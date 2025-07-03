@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>註冊</title>
+  <style>
+  body {
+    font-family: "Helvetica Neue", sans-serif;
+    background-color: #f7f7f7;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  #openModalBtn {
+    padding: 10px 20px;
+    border: none;
+    background-color: #FF385C;
+    color: white;
+    border-radius: 8px;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background-color: white;
+    padding: 40px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    position: relative;
+    text-align: center;
+  }
+
+  .close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 24px;
+    cursor: pointer;
+  }
+
+  button {
+    background: #2828FF;
+    color: #ffffff;
+    font-weight: 600;
+    border: none;
+    padding: 12px 20px;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 16px;
+    border: 2px solid transparent;
+    transition: 0.3s ease;
+    margin: 0px 0 5px 0;
+  }
+
+  button:hover {
+    color: #000000;
+    border-color: #000000;
+    background: #000000;
+  }
+
+  .helper-text {
+    text-align: center;
+    margin-top: 15px;
+  }
+
+  .input-field {
+    position: relative;
+    border-bottom: 2px solid #ccc;
+    margin: 20px 0;
+    text-align: left;
+  }
+
+  .input-field label {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    color: #000000;
+    font-size: 16px;
+    pointer-events: none;
+    transition: 0.15s ease;
+  }
+
+  .input-field input,
+  .input-field select {
+    width: 100%;
+    height: 40px;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    color: #000000;
+  }
+
+  .input-field input:focus ~ label,
+  .input-field input:valid ~ label,
+  .input-field select:focus ~ label,
+  .input-field select:valid ~ label {
+    font-size: 0.8rem;
+    top: 10px;
+    transform: translateY(-120%);
+  }
+
+  .modal a {
+    color: #842c2c;
+    text-decoration: none;
+  }
+
+  .modal a:hover {
+    text-decoration: underline;
+  }
+
+  button[type="submit"] {
+    width: 100%;
+  }
+</style>
+
+</head>
+<body>
+
+  <button id="openModalBtn">註冊</button>
+
+  <div class="modal" id="registerModal">
+    <div class="modal-content">
+      <span class="close-btn" id="closeModalBtn">&times;</span>
+      <h1>註冊</h1>
+      <form action="sign.php" method="post" onsubmit="return checkPasswordMatch()">
+        <div class="input-field">
+          <input type="text" name="username" required>
+          <label>帳號</label>
+        </div>
+        <div class="input-field">
+          <input type="text" name="name" required>
+          <label>姓名</label>
+        </div>
+        <div class="input-field">
+          <input type="email" name="email" required>
+          <label>電子郵件</label>
+        </div>
+        <div class="input-field">
+          <select name="role" required>
+            <option value="" disabled selected hidden></option>
+            <option value="老師">老師</option>
+            <option value="學生">學生</option>
+            <option value="廠商">廠商</option>
+            <option value="學校行政人員">學校行政人員</option>
+          </select>          
+          <label>身分</label>
+        </div>
+        <div class="input-field">
+          <input type="password" name="password" required>
+          <label>密碼</label>
+        </div>
+        <div class="input-field">
+          <input type="password" name="confirm_password" required>
+          <label>確認密碼</label>
+        </div>
+        <button type="submit">註冊</button>
+      </form>
+      <p class="helper-text">已經有帳號了嗎？<a href="#">登入</a></p>
+    </div>
+  </div>
+
+  <script>
+    const openBtn = document.getElementById("openModalBtn");
+    const closeBtn = document.getElementById("closeModalBtn");
+    const modal = document.getElementById("registerModal");
+
+    openBtn.onclick = () => {
+      modal.style.display = "flex";
+    };
+
+    closeBtn.onclick = () => {
+      modal.style.display = "none";
+    };
+
+    window.onclick = function(event) {
+      if (event.target === modal) {
+        modal.style.display = "none";
+      }
+    };
+  </script>
+</body>
+</html>
+<script>
+  function checkPasswordMatch() {
+    const password = document.querySelector('input[name="password"]').value;
+    const confirm = document.querySelector('input[name="confirm_password"]').value;
+    if (password !== confirm) {
+      alert("密碼與確認密碼不一致！");
+      return false; // 阻止表單送出
+    }
+    return true;
+  }
+  </script>
+  
