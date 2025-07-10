@@ -4,7 +4,7 @@
   	<meta charset="UTF-8">
   	<?php include("share/header.php"); ?>
   	<title>認識產學合作</title>
-  	<link rel="stylesheet" href="QA.css">
+  	<link rel="stylesheet" href="assets/csp/QA.css">
 </head>
 <body>
   	<h2>認識產學合作</h2>

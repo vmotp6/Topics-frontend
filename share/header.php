@@ -258,7 +258,7 @@ $isLoggedIn = isset($_SESSION['username']);
   <div class="modal-content">
     <span class="close-btn" id="closeLoginBtn">&times;</span>
     <h1>登入</h1>
-    <form action="login.php" method="post">
+    <form action="http://localhost:5000/login" method="post">
       <div class="input-field"><input type="text" name="username" required><label>帳號</label></div>
       <div class="input-field"><input type="password" name="password" required><label>密碼</label></div>
       <div class="forget">
