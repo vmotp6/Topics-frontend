@@ -6,22 +6,26 @@ $isLoggedIn = isset($_SESSION['username']);
 <!-- 導覽列與 Modal 所需 CSS -->
 <style>
   /* 導覽列樣式 */
-  .navbar {
-    background-color: #e0f0ff;
-    padding: 15px 20px;
-    color: #003366;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    flex-wrap: wrap;
-  }
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 999;
+  background-color: #e0f0ff;
+  padding: 20px 0px;
+  color: #003366;
+  display: flex;
+  align-items: center;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-wrap: wrap;
+}
 
   .navbar-links, .navbar-user {
     display: flex;
     align-items: center;
-    margin: 5px 10px;
+    margin-right: 25px;
   }
 
   .navbar-links {
@@ -64,12 +68,12 @@ $isLoggedIn = isset($_SESSION['username']);
   .btn-auth-wrapper {
     background-color: #007bff;
     border-radius: 20px;
-    padding: 8px 18px;
+    padding: 8px 16px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    margin-left: 10px;
     user-select: none;
+
   }
 
   .btn-auth-wrapper a {
