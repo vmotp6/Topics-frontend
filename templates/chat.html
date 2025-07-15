@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天室</title>
+    <style>
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: #f2f2f2;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        #messages {
+            list-style-type: none;
+            padding: 0;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 10px;
+        }
+        .message {
+            max-width: 60%;
+            margin: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            clear: both;
+        }
+        .self {
+            background-color: #d1f5d3;
+            float: right;
+            text-align: right;
+        }
+        .other {
+            background-color: #f0f0f0;
+            float: left;
+            text-align: left;
+        }
+        .timestamp {
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 5px;
+        }
+        #inputSection {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        #msgInput {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>聊天室</h1>
+    <ul id="messages"></ul>
+    <div id="inputSection">
+        <input type="text" id="msgInput" placeholder="輸入訊息" />
+        <button onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        const username = prompt("請輸入你的名稱：") || "匿名";
+        const room = prompt("請輸入房間名稱：") || "default";
+        const ws = new WebSocket("ws://localhost:8000/ws?room=" + encodeURIComponent(room));
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const messages = document.getElementById("messages");
+
+            const message = document.createElement("li");
+            message.classList.add("message");
+            message.classList.add(data.sender === username ? "self" : "other");
+
+            message.innerHTML = `
+                <div><strong>${data.sender}</strong>：${data.text}</div>
+                <div class="timestamp">${data.timestamp}</div>
+            `;
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight;
+        };
+
+        function sendMessage() {
+            const input = document.getElementById("msgInput");
+            if (input.value.trim() === "") return;
+            const messageData = {
+                sender: username,
+                text: input.value
+            };
+            ws.send(JSON.stringify(messageData));
+            input.value = "";
+        }
+    </script>
+</body>
+</html>
