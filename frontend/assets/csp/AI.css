@@ -1,0 +1,113 @@
+/* 基本字體與背景 */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #e6f0ff;
+    color: #003366;
+    margin: 0;
+    padding: 20px;
+}
+
+/* 頁面標題 */
+h1 {
+    color: #004aad;
+    text-align: center;
+    margin-bottom: 0.5em;
+}
+
+/* 頁面副標題 */
+p {
+    text-align: center;
+    font-size: 1.1em;
+    margin-bottom: 2em;
+    color: #0055cc;
+}
+
+/* 表單區域 */
+form#aiForm {
+    max-width: 600px;
+    margin: 0 auto 3em auto;
+    background: white;
+    padding: 25px 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 75, 173, 0.3);
+}
+
+/* 表單標籤 */
+form#aiForm label {
+    font-weight: 600;
+    color: #003366;
+}
+
+/* 多行文字框 */
+form#aiForm textarea {
+    width: 100%;
+    border: 2px solid #99bbff;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 1em;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+}
+
+/* 文字輸入框 */
+form#aiForm input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    margin-top: 6px;
+    margin-bottom: 20px;
+    border: 2px solid #99bbff;
+    border-radius: 6px;
+    font-size: 1em;
+    transition: border-color 0.3s ease;
+}
+
+/* 輸入框獲得焦點時變色 */
+form#aiForm textarea:focus,
+form#aiForm input[type="text"]:focus {
+    border-color: #004aad;
+    outline: none;
+}
+
+/* 送出按鈕 */
+form#aiForm button[type="submit"] {
+    background-color: #004aad;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    font-size: 1.1em;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    width: 100%;
+    transition: background-color 0.3s ease;
+}
+
+form#aiForm button[type="submit"]:hover {
+    background-color: #003366;
+}
+
+/* 結果顯示區 */
+#result {
+    max-width: 600px;
+    margin: 0 auto;
+    font-size: 1.3em;
+    padding: 15px 20px;
+    border-radius: 8px;
+    background-color: #cce0ff;
+    color: #003366;
+    box-shadow: 0 0 10px rgba(0, 75, 173, 0.4);
+    min-height: 2.5em;
+    text-align: center;
+}
+
+/* 手機版自適應 */
+@media screen and (max-width: 640px) {
+    body {
+        padding: 15px 10px;
+    }
+    form#aiForm, #result {
+        width: 100%;
+        padding: 20px 15px;
+        box-sizing: border-box;
+    }
+}
