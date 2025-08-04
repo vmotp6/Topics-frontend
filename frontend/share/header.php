@@ -210,10 +210,10 @@ $isLoggedIn = isset($_SESSION['username']);
     <a href="teach.php">產學合作2</a>
     <?php if ($isLoggedIn): ?>
       <a href="life.php">產學合作3</a>
-      <a href="AI.php">AI產學合作</a>
     <?php endif; ?>
     <a href="QA.php">認識產學合作</a>
     <a href="about.php">認識平台</a>
+    <a href="AI.php">AI產學合作</a>
   </div>
   <div class="navbar-user">
     <?php if ($isLoggedIn): ?>
