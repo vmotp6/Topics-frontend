@@ -1,1 +1,2 @@
-uyfififtiuyfouguyvgui
+<!DOCTYPE html>
+<html></html>
