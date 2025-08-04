@@ -9,6 +9,7 @@
 </head>
 
 <body>
+	<main>
 	<h2>認識產學合作</h2>
 	<div class="faq-item">
 		<div class="faq-question">Q1: 產學合作主要提供什麼服務？</div>
@@ -30,6 +31,7 @@
 			A: 是的，使用者需要註冊帳號才能提交合作提案或查詢媒合紀錄，平台支援單一登入整合（SSO）。
 		</div>
 	</div>
+	</main>
 	<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 	<script>
 		$(document).ready(function() {

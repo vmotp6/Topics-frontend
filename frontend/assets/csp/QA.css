@@ -1,7 +1,4 @@
-body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-}
+
 
 .faq-item {
   border-left: 4px solid #00bcd4;
@@ -68,7 +65,6 @@ body {
   gap: 12px;
 }
 
-
 .faq-answer::before {
   content: 'A';
   background-color: #00bcd4;
@@ -84,4 +80,11 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.container {
+  max-width: 1200px; /* 跟 one.php 的 max-width 一致 */
+  margin: 80px auto 0 auto; /* 上方留 80px (和 one.php 一樣)，左右自動置中 */
+  padding: 0 15px; /* 內側左右留點空間，防止貼邊 */
+  box-sizing: border-box;
 }
