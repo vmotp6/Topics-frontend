@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <?php include("share/header.php"); ?>
     <link rel="stylesheet" href="assets/csp/AI.css">
-    <title>AI 科系媒合系統</title>
 </head>
 <body>
     <h1>AI 科系推薦系統（廠商端）</h1>
