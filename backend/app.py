@@ -34,19 +34,19 @@ def register():
         # 使用 with 語句確保 cursor 在操作結束後被正確關閉
         with db.cursor() as cursor:
             # 1. 檢查帳號是否已存在
-            sql_check_username = "SELECT COUNT(*) FROM user WHERE 帳號 = %s"
+            sql_check_username = "SELECT COUNT(*) FROM user WHERE username = %s"
             cursor.execute(sql_check_username, (username,))
             if cursor.fetchone()[0] > 0:
                 return jsonify({"message": "此帳號已被註冊，請使用其他帳號。"}), 409 # Conflict
 
             # 2. 檢查電子郵件是否已存在
-            sql_check_email = "SELECT COUNT(*) FROM user WHERE 電子郵件 = %s"
+            sql_check_email = "SELECT COUNT(*) FROM user WHERE email = %s"
             cursor.execute(sql_check_email, (email,))
             if cursor.fetchone()[0] > 0:
                 return jsonify({"message": "此電子郵件已被註冊，請使用其他電子郵件。"}), 409 # Conflict
 
             # 如果帳號和電子郵件都未重複，則執行插入操作
-            sql_insert_user = "INSERT INTO user (`帳號`, `姓名`, `電子郵件`, `身分`, `密碼`) VALUES (%s, %s, %s, %s, %s)"
+            sql_insert_user = "INSERT INTO user (`username`, `name`, `email`, `role`, `password`) VALUES (%s, %s, %s, %s, %s)"
             cursor.execute(sql_insert_user, (username, name, email, role, password))
             db.commit() # 提交事務以保存更改
             return jsonify({"message": "成功註冊"}), 201 # Created
@@ -67,7 +67,7 @@ def login():
 
     try:
         with db.cursor() as cursor:
-            sql = "SELECT * FROM user WHERE 帳號=%s AND 密碼=%s"
+            sql = "SELECT * FROM user WHERE username=%s AND password=%s"
             cursor.execute(sql, (username, password))
             user = cursor.fetchone()
 
