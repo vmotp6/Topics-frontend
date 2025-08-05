@@ -63,6 +63,7 @@ if (!isset($_SESSION['username']) || !isset($_SESSION['role'])) {
       let cssClass = '';
       if (data.role === '老師') cssClass = 'teacher';
       else if (data.role === '廠商') cssClass = 'vendor';
+      else if (data.role === '學生') cssClass = 'student';
       if (isMe) cssClass += ' me';
 
       p.className = cssClass;
