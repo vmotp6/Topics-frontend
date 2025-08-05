@@ -3,11 +3,13 @@
 
 <head>
 	<meta charset="UTF-8">
-	<?php include("share/header.php"); ?>
+	
 	<title>認識產學合作</title>
 	<link rel="stylesheet" href="assets/csp/QA.css">
-</head>
 
+
+</head>
+<?php include("share/header.php"); ?>
 <body>
 	<main>
 	<h2>認識產學合作</h2>
@@ -73,6 +75,8 @@
 			});
 		});
 	</script>
+
+<?php include("share/footer.php"); ?>
 </body>
 
 </html>
