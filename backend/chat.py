@@ -19,13 +19,17 @@ db_config = {
 
 # ✅ 寫入訊息
 def insert_message(sender, receiver, role, message):
-    conn = pymysql.connect(**db_config)
-    cursor = conn.cursor()
-    sql = "INSERT INTO chat (sender, receiver, role, message) VALUES (%s, %s, %s, %s)"
-    cursor.execute(sql, (sender, receiver, role, message))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        conn = pymysql.connect(**db_config)
+        cursor = conn.cursor()
+        sql = "INSERT INTO chat (sender, receiver, role, message, time) VALUES (%s, %s, %s, %s, NOW())"
+        cursor.execute(sql, (sender, receiver, role, message))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("訊息寫入成功")
+    except Exception as e:
+        print("寫入資料庫失敗:", e)
 
 # ✅ 抓取歷史紀錄
 def fetch_history():
