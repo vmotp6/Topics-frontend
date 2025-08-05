@@ -191,6 +191,57 @@ $isLoggedIn = isset($_SESSION['username']);
   button:hover {
     background: #000000;
   }
+  .user-dropdown {
+  position: relative;
+}
+
+.avatar-btn {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background-color: #ffffff;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 48px;
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 120px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 2000;
+}
+
+.dropdown-menu .username {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+  color: #003366;
+}
+
+.dropdown-menu a.btn-logout {
+  color: #007bff;
+  text-decoration: none;
+  display: block;
+  text-align: center;
+  font-weight: 600;
+}
+
+.dropdown-menu a.btn-logout:hover {
+  color: #000000;
+}
+
 </style>
 
 <!-- 導覽列 -->
@@ -201,26 +252,29 @@ $isLoggedIn = isset($_SESSION['username']);
   <div class="navbar-links">
     <a href="one.php">首頁</a>
     <a href="teach.php">產學合作2</a>
-    <?php if ($isLoggedIn): ?>
-      <a href="life.php">產學合作3</a>
-    <?php endif; ?>
     <a href="QA.php">認識產學合作</a>
     <a href="about.php">認識平台</a>
 <a href="AI.php">AI產學合作</a>
   </div>
 
-  <div class="navbar-user">
-    <?php if ($isLoggedIn): ?>
-      你好, <?php echo htmlspecialchars($_SESSION['username']); ?> |
+<?php if ($isLoggedIn): ?>
+  <div class="user-dropdown">
+    <div class="avatar-btn" onclick="toggleDropdown()">
+      <img src="share/EIdROxGXsAE_LSs.jpg" alt="頭像" class="avatar-img">
+    </div>
+    <div class="dropdown-menu" id="dropdownMenu">
+      <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
       <a href="logout.php" class="btn-logout">登出</a>
-    <?php else: ?>
-      <div class="btn-auth-wrapper">
-        <a href="#" id="openModalBtn">註冊</a>
-        <span class="separator">/</span>
-        <a href="#" id="openLoginBtn">登入</a>
-      </div>
-    <?php endif; ?>
+    </div>
   </div>
+<?php else: ?>
+  <div class="btn-auth-wrapper">
+    <a href="#" id="openModalBtn">註冊</a>
+    <span class="separator">/</span>
+    <a href="#" id="openLoginBtn">登入</a>
+  </div>
+<?php endif; ?>
+
 </div>
 </div>
 
@@ -357,21 +411,37 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       sessionStorage.setItem("username", data.username);
 sessionStorage.setItem("role", data.role); // 儲存角色資訊
 
-setTimeout(() => {
-  if (data.role === "老師") {
-    // 確保跳轉路徑正確
-window.location.href = "/frontend/teacher.php";
+if (res.ok) {
+  document.getElementById("loginMessage").style.color = "green";
+  document.getElementById("loginMessage").innerText = data.message;
 
-  } else if (data.role === "學生") {
-    window.location.href = "student.php";
-  } else if (data.role === "廠商") {
-    window.location.href = "company.php";
-  } else if (data.role === "學校行政人員") {
-    window.location.href = "admin.php";
-  } else {
-    window.location.href = "index.php"; // 預設跳轉頁面
-  }
-}, 1000);
+  // 1. 將資料儲存進 PHP session
+  fetch("set_session.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: data.username,
+      role: data.role
+    })
+  })
+  .then(() => {
+    // 2. 根據身分跳轉頁面
+    setTimeout(() => {
+      if (data.role === "老師") {
+        window.location.href = "teacher.php";
+      } else if (data.role === "學生") {
+        window.location.href = "student.php";
+      } else if (data.role === "廠商") {
+        window.location.href = "company.php";
+      } else if (data.role === "學校行政人員") {
+        window.location.href = "admin.php";
+      } else {
+        window.location.href = "index.php";
+      }
+    }, 500);
+  });
+}
+
 
     } else {
       document.getElementById("loginMessage").style.color = "red";
@@ -382,4 +452,19 @@ window.location.href = "/frontend/teacher.php";
     document.getElementById("loginMessage").innerText = "登入失敗，請稍後再試。";
   });
 });
+
+function toggleDropdown() {
+  const menu = document.getElementById("dropdownMenu");
+  menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+// 點擊外部收起選單
+window.addEventListener("click", function (e) {
+  const dropdown = document.getElementById("dropdownMenu");
+  const avatar = document.querySelector(".avatar-btn");
+  if (!avatar.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.style.display = "none";
+  }
+});
+
 </script>
