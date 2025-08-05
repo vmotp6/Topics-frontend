@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import re
 import json
+from collections import defaultdict
 
 app = Flask(__name__)
 CORS(app)
@@ -9,7 +10,7 @@ CORS(app)
 with open('departments_keywords.json', 'r', encoding='utf-8') as f:
     DEPARTMENT_KEYWORDS = json.load(f)
 
-def count_keywords(text, keywords):
+def count_weighted_keywords(text, keywords):
     count = 0
     for kw in keywords:
         if re.search(r'\b' + re.escape(kw) + r'\b', text):
@@ -20,19 +21,16 @@ def count_keywords(text, keywords):
 def recommend_department():
     data = request.get_json()
 
-    # 取出欄位，預設空字串
     desc = data.get('project_desc', '').strip().lower()
     skills = data.get('required_skills', '').strip().lower()
     goal = data.get('goal', '').strip().lower()
 
-    # 必填欄位簡單驗證
     if not desc and not skills and not goal:
         return jsonify({
             "status": "error",
             "message": "請至少填寫專案描述、所需技能或目標其中一項。"
         }), 400
 
-    # 過短內容警告
     total_len = len(desc) + len(skills) + len(goal)
     if total_len < 10:
         return jsonify({
@@ -40,11 +38,11 @@ def recommend_department():
             "message": "輸入內容太短，請提供更詳細的資訊以利判斷。"
         }), 400
 
-    combined_text = " ".join([desc, skills, goal])
-
-    scores = {}
+    scores = defaultdict(float)
     for dept, keywords in DEPARTMENT_KEYWORDS.items():
-        scores[dept] = count_keywords(combined_text, keywords)
+        scores[dept] += count_weighted_keywords(desc, keywords) * 0.5
+        scores[dept] += count_weighted_keywords(skills, keywords) * 0.3
+        scores[dept] += count_weighted_keywords(goal, keywords) * 0.2
 
     max_score = max(scores.values()) if scores else 0
 
