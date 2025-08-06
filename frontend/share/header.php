@@ -202,6 +202,7 @@ $isLoggedIn = isset($_SESSION['username']);
   cursor: pointer;
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .avatar-img {
@@ -210,6 +211,18 @@ $isLoggedIn = isset($_SESSION['username']);
   border-radius: 50%;
   border: 2px solid white;
   background-color: #ffffff;
+}
+
+.notification-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background-color: #ff4444;
+  border-radius: 50%;
+  border: 2px solid white;
+  display: none;
 }
 
 .dropdown-menu {
@@ -265,9 +278,15 @@ $isLoggedIn = isset($_SESSION['username']);
   <div class="user-dropdown">
     <div class="avatar-btn" onclick="toggleDropdown()">
       <img src="share/EIdROxGXsAE_LSs.jpg" alt="頭像" class="avatar-img">
+      <div class="notification-dot" id="notificationDot"></div>
     </div>
     <div class="dropdown-menu" id="dropdownMenu">
       <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+        <a href="teacher_profile.php" class="btn-logout">個人資料</a>
+      <?php else: ?>
+        <a href="#" class="btn-logout">個人資料</a>
+      <?php endif; ?>
       <a href="logout.php" class="btn-logout">登出</a>
     </div>
   </div>
@@ -470,5 +489,31 @@ window.addEventListener("click", function (e) {
     dropdown.style.display = "none";
   }
 });
+
+// 檢查老師個人資料是否已填寫
+function checkTeacherProfile() {
+  const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
+  const role = '<?php echo isset($_SESSION['role']) ? $_SESSION['role'] : ''; ?>';
+  const notificationDot = document.getElementById('notificationDot');
+  
+  if (username && role === '老師') {
+    fetch(`http://localhost:5000/teacher/profile/${username}`)
+      .then(response => {
+        if (response.status === 404) {
+          // 尚未填寫個人資料，顯示紅點
+          notificationDot.style.display = 'block';
+        } else {
+          // 已填寫個人資料，隱藏紅點
+          notificationDot.style.display = 'none';
+        }
+      })
+      .catch(error => {
+        console.log('檢查個人資料時發生錯誤');
+      });
+  }
+}
+
+// 頁面載入時檢查
+window.addEventListener('load', checkTeacherProfile);
 
 </script>
