@@ -3,6 +3,9 @@ session_start();
 $isLoggedIn = isset($_SESSION['username']);
 ?>
 
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+
 <!-- CSS -->
 <style>
   .navbar {
@@ -254,7 +257,8 @@ $isLoggedIn = isset($_SESSION['username']);
     <a href="teach.php">產學合作2</a>
     <a href="QA.php">認識產學合作</a>
     <a href="about.php">認識平台</a>
-<a href="AI.php">AI產學合作</a>
+    <a href="AI.php">AI產學合作</a>
+    <a href="chat_settings.php">💬 聊天設置</a>
   </div>
 
 <?php if ($isLoggedIn): ?>

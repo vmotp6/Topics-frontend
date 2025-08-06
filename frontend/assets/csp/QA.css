@@ -1,12 +1,24 @@
 
 
+/* 主標題樣式 */
+main h2 {
+  padding: 150px 0 30px 0;
+  margin: 0;
+  font-size: 28px;
+  color: #333;
+  text-align: center;
+  border-bottom: 2px solid #00bcd4;
+  margin-bottom: 40px;
+}
+
 .faq-item {
   border-left: 4px solid #00bcd4;
   background-color: #f9fbfd;
-  padding: 10px 15px;
+  padding: 15px 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   font-family: "Helvetica Neue", Arial, sans-serif;
+  margin-bottom: 25px;
 }
 
 .faq-question {

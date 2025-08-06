@@ -141,6 +141,10 @@
     </section>
   </main>
 
+	<!-- 引入通用聊天室組件 -->
+	<?php include("share/chat_widget.php"); ?>
+	<?php include("share/ai_widget.php"); ?>
+
 <?php include("share/footer.php"); ?>
 
   <!-- 輪播圖 JavaScript -->
