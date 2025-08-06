@@ -14,7 +14,7 @@ def get_db():
         host="localhost",
         user="root",          # 你的 MySQL 帳號
         password="",          # 你的 MySQL 密碼
-        database="messeage",  # 你的資料庫名稱
+        database="topics_good",  # 你的資料庫名稱
         cursorclass=pymysql.cursors.DictCursor
     )
 
@@ -27,7 +27,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
     conn = get_db()
     with conn:
         with conn.cursor() as cursor:
-            sql = "SELECT * FROM users WHERE username=%s AND password=%s"
+            sql = "SELECT * FROM user WHERE username=%s AND password=%s"
             cursor.execute(sql, (username, password))
             user = cursor.fetchone()
             if user:

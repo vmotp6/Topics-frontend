@@ -9,8 +9,14 @@
 </head>
 
 <body>
+	<h1>老師專區</h1>
+	<p>歡迎來到老師專區！</p>
 	
+	<!-- 引入通用聊天室組件 -->
+	<?php include("share/chat_widget.php"); ?>
 	
+	<?php include("share/footer.php"); ?>
+	<?php include("share/ai_widget.php"); ?>
 </body>
 
 </html>

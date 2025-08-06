@@ -11,5 +11,14 @@
     text-align: center;
     padding: 15px 20px;
     font-size: 14px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+  }
+  
+  /* 為了避免內容被footer遮擋，給body添加底部間距 */
+  body {
+    padding-bottom: 60px;
   }
 </style>
