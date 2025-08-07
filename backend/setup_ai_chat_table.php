@@ -12,7 +12,7 @@ try {
     // 創建AI聊天記錄資料表
     $sql = "CREATE TABLE IF NOT EXISTS ai_chat_history (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
         message_type ENUM('user', 'ai') NOT NULL,
         message_content TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

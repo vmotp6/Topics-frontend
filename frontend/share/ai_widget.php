@@ -1,4 +1,7 @@
 <?php
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
 $isLoggedIn = isset($_SESSION['username']);
 ?>
 
@@ -610,6 +613,8 @@ $(document).ready(function() {
 	function saveAIMessageToDatabase(sender, message) {
 		<?php if ($isLoggedIn): ?>
 		let messageType = sender === '你' ? 'user' : 'ai';
+		console.log('正在保存AI訊息:', {sender, message, messageType});
+		
 		$.ajax({
 			url: '../backend/ai_chat_api.php',
 			type: 'POST',
@@ -620,20 +625,26 @@ $(document).ready(function() {
 			},
 			dataType: 'json',
 			success: function(response) {
-				if (!response.success) {
-					console.error('保存AI訊息失敗:', response.error);
+				console.log('AI保存響應:', response);
+				if (response.success) {
+					console.log('✅ AI訊息保存成功');
+				} else {
+					console.error('❌ 保存AI訊息失敗:', response.error);
 				}
 			},
-			error: function() {
-				console.error('保存AI訊息失敗');
+			error: function(xhr, status, error) {
+				console.error('❌ 保存AI訊息錯誤:', {xhr, status, error});
 			}
 		});
+		<?php else: ?>
+		console.log('用戶未登入，跳過保存');
 		<?php endif; ?>
 	}
 	
 	// 載入AI對話記錄
 	function loadAIHistory() {
 		<?php if ($isLoggedIn): ?>
+		console.log('正在載入AI聊天記錄...');
 		// 從資料庫載入聊天記錄
 		$.ajax({
 			url: '../backend/ai_chat_api.php',
@@ -641,7 +652,9 @@ $(document).ready(function() {
 			data: { action: 'get_history' },
 			dataType: 'json',
 			success: function(response) {
+				console.log('AI載入響應:', response);
 				if (response.success && response.history.length > 0) {
+					console.log('✅ 載入到', response.history.length, '條聊天記錄');
 					// 顯示歷史記錄
 					let historyHtml = '';
 					response.history.forEach(function(msg) {
@@ -651,16 +664,19 @@ $(document).ready(function() {
 					$('#ai-messages').html(historyHtml);
 					$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
 				} else {
+					console.log('沒有歷史記錄，載入歡迎訊息');
 					// 如果沒有歷史記錄，載入歡迎訊息
 					loadAIWelcomeMessage();
 				}
 			},
-			error: function() {
+			error: function(xhr, status, error) {
+				console.error('❌ 載入AI記錄錯誤:', {xhr, status, error});
 				// 如果API失敗，載入歡迎訊息
 				loadAIWelcomeMessage();
 			}
 		});
 		<?php else: ?>
+		console.log('用戶未登入，載入歡迎訊息');
 		// 未登入用戶載入歡迎訊息
 		loadAIWelcomeMessage();
 		<?php endif; ?>
@@ -792,35 +808,49 @@ $(document).ready(function() {
 		let newRight = startLeft;
 		let newBottom = startTop;
 		
+		// 調試信息
+		console.log('拖動:', currentHandle, 'deltaX:', deltaX, 'deltaY:', deltaY);
+		
 		switch (currentHandle) {
 			case 'bl': // 左下角
 				// 左邊跟隨滑鼠移動，下邊跟隨滑鼠移動
 				newWidth = Math.max(350, startWidth - deltaX);
 				newHeight = Math.max(450, startHeight + deltaY);
-				newRight = startLeft + deltaX;
+				newRight = startLeft - deltaX; // 左邊緣移動
+				console.log('左下角拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
 				break;
 			case 'br': // 右下角
 				// 右邊跟隨滑鼠移動，下邊跟隨滑鼠移動
 				newWidth = Math.max(350, startWidth + deltaX);
 				newHeight = Math.max(450, startHeight + deltaY);
+				// 右邊緣移動，不改變right值
+				console.log('右下角拖動:', {startWidth, deltaX, newWidth});
 				break;
 			case 't': // 上邊
-				// 上邊跟隨滑鼠移動
+				// 上邊跟隨滑鼠移動，下邊保持固定
 				newHeight = Math.max(450, startHeight - deltaY);
-				newBottom = startTop + deltaY;
+				newBottom = startTop - deltaY; // 上邊緣移動
+				console.log('上邊拖動:', {startHeight, deltaY, newHeight, startTop, newBottom});
 				break;
 			case 'b': // 下邊
-				// 下邊跟隨滑鼠移動
+				// 下邊跟隨滑鼠移動，上邊保持固定
 				newHeight = Math.max(450, startHeight + deltaY);
+				// 由於使用bottom定位，需要調整bottom值來讓下邊緣移動
+				newBottom = startTop - deltaY;
+				console.log('下邊拖動:', {startHeight, deltaY, newHeight, startTop, newBottom});
 				break;
 			case 'l': // 左邊
-				// 左邊跟隨滑鼠移動
+				// 左邊跟隨滑鼠移動，右邊保持固定
 				newWidth = Math.max(350, startWidth - deltaX);
-				newRight = startLeft + deltaX;
+				newRight = startLeft - deltaX;
+				console.log('左邊拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
 				break;
 			case 'r': // 右邊
-				// 右邊跟隨滑鼠移動
+				// 右邊跟隨滑鼠移動，左邊保持固定
 				newWidth = Math.max(350, startWidth + deltaX);
+				// 由於使用right定位，需要調整right值來讓右邊緣移動
+				newRight = startLeft - deltaX;
+				console.log('右邊拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
 				break;
 		}
 		

@@ -17,12 +17,14 @@ try {
 }
 
 // 檢查用戶是否已登入
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['username'])) {
     echo json_encode(['error' => '請先登入']);
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
+// 使用username作為user_id，或者從資料庫查詢user_id
+$username = $_SESSION['username'];
+$user_id = $username; // 暫時使用username作為user_id
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 switch ($action) {
