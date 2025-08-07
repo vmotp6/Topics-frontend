@@ -121,5 +121,7 @@
             });
         }
     </script>
+    
+    <?php include("share/ai_widget.php"); ?>
 </body>
 </html> 

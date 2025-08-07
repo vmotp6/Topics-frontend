@@ -188,6 +188,8 @@
 		// 頁面載入時檢查
 		window.addEventListener('load', checkProfileReminder);
 	</script>
+	
+	<?php include("share/ai_widget.php"); ?>
 </body>
 
 </html>

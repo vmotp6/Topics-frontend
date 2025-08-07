@@ -217,5 +217,7 @@
         // 頁面載入時執行檢查
         window.addEventListener('load', checkFunctionality);
     </script>
+    
+    <?php include("share/ai_widget.php"); ?>
 </body>
 </html> 

@@ -7,6 +7,14 @@ $isLoggedIn = isset($_SESSION['username']);
 
 <!-- AI功能視窗 -->
 <div id="ai-box">
+	<!-- 拖拽調整大小的控制點 -->
+	<div class="resize-handle-bl"></div>
+	<div class="resize-handle-br"></div>
+	<div class="resize-handle-t"></div>
+	<div class="resize-handle-b"></div>
+	<div class="resize-handle-l"></div>
+	<div class="resize-handle-r"></div>
+	
 	<div id="ai-header">
 		AI科系推薦助手 
 		<span id="ai-clear" title="清除對話記錄">🗑️</span>
@@ -59,7 +67,7 @@ $isLoggedIn = isset($_SESSION['username']);
 #ai-float-btn {
   position: fixed;
   bottom: 30px;
-  right: 110px;
+  right: 30px;
   width: 60px;
   height: 60px;
   background: linear-gradient(135deg, #ff6b35, #f7931e);
@@ -85,7 +93,7 @@ $isLoggedIn = isset($_SESSION['username']);
 #ai-box {
   position: fixed;
   bottom: 100px;
-  right: 110px;
+  right: 30px;
   width: 400px;
   height: 550px;
   background: white;
@@ -109,12 +117,12 @@ $isLoggedIn = isset($_SESSION['username']);
   border-color: #ff6b35;
 }
 
-/* 讓整個AI框都可以拖拽調整大小 */
-#ai-box:hover {
-  cursor: se-resize;
+/* 多方向拖拽調整大小 */
+#ai-box {
+  cursor: default;
 }
 
-/* 添加拖拽邊框效果 */
+/* 拖拽調整大小的邊框 */
 #ai-box::before {
   content: '';
   position: absolute;
@@ -132,7 +140,166 @@ $isLoggedIn = isset($_SESSION['username']);
 #ai-box:hover::before {
   border-color: #ff6b35;
   pointer-events: auto;
+}
+
+/* 八個角的拖拽點 */
+#ai-box::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #ff6b35;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+}
+
+/* 四個角落的拖拽點 */
+#ai-box:hover::after {
+  opacity: 1;
+}
+
+/* 左上角 */
+#ai-box::after {
+  top: -6px;
+  left: -6px;
+  cursor: nw-resize;
+}
+
+/* 右上角 */
+#ai-box::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: #ff6b35;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: ne-resize;
+}
+
+#ai-box:hover::before {
+  opacity: 1;
+}
+
+/* 左下角 */
+#ai-box .resize-handle-bl {
+  position: absolute;
+  bottom: -6px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  background: #ff6b35;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: sw-resize;
+}
+
+#ai-box:hover .resize-handle-bl {
+  opacity: 1;
+}
+
+/* 右下角 */
+#ai-box .resize-handle-br {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: #ff6b35;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
   cursor: se-resize;
+}
+
+#ai-box:hover .resize-handle-br {
+  opacity: 1;
+}
+
+/* 四個邊的拖拽點 */
+#ai-box .resize-handle-t {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 6px;
+  background: #ff6b35;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: n-resize;
+}
+
+#ai-box:hover .resize-handle-t {
+  opacity: 1;
+}
+
+#ai-box .resize-handle-b {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 6px;
+  background: #ff6b35;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: s-resize;
+}
+
+#ai-box:hover .resize-handle-b {
+  opacity: 1;
+}
+
+#ai-box .resize-handle-l {
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 30px;
+  background: #ff6b35;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: w-resize;
+}
+
+#ai-box:hover .resize-handle-l {
+  opacity: 1;
+}
+
+#ai-box .resize-handle-r {
+  position: absolute;
+  right: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 30px;
+  background: #ff6b35;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  cursor: e-resize;
+}
+
+#ai-box:hover .resize-handle-r {
+  opacity: 1;
 }
 
 /* 確保AI框內容區域不會影響拖拽 */
@@ -334,7 +501,7 @@ $isLoggedIn = isset($_SESSION['username']);
   
   #ai-float-btn {
     bottom: 20px;
-    right: 90px;
+    right: 20px;
     width: 50px;
     height: 50px;
     font-size: 20px;
@@ -369,10 +536,31 @@ $(document).ready(function() {
 	// 點擊清除AI對話記錄按鈕
 	$('#ai-clear').click(function() {
 		if (confirm('確定要清除所有AI對話記錄嗎？此操作無法復原。')) {
+			<?php if ($isLoggedIn): ?>
+			// 從資料庫清除記錄
+			$.ajax({
+				url: '../backend/ai_chat_api.php',
+				type: 'POST',
+				data: { action: 'clear_history' },
+				dataType: 'json',
+				success: function(response) {
+					if (response.success) {
+						$('#ai-messages').html('');
+						// 重新載入歡迎訊息
+						loadAIWelcomeMessage();
+					} else {
+						alert('清除記錄失敗: ' + response.error);
+					}
+				},
+				error: function() {
+					alert('清除記錄失敗');
+				}
+			});
+			<?php else: ?>
 			$('#ai-messages').html('');
-			localStorage.removeItem('aiHistory');
 			// 重新載入歡迎訊息
 			loadAIWelcomeMessage();
+			<?php endif; ?>
 		}
 	});
 
@@ -414,41 +602,68 @@ $(document).ready(function() {
 		$('#ai-messages').append(messageHtml);
 		$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
 		
-		// 保存到localStorage
-		saveAIHistory();
+		// 保存到資料庫
+		saveAIMessageToDatabase(sender, message);
 	}
 	
-	// 保存AI對話記錄
-	function saveAIHistory() {
-		let aiContent = $('#ai-messages').html();
-		// 只保存純對話內容，不保存歡迎訊息
-		if (!aiContent.includes('歡迎使用AI科系推薦助手') && 
-			!aiContent.includes('請先登入才能使用AI科系推薦功能') &&
-			!aiContent.includes('ai-feature-intro') &&
-			!aiContent.includes('ai-login-prompt')) {
-			localStorage.setItem('aiHistory', aiContent);
-		}
+	// 保存AI對話記錄到資料庫
+	function saveAIMessageToDatabase(sender, message) {
+		<?php if ($isLoggedIn): ?>
+		let messageType = sender === '你' ? 'user' : 'ai';
+		$.ajax({
+			url: '../backend/ai_chat_api.php',
+			type: 'POST',
+			data: {
+				action: 'save_message',
+				message_type: messageType,
+				message_content: message
+			},
+			dataType: 'json',
+			success: function(response) {
+				if (!response.success) {
+					console.error('保存AI訊息失敗:', response.error);
+				}
+			},
+			error: function() {
+				console.error('保存AI訊息失敗');
+			}
+		});
+		<?php endif; ?>
 	}
 	
 	// 載入AI對話記錄
 	function loadAIHistory() {
-		let savedAIHistory = localStorage.getItem('aiHistory');
-		if (savedAIHistory) {
-			// 檢查是否包含PHP生成的歡迎訊息或登入提示，如果包含則清除
-			if (savedAIHistory.includes('歡迎使用AI科系推薦助手') || 
-				savedAIHistory.includes('請先登入才能使用AI科系推薦功能') ||
-				savedAIHistory.includes('ai-feature-intro') ||
-				savedAIHistory.includes('ai-login-prompt')) {
-				localStorage.removeItem('aiHistory');
+		<?php if ($isLoggedIn): ?>
+		// 從資料庫載入聊天記錄
+		$.ajax({
+			url: '../backend/ai_chat_api.php',
+			type: 'GET',
+			data: { action: 'get_history' },
+			dataType: 'json',
+			success: function(response) {
+				if (response.success && response.history.length > 0) {
+					// 顯示歷史記錄
+					let historyHtml = '';
+					response.history.forEach(function(msg) {
+						let sender = msg.message_type === 'user' ? '你' : 'AI助手';
+						historyHtml += '<p><b>' + sender + ':</b> ' + msg.message_content + '</p>';
+					});
+					$('#ai-messages').html(historyHtml);
+					$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
+				} else {
+					// 如果沒有歷史記錄，載入歡迎訊息
+					loadAIWelcomeMessage();
+				}
+			},
+			error: function() {
+				// 如果API失敗，載入歡迎訊息
 				loadAIWelcomeMessage();
-			} else {
-				$('#ai-messages').html(savedAIHistory);
-				$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
 			}
-		} else {
-			// 如果沒有保存的記錄，載入歡迎訊息
-			loadAIWelcomeMessage();
-		}
+		});
+		<?php else: ?>
+		// 未登入用戶載入歡迎訊息
+		loadAIWelcomeMessage();
+		<?php endif; ?>
 	}
 	
 	// 載入AI歡迎訊息
@@ -537,5 +752,103 @@ $(document).ready(function() {
 			$('#ai-send-msg').click();
 		}
 	});
+	
+	// 多方向拖拽調整大小功能
+	let isResizing = false;
+	let currentHandle = null;
+	let startX, startY, startWidth, startHeight, startLeft, startTop;
+	
+	// 綁定所有拖拽控制點的事件
+	$('.resize-handle-bl, .resize-handle-br, .resize-handle-t, .resize-handle-b, .resize-handle-l, .resize-handle-r').on('mousedown', function(e) {
+		e.preventDefault();
+		isResizing = true;
+		currentHandle = $(this).hasClass('resize-handle-bl') ? 'bl' :
+					   $(this).hasClass('resize-handle-br') ? 'br' :
+					   $(this).hasClass('resize-handle-t') ? 't' :
+					   $(this).hasClass('resize-handle-b') ? 'b' :
+					   $(this).hasClass('resize-handle-l') ? 'l' : 'r';
+		
+		const $aiBox = $('#ai-box');
+		startX = e.clientX;
+		startY = e.clientY;
+		startWidth = $aiBox.width();
+		startHeight = $aiBox.height();
+		startLeft = parseInt($aiBox.css('right'));
+		startTop = parseInt($aiBox.css('bottom'));
+		
+		$(document).on('mousemove', handleMouseMove);
+		$(document).on('mouseup', handleMouseUp);
+	});
+	
+	function handleMouseMove(e) {
+		if (!isResizing) return;
+		
+		const $aiBox = $('#ai-box');
+		const deltaX = e.clientX - startX;
+		const deltaY = e.clientY - startY;
+		
+		let newWidth = startWidth;
+		let newHeight = startHeight;
+		let newRight = startLeft;
+		let newBottom = startTop;
+		
+		switch (currentHandle) {
+			case 'bl': // 左下角
+				// 左邊跟隨滑鼠移動，下邊跟隨滑鼠移動
+				newWidth = Math.max(350, startWidth - deltaX);
+				newHeight = Math.max(450, startHeight + deltaY);
+				newRight = startLeft + deltaX;
+				break;
+			case 'br': // 右下角
+				// 右邊跟隨滑鼠移動，下邊跟隨滑鼠移動
+				newWidth = Math.max(350, startWidth + deltaX);
+				newHeight = Math.max(450, startHeight + deltaY);
+				break;
+			case 't': // 上邊
+				// 上邊跟隨滑鼠移動
+				newHeight = Math.max(450, startHeight - deltaY);
+				newBottom = startTop + deltaY;
+				break;
+			case 'b': // 下邊
+				// 下邊跟隨滑鼠移動
+				newHeight = Math.max(450, startHeight + deltaY);
+				break;
+			case 'l': // 左邊
+				// 左邊跟隨滑鼠移動
+				newWidth = Math.max(350, startWidth - deltaX);
+				newRight = startLeft + deltaX;
+				break;
+			case 'r': // 右邊
+				// 右邊跟隨滑鼠移動
+				newWidth = Math.max(350, startWidth + deltaX);
+				break;
+		}
+		
+		// 限制最大尺寸
+		newWidth = Math.min(700, newWidth);
+		newHeight = Math.min(800, newHeight);
+		
+		$aiBox.css({
+			width: newWidth + 'px',
+			height: newHeight + 'px',
+			right: newRight + 'px',
+			bottom: newBottom + 'px'
+		});
+	}
+	
+	function handleMouseUp() {
+		isResizing = false;
+		currentHandle = null;
+		$(document).off('mousemove', handleMouseMove);
+		$(document).off('mouseup', handleMouseUp);
+	}
 });
+
+// 打開登入模態視窗的函數
+function openLoginModal() {
+	const loginModal = document.getElementById("loginModal");
+	if (loginModal) {
+		loginModal.style.display = "flex";
+	}
+}
 </script> 
