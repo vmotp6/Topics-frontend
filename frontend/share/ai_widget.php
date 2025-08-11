@@ -11,8 +11,6 @@ $isLoggedIn = isset($_SESSION['username']);
 <!-- AI功能視窗 -->
 <div id="ai-box">
 	<!-- 拖拽調整大小的控制點 -->
-	<div class="resize-handle-bl"></div>
-	<div class="resize-handle-br"></div>
 	<div class="resize-handle-t"></div>
 	<div class="resize-handle-b"></div>
 	<div class="resize-handle-l"></div>
@@ -95,8 +93,8 @@ $isLoggedIn = isset($_SESSION['username']);
 /* AI功能視窗 */
 #ai-box {
   position: fixed;
-  bottom: 100px;
-  right: 30px;
+  top: calc(100vh - 650px); /* 改用top定位，從下邊算起 */
+  left: calc(100vw - 430px); /* 改用left定位，從右邊算起 */
   width: 400px;
   height: 550px;
   background: white;
@@ -158,75 +156,7 @@ $isLoggedIn = isset($_SESSION['username']);
   z-index: 3;
 }
 
-/* 四個角落的拖拽點 */
-#ai-box:hover::after {
-  opacity: 1;
-}
 
-/* 左上角 */
-#ai-box::after {
-  top: -6px;
-  left: -6px;
-  cursor: nw-resize;
-}
-
-/* 右上角 */
-#ai-box::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 12px;
-  height: 12px;
-  background: #ff6b35;
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 3;
-  cursor: ne-resize;
-}
-
-#ai-box:hover::before {
-  opacity: 1;
-}
-
-/* 左下角 */
-#ai-box .resize-handle-bl {
-  position: absolute;
-  bottom: -6px;
-  left: -6px;
-  width: 12px;
-  height: 12px;
-  background: #ff6b35;
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 3;
-  cursor: sw-resize;
-}
-
-#ai-box:hover .resize-handle-bl {
-  opacity: 1;
-}
-
-/* 右下角 */
-#ai-box .resize-handle-br {
-  position: absolute;
-  bottom: -6px;
-  right: -6px;
-  width: 12px;
-  height: 12px;
-  background: #ff6b35;
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 3;
-  cursor: se-resize;
-}
-
-#ai-box:hover .resize-handle-br {
-  opacity: 1;
-}
 
 /* 四個邊的拖拽點 */
 #ai-box .resize-handle-t {
@@ -775,12 +705,10 @@ $(document).ready(function() {
 	let startX, startY, startWidth, startHeight, startLeft, startTop;
 	
 	// 綁定所有拖拽控制點的事件
-	$('.resize-handle-bl, .resize-handle-br, .resize-handle-t, .resize-handle-b, .resize-handle-l, .resize-handle-r').on('mousedown', function(e) {
+	$('.resize-handle-t, .resize-handle-b, .resize-handle-l, .resize-handle-r').on('mousedown', function(e) {
 		e.preventDefault();
 		isResizing = true;
-		currentHandle = $(this).hasClass('resize-handle-bl') ? 'bl' :
-					   $(this).hasClass('resize-handle-br') ? 'br' :
-					   $(this).hasClass('resize-handle-t') ? 't' :
+		currentHandle = $(this).hasClass('resize-handle-t') ? 't' :
 					   $(this).hasClass('resize-handle-b') ? 'b' :
 					   $(this).hasClass('resize-handle-l') ? 'l' : 'r';
 		
@@ -789,8 +717,8 @@ $(document).ready(function() {
 		startY = e.clientY;
 		startWidth = $aiBox.width();
 		startHeight = $aiBox.height();
-		startLeft = parseInt($aiBox.css('right'));
-		startTop = parseInt($aiBox.css('bottom'));
+		startLeft = parseInt($aiBox.css('left'));
+		startTop = parseInt($aiBox.css('top'));
 		
 		$(document).on('mousemove', handleMouseMove);
 		$(document).on('mouseup', handleMouseUp);
@@ -805,52 +733,38 @@ $(document).ready(function() {
 		
 		let newWidth = startWidth;
 		let newHeight = startHeight;
-		let newRight = startLeft;
-		let newBottom = startTop;
+		let newLeft = startLeft;
+		let newTop = startTop;
 		
 		// 調試信息
 		console.log('拖動:', currentHandle, 'deltaX:', deltaX, 'deltaY:', deltaY);
 		
 		switch (currentHandle) {
-			case 'bl': // 左下角
-				// 左邊跟隨滑鼠移動，下邊跟隨滑鼠移動
-				newWidth = Math.max(350, startWidth - deltaX);
-				newHeight = Math.max(450, startHeight + deltaY);
-				newRight = startLeft - deltaX; // 左邊緣移動
-				console.log('左下角拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
-				break;
-			case 'br': // 右下角
-				// 右邊跟隨滑鼠移動，下邊跟隨滑鼠移動
-				newWidth = Math.max(350, startWidth + deltaX);
-				newHeight = Math.max(450, startHeight + deltaY);
-				// 右邊緣移動，不改變right值
-				console.log('右下角拖動:', {startWidth, deltaX, newWidth});
-				break;
 			case 't': // 上邊
 				// 上邊跟隨滑鼠移動，下邊保持固定
 				newHeight = Math.max(450, startHeight - deltaY);
-				newBottom = startTop - deltaY; // 上邊緣移動
-				console.log('上邊拖動:', {startHeight, deltaY, newHeight, startTop, newBottom});
+				// 上邊緣移動時，top值需要減少以讓上邊緣向上拓展
+				newTop = startTop + deltaY;
+				console.log('上邊拖動:', {startHeight, deltaY, newHeight, startTop, newTop});
 				break;
 			case 'b': // 下邊
 				// 下邊跟隨滑鼠移動，上邊保持固定
 				newHeight = Math.max(450, startHeight + deltaY);
-				// 由於使用bottom定位，需要調整bottom值來讓下邊緣移動
-				newBottom = startTop - deltaY;
-				console.log('下邊拖動:', {startHeight, deltaY, newHeight, startTop, newBottom});
+				// 下邊緣移動，不改變top值
+				console.log('下邊拖動:', {startHeight, deltaY, newHeight});
 				break;
 			case 'l': // 左邊
 				// 左邊跟隨滑鼠移動，右邊保持固定
 				newWidth = Math.max(350, startWidth - deltaX);
-				newRight = startLeft - deltaX;
-				console.log('左邊拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
+				// 左邊緣移動時，left值需要增加以讓左邊緣向左拓展
+				newLeft = startLeft + deltaX;
+				console.log('左邊拖動:', {startWidth, deltaX, newWidth, startLeft, newLeft});
 				break;
 			case 'r': // 右邊
 				// 右邊跟隨滑鼠移動，左邊保持固定
 				newWidth = Math.max(350, startWidth + deltaX);
-				// 由於使用right定位，需要調整right值來讓右邊緣移動
-				newRight = startLeft - deltaX;
-				console.log('右邊拖動:', {startWidth, deltaX, newWidth, startLeft, newRight});
+				// 右邊緣移動，不改變left值
+				console.log('右邊拖動:', {startWidth, deltaX, newWidth});
 				break;
 		}
 		
@@ -861,8 +775,8 @@ $(document).ready(function() {
 		$aiBox.css({
 			width: newWidth + 'px',
 			height: newHeight + 'px',
-			right: newRight + 'px',
-			bottom: newBottom + 'px'
+			left: newLeft + 'px',
+			top: newTop + 'px'
 		});
 	}
 	
