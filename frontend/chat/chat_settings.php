@@ -6,7 +6,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>聊天室設置</title>
+    <title>AI設置</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -65,33 +65,33 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
 </head>
 <body>
     <div class="container">
-        <h1>💬 聊天室設置</h1>
+        <h1>💬 AI設置</h1>
         
         <div class="status <?php echo $chatHidden ? 'hidden' : 'visible'; ?>">
             <h3>當前狀態</h3>
             <?php if ($chatHidden): ?>
-                <p>❌ 聊天按鈕目前已被隱藏</p>
+                <p>❌ AI按鈕目前已被隱藏</p>
             <?php else: ?>
-                <p>✅ 聊天按鈕目前可見</p>
+                <p>✅ AI按鈕目前可見</p>
             <?php endif; ?>
         </div>
 
         <div>
             <h3>操作選項</h3>
             <?php if ($chatHidden): ?>
-                <button class="btn success" onclick="showChat()">重新啟用聊天按鈕</button>
+                <button class="btn success" onclick="showChat()">重新啟用AI按鈕</button>
             <?php else: ?>
-                <button class="btn danger" onclick="hideChat()">隱藏聊天按鈕</button>
+                <button class="btn danger" onclick="hideChat()">隱藏AI按鈕</button>
             <?php endif; ?>
         </div>
 
         <div style="margin-top: 30px;">
             <h3>說明</h3>
             <ul>
-                <li>聊天按鈕會在網站的所有頁面右下角顯示</li>
-                <li>您可以隨時隱藏或重新啟用聊天按鈕</li>
+                <li>AI會在網站的所有頁面右下角顯示</li>
+                <li>您可以隨時隱藏或重新啟用AI</li>
                 <li>設置會保存在您的瀏覽器中</li>
-                <li>如果聊天按鈕被隱藏，您可以在任何頁面的聊天室中點擊 🚫 按鈕來永久關閉</li>
+                <li>如果AI被隱藏，您可以在任何頁面的AI中點擊 🚫 按鈕來永久關閉</li>
             </ul>
         </div>
 
