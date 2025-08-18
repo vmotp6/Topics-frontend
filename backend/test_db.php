@@ -1,6 +1,6 @@
 <?php
 // 測試資料庫連線
-$host = 'localhost';
+$host = '100.79.58.120';  // 使用本機資料庫
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

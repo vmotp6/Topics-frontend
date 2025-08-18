@@ -389,7 +389,7 @@ document.getElementById("registerForm")?.addEventListener("submit", function (e)
   e.preventDefault();
   const formData = new FormData(this);
 
-  fetch("http://localhost:5000/sign", {
+              fetch("http://100.79.58.120:5000/sign", {
     method: "POST",
     body: formData
   })
@@ -420,7 +420,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   e.preventDefault();
   const formData = new FormData(this);
 
-  fetch("http://localhost:5000/login", {
+              fetch("http://100.79.58.120:5000/login", {
     method: "POST",
     body: formData
   })
@@ -497,7 +497,7 @@ function checkTeacherProfile() {
   const notificationDot = document.getElementById('notificationDot');
   
   if (username && role === '老師') {
-    fetch(`http://localhost:5000/teacher/profile/${username}`)
+                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
       .then(response => {
         if (response.status === 404) {
           // 尚未填寫個人資料，顯示紅點

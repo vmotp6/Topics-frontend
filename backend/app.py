@@ -7,7 +7,7 @@ CORS(app)
 
 # 連接資料庫
 db = pymysql.connect(
-    host="localhost",
+    host="100.79.58.120",  # 使用本機資料庫
     user="root",
     password="",
     database="topics_good",

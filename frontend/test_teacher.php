@@ -80,10 +80,10 @@
             formData.append('department', document.getElementById('department').value);
             formData.append('phone', document.getElementById('phone').value);
             
-            fetch('http://localhost:5000/teacher/profile', {
-                method: 'POST',
-                body: formData
-            })
+                    fetch('http://100.79.58.120:5000/teacher/profile', {
+            method: 'POST',
+            body: formData
+        })
             .then(response => response.json())
             .then(data => {
                 const resultDiv = document.getElementById('saveResult');
@@ -104,7 +104,7 @@
         function getProfile() {
             const username = document.getElementById('getUsername').value;
             
-            fetch(`http://localhost:5000/teacher/profile/${username}`)
+            fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
             .then(response => response.json())
             .then(data => {
                 const resultDiv = document.getElementById('getResult');

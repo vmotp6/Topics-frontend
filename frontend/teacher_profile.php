@@ -171,7 +171,7 @@
         window.addEventListener('load', function() {
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
             if (username) {
-                fetch(`http://localhost:5000/teacher/profile/${username}`)
+                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
                     .then(response => {
                         if (response.ok) {
                             return response.json();
@@ -203,10 +203,10 @@
             formData.append('department', department);
             formData.append('phone', phone);
             
-            fetch('http://localhost:5000/teacher/profile', {
-                method: 'POST',
-                body: formData
-            })
+                    fetch('http://100.79.58.120:5000/teacher/profile', {
+            method: 'POST',
+            body: formData
+        })
             .then(response => {
                 return response.json().then(data => {
                     const messageDiv = document.getElementById('message');
