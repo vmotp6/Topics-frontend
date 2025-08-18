@@ -3,7 +3,7 @@ session_start();
 header('Content-Type: application/json');
 
 // 資料庫連線設定
-$host = 'localhost';
+$host = '100.79.58.120';  // 使用本機資料庫
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

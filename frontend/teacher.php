@@ -169,7 +169,7 @@
 			const reminder = document.getElementById('profileReminder');
 			
 			if (username && role === '老師' && reminder) {
-				fetch(`http://localhost:5000/teacher/profile/${username}`)
+				fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
 					.then(response => {
 						if (response.status === 404) {
 							// 尚未填寫個人資料，顯示提醒

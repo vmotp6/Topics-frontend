@@ -7,7 +7,7 @@ CORS(app)
 
 # 連接資料庫
 db = pymysql.connect(
-    host="localhost",
+    host="100.79.58.120",  # 使用本機資料庫
     user="root",
     password="",
     database="topics_good",
@@ -101,7 +101,7 @@ def get_teacher_profile(username):
             user_id = user_result[0]
             
             # 查詢老師個人資料
-            sql_get_profile = "SELECT department, phone FROM teacher WHERE user_id = %s"
+            sql_get_profile = "SELECT department, phone FROM teacher02 WHERE u_id = %s"
             cursor.execute(sql_get_profile, (user_id,))
             profile = cursor.fetchone()
             
@@ -140,17 +140,17 @@ def save_teacher_profile():
             user_id = user_result[0]
             
             # 檢查是否已有個人資料
-            sql_check = "SELECT COUNT(*) FROM teacher WHERE user_id = %s"
+            sql_check = "SELECT COUNT(*) FROM teacher02 WHERE u_id = %s"
             cursor.execute(sql_check, (user_id,))
             exists = cursor.fetchone()[0] > 0
             
             if exists:
                 # 更新現有資料
-                sql_update = "UPDATE teacher SET department = %s, phone = %s WHERE user_id = %s"
+                sql_update = "UPDATE teacher02 SET department = %s, phone = %s WHERE u_id = %s"
                 cursor.execute(sql_update, (department, phone, user_id))
             else:
                 # 新增資料
-                sql_insert = "INSERT INTO teacher (user_id, department, phone) VALUES (%s, %s, %s)"
+                sql_insert = "INSERT INTO teacher02 (u_id, department, phone) VALUES (%s, %s, %s)"
                 cursor.execute(sql_insert, (user_id, department, phone))
             
             db.commit()
@@ -167,4 +167,7 @@ def save_teacher_profile():
 
 # 啟動伺服器
 if __name__ == '__main__':
-    app.run(debug=True)
+    print("🚀 註冊/登入 API 服務啟動中...")
+    print("📍 API 端點：http://100.79.58.120:5000")
+    print("📊 資料庫：topics_good")
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>註冊功能測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 註冊功能測試</h1>
+        
+        <div class="status">
+            <h3>📊 服務狀態：</h3>
+            <p>✅ 後端服務已啟動在 <strong>http://100.79.58.120:5000</strong></p>
+            <p>✅ 資料庫連線正常</p>
+            <p>✅ 所有前台檔案已修改為使用本機資料庫</p>
+        </div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="username">帳號：</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="name">姓名：</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">電子郵件：</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="role">身分：</label>
+                <select id="role" name="role" required>
+                    <option value="">請選擇身分</option>
+                    <option value="老師">老師</option>
+                    <option value="學生">學生</option>
+                    <option value="廠商">廠商</option>
+                    <option value="學校行政人員">學校行政人員</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密碼：</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">確認密碼：</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            
+            <button type="submit">註冊</button>
+        </form>
+        
+        <div id="message"></div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const messageDiv = document.getElementById('message');
+            
+            // 檢查密碼是否一致
+            if (formData.get('password') !== formData.get('confirm_password')) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '❌ 密碼與確認密碼不一致';
+                return;
+            }
+            
+            messageDiv.className = 'message';
+            messageDiv.textContent = '🔄 正在註冊...';
+            
+            fetch('http://100.79.58.120:5000/sign', {
+                method: 'POST',
+                body: formData
+            })
+            .then(async response => {
+                const data = await response.json();
+                
+                if (response.ok) {
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = `✅ ${data.message}`;
+                    document.getElementById('registerForm').reset();
+                } else {
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = `❌ ${data.message}`;
+                }
+            })
+            .catch(error => {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '❌ 註冊失敗，請檢查網路連線或後端服務狀態';
+                console.error('Error:', error);
+            });
+        });
+    </script>
+</body>
+</html>

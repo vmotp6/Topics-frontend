@@ -127,7 +127,7 @@
             ];
             
             // 測試API
-            fetch('http://localhost:5000/teacher/profile/test')
+            fetch('http://100.79.58.120:5000/teacher/profile/test')
                 .then(response => {
                     checks[0].status = 'success';
                     checks[5].status = 'success';
@@ -190,7 +190,7 @@
             const resultDiv = document.getElementById('apiResult');
             resultDiv.innerHTML = '<p>正在測試API...</p>';
             
-            fetch('http://localhost:5000/teacher/profile/test')
+            fetch('http://100.79.58.120:5000/teacher/profile/test')
                 .then(response => response.json())
                 .then(data => {
                     resultDiv.innerHTML = `

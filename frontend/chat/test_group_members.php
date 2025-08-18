@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 
 // 資料庫連接
-$host = 'localhost';
+$host = '100.79.58.120';  // 使用本機資料庫
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';

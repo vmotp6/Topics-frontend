@@ -107,7 +107,7 @@
             ];
             
             // 測試API
-            fetch('http://localhost:5000/teacher/profile/test')
+            fetch('http://100.79.58.120:5000/teacher/profile/test')
                 .then(response => {
                     checks[0].status = 'success';
                     checks[4].status = 'success';
@@ -161,7 +161,7 @@
             const resultDiv = document.getElementById('apiResult');
             resultDiv.textContent = '正在測試API...';
             
-            fetch('http://localhost:5000/teacher/profile/test')
+            fetch('http://100.79.58.120:5000/teacher/profile/test')
                 .then(response => response.json())
                 .then(data => {
                     resultDiv.innerHTML = `
@@ -187,7 +187,7 @@
             formData.append('department', document.getElementById('department').value);
             formData.append('phone', document.getElementById('phone').value);
             
-            fetch('http://localhost:5000/teacher/profile', {
+            fetch('http://100.79.58.120:5000/teacher/profile', {
                 method: 'POST',
                 body: formData
             })

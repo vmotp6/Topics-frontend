@@ -48,7 +48,7 @@
         submitBtn.disabled = true;
         document.getElementById('result').innerText = "🔄 分析中，請稍候...";
 
-        fetch('http://localhost:5001/recommend', {
+        fetch('http://100.79.58.120:5001/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -10,7 +10,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # ✅ 資料庫設定
 db_config = {
-    "host": "localhost",
+    "host": "100.79.58.120",  # 使用本機資料庫
     "user": "root",
     "password": "",
     "database": "topics_good",
