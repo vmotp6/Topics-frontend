@@ -20,9 +20,9 @@ try {
     // 根據角色獲取不同的資料
     if ($role === '廠商') {
         // 廠商：獲取教師列表，使用username作為ID
-        $stmt = $pdo->query("SELECT t2.u_id, t2.name, t2.department, u.username 
-                             FROM teacher02 t2 
-                             JOIN user u ON t2.u_id = u.id 
+        $stmt = $pdo->query("SELECT t.user_id, t.department, u.username, u.username as name 
+                             FROM teacher t 
+                             JOIN user u ON t.user_id = u.id 
                              WHERE u.role = '老師'");
         $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } elseif ($role === '老師') {

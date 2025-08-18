@@ -18,7 +18,10 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 獲取教師列表
-    $stmt = $pdo->query("SELECT u_id, name, department FROM teacher02");
+    $stmt = $pdo->query("SELECT t.user_id, t.department, u.username as name 
+                         FROM teacher t 
+                         JOIN user u ON t.user_id = u.id 
+                         WHERE u.role = '老師'");
     $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch(PDOException $e) {
@@ -220,7 +223,7 @@ try {
             <div class="teacher-list">
                 <h3>教師列表</h3>
                 <?php foreach ($teachers as $teacher): ?>
-                <div class="teacher-item" onclick="selectTeacher(<?php echo $teacher['u_id']; ?>, '<?php echo htmlspecialchars($teacher['name']); ?>', '<?php echo htmlspecialchars($teacher['department']); ?>')">
+                <div class="teacher-item" onclick="selectTeacher(<?php echo $teacher['user_id']; ?>, '<?php echo htmlspecialchars($teacher['name']); ?>', '<?php echo htmlspecialchars($teacher['department']); ?>')">
                     <div class="avatar">
                         <?php echo strtoupper(substr($teacher['name'], 0, 1)); ?>
                     </div>
