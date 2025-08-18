@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天功能修復測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .fix-btn {
+            background: #28a745;
+        }
+        .fix-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>聊天功能修復測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 資料庫字符集修復</h2>
+        <p>點擊下方按鈕修復資料庫字符集衝突問題：</p>
+        <button class="fix-btn" onclick="fixDatabaseCollation()">修復資料庫字符集</button>
+        <div id="collationResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 測試老師登入查詢</h2>
+        <p>測試老師帳號登入時的資料庫查詢是否正常：</p>
+        <button onclick="testTeacherQuery()">測試老師查詢</button>
+        <div id="teacherQueryResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 測試私聊API</h2>
+        <p>測試私聊訊息的發送和接收：</p>
+        <button onclick="testPrivateChat()">測試私聊功能</button>
+        <div id="privateChatResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 測試群聊API</h2>
+        <p>測試群聊功能的建立和訊息發送：</p>
+        <button onclick="testGroupChat()">測試群聊功能</button>
+        <div id="groupChatResult"></div>
+    </div>
+
+    <script>
+        async function fixDatabaseCollation() {
+            const resultDiv = document.getElementById('collationResult');
+            resultDiv.innerHTML = '<div class="test-result">修復中...</div>';
+            
+            try {
+                const response = await fetch('fix_database_collation.php');
+                const result = await response.text();
+                
+                if (result.includes('✅ 所有資料表字符集修復完成')) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 資料庫字符集修復成功！</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 修復失敗</div><div class="test-result">${result}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 修復失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testTeacherQuery() {
+            const resultDiv = document.getElementById('teacherQueryResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                // 模擬老師查詢
+                const response = await fetch('test_teacher_query.php');
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 老師查詢測試成功！</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 老師查詢測試失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 老師查詢測試失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testPrivateChat() {
+            const resultDiv = document.getElementById('privateChatResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                // 測試發送私聊訊息
+                const sendResponse = await fetch('save_private_message.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from: 'test_teacher',
+                        to: 'test_vendor',
+                        message: '測試私聊訊息',
+                        role: '老師'
+                    })
+                });
+                
+                const sendResult = await sendResponse.json();
+                
+                if (sendResult.success) {
+                    // 測試載入私聊訊息
+                    const loadResponse = await fetch('load_private_messages.php?from=test_teacher&to=test_vendor');
+                    const loadResult = await loadResponse.json();
+                    
+                    if (loadResult.success) {
+                        resultDiv.innerHTML = `<div class="test-result success">✅ 私聊功能測試成功！</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="test-result error">❌ 載入私聊訊息失敗: ${loadResult.error}</div>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 發送私聊訊息失敗: ${sendResult.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 私聊功能測試失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testGroupChat() {
+            const resultDiv = document.getElementById('groupChatResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                // 測試建立群聊
+                const createResponse = await fetch('group_chat_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'create_group',
+                        group_name: '測試群聊',
+                        created_by: 'test_teacher',
+                        members: ['test_vendor']
+                    })
+                });
+                
+                const createResult = await createResponse.json();
+                
+                if (createResult.success) {
+                    // 測試發送群聊訊息
+                    const sendResponse = await fetch('group_chat_api.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            action: 'send_group_message',
+                            group_id: createResult.group_id,
+                            from_user: 'test_teacher',
+                            message: '測試群聊訊息',
+                            role: '老師'
+                        })
+                    });
+                    
+                    const sendResult = await sendResponse.json();
+                    
+                    if (sendResult.success) {
+                        resultDiv.innerHTML = `<div class="test-result success">✅ 群聊功能測試成功！群組ID: ${createResult.group_id}</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="test-result error">❌ 發送群聊訊息失敗: ${sendResult.error}</div>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 建立群聊失敗: ${createResult.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 群聊功能測試失敗: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+

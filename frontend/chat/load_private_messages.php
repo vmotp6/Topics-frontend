@@ -28,14 +28,18 @@ try {
         exit;
     }
     
-    // 獲取兩個用戶之間的私聊訊息
+    // 獲取兩個用戶之間的私聊訊息（限制最新100條以提高速度）
     $sql = "SELECT * FROM private_chat_history 
             WHERE (from_user = ? AND to_user = ?) 
             OR (from_user = ? AND to_user = ?) 
-            ORDER BY timestamp ASC";
+            ORDER BY timestamp DESC 
+            LIMIT 100";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$from, $to, $to, $from]);
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 反轉陣列以保持時間順序
+    $messages = array_reverse($messages);
     
     echo json_encode([
         'success' => true,

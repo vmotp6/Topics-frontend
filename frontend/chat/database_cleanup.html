@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料庫表格清理工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .tool-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .tool-section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .tool-section p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 10px 10px 0;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .steps {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 資料庫表格清理工具</h1>
+        
+        <div class="warning">
+            <strong>⚠️ 重要提醒：</strong>
+            在執行任何資料庫操作前，請務必備份您的資料庫！刪除資料表是不可逆的操作。
+        </div>
+        
+        <div class="info">
+            <strong>📋 使用說明：</strong>
+            此工具可以幫助您分析資料庫中的表格，識別哪些表格是未使用的，並安全地刪除它們。
+        </div>
+        
+        <div class="steps">
+            <h3>📝 建議操作步驟：</h3>
+            <ol>
+                <li><strong>第一步：</strong> 點擊「分析資料庫表格」來查看所有表格的詳細分析</li>
+                <li><strong>第二步：</strong> 檢查分析結果，確認哪些表格可以安全刪除</li>
+                <li><strong>第三步：</strong> 如果需要刪除表格，點擊「刪除未使用的表格」</li>
+                <li><strong>第四步：</strong> 謹慎選擇要刪除的表格並確認操作</li>
+            </ol>
+        </div>
+        
+        <div class="tool-section">
+            <h2>📊 1. 資料庫表格分析</h2>
+            <p>分析所有資料庫表格，識別核心系統表格、可能重複的表格，以及可以安全刪除的表格。</p>
+            <a href="analyze_database_tables.php" class="btn btn-success">🔍 分析資料庫表格</a>
+        </div>
+        
+        <div class="tool-section">
+            <h2>🗑️ 2. 刪除未使用的表格</h2>
+            <p>安全地刪除未使用的資料表。此工具會檢查表格是否為空，並提供確認機制。</p>
+            <a href="delete_unused_tables.php" class="btn btn-danger">🗑️ 刪除未使用的表格</a>
+        </div>
+        
+        <div class="tool-section">
+            <h2>📋 3. 核心系統表格說明</h2>
+            <p>以下表格是聊天系統的核心，<strong>絕對不能刪除</strong>：</p>
+            <ul>
+                <li><strong>user</strong> - 用戶基本資料表</li>
+                <li><strong>teacher02</strong> - 教師詳細資料表</li>
+                <li><strong>private_chat_history</strong> - 私聊訊息記錄表</li>
+                <li><strong>group_chats</strong> - 群聊資料表</li>
+                <li><strong>group_chat_members</strong> - 群聊成員表</li>
+                <li><strong>group_chat_messages</strong> - 群聊訊息記錄表</li>
+                <li><strong>ai_chat_history</strong> - AI聊天記錄表</li>
+            </ul>
+        </div>
+        
+        <div class="tool-section">
+            <h2>🔧 4. 系統表格說明</h2>
+            <p>以下表格是MySQL系統表格，<strong>不能刪除</strong>：</p>
+            <ul>
+                <li><strong>mysql</strong> - MySQL系統資料表</li>
+                <li><strong>performance_schema</strong> - 效能監控資料表</li>
+                <li><strong>phpmyadmin</strong> - phpMyAdmin管理資料表</li>
+                <li><strong>test</strong> - 測試資料表</li>
+            </ul>
+        </div>
+        
+        <div class="tool-section">
+            <h2>📞 5. 其他工具</h2>
+            <p>其他有用的資料庫管理工具：</p>
+            <a href="test_database.php" class="btn">🧪 測試資料庫連接</a>
+            <a href="create_chat_tables.php" class="btn">📋 建立聊天表格</a>
+            <a href="fix_database_collation.php" class="btn">🔧 修復資料庫字符集</a>
+            <a href="../chat.php" class="btn">💬 返回聊天室</a>
+        </div>
+        
+        <div class="warning">
+            <strong>💡 提示：</strong>
+            如果您不確定某個表格是否可以刪除，建議先保留它。刪除錯誤的表格可能會導致系統無法正常運作。
+        </div>
+    </div>
+</body>
+</html>
+

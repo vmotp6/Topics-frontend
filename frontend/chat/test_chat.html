@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天功能測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>聊天功能測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 測試群聊API</h2>
+        <button onclick="testGroupChatAPI()">測試群聊API</button>
+        <div id="groupChatResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 測試私聊API</h2>
+        <button onclick="testPrivateChatAPI()">測試私聊API</button>
+        <div id="privateChatResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 測試資料庫連接</h2>
+        <button onclick="testDatabaseConnection()">測試資料庫連接</button>
+        <div id="databaseResult"></div>
+    </div>
+
+    <script>
+        async function testGroupChatAPI() {
+            const resultDiv = document.getElementById('groupChatResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                const response = await fetch('group_chat_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'create_group',
+                        group_name: '測試群聊',
+                        created_by: 'test_user',
+                        members: ['user1', 'user2']
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 群聊API測試成功！群組ID: ${result.group_id}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 群聊API測試失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 群聊API測試失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testPrivateChatAPI() {
+            const resultDiv = document.getElementById('privateChatResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                const response = await fetch('save_private_message.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from: 'test_user1',
+                        to: 'test_user2',
+                        message: '測試訊息',
+                        role: '測試'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 私聊API測試成功！訊息ID: ${result.id}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 私聊API測試失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 私聊API測試失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testDatabaseConnection() {
+            const resultDiv = document.getElementById('databaseResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                const response = await fetch('load_private_messages.php?from=test_user1&to=test_user2');
+                const result = await response.json();
+                
+                if (result.success !== undefined) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 資料庫連接測試成功！</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 資料庫連接測試失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 資料庫連接測試失敗: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+

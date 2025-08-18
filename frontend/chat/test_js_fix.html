@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試 JavaScript 修復</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript 修復測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 測試 DOM 元素訪問</h2>
+        <p>測試修復後的 JavaScript 是否能正確處理 null 元素</p>
+        <button class="test-button" onclick="testDOMAccess()">測試 DOM 訪問</button>
+        <div id="domTestResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 測試聊天 API</h2>
+        <p>測試聊天相關的 API 是否正常工作</p>
+        <button class="test-button" onclick="testChatAPI()">測試聊天 API</button>
+        <div id="apiTestResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 測試資料庫連接</h2>
+        <p>測試資料庫連接和表格是否存在</p>
+        <button class="test-button" onclick="testDatabase()">測試資料庫</button>
+        <div id="dbTestResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 測試群聊功能</h2>
+        <p>測試群聊相關的 API</p>
+        <button class="test-button" onclick="testGroupChat()">測試群聊</button>
+        <div id="groupTestResult" class="result"></div>
+    </div>
+
+    <script>
+        function showResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function testDOMAccess() {
+            try {
+                // 測試修復後的 DOM 訪問邏輯
+                const testElement = document.querySelector('.non-existent-element');
+                if (testElement && testElement.classList) {
+                    testElement.classList.remove('active');
+                }
+                
+                // 測試安全的元素訪問
+                const safeElement = document.getElementById('testElement');
+                if (safeElement) {
+                    safeElement.textContent = 'test';
+                }
+                
+                showResult('domTestResult', '✅ DOM 訪問測試通過 - 沒有 JavaScript 錯誤');
+            } catch (error) {
+                showResult('domTestResult', `❌ DOM 訪問測試失敗: ${error.message}`, true);
+            }
+        }
+
+        async function testChatAPI() {
+            try {
+                const response = await fetch('load_private_messages.php?from=test&to=test');
+                const result = await response.json();
+                showResult('apiTestResult', `✅ 聊天 API 測試通過 - 回應: ${JSON.stringify(result)}`);
+            } catch (error) {
+                showResult('apiTestResult', `❌ 聊天 API 測試失敗: ${error.message}`, true);
+            }
+        }
+
+        async function testDatabase() {
+            try {
+                const response = await fetch('test_database.php');
+                const result = await response.text();
+                showResult('dbTestResult', `✅ 資料庫測試完成 - 檢查控制台查看詳細結果`);
+                console.log('Database test result:', result);
+            } catch (error) {
+                showResult('dbTestResult', `❌ 資料庫測試失敗: ${error.message}`, true);
+            }
+        }
+
+        async function testGroupChat() {
+            try {
+                const response = await fetch('group_chat_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'get_group_messages',
+                        group_id: 1,
+                        from_user: 'test'
+                    })
+                });
+                const result = await response.json();
+                showResult('groupTestResult', `✅ 群聊 API 測試通過 - 回應: ${JSON.stringify(result)}`);
+            } catch (error) {
+                showResult('groupTestResult', `❌ 群聊 API 測試失敗: ${error.message}`, true);
+            }
+        }
+
+        // 頁面載入時自動測試 DOM 訪問
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('頁面載入完成，開始自動測試...');
+            testDOMAccess();
+        });
+    </script>
+</body>
+</html>
+

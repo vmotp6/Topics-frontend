@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天功能測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .chat-test {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            height: 300px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .sent {
+            background: #007bff;
+            color: white;
+            text-align: right;
+        }
+        .received {
+            background: #e9ecef;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>聊天功能測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 檢查資料庫表</h2>
+        <button onclick="checkDatabase()">檢查資料庫</button>
+        <div id="databaseResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 測試發送私聊訊息</h2>
+        <input type="text" id="fromUser" placeholder="發送者" value="vendor1">
+        <input type="text" id="toUser" placeholder="接收者" value="teacher1">
+        <input type="text" id="messageText" placeholder="訊息內容" value="測試訊息">
+        <button onclick="sendPrivateMessage()">發送私聊訊息</button>
+        <div id="sendResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 測試載入私聊訊息</h2>
+        <input type="text" id="loadFrom" placeholder="發送者" value="vendor1">
+        <input type="text" id="loadTo" placeholder="接收者" value="teacher1">
+        <button onclick="loadPrivateMessages()">載入私聊訊息</button>
+        <div id="loadResult"></div>
+        <div id="chatDisplay" class="chat-test"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 測試聊天室功能</h2>
+        <button onclick="testChatRoom()">測試聊天室</button>
+        <div id="chatRoomResult"></div>
+    </div>
+
+    <script>
+        async function checkDatabase() {
+            const resultDiv = document.getElementById('databaseResult');
+            resultDiv.innerHTML = '<div class="test-result">檢查中...</div>';
+            
+            try {
+                const response = await fetch('test_database.php');
+                const result = await response.text();
+                resultDiv.innerHTML = `<div class="test-result">${result}</div>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 檢查失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function sendPrivateMessage() {
+            const resultDiv = document.getElementById('sendResult');
+            const fromUser = document.getElementById('fromUser').value;
+            const toUser = document.getElementById('toUser').value;
+            const message = document.getElementById('messageText').value;
+            
+            if (!fromUser || !toUser || !message) {
+                resultDiv.innerHTML = '<div class="test-result error">❌ 請填寫所有欄位</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="test-result">發送中...</div>';
+            
+            try {
+                const response = await fetch('save_private_message.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from: fromUser,
+                        to: toUser,
+                        message: message,
+                        role: '測試'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 訊息發送成功！ID: ${result.id}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 發送失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 發送失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadPrivateMessages() {
+            const resultDiv = document.getElementById('loadResult');
+            const chatDisplay = document.getElementById('chatDisplay');
+            const fromUser = document.getElementById('loadFrom').value;
+            const toUser = document.getElementById('loadTo').value;
+            
+            if (!fromUser || !toUser) {
+                resultDiv.innerHTML = '<div class="test-result error">❌ 請填寫發送者和接收者</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="test-result">載入中...</div>';
+            chatDisplay.innerHTML = '';
+            
+            try {
+                const response = await fetch(`load_private_messages.php?from=${fromUser}&to=${toUser}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `<div class="test-result success">✅ 載入成功！共 ${result.messages.length} 條訊息</div>`;
+                    
+                    // 顯示訊息
+                    result.messages.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${msg.from_user === fromUser ? 'sent' : 'received'}`;
+                        messageDiv.textContent = `[${msg.role}] ${msg.from_user}: ${msg.message}`;
+                        chatDisplay.appendChild(messageDiv);
+                    });
+                    
+                    chatDisplay.scrollTop = chatDisplay.scrollHeight;
+                } else {
+                    resultDiv.innerHTML = `<div class="test-result error">❌ 載入失敗: ${result.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 載入失敗: ${error.message}</div>`;
+            }
+        }
+        
+        async function testChatRoom() {
+            const resultDiv = document.getElementById('chatRoomResult');
+            resultDiv.innerHTML = '<div class="test-result">測試中...</div>';
+            
+            try {
+                const response = await fetch('chat.php');
+                const result = await response.text();
+                
+                if (result.includes('請先登入')) {
+                    resultDiv.innerHTML = '<div class="test-result error">❌ 聊天室需要登入</div>';
+                } else if (result.includes('聊天室')) {
+                    resultDiv.innerHTML = '<div class="test-result success">✅ 聊天室頁面載入正常</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="test-result error">❌ 聊天室頁面載入異常</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="test-result error">❌ 測試失敗: ${error.message}</div>`;
+            }
+        }
+        
+        // 頁面載入時自動檢查資料庫
+        window.onload = function() {
+            checkDatabase();
+        };
+    </script>
+</body>
+</html>
+

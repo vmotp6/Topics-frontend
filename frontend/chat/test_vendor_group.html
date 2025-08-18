@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試廠商群聊功能</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .info {
+            border-left-color: #17a2b8;
+            background: #d1ecf1;
+        }
+    </style>
+</head>
+<body>
+    <h1>廠商群聊功能測試</h1>
+    
+    <div class="test-section">
+        <h2>1. 測試廠商群聊查詢</h2>
+        <p>測試廠商帳號是否能查詢到參與的群聊</p>
+        <input type="text" id="vendorUsername" placeholder="輸入廠商帳號" value="vendor1" style="padding: 8px; margin-right: 10px;">
+        <button class="test-button" onclick="testVendorGroups()">測試廠商群聊</button>
+        <div id="vendorGroupResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 測試群聊成員查詢</h2>
+        <p>測試特定群聊的成員列表</p>
+        <input type="text" id="groupId" placeholder="輸入群聊ID" value="1" style="padding: 8px; margin-right: 10px;">
+        <button class="test-button" onclick="testGroupMembers()">測試群聊成員</button>
+        <div id="groupMembersResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 測試群聊訊息</h2>
+        <p>測試群聊訊息查詢</p>
+        <input type="text" id="testGroupId" placeholder="輸入群聊ID" value="1" style="padding: 8px; margin-right: 10px;">
+        <input type="text" id="testUsername" placeholder="輸入用戶名" value="vendor1" style="padding: 8px; margin-right: 10px;">
+        <button class="test-button" onclick="testGroupMessages()">測試群聊訊息</button>
+        <div id="groupMessagesResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 測試資料庫表格</h2>
+        <p>檢查群聊相關的資料庫表格</p>
+        <button class="test-button" onclick="testDatabaseTables()">檢查資料庫表格</button>
+        <div id="databaseResult" class="result"></div>
+    </div>
+
+    <script>
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+        }
+
+        async function testVendorGroups() {
+            const vendorUsername = document.getElementById('vendorUsername').value;
+            if (!vendorUsername) {
+                showResult('vendorGroupResult', '請輸入廠商帳號', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('test_vendor_groups.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vendor_username: vendorUsername
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let message = `✅ 廠商 ${vendorUsername} 的群聊查詢成功\n`;
+                    message += `找到 ${result.groups.length} 個群聊:\n`;
+                    result.groups.forEach(group => {
+                        message += `- 群聊ID: ${group.id}, 名稱: ${group.group_name}, 建立者: ${group.created_by}\n`;
+                    });
+                    showResult('vendorGroupResult', message, 'success');
+                } else {
+                    showResult('vendorGroupResult', `❌ 查詢失敗: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('vendorGroupResult', `❌ 測試失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGroupMembers() {
+            const groupId = document.getElementById('groupId').value;
+            if (!groupId) {
+                showResult('groupMembersResult', '請輸入群聊ID', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('test_group_members.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        group_id: groupId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let message = `✅ 群聊 ${groupId} 的成員查詢成功\n`;
+                    message += `找到 ${result.members.length} 個成員:\n`;
+                    result.members.forEach(member => {
+                        message += `- 用戶名: ${member.member_username}\n`;
+                    });
+                    showResult('groupMembersResult', message, 'success');
+                } else {
+                    showResult('groupMembersResult', `❌ 查詢失敗: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('groupMembersResult', `❌ 測試失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGroupMessages() {
+            const groupId = document.getElementById('testGroupId').value;
+            const username = document.getElementById('testUsername').value;
+            
+            if (!groupId || !username) {
+                showResult('groupMessagesResult', '請輸入群聊ID和用戶名', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('group_chat_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'get_group_messages',
+                        group_id: groupId,
+                        from_user: username
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let message = `✅ 群聊 ${groupId} 的訊息查詢成功\n`;
+                    message += `找到 ${result.messages.length} 條訊息:\n`;
+                    result.messages.slice(0, 5).forEach(msg => {
+                        message += `- [${msg.role}] ${msg.from_user}: ${msg.message}\n`;
+                    });
+                    if (result.messages.length > 5) {
+                        message += `... 還有 ${result.messages.length - 5} 條訊息\n`;
+                    }
+                    showResult('groupMessagesResult', message, 'success');
+                } else {
+                    showResult('groupMessagesResult', `❌ 查詢失敗: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('groupMessagesResult', `❌ 測試失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDatabaseTables() {
+            try {
+                const response = await fetch('test_database.php');
+                const result = await response.text();
+                showResult('databaseResult', `✅ 資料庫檢查完成 - 檢查控制台查看詳細結果`, 'success');
+                console.log('Database tables check:', result);
+            } catch (error) {
+                showResult('databaseResult', `❌ 資料庫檢查失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 頁面載入時顯示說明
+        document.addEventListener('DOMContentLoaded', function() {
+            showResult('vendorGroupResult', '請輸入廠商帳號並點擊測試按鈕', 'info');
+            showResult('groupMembersResult', '請輸入群聊ID並點擊測試按鈕', 'info');
+            showResult('groupMessagesResult', '請輸入群聊ID和用戶名並點擊測試按鈕', 'info');
+            showResult('databaseResult', '點擊按鈕檢查資料庫表格', 'info');
+        });
+    </script>
+</body>
+</html>
+
