@@ -8,7 +8,7 @@ if (!isset($_SESSION['username']) || !isset($_SESSION['role'])) {
 }
 
 // 資料庫連接
-$host = '100.79.58.120';  // 使用本機資料庫
+$host = '100.79.58.120';
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';
@@ -19,23 +19,62 @@ try {
     
     // 根據角色獲取不同的資料
     if ($role === '廠商') {
-        // 廠商：獲取教師列表，使用username作為ID
-        $stmt = $pdo->query("SELECT t.user_id, t.department, u.username, u.username as name 
-                             FROM teacher t 
-                             JOIN user u ON t.user_id = u.id 
-                             WHERE u.role = '老師'");
-        $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } elseif ($role === '老師') {
-        // 老師：獲取廠商列表，使用username作為ID
-        $stmt = $pdo->query("SELECT DISTINCT username as vendor_id, username as vendor_name 
-                             FROM user 
-                             WHERE role = '廠商' 
-                             ORDER BY username");
-        $vendors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // 廠商：獲取所有教師列表
+        $contacts = [];
         
-        // 如果沒有廠商，顯示空陣列
-        if (empty($vendors)) {
-            $vendors = [];
+        // 獲取所有老師
+        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+                              FROM teacher t 
+                              JOIN user u ON t.user_id = u.id 
+                              WHERE u.role = '老師'
+                              ORDER BY t.name");
+        $stmt->execute();
+        $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $contacts = array_merge($contacts, $allTeachers);
+        
+        // 如果沒有聯絡人，顯示空陣列
+        if (empty($contacts)) {
+            $contacts = [];
+        }
+    } elseif ($role === '老師') {
+        // 老師：獲取同科系老師和曾經有私信過的廠商
+        $contacts = [];
+        
+        // 先獲取當前老師的科系
+        $stmt = $pdo->prepare("SELECT t.department FROM teacher t 
+                              JOIN user u ON t.user_id = u.id 
+                              WHERE u.username = ? AND u.role = '老師'");
+        $stmt->execute([$username]);
+        $currentTeacher = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($currentTeacher) {
+            $department = $currentTeacher['department'];
+            
+            // 獲取同科系的老師
+            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+                                  FROM teacher t 
+                                  JOIN user u ON t.user_id = u.id 
+                                  WHERE u.role = '老師' AND t.department = ? AND u.username != ?
+                                  ORDER BY t.name");
+            $stmt->execute([$department, $username]);
+            $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $contacts = array_merge($contacts, $sameDeptTeachers);
+            
+            // 獲取曾經有私信過老師的廠商
+            $stmt = $pdo->prepare("SELECT DISTINCT u.username as username, u.username as name, '廠商' as contact_type, '廠商' as department
+                                  FROM user u 
+                                  JOIN private_chat_history pm ON (u.username COLLATE utf8mb4_unicode_ci = pm.from_user COLLATE utf8mb4_unicode_ci OR u.username COLLATE utf8mb4_unicode_ci = pm.to_user COLLATE utf8mb4_unicode_ci)
+                                  WHERE u.role = '廠商' 
+                                  AND (pm.from_user COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci OR pm.to_user COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci)
+                                  ORDER BY u.username");
+            $stmt->execute([$username, $username]);
+            $vendorsWithMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $contacts = array_merge($contacts, $vendorsWithMessages);
+        }
+        
+        // 如果沒有聯絡人，顯示空陣列
+        if (empty($contacts)) {
+            $contacts = [];
         }
     }
     
@@ -101,6 +140,21 @@ try {
       background-color: #f8f9fa;
     }
     
+    .edit-group-btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    
+    .edit-group-btn:hover {
+      background: #0056b3;
+    }
+    
     .user-item.active {
       background-color: #e3f2fd;
       border-left: 4px solid #2196f3;
@@ -133,6 +187,12 @@ try {
     .user-role {
       font-size: 12px;
       color: #666;
+    }
+    
+    .contact-type {
+      font-size: 10px;
+      color: #999;
+      margin-top: 2px;
     }
     
     .chat-main {
@@ -282,27 +342,43 @@ try {
   </style>
 </head>
 <body>
-  <?php if ($role === '廠商' && !empty($teachers)): ?>
-    <!-- 廠商私聊介面 -->
+  <?php if ($role === '廠商'): ?>
+    <!-- 廠商聊天介面 -->
     <div class="chat-container">
-      <!-- 左側教師列表 -->
+      <!-- 左側聯絡人列表 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <h2 class="sidebar-title">教師列表</h2>
+          <h2 class="sidebar-title">聯絡人列表</h2>
         </div>
-        <ul class="user-list">
-          <?php foreach ($teachers as $teacher): ?>
-          <li class="user-item" data-user-id="<?php echo $teacher['username']; ?>" data-user-name="<?php echo htmlspecialchars($teacher['name']); ?>">
-            <div class="user-avatar">
-              <?php echo strtoupper(substr($teacher['name'], 0, 1)); ?>
-            </div>
-            <div class="user-info">
-              <div class="user-name"><?php echo htmlspecialchars($teacher['name']); ?></div>
-              <div class="user-role"><?php echo htmlspecialchars($teacher['department']); ?></div>
-            </div>
-          </li>
-          <?php endforeach; ?>
-        </ul>
+        
+        <!-- 群組列表 -->
+        <div id="groupList" style="margin-bottom: 20px;">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
+          <div id="groupsContainer"></div>
+        </div>
+        
+        <!-- 聯絡人列表 -->
+        <div id="contactList">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
+          <ul class="user-list">
+            <?php if (!empty($contacts)): ?>
+              <?php foreach ($contacts as $contact): ?>
+              <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private">
+                <div class="user-avatar">
+                  <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                </div>
+                <div class="user-info">
+                  <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                  <div class="user-role"><?php echo htmlspecialchars($contact['department']); ?></div>
+                  <div class="contact-type"><?php echo $contact['contact_type']; ?></div>
+                </div>
+              </li>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <li style="padding: 20px; text-align: center; color: #999;">暫無聯絡人</li>
+            <?php endif; ?>
+          </ul>
+        </div>
       </div>
       
       <!-- 右側聊天區域 -->
@@ -327,41 +403,60 @@ try {
       </div>
     </div>
 
-  <?php elseif ($role === '老師' && !empty($vendors)): ?>
-    <!-- 老師私聊介面 -->
+  <?php elseif ($role === '老師' || $role === '廠商'): ?>
+    <!-- 老師和廠商聊天介面 -->
     <div class="chat-container">
-      <!-- 左側廠商列表 -->
+      <!-- 左側聯絡人列表 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <h2 class="sidebar-title">廠商列表</h2>
+          <h2 class="sidebar-title">聯絡人列表</h2>
+          <?php if ($role === '老師'): ?>
+          <button id="createGroupBtn" style="margin-top: 10px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+          <?php endif; ?>
         </div>
-        <ul class="user-list">
-          <?php foreach ($vendors as $vendor): ?>
-          <li class="user-item" data-user-id="<?php echo $vendor['vendor_id']; ?>" data-user-name="<?php echo htmlspecialchars($vendor['vendor_name']); ?>">
-            <div class="user-avatar">
-              <?php echo strtoupper(substr($vendor['vendor_name'], 0, 1)); ?>
-            </div>
-            <div class="user-info">
-              <div class="user-name"><?php echo htmlspecialchars($vendor['vendor_name']); ?></div>
-              <div class="user-role">廠商</div>
-            </div>
-          </li>
-          <?php endforeach; ?>
-        </ul>
+        
+        <!-- 群組列表 -->
+        <div id="groupList" style="margin-bottom: 20px;">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
+          <div id="groupsContainer"></div>
+        </div>
+        
+        <!-- 聯絡人列表 -->
+        <div id="contactList">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
+          <ul class="user-list">
+            <?php if (!empty($contacts)): ?>
+              <?php foreach ($contacts as $contact): ?>
+              <li class="user-item" data-user-id="<?php echo $contact['username'] ?? $contact['vendor_id']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name'] ?? $contact['vendor_name']); ?>" data-chat-type="private">
+                <div class="user-avatar">
+                  <?php echo strtoupper(substr($contact['name'] ?? $contact['vendor_name'], 0, 1)); ?>
+                </div>
+                <div class="user-info">
+                  <div class="user-name"><?php echo htmlspecialchars($contact['name'] ?? $contact['vendor_name']); ?></div>
+                  <div class="user-role"><?php echo htmlspecialchars($contact['department'] ?? '廠商'); ?></div>
+                  <div class="contact-type"><?php echo $contact['contact_type']; ?></div>
+                </div>
+              </li>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <li style="padding: 20px; text-align: center; color: #999;">暫無聯絡人</li>
+            <?php endif; ?>
+          </ul>
+        </div>
       </div>
       
       <!-- 右側聊天區域 -->
       <div class="chat-main">
         <div class="chat-header">
           <div class="current-chat-info">
-            <div class="current-chat-name">選擇廠商查看聊天</div>
+            <div class="current-chat-name">選擇聯絡人開始聊天</div>
             <div class="current-chat-role"></div>
           </div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
           <div class="no-chat-selected">
-            請從左側選擇一位廠商查看聊天記錄
+            請從左側選擇一位聯絡人開始聊天
           </div>
         </div>
         
@@ -388,11 +483,371 @@ try {
     
     let currentUserId = null;
     let currentUserName = null;
+    let currentChatType = 'private'; // 'private' 或 'group'
+    let currentGroupId = null;
     let lastMessageId = 0;
+    let messageCache = new Map(); // 快取聊天記錄
+    
+    // 清除所有快取
+    function clearMessageCache() {
+        messageCache.clear();
+        console.log('清除所有聊天記錄快取');
+    }
     
     <?php if ($role === '廠商' || $role === '老師'): ?>
+    // 載入群組列表
+    async function loadGroups() {
+      try {
+        const response = await fetch('group_management.php?action=get_my_groups&username=' + username);
+        const result = await response.json();
+        
+        if (result.success && result.groups) {
+          const groupsContainer = document.getElementById('groupsContainer');
+          groupsContainer.innerHTML = '';
+          
+          result.groups.forEach(group => {
+            const groupItem = document.createElement('div');
+            groupItem.className = 'user-item';
+            groupItem.dataset.groupId = group.id;
+            groupItem.dataset.groupName = group.group_name;
+            groupItem.dataset.chatType = 'group';
+            
+            groupItem.innerHTML = `
+              <div class="user-avatar" style="background: #4CAF50;">
+                <i class="fas fa-users" style="font-size: 16px;">👥</i>
+              </div>
+              <div class="user-info">
+                <div class="user-name" id="group-name-${group.id}">${group.group_name}</div>
+                <div class="user-role">${group.member_count} 位成員</div>
+                <div class="contact-type">群組</div>
+                <button class="edit-group-btn" onclick="editGroupName('${group.id}', '${group.group_name}')">編輯</button>
+              </div>
+            `;
+            
+            groupItem.addEventListener('click', function(e) {
+              // 如果點擊的是編輯按鈕，不觸發群組選擇
+              if (e.target.classList.contains('edit-group-btn')) {
+                return;
+              }
+              selectGroup(group.id, group.group_name);
+            });
+            
+            groupsContainer.appendChild(groupItem);
+          });
+        }
+      } catch (error) {
+        console.error('載入群組失敗:', error);
+      }
+    }
+    
+    // 選擇群組
+    function selectGroup(groupId, groupName) {
+      console.log('選擇群組:', groupId, groupName);
+      
+      // 移除其他項目的active狀態
+      document.querySelectorAll('.user-item').forEach(i => i.classList.remove('active'));
+      
+      // 添加當前項目的active狀態
+      const currentElement = document.querySelector(`[data-group-id="${groupId}"]`);
+      if (currentElement) {
+        currentElement.classList.add('active');
+      }
+      
+      // 檢查是否切換到不同的群組
+      if (currentGroupId !== groupId || currentChatType !== 'group') {
+        // 重置訊息ID並清空聊天區域
+        lastMessageId = 0;
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+          chatMessages.innerHTML = '';
+        }
+      }
+      
+      // 設置當前聊天類型
+      currentChatType = 'group';
+      currentGroupId = groupId;
+      currentUserId = null;
+      currentUserName = groupName;
+      
+      // 更新聊天標題
+      const chatNameElement = document.querySelector('.current-chat-name');
+      const chatRoleElement = document.querySelector('.current-chat-role');
+      if (chatNameElement) {
+        chatNameElement.textContent = groupName;
+      }
+      if (chatRoleElement) {
+        chatRoleElement.textContent = '群組聊天';
+      }
+      
+      // 啟用輸入框
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.querySelector('.chat-input button');
+      if (messageInput) {
+        messageInput.disabled = false;
+      }
+      if (sendButton) {
+        sendButton.disabled = false;
+      }
+      
+      // 隱藏提示訊息
+      const noChatSelected = document.querySelector('.no-chat-selected');
+      if (noChatSelected) {
+        noChatSelected.classList.add('hidden');
+      }
+      
+      // 載入群組聊天記錄
+      loadGroupChatHistory();
+    }
+    
+    // 編輯群組名稱
+    async function editGroupName(groupId, currentName) {
+      const newName = prompt('請輸入新的群組名稱:', currentName);
+      if (newName && newName.trim() && newName !== currentName) {
+        try {
+          const formData = new FormData();
+          formData.append('action', 'update_group_name');
+          formData.append('group_id', groupId);
+          formData.append('new_name', newName.trim());
+          formData.append('username', username);
+          
+          const response = await fetch('group_management.php', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            // 更新顯示的群組名稱
+            const nameElement = document.getElementById(`group-name-${groupId}`);
+            if (nameElement) {
+              nameElement.textContent = newName.trim();
+            }
+            
+            // 更新群組項目的data屬性
+            const groupItem = document.querySelector(`[data-group-id="${groupId}"]`);
+            if (groupItem) {
+              groupItem.dataset.groupName = newName.trim();
+            }
+            
+            // 如果當前選中的是這個群組，也要更新聊天標題
+            if (currentGroupId === groupId) {
+              document.querySelector('.current-chat-name').textContent = newName.trim();
+              currentUserName = newName.trim();
+            }
+            
+            alert('群組名稱更新成功！');
+          } else {
+            alert('更新失敗: ' + result.error);
+          }
+        } catch (error) {
+          console.error('更新群組名稱失敗:', error);
+          alert('更新群組名稱失敗');
+        }
+      }
+    }
+    
+    // 載入群組聊天記錄
+    async function loadGroupChatHistory() {
+      console.log('載入群組聊天記錄，群組ID:', currentGroupId);
+      try {
+        const response = await fetch('group_management.php?action=get_group_messages&group_id=' + currentGroupId);
+        console.log('群組訊息API響應:', response);
+        
+        const result = await response.json();
+        console.log('群組訊息API結果:', result);
+        
+        if (result.success && result.messages) {
+          console.log('群組訊息數量:', result.messages.length);
+          displayGroupMessages(result.messages);
+          
+          if (result.messages.length > 0) {
+            lastMessageId = Math.max(...result.messages.map(m => m.id));
+            console.log('最後訊息ID:', lastMessageId);
+          }
+        } else {
+          console.log('群組訊息載入失敗或沒有訊息');
+        }
+      } catch (error) {
+        console.error('載入群組聊天記錄失敗:', error);
+      }
+    }
+    
+    // 顯示群組訊息
+    function displayGroupMessages(messages) {
+      const chatMessages = document.getElementById('chatMessages');
+      
+      // 清空聊天區域
+      chatMessages.innerHTML = '';
+      
+      // 檢查是否有訊息
+      if (!messages || messages.length === 0) {
+        // 顯示無訊息的提示
+        const noMessageDiv = document.createElement('div');
+        noMessageDiv.style.cssText = `
+          text-align: center;
+          padding: 40px 20px;
+          color: #999;
+          font-size: 14px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          margin: 20px;
+          border: 1px dashed #ddd;
+        `;
+        noMessageDiv.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 10px;">👥</div>
+          <div>群組還沒有任何訊息</div>
+          <div style="font-size: 12px; margin-top: 5px;">開始發送訊息吧！</div>
+        `;
+        chatMessages.appendChild(noMessageDiv);
+        return;
+      }
+      
+      messages.forEach(message => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.innerHTML = `
+          <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+            ${message.from_user} (${message.role})
+          </div>
+          <div>${message.message}</div>
+        `;
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date(message.timestamp).toLocaleString();
+        
+        contentDiv.appendChild(timeDiv);
+        messageDiv.appendChild(contentDiv);
+        chatMessages.appendChild(messageDiv);
+      });
+      
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // 建立群組按鈕事件
+    const createGroupBtn = document.getElementById('createGroupBtn');
+    if (createGroupBtn) {
+      createGroupBtn.addEventListener('click', function() {
+        showCreateGroupModal();
+      });
+    }
+    
+    // 顯示建立群組模態框
+    function showCreateGroupModal() {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; width: 400px; max-height: 80vh; overflow-y: auto;">
+          <h3>建立群組</h3>
+          <div style="margin: 15px 0;">
+            <label>群組名稱：</label>
+            <input type="text" id="groupName" style="width: 100%; padding: 8px; margin-top: 5px;">
+          </div>
+          <div style="margin: 15px 0;">
+            <label>選擇成員：</label>
+            <div id="memberSelection" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 5px;">
+              ${generateMemberCheckboxes()}
+            </div>
+          </div>
+          <div style="text-align: right; margin-top: 20px;">
+            <button onclick="closeCreateGroupModal()" style="margin-right: 10px; padding: 8px 16px;">取消</button>
+            <button onclick="createGroup()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px;">建立</button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+    }
+    
+    // 生成成員選擇框
+    function generateMemberCheckboxes() {
+      const contacts = <?php echo json_encode($contacts ?? []); ?>;
+      let html = '';
+      
+      contacts.forEach(contact => {
+        const displayName = contact.name || contact.vendor_name;
+        const role = contact.contact_type;
+        html += `
+          <div style="margin: 5px 0;">
+            <input type="checkbox" id="member_${contact.username || contact.vendor_id}" value="${contact.username || contact.vendor_id}" data-role="${role}">
+            <label for="member_${contact.username || contact.vendor_id}">${displayName} (${role})</label>
+          </div>
+        `;
+      });
+      
+      return html || '<p style="color: #999;">暫無聯絡人可選擇</p>';
+    }
+    
+    // 關閉建立群組模態框
+    function closeCreateGroupModal() {
+      const modal = document.querySelector('div[style*="position: fixed"]');
+      if (modal) {
+        modal.remove();
+      }
+    }
+    
+    // 建立群組
+    async function createGroup() {
+      const groupName = document.getElementById('groupName').value.trim();
+      if (!groupName) {
+        alert('請輸入群組名稱');
+        return;
+      }
+      
+      const selectedMembers = [];
+      document.querySelectorAll('#memberSelection input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedMembers.push({
+          username: checkbox.value,
+          role: checkbox.dataset.role
+        });
+      });
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'create_group');
+        formData.append('group_name', groupName);
+        formData.append('created_by', username);
+        formData.append('department', '<?php echo $currentTeacher['department'] ?? ''; ?>');
+        formData.append('members', JSON.stringify(selectedMembers));
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('群組建立成功！');
+          closeCreateGroupModal();
+          loadGroups(); // 重新載入群組列表
+        } else {
+          alert('建立群組失敗: ' + (result.error || '未知錯誤'));
+        }
+      } catch (error) {
+        console.error('建立群組失敗:', error);
+        alert('建立群組失敗: ' + error.message);
+      }
+    }
+    
     // 私聊功能
-    document.querySelectorAll('.user-item').forEach(item => {
+    document.querySelectorAll('.user-item[data-chat-type="private"]').forEach(item => {
       item.addEventListener('click', function() {
         // 移除其他項目的active狀態
         document.querySelectorAll('.user-item').forEach(i => i.classList.remove('active'));
@@ -401,8 +856,31 @@ try {
         this.classList.add('active');
         
         // 獲取用戶資訊
-        currentUserId = this.dataset.userId;
-        currentUserName = this.dataset.userName;
+        const newUserId = this.dataset.userId;
+        const newUserName = this.dataset.userName;
+        
+        console.log('切換聯絡人:', {
+          from: currentUserId,
+          to: newUserId,
+          chatType: currentChatType
+        });
+        
+        // 檢查是否切換到不同的用戶
+        if (currentUserId !== newUserId || currentChatType !== 'private') {
+          // 重置訊息ID並清空聊天區域
+          lastMessageId = 0;
+          document.getElementById('chatMessages').innerHTML = '';
+          // 清除快取，強制重新載入
+          const oldCacheKey = `${username}-${currentUserId}`;
+          messageCache.delete(oldCacheKey);
+          console.log('清除舊快取:', oldCacheKey);
+        }
+        
+        // 更新當前用戶資訊
+        currentUserId = newUserId;
+        currentUserName = newUserName;
+        currentChatType = 'private';
+        currentGroupId = null;
         const userRole = this.querySelector('.user-role').textContent;
         
         // 更新聊天標題
@@ -418,15 +896,28 @@ try {
         
         // 載入聊天記錄
         loadChatHistory();
-        
-        // 清空訊息區域
-        document.getElementById('chatMessages').innerHTML = '';
-        });
       });
+    });
 
     // 載入聊天記錄
     async function loadChatHistory() {
+      const chatMessages = document.getElementById('chatMessages');
+      const cacheKey = `${username}-${currentUserId}`;
+      
+      // 檢查快取
+      if (messageCache.has(cacheKey)) {
+        const cachedData = messageCache.get(cacheKey);
+        displayMessages(cachedData.messages);
+        lastMessageId = cachedData.lastMessageId;
+        console.log('使用快取聊天記錄:', cacheKey);
+        return;
+      }
+      
+      // 顯示載入指示器
+      chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">載入中...</div>';
+      
       try {
+        const startTime = performance.now();
         const response = await fetch('load_private_messages.php?from=' + username + '&to=' + currentUserId);
         
         const result = await response.json();
@@ -437,18 +928,59 @@ try {
           if (result.messages.length > 0) {
             lastMessageId = Math.max(...result.messages.map(m => m.id));
           }
+          
+          // 儲存到快取
+          messageCache.set(cacheKey, {
+            messages: result.messages,
+            lastMessageId: lastMessageId,
+            timestamp: Date.now()
+          });
+          console.log('儲存快取:', cacheKey, '訊息數量:', result.messages.length);
+          
+          const loadTime = performance.now() - startTime;
+          console.log(`聊天記錄載入完成，耗時: ${loadTime.toFixed(2)}ms`);
         } else {
           console.error('載入聊天記錄失敗:', result.error);
+          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
         }
       } catch (error) {
         console.error('載入聊天記錄失敗:', error);
+        chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
       }
     }
     
     // 顯示訊息
     function displayMessages(messages) {
       const chatMessages = document.getElementById('chatMessages');
+      
+      // 清空聊天區域
       chatMessages.innerHTML = '';
+      
+      // 檢查是否有訊息
+      if (!messages || messages.length === 0) {
+        // 顯示無訊息的提示
+        const noMessageDiv = document.createElement('div');
+        noMessageDiv.style.cssText = `
+          text-align: center;
+          padding: 40px 20px;
+          color: #999;
+          font-size: 14px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          margin: 20px;
+          border: 1px dashed #ddd;
+        `;
+        noMessageDiv.innerHTML = `
+          <div style="font-size: 24px; margin-bottom: 10px;">💬</div>
+          <div>還沒有任何訊息</div>
+          <div style="font-size: 12px; margin-top: 5px;">開始發送訊息吧！</div>
+        `;
+        chatMessages.appendChild(noMessageDiv);
+        return;
+      }
+      
+      // 使用 DocumentFragment 優化DOM操作
+      const fragment = document.createDocumentFragment();
       
       messages.forEach(message => {
         const messageDiv = document.createElement('div');
@@ -464,9 +996,11 @@ try {
         
         contentDiv.appendChild(timeDiv);
         messageDiv.appendChild(contentDiv);
-        chatMessages.appendChild(messageDiv);
+        fragment.appendChild(messageDiv);
       });
       
+      // 一次性更新DOM
+      chatMessages.appendChild(fragment);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
     
@@ -475,33 +1009,78 @@ try {
       const input = document.getElementById('messageInput');
       const message = input.value.trim();
       
-      if (!message || !currentUserId) return;
+      if (!message) return;
       
       const sendButton = document.querySelector('.chat-input button');
       sendButton.disabled = true;
       
       try {
-        const response = await fetch('save_private_message.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: username,
-            to: currentUserId,
+        if (currentChatType === 'group') {
+          console.log('發送群組訊息:', {
+            groupId: currentGroupId,
+            fromUser: username,
             message: message,
             role: role
-          })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          input.value = '';
-          // 重新載入聊天記錄以顯示新訊息
-          loadChatHistory();
+          });
+          
+          // 發送群組訊息
+          const formData = new FormData();
+          formData.append('action', 'send_group_message');
+          formData.append('group_id', currentGroupId);
+          formData.append('from_user', username);
+          formData.append('message', message);
+          formData.append('role', role);
+          
+          console.log('發送請求到:', 'group_management.php');
+          
+          const response = await fetch('group_management.php', {
+            method: 'POST',
+            body: formData
+          });
+          
+          console.log('收到響應:', response);
+          
+          const result = await response.json();
+          console.log('響應結果:', result);
+          
+          if (result.success) {
+            input.value = '';
+            console.log('群組訊息發送成功，重新載入聊天記錄');
+            // 重新載入群組聊天記錄
+            loadGroupChatHistory();
+          } else {
+            console.error('群組訊息發送失敗:', result.error);
+            alert('發送失敗: ' + (result.error || '未知錯誤'));
+          }
         } else {
-          alert('發送失敗: ' + (result.error || '未知錯誤'));
+          // 發送私聊訊息
+          if (!currentUserId) return;
+          
+          const response = await fetch('save_private_message.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: username,
+              to: currentUserId,
+              message: message,
+              role: role
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            input.value = '';
+            // 清除快取，強制重新載入
+            const cacheKey = `${username}-${currentUserId}`;
+            messageCache.delete(cacheKey);
+            // 重新載入聊天記錄以顯示新訊息
+            loadChatHistory();
+          } else {
+            alert('發送失敗: ' + (result.error || '未知錯誤'));
+          }
         }
       } catch (error) {
         console.error('發送訊息失敗:', error);
@@ -518,119 +1097,60 @@ try {
       }
     });
     
+    // 初始化群組列表
+    if (role === '老師' || role === '廠商') {
+      loadGroups();
+    }
+    
+    // 定期清理快取（每5分鐘清理一次）
+    setInterval(() => {
+      const now = Date.now();
+      const maxAge = 5 * 60 * 1000; // 5分鐘
+      
+      for (const [key, data] of messageCache.entries()) {
+        if (now - data.timestamp > maxAge) {
+          messageCache.delete(key);
+        }
+      }
+      console.log('快取清理完成');
+    }, 5 * 60 * 1000);
+    
     // 輪詢新訊息
     setInterval(async () => {
-      if (!currentUserId) return;
-      
-      try {
-        const response = await fetch('load_private_messages.php?from=' + username + '&to=' + currentUserId);
-        
-        const result = await response.json();
-        
-        if (result.success && result.messages) {
-          // 檢查是否有新訊息
-          const newMessages = result.messages.filter(m => m.id > lastMessageId);
-          if (newMessages.length > 0) {
-            displayMessages(result.messages);
-            lastMessageId = Math.max(...result.messages.map(m => m.id));
+      if (currentChatType === 'group' && currentGroupId) {
+        // 檢查群組新訊息
+        try {
+          const response = await fetch('group_management.php?action=get_group_messages&group_id=' + currentGroupId);
+          const result = await response.json();
+          
+          if (result.success && result.messages) {
+            const newMessages = result.messages.filter(m => m.id > lastMessageId);
+            if (newMessages.length > 0) {
+              displayGroupMessages(result.messages);
+              lastMessageId = Math.max(...result.messages.map(m => m.id));
+            }
           }
+        } catch (error) {
+          console.error('檢查群組新訊息失敗:', error);
         }
-      } catch (error) {
-        console.error('檢查新訊息失敗:', error);
-      }
-    }, 3000);
-    
-    <?php else: ?>
-    // 群聊功能
-    const chat = document.getElementById('groupChat');
-    let lastMessageId = 0;
-    
-    // 載入群聊歷史
-    async function loadGroupChatHistory() {
-      try {
-        const response = await fetch('../backend/chat_history.php');
-        const messages = await response.json();
-        displayGroupMessages(messages);
-        
-        if (messages.length > 0) {
-          lastMessageId = Math.max(...messages.map(m => m.id));
+      } else if (currentChatType === 'private' && currentUserId) {
+        // 檢查私聊新訊息
+        try {
+          const response = await fetch('load_private_messages.php?from=' + username + '&to=' + currentUserId);
+          
+          const result = await response.json();
+          
+          if (result.success && result.messages) {
+            // 檢查是否有新訊息
+            const newMessages = result.messages.filter(m => m.id > lastMessageId);
+            if (newMessages.length > 0) {
+              displayMessages(result.messages);
+              lastMessageId = Math.max(...result.messages.map(m => m.id));
+            }
+          }
+        } catch (error) {
+          console.error('檢查新訊息失敗:', error);
         }
-      } catch (error) {
-        console.error('載入群聊歷史失敗:', error);
-      }
-    }
-    
-    // 顯示群聊訊息
-    function displayGroupMessages(messages) {
-      chat.innerHTML = '';
-      
-      messages.forEach(message => {
-      const p = document.createElement('p');
-        const isMe = (message.username === username);
-      let cssClass = '';
-        if (message.role === '老師') cssClass = 'teacher';
-        else if (message.role === '廠商') cssClass = 'vendor';
-      if (isMe) cssClass += ' me';
-
-      p.className = cssClass;
-        p.textContent = `[${message.role}] ${message.username}：${message.message}`;
-      chat.appendChild(p);
-      });
-      
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    // 發送群聊訊息
-    async function sendMsg() {
-      const msgInput = document.getElementById('msg');
-      const msg = msgInput.value.trim();
-      
-      if (!msg) return;
-      
-      try {
-        const response = await fetch('../backend/send_message.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-          username: username,
-          role: role,
-          message: msg
-          })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-        msgInput.value = '';
-          loadGroupChatHistory();
-        } else {
-          alert('發送失敗: ' + (result.error || '未知錯誤'));
-        }
-      } catch (error) {
-        console.error('發送訊息失敗:', error);
-        alert('發送失敗: ' + error.message);
-      }
-    }
-    
-    // 載入群聊歷史
-    loadGroupChatHistory();
-    
-    // 輪詢新群聊訊息
-    setInterval(async () => {
-      try {
-        const response = await fetch('../backend/chat_history.php');
-        const messages = await response.json();
-        
-        // 檢查是否有新訊息
-        const newMessages = messages.filter(m => m.id > lastMessageId);
-        if (newMessages.length > 0) {
-          displayGroupMessages(messages);
-          lastMessageId = Math.max(...messages.map(m => m.id));
-        }
-      } catch (error) {
-        console.error('檢查新群聊訊息失敗:', error);
       }
     }, 3000);
     <?php endif; ?>
