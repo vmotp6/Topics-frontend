@@ -15,7 +15,7 @@ $isLoggedIn = isset($_SESSION['username']);
     width: 100%;
     z-index: 999;
     background-color: #e0f0ff;
-    padding: 20px 0;
+    padding: 12px 0;
     color: #003366;
     font-family: "Helvetica Neue", Arial, sans-serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -37,7 +37,7 @@ $isLoggedIn = isset($_SESSION['username']);
   }
 
   .logo img {
-    height: 40px;
+    height: 32px;
     width: auto;
   }
 
@@ -51,9 +51,9 @@ $isLoggedIn = isset($_SESSION['username']);
   .navbar-links a {
     color: #0056b3;
     text-decoration: none;
-    margin: 0 12px;
+    margin: 0 10px;
     font-weight: bold;
-    font-size: 16px;
+    font-size: 14px;
     transition: color 0.3s;
   }
 
@@ -68,18 +68,18 @@ $isLoggedIn = isset($_SESSION['username']);
 
   .btn-auth-wrapper {
     background-color: #007bff;
-    border-radius: 20px;
-    padding: 8px 16px;
+    border-radius: 16px;
+    padding: 6px 12px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     user-select: none;
   }
 
   .btn-auth-wrapper a {
     color: white;
     text-decoration: none;
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
   }
@@ -91,7 +91,7 @@ $isLoggedIn = isset($_SESSION['username']);
   .btn-auth-wrapper .separator {
     color: white;
     font-weight: 600;
-    font-size: 18px;
+    font-size: 14px;
   }
 
   /* modal 樣式 */
