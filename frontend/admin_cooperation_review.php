@@ -271,7 +271,12 @@ $role = $_SESSION['role'];
 </head>
 <body>
     <div class="container">
-        <h1>📋 產學合作案審核管理</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <h1>📋 產學合作案審核管理</h1>
+            <a href="admin.php" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-size: 14px; transition: background-color 0.3s ease;">
+                ← 返回主頁面
+            </a>
+        </div>
         
         <!-- 篩選區域 -->
         <div class="filter-section">
@@ -364,7 +369,7 @@ $role = $_SESSION['role'];
             const departmentFilter = document.getElementById('departmentFilter').value;
             const dateFilter = document.getElementById('dateFilter').value;
 
-            fetch(`backend/cooperation_list_api.php?status=${statusFilter}&department=${departmentFilter}&date=${dateFilter}`)
+            fetch(`/backend/cooperation_list_api.php?status=${statusFilter}&department=${departmentFilter}&date=${dateFilter}`)
                 .then(response => response.json())
                 .then(data => {
                     const tbody = document.getElementById('applicationsTableBody');
@@ -379,7 +384,7 @@ $role = $_SESSION['role'];
                         const row = document.createElement('tr');
                         row.innerHTML = `
                             <td>#${app.id}</td>
-                            <td>${app.teacher_name}</td>
+                            <td>${app.teacher_username}</td>
                             <td>${app.department}</td>
                             <td>${app.project_title}</td>
                             <td>${app.company_name}</td>
@@ -389,8 +394,8 @@ $role = $_SESSION['role'];
                             <td>
                                 <button class="action-btn btn-view" onclick="viewDetail(${app.id})">查看</button>
                                 ${app.status === 'pending' ? `
-                                    <button class="action-btn btn-approve" onclick="reviewApplication(${app.id}, 'approved')">通過</button>
-                                    <button class="action-btn btn-reject" onclick="reviewApplication(${app.id}, 'rejected')">拒絕</button>
+                                    <button class="action-btn btn-approve" onclick="submitReview(${app.id}, 'approved')">通過</button>
+                                    <button class="action-btn btn-reject" onclick="submitReview(${app.id}, 'rejected')">拒絕</button>
                                 ` : ''}
                             </td>
                         `;
@@ -416,7 +421,7 @@ $role = $_SESSION['role'];
 
         // 查看詳細資料
         function viewDetail(applicationId) {
-            fetch(`backend/cooperation_detail_api.php?id=${applicationId}`)
+            fetch(`/backend/cooperation_detail_api.php?id=${applicationId}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -427,8 +432,8 @@ $role = $_SESSION['role'];
                             <div class="detail-section">
                                 <h3>👨‍🏫 申請人資訊</h3>
                                 <div class="detail-row">
-                                    <div class="detail-label">申請人姓名:</div>
-                                    <div class="detail-value">${app.teacher_name}</div>
+                                    <div class="detail-label">申請人帳號:</div>
+                                    <div class="detail-value">${app.teacher_username}</div>
                                 </div>
                                 <div class="detail-row">
                                     <div class="detail-label">所屬科系:</div>
@@ -443,16 +448,12 @@ $role = $_SESSION['role'];
                                     <div class="detail-value">${app.project_title}</div>
                                 </div>
                                 <div class="detail-row">
-                                    <div class="detail-label">專案描述:</div>
-                                    <div class="detail-value">${app.project_description}</div>
+                                    <div class="detail-label">專案時程:</div>
+                                    <div class="detail-value">${app.project_timeline}</div>
                                 </div>
                                 <div class="detail-row">
-                                    <div class="detail-label">專案期間:</div>
-                                    <div class="detail-value">${app.project_start_date} ~ ${app.project_end_date}</div>
-                                </div>
-                                <div class="detail-row">
-                                    <div class="detail-label">預算金額:</div>
-                                    <div class="detail-value">NT$ ${parseFloat(app.budget_amount).toLocaleString()}</div>
+                                    <div class="detail-label">專案金額:</div>
+                                    <div class="detail-value">NT$ ${parseFloat(app.project_amount).toLocaleString()}</div>
                                 </div>
                                 <div class="detail-row">
                                     <div class="detail-label">預期成果:</div>
@@ -475,18 +476,26 @@ $role = $_SESSION['role'];
                                     <div class="detail-value">${app.company_phone}</div>
                                 </div>
                                 <div class="detail-row">
-                                    <div class="detail-label">聯絡信箱:</div>
-                                    <div class="detail-value">${app.company_email}</div>
+                                    <div class="detail-label">聯絡電話:</div>
+                                    <div class="detail-value">${app.company_phone}</div>
                                 </div>
                             </div>
 
                             <div class="detail-section">
                                 <h3>📎 申請表檔案</h3>
                                 <div class="detail-row">
-                                    <div class="detail-label">檔案:</div>
+                                    <div class="detail-label">合約書:</div>
                                     <div class="detail-value">
-                                        <a href="${app.application_file_path}" target="_blank" style="color: #3498db; text-decoration: none;">
-                                            📄 查看申請表檔案
+                                        <a href="${app.contract_file_path}" target="_blank" style="color: #3498db; text-decoration: none;">
+                                            📄 查看合約書
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="detail-row">
+                                    <div class="detail-label">計畫書:</div>
+                                    <div class="detail-value">
+                                        <a href="${app.proposal_file_path}" target="_blank" style="color: #3498db; text-decoration: none;">
+                                            📄 查看計畫書
                                         </a>
                                     </div>
                                 </div>
@@ -497,8 +506,8 @@ $role = $_SESSION['role'];
                                     <h3>📝 審核意見</h3>
                                     <textarea id="reviewComment" placeholder="請輸入審核意見（選填）"></textarea>
                                     <div class="review-buttons">
-                                        <button class="action-btn btn-approve" onclick="submitReview(${app.id}, 'approved')">✅ 通過申請</button>
-                                        <button class="action-btn btn-reject" onclick="submitReview(${app.id}, 'rejected')">❌ 拒絕申請</button>
+                                        <button class="action-btn btn-approve" onclick="submitDetailReview(${app.id}, 'approved')">✅ 通過申請</button>
+                                        <button class="action-btn btn-reject" onclick="submitDetailReview(${app.id}, 'rejected')">❌ 拒絕申請</button>
                                     </div>
                                 </div>
                             ` : `
@@ -538,11 +547,42 @@ $role = $_SESSION['role'];
                 });
         }
 
-        // 提交審核結果
+        // 提交審核結果（從表格直接審核）
         function submitReview(applicationId, status) {
+            if (confirm(`確定要${status === 'approved' ? '通過' : '拒絕'}這個申請嗎？`)) {
+                fetch('/backend/cooperation_review_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        application_id: applicationId,
+                        status: status,
+                        comment: '',
+                        admin_username: '<?php echo $username; ?>'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('審核完成！');
+                        loadApplications(); // 重新載入列表
+                    } else {
+                        alert('審核失敗: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('提交審核時發生錯誤');
+                });
+            }
+        }
+
+        // 提交詳細審核結果（從詳細資料模態框）
+        function submitDetailReview(applicationId, status) {
             const comment = document.getElementById('reviewComment')?.value || '';
             
-            fetch('backend/cooperation_review_api.php', {
+            fetch('/backend/cooperation_review_api.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

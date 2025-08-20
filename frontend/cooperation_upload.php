@@ -383,6 +383,38 @@ $role = $_SESSION['role'];
             width: 120px;
         }
 
+        .attachment-info {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%);
+            border-radius: 8px;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .attachment-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .attachment-list li {
+            padding: 8px 15px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .attachment-list li::before {
+            content: '📎';
+            margin-right: 8px;
+            color: #667eea;
+        }
+
         /* 確保浮動元素不受影響 */
         #ai-float-btn,
         #ai-box,
@@ -728,14 +760,11 @@ $role = $_SESSION['role'];
             <!-- 繳交附件 -->
             <h3 class="section-title">繳交附件</h3>
             <div class="form-group">
-                <div class="checkbox-group">
-                    <input type="checkbox" id="attachment_contract" name="attachments[]" value="contract" required>
-                    <label for="attachment_contract">產學合作合約書（含計畫內容、經費、期程等）</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="attachment_proposal" name="attachments[]" value="proposal" required>
-                    <label for="attachment_proposal">產學合作計畫書（含經費編列、人力規劃等）</label>
-                </div>
+                <p class="attachment-info">以下附件為必繳文件，請務必上傳：</p>
+                <ul class="attachment-list">
+                    <li>產學合作合約書（含計畫內容、經費、期程等）</li>
+                    <li>產學合作計畫書（含經費編列、人力規劃等）</li>
+                </ul>
             </div>
 
             <!-- 檔案上傳 -->
@@ -817,7 +846,7 @@ $role = $_SESSION['role'];
             const formData = new FormData(this);
             formData.append('teacher_username', '<?php echo $username; ?>');
             
-            fetch('backend/cooperation_upload_api.php', {
+            fetch('/backend/auto_fix_api.php', {
                 method: 'POST',
                 body: formData
             })

@@ -207,7 +207,7 @@
 	<script>
 		// 載入統計數據
 		function loadStats() {
-			fetch('backend/cooperation_stats_api.php')
+			fetch('/backend/cooperation_stats_api.php')
 				.then(response => response.json())
 				.then(data => {
 					if (data.success) {
@@ -215,6 +215,8 @@
 						document.getElementById('approvedCount').textContent = data.stats.approved || 0;
 						document.getElementById('rejectedCount').textContent = data.stats.rejected || 0;
 						document.getElementById('totalCount').textContent = data.stats.total || 0;
+					} else {
+						console.log('統計API返回錯誤:', data.message);
 					}
 				})
 				.catch(error => {

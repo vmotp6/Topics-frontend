@@ -1,5 +1,7 @@
 <?php
-// 資料庫連線設定
+header('Content-Type: text/html; charset=utf-8');
+echo "<h1>康寧大學產學合作系統修復工具</h1>\n";
+
 $host = '100.79.58.120';
 $dbname = 'topics_good';
 $username = 'root';
@@ -8,11 +10,17 @@ $password = '';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    echo "✅ 資料庫連線成功<br>\n";
     
-    echo "正在建立產學合作案申請表資料表...\n";
+    // 1. 重建資料表
+    echo "<h2>1. 重建資料表</h2>\n";
     
-    // 創建產學合作案申請表資料表 - 更新為康寧大學格式
-    $sql = "CREATE TABLE IF NOT EXISTS cooperation_applications (
+    // 先刪除舊表
+    $pdo->exec("DROP TABLE IF EXISTS cooperation_applications");
+    echo "✅ 舊資料表已刪除<br>\n";
+    
+    // 建立新表
+    $sql = "CREATE TABLE cooperation_applications (
         id INT AUTO_INCREMENT PRIMARY KEY,
         
         -- 基本申請資訊
@@ -96,40 +104,63 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     
     $pdo->exec($sql);
-    echo "✅ 產學合作案申請表資料表建立成功！\n";
+    echo "✅ 新資料表建立成功<br>\n";
     
-    // 檢查資料表是否建立成功
-    $stmt = $pdo->query("SHOW TABLES LIKE 'cooperation_applications'");
-    if ($stmt->rowCount() > 0) {
-        echo "✅ 資料表 'cooperation_applications' 已存在並可以使用。\n";
-        
-        // 顯示資料表結構
-        echo "\n📋 資料表結構：\n";
-        $stmt = $pdo->query("DESCRIBE cooperation_applications");
-        $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($columns as $column) {
-            echo "- {$column['Field']}: {$column['Type']} " . 
-                 ($column['Null'] === 'NO' ? '(必填)' : '(選填)') . "\n";
-        }
-    } else {
-        echo "❌ 警告：資料表建立可能失敗。\n";
-    }
-    
-    // 建立上傳目錄
+    // 2. 建立上傳目錄
+    echo "<h2>2. 建立上傳目錄</h2>\n";
     $upload_dir = '../uploads/cooperation/';
+    
     if (!file_exists($upload_dir)) {
         if (mkdir($upload_dir, 0755, true)) {
-            echo "✅ 上傳目錄建立成功：$upload_dir\n";
+            echo "✅ 上傳目錄建立成功：$upload_dir<br>\n";
         } else {
-            echo "❌ 上傳目錄建立失敗：$upload_dir\n";
+            echo "❌ 上傳目錄建立失敗：$upload_dir<br>\n";
         }
     } else {
-        echo "✅ 上傳目錄已存在：$upload_dir\n";
+        echo "✅ 上傳目錄已存在：$upload_dir<br>\n";
     }
     
+    // 設定目錄權限
+    if (chmod($upload_dir, 0755)) {
+        echo "✅ 目錄權限設定成功<br>\n";
+    } else {
+        echo "❌ 目錄權限設定失敗<br>\n";
+    }
+    
+    // 3. 測試資料插入
+    echo "<h2>3. 測試資料插入</h2>\n";
+    $test_sql = "INSERT INTO cooperation_applications (
+        teacher_username, application_date, department, principal_investigator,
+        regulations_read, application_categories, project_amount, company_name,
+        company_contact, company_phone, project_title, expected_outcomes,
+        project_timeline, has_intellectual_property, contract_file_path, proposal_file_path
+    ) VALUES (
+        'test_teacher', '2024-01-01', '資訊工程系', '測試主持人',
+        'yes', '技術合作', 100000.00, '測試公司',
+        '測試聯絡人', '0912345678', '測試專案', '測試成果',
+        '6個月', 'no', '/test/contract.pdf', '/test/proposal.pdf'
+    )";
+    
+    $pdo->exec($test_sql);
+    echo "✅ 測試資料插入成功<br>\n";
+    
+    // 4. 驗證資料表
+    echo "<h2>4. 驗證資料表</h2>\n";
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM cooperation_applications");
+    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+    echo "📊 資料表記錄數量：{$count} 筆<br>\n";
+    
+    // 5. 清理測試資料
+    $pdo->exec("DELETE FROM cooperation_applications WHERE teacher_username = 'test_teacher'");
+    echo "✅ 測試資料已清理<br>\n";
+    
+    echo "<h2>✅ 修復完成！</h2>\n";
+    echo "<p>系統已修復完成，現在可以正常使用產學合作申請表功能。</p>\n";
+    echo "<p><a href='../frontend/cooperation_upload.php'>點擊這裡測試申請表上傳</a></p>\n";
+    
 } catch(PDOException $e) {
-    echo "❌ 資料庫錯誤: " . $e->getMessage() . "\n";
+    echo "❌ 資料庫錯誤: " . $e->getMessage() . "<br>\n";
 } catch(Exception $e) {
-    echo "❌ 系統錯誤: " . $e->getMessage() . "\n";
+    echo "❌ 系統錯誤: " . $e->getMessage() . "<br>\n";
 }
 ?>

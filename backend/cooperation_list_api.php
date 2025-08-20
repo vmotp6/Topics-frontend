@@ -47,8 +47,8 @@ try {
     }
     
     // 組合SQL語句
-    $sql = "SELECT id, teacher_username, teacher_name, department, project_title, 
-                   company_name, budget_amount, status, created_at 
+    $sql = "SELECT id, teacher_username, department, project_title, 
+                   company_name, project_amount as budget_amount, status, created_at 
             FROM cooperation_applications";
     
     if (!empty($where_conditions)) {

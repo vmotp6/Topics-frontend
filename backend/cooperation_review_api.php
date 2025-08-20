@@ -74,7 +74,7 @@ try {
     ]);
     
     // 取得申請表資訊用於通知
-    $app_info_sql = "SELECT teacher_name, project_title FROM cooperation_applications WHERE id = :id";
+    $app_info_sql = "SELECT teacher_username, project_title FROM cooperation_applications WHERE id = :id";
     $app_info_stmt = $pdo->prepare($app_info_sql);
     $app_info_stmt->execute([':id' => $data['application_id']]);
     $app_info = $app_info_stmt->fetch(PDO::FETCH_ASSOC);
