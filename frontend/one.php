@@ -97,6 +97,27 @@
       background-color: #e0f0ff;
     }
 
+    /* 申請表卡片特殊樣式 */
+    #applyCard {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: 2px solid #667eea;
+    }
+
+    #applyCard:hover {
+      background: linear-gradient(135deg, #5a6fd8, #6a4190);
+      transform: translateY(-5px) scale(1.02);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    #applyCard .icon {
+      color: white;
+    }
+
+    #applyCard .title {
+      color: white;
+    }
+
     .card .icon {
       font-size: 38px;
       margin-bottom: 18px;
@@ -138,6 +159,7 @@
       <a href="video.php" class="card"><div class="icon">🎬</div><div class="title">成果影片</div></a>
       <a href="partner_map.php" class="card"><div class="icon">🗺️</div><div class="title">合作夥伴地圖</div></a>
       <a href="faq.php" class="card"><div class="icon">❓</div><div class="title">常見問題</div></a>
+      <a href="cooperation_upload.php" class="card" id="applyCard"><div class="icon">📝</div><div class="title">申請表填寫</div></a>
     </section>
   </main>
 
@@ -182,6 +204,30 @@
     document.querySelector(".next").addEventListener("click", () => plusSlides(1));
 
     showSlides();
+
+    // 處理申請表卡片的點擊事件
+    document.getElementById('applyCard').addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      // 檢查是否已登入
+      const isLoggedIn = <?php echo isset($_SESSION['username']) ? 'true' : 'false'; ?>;
+      const userRole = '<?php echo isset($_SESSION['role']) ? $_SESSION['role'] : ''; ?>';
+      
+      if (!isLoggedIn) {
+        alert('請先登入才能填寫申請表！');
+        // 觸發登入視窗
+        document.getElementById('openLoginBtn').click();
+        return;
+      }
+      
+      if (userRole !== '老師') {
+        alert('只有老師身分才能填寫產學合作申請表！');
+        return;
+      }
+      
+      // 如果已登入且為老師身分，跳轉到申請表頁面
+      window.location.href = 'cooperation_upload.php';
+    });
   </script>
 
 </body>
