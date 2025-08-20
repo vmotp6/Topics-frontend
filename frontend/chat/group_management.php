@@ -253,10 +253,23 @@ function updateGroupName($pdo) {
             return;
         }
         
-        // 更新群組名稱
-        $sql = "UPDATE group_info SET group_name = ? WHERE group_id = ?";
+        // 檢查群組資訊是否存在，如果不存在則創建
+        $sql = "SELECT COUNT(*) FROM group_info WHERE group_id = ?";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$newName, $groupId]);
+        $stmt->execute([$groupId]);
+        $exists = $stmt->fetchColumn() > 0;
+        
+        if ($exists) {
+            // 更新現有群組資訊
+            $sql = "UPDATE group_info SET group_name = ? WHERE group_id = ?";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$newName, $groupId]);
+        } else {
+            // 創建新的群組資訊記錄
+            $sql = "INSERT INTO group_info (group_id, group_name, created_by, created_at) VALUES (?, ?, ?, NOW())";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$groupId, $newName, $username]);
+        }
         
         echo json_encode([
             'success' => true,

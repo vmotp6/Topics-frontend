@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 $isLoggedIn = isset($_SESSION['username']);
 ?>
 
@@ -266,18 +268,21 @@ $isLoggedIn = isset($_SESSION['username']);
   <div class="spacer"></div>
 
   <div class="navbar-links">
-    <a href="one.php">首頁</a>
-    <a href="teach.php">產學合作2</a>
-    <a href="QA.php">認識產學合作</a>
-    <a href="about.php">認識平台</a>
-    <a href="AI.php">AI產學合作</a>
-    <a href="chat_settings.php">💬 聊天設置</a>
+    <a href="/frontend/one.php">首頁</a>
+    <a href="/frontend/teach.php">產學合作2</a>
+    <a href="/frontend/QA.php">認識產學合作</a>
+    <a href="/frontend/about.php">認識平台</a>
+    <a href="/frontend/AI.php">AI產學合作</a>
+    <a href="/frontend/chat_settings.php">💬 聊天設置</a>
+    <?php if ($isLoggedIn && (isset($_SESSION['role']) && ($_SESSION['role'] === '老師' || $_SESSION['role'] === '廠商'))): ?>
+      <a href="/frontend/chat/chat.php">私訊聊天</a>
+    <?php endif; ?>
   </div>
 
 <?php if ($isLoggedIn): ?>
   <div class="user-dropdown">
     <div class="avatar-btn" onclick="toggleDropdown()">
-      <img src="share/EIdROxGXsAE_LSs.jpg" alt="頭像" class="avatar-img">
+    <img src="/frontend/share/EIdROxGXsAE_LSs.jpg" alt="頭像" class="avatar-img">
       <div class="notification-dot" id="notificationDot"></div>
     </div>
     <div class="dropdown-menu" id="dropdownMenu">
@@ -478,14 +483,16 @@ if (res.ok) {
 
 function toggleDropdown() {
   const menu = document.getElementById("dropdownMenu");
-  menu.style.display = menu.style.display === "block" ? "none" : "block";
+  if (menu) {
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+  }
 }
 
 // 點擊外部收起選單
 window.addEventListener("click", function (e) {
   const dropdown = document.getElementById("dropdownMenu");
   const avatar = document.querySelector(".avatar-btn");
-  if (!avatar.contains(e.target) && !dropdown.contains(e.target)) {
+  if (dropdown && avatar && !avatar.contains(e.target) && !dropdown.contains(e.target)) {
     dropdown.style.display = "none";
   }
 });

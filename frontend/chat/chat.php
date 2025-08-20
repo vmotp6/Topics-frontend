@@ -87,259 +87,10 @@ try {
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
+  <?php include("../share/header.php"); ?>
+  <link rel="stylesheet" href="../assets/csp/chat.css">
   <title>聊天室</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-    }
-    
-    .chat-container {
-      display: flex;
-      height: 100vh;
-    }
-    
-    .sidebar {
-      width: 280px;
-      background: white;
-      border-right: 1px solid #ddd;
-      overflow-y: auto;
-    }
-    
-    .sidebar-header {
-      padding: 20px;
-      border-bottom: 1px solid #eee;
-      background: #f8f9fa;
-    }
-    
-    .sidebar-title {
-      font-size: 18px;
-      font-weight: bold;
-      color: #333;
-      margin: 0;
-    }
-    
-    .user-list {
-      padding: 0;
-      margin: 0;
-      list-style: none;
-    }
-    
-    .user-item {
-      display: flex;
-      align-items: center;
-      padding: 15px 20px;
-      border-bottom: 1px solid #f0f0f0;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    
-    .user-item:hover {
-      background-color: #f8f9fa;
-    }
-    
-    .edit-group-btn {
-      background: #007bff;
-      color: white;
-      border: none;
-      padding: 2px 8px;
-      border-radius: 3px;
-      font-size: 12px;
-      cursor: pointer;
-      margin-left: 10px;
-    }
-    
-    .edit-group-btn:hover {
-      background: #0056b3;
-    }
-    
-    .user-item.active {
-      background-color: #e3f2fd;
-      border-left: 4px solid #2196f3;
-    }
-    
-    .user-avatar {
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      background: #2196f3;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-right: 15px;
-      font-weight: bold;
-      font-size: 18px;
-    }
-    
-    .user-info {
-      flex: 1;
-    }
-    
-    .user-name {
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 5px;
-    }
-    
-    .user-role {
-      font-size: 12px;
-      color: #666;
-    }
-    
-    .contact-type {
-      font-size: 10px;
-      color: #999;
-      margin-top: 2px;
-    }
-    
-    .chat-main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .chat-header {
-      padding: 20px;
-      background: white;
-      border-bottom: 1px solid #ddd;
-      display: flex;
-      align-items: center;
-    }
-    
-    .current-chat-info {
-      flex: 1;
-    }
-    
-    .current-chat-name {
-      font-size: 18px;
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 5px;
-    }
-    
-    .current-chat-role {
-      font-size: 14px;
-      color: #666;
-    }
-    
-    .chat-messages {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      background: #f8f9fa;
-    }
-    
-    .message {
-      margin-bottom: 15px;
-      display: flex;
-      align-items: flex-start;
-    }
-    
-    .message.sent {
-      justify-content: flex-end;
-    }
-    
-    .message-content {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 18px;
-      word-wrap: break-word;
-    }
-    
-    .message.received .message-content {
-      background: white;
-      color: #333;
-      border: 1px solid #ddd;
-    }
-    
-    .message.sent .message-content {
-      background: #2196f3;
-      color: white;
-    }
-    
-    .message-time {
-      font-size: 11px;
-      color: #999;
-      margin-top: 5px;
-    }
-    
-    .chat-input {
-      padding: 20px;
-      background: white;
-      border-top: 1px solid #ddd;
-      display: flex;
-      align-items: center;
-    }
-    
-    .chat-input input {
-      flex: 1;
-      padding: 12px 16px;
-      border: 1px solid #ddd;
-      border-radius: 25px;
-      margin-right: 10px;
-      font-size: 14px;
-    }
-    
-    .chat-input button {
-      padding: 12px 24px;
-      background: #2196f3;
-      color: white;
-      border: none;
-      border-radius: 25px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: bold;
-    }
-    
-    .chat-input button:hover {
-      background: #1976d2;
-    }
-    
-    .chat-input button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    
-    .no-chat-selected {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #666;
-      font-size: 18px;
-    }
-    
-    .hidden {
-      display: none;
-    }
-    
-    /* 群聊樣式 */
-    .group-chat {
-      max-width: 800px;
-      margin: 50px auto;
-      padding: 20px;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    #groupChat {
-      width: 100%;
-      height: 400px;
-      border: 1px solid #ccc;
-      overflow-y: scroll;
-      padding: 10px;
-      margin-bottom: 10px;
-      background: #f9f9f9;
-    }
-    
-    .teacher { color: blue; }
-    .vendor { color: green; }
-    .me { font-weight: bold; }
-  </style>
+ 
 </head>
 <body>
   <?php if ($role === '廠商'): ?>
@@ -526,7 +277,7 @@ try {
             
             groupItem.addEventListener('click', function(e) {
               // 如果點擊的是編輯按鈕，不觸發群組選擇
-              if (e.target.classList.contains('edit-group-btn')) {
+              if (e.target && e.target.classList && e.target.classList.contains('edit-group-btn')) {
                 return;
               }
               selectGroup(group.id, group.group_name);
@@ -545,11 +296,15 @@ try {
       console.log('選擇群組:', groupId, groupName);
       
       // 移除其他項目的active狀態
-      document.querySelectorAll('.user-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.user-item').forEach(i => {
+        if (i && i.classList) {
+          i.classList.remove('active');
+        }
+      });
       
       // 添加當前項目的active狀態
       const currentElement = document.querySelector(`[data-group-id="${groupId}"]`);
-      if (currentElement) {
+      if (currentElement && currentElement.classList) {
         currentElement.classList.add('active');
       }
       
@@ -591,7 +346,7 @@ try {
       
       // 隱藏提示訊息
       const noChatSelected = document.querySelector('.no-chat-selected');
-      if (noChatSelected) {
+      if (noChatSelected && noChatSelected.classList) {
         noChatSelected.classList.add('hidden');
       }
       
@@ -637,6 +392,9 @@ try {
             }
             
             alert('群組名稱更新成功！');
+            
+            // 重新載入群組列表以確保數據同步
+            loadGroups();
           } else {
             alert('更新失敗: ' + result.error);
           }
@@ -850,10 +608,16 @@ try {
     document.querySelectorAll('.user-item[data-chat-type="private"]').forEach(item => {
       item.addEventListener('click', function() {
         // 移除其他項目的active狀態
-        document.querySelectorAll('.user-item').forEach(i => i.classList.remove('active'));
+        document.querySelectorAll('.user-item').forEach(i => {
+          if (i && i.classList) {
+            i.classList.remove('active');
+          }
+        });
         
         // 添加當前項目的active狀態
-        this.classList.add('active');
+        if (this && this.classList) {
+          this.classList.add('active');
+        }
         
         // 獲取用戶資訊
         const newUserId = this.dataset.userId;
@@ -892,7 +656,10 @@ try {
         document.querySelector('.chat-input button').disabled = false;
         
         // 隱藏提示訊息
-        document.querySelector('.no-chat-selected').classList.add('hidden');
+        const noChatSelected = document.querySelector('.no-chat-selected');
+        if (noChatSelected && noChatSelected.classList) {
+          noChatSelected.classList.add('hidden');
+        }
         
         // 載入聊天記錄
         loadChatHistory();
@@ -1155,5 +922,6 @@ try {
     }, 3000);
     <?php endif; ?>
   </script>
+  	<?php include("../share/footer.php"); ?>
 </body>
 </html>
