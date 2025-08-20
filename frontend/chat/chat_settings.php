@@ -10,7 +10,8 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 600px;
+            max-width: 600px;ping 100.79.58.120
+
             margin: 50px auto;
             padding: 20px;
             background-color: #f5f5f5;

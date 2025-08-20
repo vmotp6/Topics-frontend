@@ -104,6 +104,22 @@
 		.profile-btn:hover {
 			background: #0056b3;
 		}
+
+		.feature-link {
+			display: inline-block;
+			background: #007bff;
+			color: white;
+			text-decoration: none;
+			padding: 8px 16px;
+			border-radius: 4px;
+			font-size: 14px;
+			margin: 5px;
+			transition: background-color 0.3s;
+		}
+
+		.feature-link:hover {
+			background: #0056b3;
+		}
 	</style>
 </head>
 
@@ -127,6 +143,8 @@
 				<div class="feature-icon">🤝</div>
 				<h3 class="feature-title">產學合作</h3>
 				<p class="feature-description">瀏覽和管理您的產學合作專案，與企業建立合作關係。</p>
+				<a href="cooperation_upload.php" class="feature-link">📝 上傳申請表</a>
+				<a href="teacher_cooperation_status.php" class="feature-link">📋 查看申請狀態</a>
 			</div>
 			
 			<div class="feature-card">
