@@ -13,14 +13,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// 自動修復資料庫結構
-function autoFixDatabase($pdo) {
+// 確認/初始化資料表（不清空既有資料）
+function ensureTableSchema($pdo) {
     try {
-        // 強制重建資料表 - 先刪除再創建
-        $pdo->exec("DROP TABLE IF EXISTS cooperation_applications");
-        
-        // 創建完整的資料表
-        $sql = "CREATE TABLE cooperation_applications (
+        // 僅在不存在時建立資料表
+        $sql = "CREATE TABLE IF NOT EXISTS cooperation_applications (
             id INT AUTO_INCREMENT PRIMARY KEY,
             teacher_username VARCHAR(255) NOT NULL,
             application_date DATE NOT NULL,
@@ -78,12 +75,11 @@ function autoFixDatabase($pdo) {
             INDEX idx_created_at (created_at),
             INDEX idx_department (department)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        
         $pdo->exec($sql);
-        return "資料表已完全重建";
-        
+
+        return "資料表已確認存在（不會清空資料）";
     } catch (PDOException $e) {
-        return "修復失敗: " . $e->getMessage();
+        return "結構確認失敗: " . $e->getMessage();
     }
 }
 
@@ -113,8 +109,8 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // 自動修復資料庫
-    $fix_result = autoFixDatabase($pdo);
+    // 確認/初始化資料表（不清空既有資料）
+    $fix_result = ensureTableSchema($pdo);
     
     // 簡化的欄位檢查
     $required_fields = [

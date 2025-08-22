@@ -17,519 +17,234 @@ $role = $_SESSION['role'];
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>產學合作案申請表上傳</title>
-    <?php include("share/header.php"); ?>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-        }
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #fff; /* 移除漸層，純白背景 */
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        color: #333;
+        padding-top: 100px; /* 避開固定在頂部的 header */
+    }
 
-        .container {
-            max-width: 1600px;
-            margin: 20px auto;
-            background: white;
-            padding: 50px;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            position: relative;
-            overflow: hidden;
-        }
+    main { /* 讓主要內容可撐開高度，與 footer 相容 */
+        flex: 1;
+    }
 
-        .container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 5px;
-            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
-        }
+    .coop-container {
+        max-width: 1200px;
+        margin: 40px auto;
+        background: #fff;
+        padding: 40px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
 
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 40px;
-            font-size: 2.2em;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            position: relative;
-            line-height: 1.2;
-        }
+    .h11 {
+        color: #222;
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 1.8em;
+        font-weight: 600;
+    }
 
-        h1::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 2px;
-        }
+    .form-group {
+        margin-bottom: 20px;
+    }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+    label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        color: #333;
+        font-size: 15px;
+    }
 
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: #34495e;
-            font-size: 15px;
-        }
+    input[type="text"], 
+    input[type="email"], 
+    input[type="tel"], 
+    input[type="date"], 
+    input[type="number"],
+    textarea,
+    select {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 15px;
+        transition: border 0.3s ease;
+        box-sizing: border-box;
+    }
 
-        input[type="text"], 
-        input[type="email"], 
-        input[type="tel"], 
-        input[type="date"], 
-        input[type="number"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 15px 20px;
-            border: 2px solid #e1e8ed;
-            border-radius: 8px;
-            font-size: 15px;
-            transition: all 0.3s ease;
-            box-sizing: border-box;
-            background-color: #fafbfc;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
+    input:focus, textarea:focus, select:focus {
+        border-color: #0056b3;
+        outline: none;
+    }
 
-        textarea {
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            min-height: 80px;
-            resize: vertical;
-        }
+    textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
 
-        input[type="file"] {
-            width: 100%;
-            padding: 20px;
-            border: 2px dashed #667eea;
-            border-radius: 10px;
-            background-color: #f8f9ff;
-            transition: all 0.3s ease;
-        }
+    input[type="file"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px dashed #aaa;
+        border-radius: 4px;
+        background-color: #fafafa;
+    }
 
-        input:focus, textarea:focus, select:focus {
-            border-color: #667eea;
-            outline: none;
-            background-color: white;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
+    .submit-btn {
+        background: #0056b3;
+        color: white;
+        padding: 14px 24px;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        transition: background 0.3s ease;
+    }
 
-        input[type="file"]:hover {
-            border-color: #764ba2;
-            background-color: #f0f2ff;
-        }
+    .submit-btn:hover {
+        background: #004494;
+    }
 
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
+    .message {
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        text-align: center;
+        font-weight: 500;
+        font-size: 14px;
+    }
 
-        .submit-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 18px 30px;
-            border: none;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
+    .message.success {
+        background: #e6f4ea;
+        color: #1e4620;
+        border: 1px solid #9ccc9c;
+    }
 
-        .submit-btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
-        }
+    .message.error {
+        background: #fdecea;
+        color: #611a15;
+        border: 1px solid #f5c6cb;
+    }
 
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
+    .required {
+        color: #e74c3c;
+    }
 
-        .submit-btn:hover::before {
-            left: 100%;
-        }
+    .form-row,
+    .form-row-3,
+    .form-row-2-1 {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
 
-        .submit-btn:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
+    .form-row .form-group,
+    .form-row-3 .form-group,
+    .form-row-2-1 .form-group {
+        flex: 1;
+    }
 
-        .message {
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 16px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            animation: slideIn 0.5s ease;
-        }
+    .form-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
 
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+    .form-table th,
+    .form-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+    }
 
-        .message.success {
-            background: linear-gradient(135deg, #d4edda, #c3e6cb);
-            color: #155724;
-            border: 2px solid #28a745;
-        }
+    .form-table th {
+        background: #f7f7f7;
+        font-weight: 600;
+        width: 20%;
+    }
 
-        .message.error {
-            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-            color: #721c24;
-            border: 2px solid #dc3545;
-        }
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 5px 0;
+    }
 
-        .required {
-            color: #e74c3c;
-        }
+    .checkbox-group input {
+        cursor: pointer;
+    }
 
-        .form-row {
-            display: flex;
-            gap: 40px;
-        }
+    .section-title {
+        color: #333;
+        border-bottom: 2px solid #0056b3;
+        padding-bottom: 6px;
+        margin: 25px 0 15px 0;
+        font-size: 1.2em;
+        font-weight: 600;
+    }
 
-        .form-row .form-group {
-            flex: 1;
-            min-width: 0; /* 防止文字溢出 */
-        }
+    .sub-section {
+        margin: 15px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: #fafafa;
+    }
 
-        .form-row-3 {
-            display: flex;
-            gap: 35px;
-        }
+    .sub-section h4 {
+        margin: 0 0 10px 0;
+        font-size: 1em;
+        font-weight: 600;
+        color: #333;
+    }
 
-        .form-row-3 .form-group {
-            flex: 1;
-            min-width: 0; /* 防止文字溢出 */
-        }
+    .attachment-info {
+        color: #333;
+        font-weight: 600;
+        margin-bottom: 10px;
+        padding: 8px;
+        background: #f1f9ff;
+        border-left: 3px solid #0056b3;
+    }
 
+    .attachment-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .attachment-list li {
+        padding: 6px 10px;
+        margin: 5px 0;
+        background: #fafafa;
+        border-left: 3px solid #0056b3;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+        .form-row,
+        .form-row-3,
         .form-row-2-1 {
-            display: flex;
-            gap: 35px;
+            flex-direction: column;
         }
-
-        .form-row-2-1 .form-group:nth-child(1),
-        .form-row-2-1 .form-group:nth-child(2) {
-            flex: 1;
-            min-width: 0; /* 防止文字溢出 */
-        }
-
-        .form-row-2-1 .form-group:nth-child(3) {
-            flex: 0.5;
-            min-width: 0; /* 防止文字溢出 */
-        }
-
-        /* 檔案上傳區域樣式 */
-        .file-upload-section {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-
-        .form-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-
-        .form-table th,
-        .form-table td {
-            border: 1px solid #e1e8ed;
-            padding: 15px;
-            text-align: left;
-            vertical-align: top;
-        }
-
-        .form-table th {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
-            width: 20%;
-        }
-
-        .form-table td {
-            width: 80%;
-        }
-
-        .form-table tr:nth-child(even) {
-            background-color: #fafbfc;
-        }
-
-        .form-table tr:hover {
-            background-color: #f0f2ff;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin: 8px 0;
-            padding: 10px 15px;
-            border-radius: 6px;
-            transition: background-color 0.3s ease;
-        }
-
-        .checkbox-group:hover {
-            background-color: rgba(102, 126, 234, 0.05);
-        }
-
-        .checkbox-group input[type="checkbox"],
-        .checkbox-group input[type="radio"] {
-            width: 16px;
-            height: 16px;
-            margin: 0;
-            accent-color: #667eea;
-            cursor: pointer;
-        }
-
-        .checkbox-group label {
-            margin: 0;
-            font-weight: 500;
-            color: #2c3e50;
-            cursor: pointer;
-            flex: 1;
-            font-size: 14px;
-        }
-
-        .section-title {
-            color: #2c3e50;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 12px;
-            margin: 35px 0 20px 0;
-            font-size: 1.3em;
-            font-weight: 600;
-            position: relative;
-        }
-
-        .section-title::before {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 40px;
-            height: 2px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 1px;
-        }
-
-        .sub-section {
-            margin: 20px 0;
-            padding: 25px;
-            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
-            transition: all 0.3s ease;
-        }
-
-        .sub-section:hover {
-            transform: translateX(3px);
-            box-shadow: 0 3px 12px rgba(102, 126, 234, 0.15);
-        }
-
-        .sub-section h4 {
-            margin: 0 0 12px 0;
-            color: #2c3e50;
-            font-size: 1.1em;
-            font-weight: 600;
-        }
-
-        .percentage-input {
-            width: 60px;
-            text-align: center;
-        }
-
-        .amount-input {
-            width: 120px;
-        }
-
-        .attachment-info {
-            color: #2c3e50;
-            font-weight: 600;
-            margin-bottom: 15px;
-            padding: 10px 15px;
-            background: linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%);
-            border-radius: 8px;
-            border-left: 4px solid #17a2b8;
-        }
-
-        .attachment-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .attachment-list li {
-            padding: 8px 15px;
-            margin: 5px 0;
-            background: #f8f9fa;
-            border-radius: 6px;
-            border-left: 3px solid #667eea;
-            color: #2c3e50;
-            font-weight: 500;
-        }
-
-        .attachment-list li::before {
-            content: '📎';
-            margin-right: 8px;
-            color: #667eea;
-        }
-
-        /* 確保浮動元素不受影響 */
-        #ai-float-btn,
-        #ai-box,
-        #chat-float-btn,
-        #chat-box {
-            position: fixed !important;
-            z-index: 1000 !important;
-        }
-
-        /* 確保AI助手在申請表頁面正常顯示 */
-        #ai-box {
-            position: fixed !important;
-            top: calc(100vh - 650px) !important;
-            left: calc(100vw - 430px) !important;
-            width: 400px !important;
-            height: 550px !important;
-            background: white !important;
-            border-radius: 12px !important;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
-            z-index: 999 !important;
-            border: 2px solid #e0e0e0 !important;
-            resize: both !important;
-            overflow: hidden !important;
-            min-width: 350px !important;
-            min-height: 450px !important;
-            max-width: 700px !important;
-            max-height: 800px !important;
-        }
-
-        #ai-float-btn {
-            position: fixed !important;
-            bottom: 30px !important;
-            right: 30px !important;
-            width: 60px !important;
-            height: 60px !important;
-            background: linear-gradient(135deg, #ff6b35, #f7931e) !important;
-            color: white !important;
-            border-radius: 50% !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            font-size: 24px !important;
-            cursor: pointer !important;
-            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4) !important;
-            z-index: 1000 !important;
-            border: none !important;
-        }
-
-        /* 確保AI助手內容正常顯示 */
-        #ai-header {
-            background: linear-gradient(135deg, #ff6b35, #f7931e) !important;
-            color: white !important;
-            padding: 15px 20px !important;
-            border-radius: 12px 12px 0 0 !important;
-            font-weight: bold !important;
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
-        }
-
-        #ai-messages {
-            flex: 1 !important;
-            padding: 20px !important;
-            overflow-y: auto !important;
-            background: white !important;
-        }
-
-        #ai-input {
-            padding: 15px 20px !important;
-            background: #f8f9fa !important;
-            border-top: 1px solid #e0e0e0 !important;
-            display: flex !important;
-            gap: 10px !important;
-        }
-
-        #ai-input input {
-            flex: 1 !important;
-            padding: 10px !important;
-            border: 1px solid #ddd !important;
-            border-radius: 6px !important;
-            font-size: 14px !important;
-        }
-
-        #ai-send-msg {
-            background: linear-gradient(135deg, #ff6b35, #f7931e) !important;
-            color: white !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            border-radius: 6px !important;
-            cursor: pointer !important;
-            font-weight: bold !important;
-        }
-
-        @media (max-width: 768px) {
-            .form-row,
-            .form-row-3,
-            .form-row-2-1 {
-                flex-direction: column;
-                gap: 0;
-            }
-            
-            .form-table {
-                font-size: 14px;
-            }
-            
-            .form-table th,
-            .form-table td {
-                padding: 5px;
-            }
-        }
+    }
     </style>
+
 </head>
 <body>
-    <div class="container">
-        <h1>康寧大學產學合作申請表</h1>
+    <?php include("share/header.php"); ?>
+    <main>
+    <div class="coop-container">
+        <h1 class="h11">康寧大學產學合作申請表</h1>
         
         <div id="message"></div>
         
@@ -785,6 +500,7 @@ $role = $_SESSION['role'];
             </button>
         </form>
     </div>
+    </main>
 
     <script>
         // 智慧財產權區塊顯示/隱藏
@@ -877,7 +593,7 @@ $role = $_SESSION['role'];
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('application_date').value = today;
     </script>
-
+    <?php include("share/footer.php"); ?>
     <?php include("share/chat_widget.php"); ?>
     <?php include("share/ai_widget.php"); ?>
 </body>

@@ -18,8 +18,8 @@
 </head>
 <body>
     <h1>科系推薦系統</h1>
-    <p>請填寫您專案的基本資訊，系統將推薦最適合承接此案的科系。</p>
-
+    <div class="pp"><p>請填寫您專案的基本資訊，系統將推薦最適合承接此案的科系。</p></div>
+<div class="form-card">
     <form id="aiForm">
         <label for="project_desc">📌 專案內容描述：</label><br>
         <textarea name="project_desc" rows="4" required></textarea><br><br>
@@ -32,7 +32,7 @@
 
         <button type="submit" id="submitBtn">送出</button>
     </form>
-
+</div>
     <h2 id="result"></h2>
 
     <script>

@@ -3,10 +3,31 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 $isLoggedIn = isset($_SESSION['username']);
+
+// 路徑配置
+$config = [
+    'base_url' => '/Topics-frontend/frontend/',
+    'share_url' => '/Topics-frontend/frontend/share/'
+];
+
+// 路徑生成函數
+function getCorrectPath($targetFile) {
+    global $config;
+    return $config['base_url'] . $targetFile;
+}
+
+// 資源路徑生成函數
+function getResourcePath($resourceFile) {
+    global $config;
+    return $config['share_url'] . $resourceFile;
+}
 ?>
 
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <!-- CSS -->
 <style>
@@ -16,17 +37,20 @@ $isLoggedIn = isset($_SESSION['username']);
     left: 0;
     width: 100%;
     z-index: 999;
-    background-color: #e0f0ff;
-    padding: 12px 0;
-    color: #003366;
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: rgba(217, 229, 234, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+    height: 80px;
+    padding: 0;
+    color: #2c3e50;
+    font-family: 'Microsoft JhengHei', sans-serif;
   }
 
   .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 0 10px;
+    padding: 0 20px;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -35,32 +59,65 @@ $isLoggedIn = isset($_SESSION['username']);
   .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
   }
 
-  .logo img {
-    height: 32px;
-    width: auto;
+  .logo-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #667eea 0%, rgb(168, 186, 221) 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .logo-subtitle {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin: 0;
+    font-weight: 500;
   }
 
   .navbar-links {
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex-grow: 1;
+    gap: 30px;
   }
 
   .navbar-links a {
-    color: #0056b3;
+    color: #2c3e50;
     text-decoration: none;
-    margin: 0 10px;
-    font-weight: bold;
-    font-size: 14px;
-    transition: color 0.3s;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 10px 15px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    position: relative;
   }
 
   .navbar-links a:hover {
-    color: #003366;
+    background: #667eea;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   }
 
   .navbar-user {
@@ -68,32 +125,45 @@ $isLoggedIn = isset($_SESSION['username']);
     align-items: center;
   }
 
-  .btn-auth-wrapper {
-    background-color: #007bff;
-    border-radius: 16px;
-    padding: 6px 12px;
+  .auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .btn-auth {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 25px;
+    padding: 10px 20px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     user-select: none;
-  }
-
-  .btn-auth-wrapper a {
-    color: white;
+    transition: all 0.3s ease;
     text-decoration: none;
-    font-size: 14px;
+    color: white;
+    font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
+    border: none;
   }
 
-  .btn-auth-wrapper a:hover {
-    color: rgb(178, 182, 182);
-  }
-
-  .btn-auth-wrapper .separator {
+  .btn-auth:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     color: white;
-    font-weight: 600;
-    font-size: 14px;
+  }
+
+  .btn-register {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .btn-login {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  }
+
+  .btn-login:hover {
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
   }
 
   /* modal 樣式 */
@@ -111,14 +181,16 @@ $isLoggedIn = isset($_SESSION['username']);
   }
 
   .modal-content {
-    background-color: white;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
     padding: 40px;
-    border-radius: 16px;
+    border-radius: 20px;
     max-width: 600px;
     width: 100%;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
     position: relative;
     text-align: center;
+    border: 1px solid rgba(102, 126, 234, 0.1);
   }
 
   .close-btn {
@@ -131,19 +203,26 @@ $isLoggedIn = isset($_SESSION['username']);
 
   .input-field {
     position: relative;
-    border-bottom: 2px solid #ccc;
+    border-bottom: 2px solid rgba(102, 126, 234, 0.3);
     margin: 20px 0;
     text-align: left;
+    transition: all 0.3s ease;
+    padding-top: 14px; /* 預留標籤空間，避免與輸入文字重疊 */
+    box-sizing: border-box;
+  }
+
+  .input-field:focus-within {
+    border-bottom-color: #667eea;
   }
 
   .input-field label {
     position: absolute;
-    top: 50%;
+    top: 0;
     left: 0;
-    transform: translateY(-50%);
-    color: #000000;
-    font-size: 16px;
-    transition: 0.15s ease;
+    transform: none;
+    color: #2c3e50;
+    font-size: 14px;
+    transition: 0.3s ease;
     pointer-events: none;
   }
 
@@ -151,25 +230,39 @@ $isLoggedIn = isset($_SESSION['username']);
   .input-field select {
     width: 100%;
     height: 40px;
+    padding-top: 6px; /* 與上方標籤錯開 */
     background: transparent;
     border: none;
     font-size: 16px;
     outline: none;
-    color: #000000;
+    color: #2c3e50;
   }
 
   .input-field input:focus~label,
   .input-field input:valid~label,
   .input-field select:focus~label,
   .input-field select:valid~label {
-    font-size: 0.8rem;
-    top: 10px;
-    transform: translateY(-120%);
+    font-size: 12px;
+    top: -10px;
+    transform: none;
+    color: #667eea;
   }
 
   .helper-text {
     margin-top: 15px;
     text-align: center;
+    color: #7f8c8d;
+  }
+
+  .helper-text a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.3s ease;
+  }
+
+  .helper-text a:hover {
+    color: #5a6fd8;
   }
 
   .forget {
@@ -181,125 +274,212 @@ $isLoggedIn = isset($_SESSION['username']);
   }
 
   button {
-    background: #2828FF;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     font-weight: 600;
     border: none;
     padding: 12px 20px;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 25px;
     font-size: 16px;
     margin-bottom: 5px;
     width: 100%;
+    transition: all 0.3s ease;
   }
 
   button:hover {
-    background: #000000;
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   }
   .user-dropdown {
-  position: relative;
-}
+    position: relative;
+  }
 
-.avatar-btn {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
+  .avatar-btn {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+  }
 
-.avatar-img {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid white;
-  background-color: #ffffff;
-}
+  .avatar-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+    transform: translateY(-2px);
+  }
 
-.notification-dot {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 12px;
-  height: 12px;
-  background-color: #ff4444;
-  border-radius: 50%;
-  border: 2px solid white;
-  display: none;
-}
+  .avatar-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid white;
+    background-color: #ffffff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    object-fit: cover;
+  }
 
-.dropdown-menu {
-  display: none;
-  position: absolute;
-  right: 0;
-  top: 48px;
-  background-color: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 10px;
-  min-width: 120px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  z-index: 2000;
-}
+  .notification-dot {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    width: 14px;
+    height: 14px;
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    border-radius: 50%;
+    border: 2px solid white;
+    display: none;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+  }
 
-.dropdown-menu .username {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: bold;
-  color: #003366;
-}
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 60px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 12px;
+    padding: 15px;
+    min-width: 150px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+  }
 
-.dropdown-menu a.btn-logout {
-  color: #007bff;
-  text-decoration: none;
-  display: block;
-  text-align: center;
-  font-weight: 600;
-}
+  .dropdown-menu .username {
+    display: block;
+    margin-bottom: 12px;
+    font-weight: 700;
+    color: #2c3e50;
+    font-size: 1rem;
+    text-align: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+  }
 
-.dropdown-menu a.btn-logout:hover {
-  color: #000000;
-}
+  .dropdown-menu a.btn-logout {
+    color: #667eea;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    margin-bottom: 5px;
+  }
+
+  .dropdown-menu a.btn-logout:hover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  /* 響應式設計 */
+  @media (max-width: 1024px) {
+    .navbar-links {
+      gap: 20px;
+    }
+
+    .navbar-links a {
+      font-size: 0.9rem;
+      padding: 8px 12px;
+    }
+
+    .logo-title {
+      font-size: 1.2rem;
+    }
+
+    .logo-subtitle {
+      font-size: 0.8rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .navbar-links {
+      display: none;
+    }
+
+    .logo-title {
+      font-size: 1rem;
+    }
+
+    .logo-subtitle {
+      font-size: 0.7rem;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+    }
+
+    .auth-buttons {
+      gap: 10px;
+    }
+
+    .btn-auth {
+      padding: 8px 15px;
+      font-size: 0.8rem;
+    }
+  }
 
 </style>
 
 <!-- 導覽列 -->
 <div class="navbar">
 <div class="container">
-  <div class="spacer"></div>
+  <!-- Logo 區域 -->
+  <div class="logo">
+    <div class="logo-icon">
+      <i class="fas fa-university"></i>
+    </div>
+    <div class="logo-text">
+      <h1 class="logo-title">康寧大學產學合作平台</h1>
+      <p class="logo-subtitle">Kang Ning University Industry-Academia Cooperation Platform</p>
+    </div>
+  </div>
 
   <div class="navbar-links">
-    <a href="/frontend/one.php">首頁</a>
-    <a href="/frontend/teach.php">產學合作2</a>
-    <a href="/frontend/QA.php">認識產學合作</a>
-    <a href="/frontend/about.php">認識平台</a>
-    <a href="/frontend/AI.php">AI產學合作</a>
-    <a href="/frontend/chat_settings.php">💬 聊天設置</a>
-    <?php if ($isLoggedIn && (isset($_SESSION['role']) && ($_SESSION['role'] === '老師' || $_SESSION['role'] === '廠商'))): ?>
-      <a href="/frontend/chat/chat.php">私訊聊天</a>
-    <?php endif; ?>
+    <a href="<?php echo getCorrectPath('index.php'); ?>">首頁</a>
+    <a href="<?php echo getCorrectPath('QA.php'); ?>">認識產學合作</a>
+    <a href="<?php echo getCorrectPath('AI.php'); ?>">AI產學合作</a>
+    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">💬 聊天設置</a>
+  
   </div>
 
 <?php if ($isLoggedIn): ?>
   <div class="user-dropdown">
-    <div class="avatar-btn" onclick="toggleDropdown()">
-    <img src="/frontend/share/EIdROxGXsAE_LSs.jpg" alt="頭像" class="avatar-img">
-      <div class="notification-dot" id="notificationDot"></div>
-    </div>
-    <div class="dropdown-menu" id="dropdownMenu">
-      <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
-      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
-        <a href="teacher_profile.php" class="btn-logout">個人資料</a>
-      <?php else: ?>
-        <a href="#" class="btn-logout">個人資料</a>
-      <?php endif; ?>
-      <a href="logout.php" class="btn-logout">登出</a>
-    </div>
+                   <div class="avatar-btn" onclick="toggleDropdown()">
+             <img src="<?php echo getResourcePath('EIdROxGXsAE_LSs.jpg'); ?>" alt="頭像" class="avatar-img">
+        <div class="notification-dot" id="notificationDot"></div>
+      </div>
+                                     <div class="dropdown-menu" id="dropdownMenu">
+         <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
+         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+           <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
+         <?php else: ?>
+           <a href="#" class="btn-logout">個人資料</a>
+         <?php endif; ?>
+         <a href="<?php echo getCorrectPath('logout.php'); ?>" class="btn-logout">登出</a>
+       </div>
   </div>
 <?php else: ?>
-  <div class="btn-auth-wrapper">
-    <a href="#" id="openModalBtn">註冊</a>
-    <span class="separator">/</span>
-    <a href="#" id="openLoginBtn">登入</a>
+  <div class="auth-buttons">
+    <a href="#" id="openModalBtn" class="btn-auth btn-register">
+      <i class="fas fa-user-plus"></i>
+      註冊
+    </a>
+    <a href="#" id="openLoginBtn" class="btn-auth btn-login">
+      <i class="fas fa-sign-in-alt"></i>
+      登入
+    </a>
   </div>
 <?php endif; ?>
 
@@ -356,7 +536,6 @@ $isLoggedIn = isset($_SESSION['username']);
     <p class="helper-text">還沒有帳號？<a href="#" id="switchToRegister">註冊</a></p>
   </div>
 </div>
-
 <!-- JavaScript 控制 modal -->
 <script>
   const registerModal = document.getElementById("registerModal");
@@ -444,7 +623,7 @@ if (res.ok) {
   document.getElementById("loginMessage").innerText = data.message;
 
   // 1. 將資料儲存進 PHP session
-  fetch("set_session.php", {
+  fetch("<?php echo getCorrectPath('set_session.php'); ?>", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -456,15 +635,15 @@ if (res.ok) {
     // 2. 根據身分跳轉頁面
     setTimeout(() => {
       if (data.role === "老師") {
-        window.location.href = "teacher.php";
+        window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
       } else if (data.role === "學生") {
-        window.location.href = "student.php";
+        window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
       } else if (data.role === "廠商") {
-        window.location.href = "company.php";
+        window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
       } else if (data.role === "學校行政人員") {
-        window.location.href = "admin.php";
+        window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
       } else {
-        window.location.href = "index.php";
+        window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
       }
     }, 500);
   });
@@ -524,3 +703,4 @@ function checkTeacherProfile() {
 window.addEventListener('load', checkTeacherProfile);
 
 </script>
+

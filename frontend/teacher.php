@@ -7,9 +7,11 @@
 	<title>老師</title>
 	<link rel="stylesheet" href="assets/csp/QA.css">
 	<style>
+		body { padding-top: 100px; }
+		main { flex: 1; }
 		.teacher-container {
 			max-width: 1200px;
-			margin: 120px auto 40px;
+			margin: 40px auto 40px;
 			padding: 40px;
 			background: white;
 			border-radius: 16px;
@@ -124,6 +126,7 @@
 </head>
 
 <body>
+	<main>
 	<div class="teacher-container">
 		<div class="welcome-section">
 			<h1 class="welcome-title">歡迎，老師！</h1>
@@ -178,6 +181,7 @@
 			</div>
 		</div>
 	</div>
+	</main>
 
 	<script>
 		// 檢查是否需要顯示個人資料提醒
@@ -188,18 +192,18 @@
 			
 			if (username && role === '老師' && reminder) {
 				        fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
-					.then(response => {
-						if (response.status === 404) {
-							// 尚未填寫個人資料，顯示提醒
-							reminder.style.display = 'block';
-						} else {
-							// 已填寫個人資料，隱藏提醒
-							reminder.style.display = 'none';
-						}
-					})
-					.catch(error => {
-						console.log('檢查個人資料時發生錯誤');
-					});
+				.then(response => {
+					if (response.status === 404) {
+						// 尚未填寫個人資料，顯示提醒
+						reminder.style.display = 'block';
+					} else {
+						// 已填寫個人資料，隱藏提醒
+						reminder.style.display = 'none';
+					}
+				})
+				.catch(error => {
+					console.log('檢查個人資料時發生錯誤');
+				});
 			}
 		}
 
@@ -207,7 +211,9 @@
 		window.addEventListener('load', checkProfileReminder);
 	</script>
 	
-	<?php include("share/ai_widget.php"); ?>
+    <?php include("share/footer.php"); ?>
+    <?php include("share/chat_widget.php"); ?>
+    <?php include("share/ai_widget.php"); ?>
 </body>
 
 </html>

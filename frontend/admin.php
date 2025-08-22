@@ -6,9 +6,11 @@
 	<?php include("share/header.php"); ?>
 	<title>行政人員管理平台</title>
 	<style>
+		body { padding-top: 100px; }
+		main { flex: 1; }
 		.admin-container {
 			max-width: 1200px;
-			margin: 120px auto 40px;
+			margin: 40px auto 40px;
 			padding: 40px;
 			background: white;
 			border-radius: 16px;
@@ -130,6 +132,7 @@
 </head>
 
 <body>
+	<main>
 	<div class="admin-container">
 		<div class="welcome-section">
 			<h1 class="welcome-title">歡迎，行政人員！</h1>
@@ -203,6 +206,7 @@
 			</div>
 		</div>
 	</div>
+	</main>
 
 	<script>
 		// 載入統計數據
@@ -228,7 +232,9 @@
 		window.addEventListener('load', loadStats);
 	</script>
 	
-	<?php include("share/ai_widget.php"); ?>
+    <?php include("share/footer.php"); ?>
+    <?php include("share/chat_widget.php"); ?>
+    <?php include("share/ai_widget.php"); ?>
 </body>
 
 </html>

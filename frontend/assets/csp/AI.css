@@ -1,113 +1,65 @@
-/* 基本字體與背景 */
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #e6f0ff;
-    color: #003366;
-    margin: 0;
-    padding: 20px;
+    background: #e6f0ff;
+    font-family: "Microsoft JhengHei", sans-serif;
+}
+.pp {
+    font-size: 24px; 
+    font-weight: bold;
+    color: #333;
+    text-align: center; 
+    margin-top: 50px;  /* 設定標題和上方的距離 */
+    margin-bottom: 20px;  /* 標題和下方內容的間距 */
 }
 
-/* 頁面標題 */
-h1 {
-    color: #004aad;
-    text-align: center;
-    margin-bottom: 0.5em;
+.form-card {
+    background: #ffffff;
+    border-radius: 15px;
+    padding: 30px;
+    width: 90%;
+    max-width: 500px;
+    margin: 50px auto;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    border: 1px solid #d9e2ec;
 }
 
-/* 頁面副標題 */
-p {
-    text-align: center;
-    font-size: 1.1em;
-    margin-bottom: 2em;
-    color: #0055cc;
+label {
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-size: 16px;
 }
 
-/* 表單區域 */
-form#aiForm {
-    max-width: 600px;
-    margin: 0 auto 3em auto;
-    background: white;
-    padding: 25px 30px;
+textarea, input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
     border-radius: 10px;
-    box-shadow: 0 0 15px rgba(0, 75, 173, 0.3);
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+    transition: 0.3s;
 }
 
-/* 表單標籤 */
-form#aiForm label {
-    font-weight: 600;
-    color: #003366;
-}
-
-/* 多行文字框 */
-form#aiForm textarea {
-    width: 100%;
-    border: 2px solid #99bbff;
-    border-radius: 6px;
-    padding: 10px;
-    font-size: 1em;
-    resize: vertical;
-    transition: border-color 0.3s ease;
-}
-
-/* 文字輸入框 */
-form#aiForm input[type="text"] {
-    width: 100%;
-    padding: 8px 12px;
-    margin-top: 6px;
-    margin-bottom: 20px;
-    border: 2px solid #99bbff;
-    border-radius: 6px;
-    font-size: 1em;
-    transition: border-color 0.3s ease;
-}
-
-/* 輸入框獲得焦點時變色 */
-form#aiForm textarea:focus,
-form#aiForm input[type="text"]:focus {
-    border-color: #004aad;
+textarea:focus, input[type="text"]:focus {
+    border-color: #6a9cff;
     outline: none;
 }
 
-/* 送出按鈕 */
-form#aiForm button[type="submit"] {
-    background-color: #004aad;
-    color: white;
-    border: none;
-    padding: 12px 25px;
-    font-size: 1.1em;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 700;
+button#submitBtn {
+    margin-top: 20px;
     width: 100%;
-    transition: background-color 0.3s ease;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background: linear-gradient(to right, #6a9cff, #a07cff);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.3s;
 }
 
-form#aiForm button[type="submit"]:hover {
-    background-color: #003366;
-}
-
-/* 結果顯示區 */
-#result {
-    max-width: 600px;
-    margin: 0 auto;
-    font-size: 1.3em;
-    padding: 15px 20px;
-    border-radius: 8px;
-    background-color: #cce0ff;
-    color: #003366;
-    box-shadow: 0 0 10px rgba(0, 75, 173, 0.4);
-    min-height: 2.5em;
-    text-align: center;
-}
-
-/* 手機版自適應 */
-@media screen and (max-width: 640px) {
-    body {
-        padding: 15px 10px;
-    }
-    form#aiForm, #result {
-        width: 100%;
-        padding: 20px 15px;
-        box-sizing: border-box;
-    }
+button#submitBtn:hover {
+    background: linear-gradient(to right, #5a8eff, #936bff);
 }
