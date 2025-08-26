@@ -170,7 +170,8 @@ def save_teacher_profile():
 def get_faq():
     try:
         with db.cursor() as cursor:
-            sql = "SELECT id, question, answer, category FROM qa WHERE is_active = 1 ORDER BY id ASC"
+            # 根據你的資料表結構：id, question, answer, is_active, created_at, updated_at
+            sql = "SELECT id, question, answer FROM qa WHERE is_active = 1 ORDER BY id ASC"
             cursor.execute(sql)
             faqs = cursor.fetchall()
 
