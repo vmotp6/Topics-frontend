@@ -165,6 +165,33 @@ def save_teacher_profile():
         print(f"未知錯誤：{e}")
         return jsonify({"message": "保存失敗，發生未知錯誤。"}), 500
 
+# ✅ QA 列表 API
+@app.route('/qa', methods=['GET'])
+def get_faq():
+    try:
+        with db.cursor() as cursor:
+            sql = "SELECT id, question, answer, category FROM qa WHERE is_active = 1 ORDER BY id ASC"
+            cursor.execute(sql)
+            faqs = cursor.fetchall()
+
+            # 把查詢結果轉換成 JSON 格式
+            result = []
+            for row in faqs:
+                result.append({
+                    "id": row[0],
+                    "question": row[1],
+                    "answer": row[2]
+                })
+
+        return jsonify(result), 200
+
+    except pymysql.Error as e:
+        print(f"資料庫查詢錯誤：{e}")
+        return jsonify({"message": "無法獲取 FAQ"}), 500
+    except Exception as e:
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "發生未知錯誤"}), 500
+
 # 啟動伺服器
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
