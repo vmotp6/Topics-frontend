@@ -18,7 +18,7 @@ $isLoggedIn = isset($_SESSION['username']);
         
         <!-- 智能問答留言區 -->
         <section class="qa-chat-section">
-            <h3>🎓 招生智能問答助手</h3>
+            <h3>🎓 招生智能問答助手(並非AI)</h3>
             <div class="chat-container">
                 <div class="chat-messages" id="chat-messages">
                     <div class="chat-message bot-message">

@@ -188,7 +188,7 @@ def get_faq():
 
     except pymysql.Error as e:
         print(f"資料庫查詢錯誤：{e}")
-        return jsonify({"message": "無法獲取 FAQ"}), 500
+        return jsonify({"message": "無法獲取 QA列表"}), 500
     except Exception as e:
         print(f"未知錯誤：{e}")
         return jsonify({"message": "發生未知錯誤"}), 500

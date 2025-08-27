@@ -448,9 +448,11 @@ function getResourcePath($resourceFile) {
 
   <div class="navbar-links">
     <a href="<?php echo getCorrectPath('index.php'); ?>">首頁</a>
-    <a href="<?php echo getCorrectPath('QA.php'); ?>">認識產學合作</a>
-    <a href="<?php echo getCorrectPath('AI.php'); ?>">AI產學合作</a>
+    <a href="<?php echo getCorrectPath('QA.php'); ?>">招生QA問答</a>
     <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">💬 聊天設置</a>
+    <?php if ($isLoggedIn): ?>
+      <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
+    <?php endif; ?>
   
   </div>
 
