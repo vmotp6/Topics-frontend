@@ -179,6 +179,13 @@
 				<h3 class="feature-title">報告管理</h3>
 				<p class="feature-description">管理產學合作專案的報告和文件。</p>
 			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">🎓</div>
+				<h3 class="feature-title">就讀意願管理</h3>
+				<p class="feature-description">管理學生和家長的就讀意願登錄，查看申請狀態並進行聯絡。</p>
+				<a href="admin_enrollment_review_fixed.php" class="feature-link">管理就讀意願</a>
+			</div>
 		</div>
 	</div>
 	</main>
