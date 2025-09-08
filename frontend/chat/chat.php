@@ -922,6 +922,5 @@ try {
     }, 3000);
     <?php endif; ?>
   </script>
-  	<?php include("../share/footer.php"); ?>
 </body>
 </html>
