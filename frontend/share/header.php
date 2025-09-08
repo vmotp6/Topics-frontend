@@ -441,7 +441,7 @@ function getResourcePath($resourceFile) {
       <i class="fas fa-university"></i>
     </div>
     <div class="logo-text">
-      <h1 class="logo-title">康寧大學產學合作平台</h1>
+      <h1 class="logo-title">康寧大學招生平台</h1>
       <p class="logo-subtitle">Kang Ning University Industry-Academia Cooperation Platform</p>
     </div>
   </div>

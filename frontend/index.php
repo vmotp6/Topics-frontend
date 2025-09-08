@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>康寧大學產學合作平台</title>
+  <title>康寧大學招生平台</title>
   
   <!-- 輪播圖片樣式 -->
   <style>
@@ -205,7 +205,7 @@ if (session_status() === PHP_SESSION_NONE) {
     <div class="carousel-slide active" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
       <div class="slide-overlay"></div>
       <div class="slide-content">
-        <h2>歡迎來到康寧大學產學合作平台</h2>
+        <h2>歡迎來到康寧大學招生平台</h2>
         <p>連結學術研究與產業發展，創造雙贏的產學合作機會</p>
         <a href="QA.php" class="slide-btn">了解更多</a>
       </div>

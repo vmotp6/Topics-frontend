@@ -2,12 +2,12 @@
 <footer class="footer">
 	<nav class="footer-nav" aria-label="Footer navigation">
 		<a href="/Topics-frontend/frontend/index.php" class="footer-link">首頁</a>
-		<a href="/Topics-frontend/frontend/QA.php" class="footer-link">認識產學合作</a>
-		<a href="/Topics-frontend/frontend/AI.php" class="footer-link">AI產學合作</a>
+		<a href="/Topics-frontend/frontend/QA.php" class="footer-link">認識招生平台</a>
+		<a href="/Topics-frontend/frontend/AI.php" class="footer-link">AI招生平台</a>
 		<a href="/Topics-frontend/frontend/chat_settings.php" class="footer-link">💬 聊天設置</a>
 	</nav>
 	<div class="footer-copy">
-		<p>© 2025 康寧大學產學合作平台</p>
+		<p>© 2025 康寧大學招生平台</p>
 	</div>
 </footer>
 
