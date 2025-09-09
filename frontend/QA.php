@@ -1,6 +1,38 @@
 <?php
 session_start();
 $isLoggedIn = isset($_SESSION['username']);
+
+// 引入資料庫配置
+require_once 'config.php';
+
+// 從資料庫讀取 FAQ 資料
+function getFAQFromDatabase() {
+    try {
+        $conn = getDatabaseConnection();
+        
+        // 假設 FAQ 資料表名稱為 'faq' 或 'qa'，欄位為 'question' 和 'answer'
+        // 如果資料表名稱或欄位不同，請告訴我正確的名稱
+        $sql = "SELECT question, answer FROM faq ORDER BY id ASC";
+        $result = $conn->query($sql);
+        
+        $faqs = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $faqs[] = [
+                    'question' => $row['question'],
+                    'answer' => $row['answer']
+                ];
+            }
+        }
+        
+        $conn->close();
+        return $faqs;
+        
+    } catch (Exception $e) {
+        // 如果資料庫連接失敗，返回錯誤資訊
+        return ['error' => '資料庫連接錯誤: ' . $e->getMessage()];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -48,47 +80,91 @@ $(document).ready(function() {
         console.error("關鍵詞資料載入失敗");
     });
 
-    // 2. 呼叫 Flask API 撈 FAQ
-    $.get("http://localhost:5000/qa", function(data) {
-        let html = "";
-        data.forEach(function(item) {
-            html += `
-                <div class="faq-item">
-                    <div class="faq-question">${item.question}</div>
-                    <div class="faq-answer">
-                        <div class="faq-content">${item.answer}</div>
-                    </div>
-                </div>
-            `;
-        });
-        $("#faq-container").html(html);
+    // 2. 從資料庫載入 FAQ 資料
+    function loadFAQFromDatabase() {
+        $.ajax({
+            url: 'get_faq.php',
+            type: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                if (data.error) {
+                    $("#faq-container").html(`
+                        <div style="text-align: center; color: #d9534f; padding: 20px; background: #f8d7da; border-radius: 5px; margin: 20px 0;">
+                            <h4>❌ 資料庫連接錯誤</h4>
+                            <p>${data.error}</p>
+                            <p>請檢查：</p>
+                            <ul style="text-align: left; display: inline-block;">
+                                <li>資料庫伺服器是否正常運行</li>
+                                <li>網路連接是否正常</li>
+                                <li>資料表是否存在</li>
+                            </ul>
+                        </div>
+                    `);
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    $("#faq-container").html(`
+                        <div style="text-align: center; color: #856404; padding: 20px; background: #fff3cd; border-radius: 5px; margin: 20px 0;">
+                            <h4>📝 暫無 FAQ 資料</h4>
+                            <p>資料庫中尚未新增任何 FAQ 內容</p>
+                        </div>
+                    `);
+                    return;
+                }
 
-        // 3. 啟用 FAQ 動畫
-        $('.faq-content').hide();
-
-        $('.faq-question').click(function() {
-            const $this = $(this);
-            const $answer = $this.next('.faq-answer');
-            const $content = $answer.find('.faq-content');
-
-            if ($this.hasClass('active')) {
-                $content.slideUp(300, function() {
-                    $answer.removeClass('show');
+                let html = "";
+                data.forEach(function(item) {
+                    html += `
+                        <div class="faq-item">
+                            <div class="faq-question">${item.question}</div>
+                            <div class="faq-answer">
+                                <div class="faq-content">${item.answer}</div>
+                            </div>
+                        </div>
+                    `;
                 });
-                $this.removeClass('active');
-            } else {
-                $('.faq-question').removeClass('active');
-                $('.faq-answer .faq-content').slideUp(300);
-                $('.faq-answer').removeClass('show');
+                $("#faq-container").html(html);
 
-                $answer.addClass('show');
-                $content.slideDown(300);
-                $this.addClass('active');
+                // 3. 啟用 FAQ 動畫
+                $('.faq-content').hide();
+
+                $('.faq-question').click(function() {
+                    const $this = $(this);
+                    const $answer = $this.next('.faq-answer');
+                    const $content = $answer.find('.faq-content');
+
+                    if ($this.hasClass('active')) {
+                        $content.slideUp(300, function() {
+                            $answer.removeClass('show');
+                        });
+                        $this.removeClass('active');
+                    } else {
+                        $('.faq-question').removeClass('active');
+                        $('.faq-answer .faq-content').slideUp(300);
+                        $('.faq-answer').removeClass('show');
+
+                        $answer.addClass('show');
+                        $content.slideDown(300);
+                        $this.addClass('active');
+                    }
+                });
+            },
+            error: function(xhr, status, error) {
+                $("#faq-container").html(`
+                    <div style="text-align: center; color: #d9534f; padding: 20px; background: #f8d7da; border-radius: 5px; margin: 20px 0;">
+                        <h4>❌ 載入 FAQ 失敗</h4>
+                        <p>AJAX 請求錯誤: ${error}</p>
+                        <p>狀態碼: ${xhr.status}</p>
+                        <p>請檢查 get_faq.php 檔案是否存在</p>
+                    </div>
+                `);
             }
         });
-    }).fail(function() {
-        $("#faq-container").html('<p style="text-align: center; color: #666; padding: 20px;">暫時無法載入 FAQ 資料，請稍後再試。</p>');
-    });
+    }
+
+    // 載入資料庫 FAQ
+    loadFAQFromDatabase();
 
     // 4. 智能問答功能
     function findAnswer(question) {

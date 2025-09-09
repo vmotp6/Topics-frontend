@@ -128,6 +128,25 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
     exit();
 }
 
+// 查詢該教師的活動記錄
+$activity_records = [];
+if ($teacher_id) {
+    $records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY activity_date DESC, id DESC";
+    $records_stmt = $conn->prepare($records_sql);
+    if ($records_stmt) {
+        $records_stmt->bind_param("i", $teacher_id);
+        $records_stmt->execute();
+        $records_result = $records_stmt->get_result();
+        
+        if ($records_result) {
+            while ($row = $records_result->fetch_assoc()) {
+                $activity_records[] = $row;
+            }
+        }
+        $records_stmt->close();
+    }
+}
+
 $message = "";
 $messageType = "";
 
@@ -330,6 +349,37 @@ $conn->close();
                     </small>
                 </div>
             <?php endif; ?>
+
+            <!-- 查看記錄按鈕區塊 -->
+            <div class="view-records-section" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #f0ad4e; text-align: center;">
+                <h4 style="color: #856404; margin-bottom: 15px;">
+                    <i class="fas fa-database"></i> 活動記錄管理
+                </h4>
+                <p style="color: #856404; margin-bottom: 20px;">
+                    進入專門的管理頁面來查看、編輯、刪除
+                </p>
+                <button type="button" id="toggleRecordsBtn" class="toggle-records-btn" onclick="window.location.href='activity_records_management.php'" 
+                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
+                    <i class="fas fa-cogs" id="recordsIcon"></i> 
+                    <span id="recordsText">進入活動記錄管理</span>
+                    <?php if (!empty($activity_records)): ?>
+                        <span style="background: #e74c3c; color: white; padding: 4px 8px; border-radius: 50%; font-size: 0.8em; margin-left: 8px;">
+                            <?php echo count($activity_records); ?>
+                        </span>
+                    <?php endif; ?>
+                </button>
+                <div style="margin-top: 10px;">
+                    <small style="color: #856404;">
+                        <i class="fas fa-info-circle"></i> 
+                        <?php if (!empty($activity_records)): ?>
+                            共有 <?php echo count($activity_records); ?> 筆記錄
+                        <?php else: ?>
+                            目前尚無活動記錄
+                        <?php endif; ?>
+                    </small>
+                </div>
+            </div>
+
 
 <form action="" method="post" enctype="multipart/form-data">
                 <div class="form-grid">
@@ -674,6 +724,22 @@ $conn->close();
                 }
                 
                 updateRemoveButtons();
+            }
+        });
+        
+        // 按鈕hover效果
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('toggleRecordsBtn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-2px)';
+                    this.style.boxShadow = '0 5px 10px rgba(0,0,0,0.3)';
+                });
+                
+                toggleBtn.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                    this.style.boxShadow = '0 3px 6px rgba(0,0,0,0.2)';
+                });
             }
         });
         
