@@ -1,6 +1,9 @@
 <?php
 session_start();
 
+// 載入 reCAPTCHA 設定
+require_once '../backend/recaptcha_config.php';
+
 // 檢查是否已登入且為學生身份
 if (!isset($_SESSION['username']) || ($_SESSION['role'] !== '學生' && $_SESSION['role'] !== 'student')) {
     header('Location: one.php');
@@ -494,7 +497,10 @@ $role = $_SESSION['role'];
 
             <!-- reCAPTCHA -->
             <div class="recaptcha-section">
-                <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
+                <div class="g-recaptcha" data-sitekey="<?php echo RECAPTCHA_SITE_KEY; ?>" data-callback="onRecaptchaSuccess" data-expired-callback="onRecaptchaExpired"></div>
+                <div id="recaptcha-error" class="recaptcha-error" style="display: none; color: #e74c3c; font-size: 14px; margin-top: 5px;">
+                    請完成「我不是機器人」驗證
+                </div>
             </div>
 
             <button type="submit" class="submit-btn" id="submitBtn">
@@ -505,6 +511,22 @@ $role = $_SESSION['role'];
     </main>
 
     <script>
+        // reCAPTCHA 狀態追蹤
+        let recaptchaCompleted = false;
+        
+        // reCAPTCHA 成功回調
+        function onRecaptchaSuccess(token) {
+            recaptchaCompleted = true;
+            document.getElementById('recaptcha-error').style.display = 'none';
+            console.log('reCAPTCHA 驗證成功');
+        }
+        
+        // reCAPTCHA 過期回調
+        function onRecaptchaExpired() {
+            recaptchaCompleted = false;
+            console.log('reCAPTCHA 驗證已過期');
+        }
+        
         // 搜尋學校功能
         function searchSchool() {
             const keyword = document.getElementById('junior_high').value;
@@ -546,10 +568,13 @@ $role = $_SESSION['role'];
                 return;
             }
             
-            // 檢查reCAPTCHA (暫時跳過驗證)
+            // 檢查reCAPTCHA
             const recaptchaResponse = grecaptcha.getResponse();
-            if (!recaptchaResponse) {
-                console.log('reCAPTCHA未完成，但繼續提交');
+            if (!recaptchaResponse || !recaptchaCompleted) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '請完成「我不是機器人」驗證';
+                document.getElementById('recaptcha-error').style.display = 'block';
+                return;
             }
             
             submitBtn.disabled = true;

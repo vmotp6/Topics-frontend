@@ -1,4 +1,7 @@
 <?php
+// 載入 reCAPTCHA 設定
+require_once 'recaptcha_config.php';
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -61,6 +64,42 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         
         $pdo->exec($sql);
+    }
+    
+    // reCAPTCHA 驗證函數
+    function verifyRecaptcha($response, $secret_key) {
+        $url = 'https://www.google.com/recaptcha/api/siteverify';
+        $data = [
+            'secret' => $secret_key,
+            'response' => $response,
+            'remoteip' => $_SERVER['REMOTE_ADDR']
+        ];
+        
+        $options = [
+            'http' => [
+                'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method' => 'POST',
+                'content' => http_build_query($data)
+            ]
+        ];
+        
+        $context = stream_context_create($options);
+        $result = file_get_contents($url, false, $context);
+        
+        if ($result === FALSE) {
+            return false;
+        }
+        
+        $json = json_decode($result, true);
+        return $json['success'] === true;
+    }
+    
+    // 驗證 reCAPTCHA
+    $recaptcha_response = $_POST['g-recaptcha-response'] ?? '';
+    
+    if (empty($recaptcha_response) || !verifyRecaptcha($recaptcha_response, RECAPTCHA_SECRET_KEY)) {
+        echo json_encode(['success' => false, 'message' => 'reCAPTCHA 驗證失敗，請重新驗證']);
+        exit;
     }
     
     // 檢查必要欄位
