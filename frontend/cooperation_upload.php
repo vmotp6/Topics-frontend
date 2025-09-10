@@ -482,6 +482,14 @@ $role = $_SESSION['role'];
                 </div>
             </div>
 
+            <!-- 推薦老師資訊 -->
+            <h3 class="section-title">推薦老師資訊</h3>
+            
+            <div class="form-group">
+                <label for="recommended_teacher">推薦老師:</label>
+                <input type="text" id="recommended_teacher" name="recommended_teacher" placeholder="請輸入推薦老師姓名">
+            </div>
+
             <!-- 備註 -->
             <h3 class="section-title">備註</h3>
             
