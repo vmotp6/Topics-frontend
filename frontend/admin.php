@@ -192,6 +192,13 @@
 			</div>
 			
 			<div class="feature-card">
+				<div class="feature-icon">🎓</div>
+				<h3 class="feature-title">入學說明會</h3>
+				<p class="feature-description">管理康寧大學五專入學說明會場次，新增、編輯或停用報名場次。</p>
+				<a href="admin_admission.php" class="feature-link">管理場次</a>
+			</div>
+			
+			<div class="feature-card">
 				<div class="feature-icon">📁</div>
 				<h3 class="feature-title">檔案管理</h3>
 				<p class="feature-description">管理上傳的申請表檔案、合約書和計畫書等文件。</p>
