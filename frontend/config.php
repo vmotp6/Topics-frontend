@@ -30,4 +30,13 @@ define('ALLOWED_EXTENSIONS', ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'zip', 'rar'])
 
 // 驗證碼選項
 define('CAPTCHA_CODES', ['5897', '3642', '8159', '7234', '9876']);
+
+// SMTP 郵件設定
+define('SMTP_HOST', 'smtp.gmail.com');           // Gmail SMTP 伺服器
+define('SMTP_PORT', 587);                        // Gmail SMTP 端口 (TLS)
+define('SMTP_USERNAME', 'vichuang2005@gmail.com');                     // 您的 Gmail 地址 (請填入)
+define('SMTP_PASSWORD', 'sulv mlfy ysjd hrcp');                     // 您的 Gmail 應用程序密碼 (請填入)
+define('SMTP_FROM_EMAIL', 'vichuang2005@gmail.com');                   // 發送者郵件地址 (請填入)
+define('SMTP_FROM_NAME', '康寧大學五專入學說明會');  // 發送者名稱
+define('SMTP_SECURE', 'tls');                    // 加密類型 (tls 或 ssl)
 ?>

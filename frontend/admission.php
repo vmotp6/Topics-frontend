@@ -25,6 +25,41 @@ if ($sessions_result) {
     }
 }
 
+// 取得啟用的年級選項
+$grades = [];
+$grades_query = "SELECT grade_name FROM admission_grades WHERE is_active = 1 ORDER BY sort_order";
+$grades_result = $conn->query($grades_query);
+if ($grades_result) {
+    while ($row = $grades_result->fetch_assoc()) {
+        $grades[] = $row['grade_name'];
+    }
+}
+
+// 取得啟用的體驗課程
+$courses = [];
+$courses_query = "SELECT c.course_name, d.department_name 
+                  FROM admission_courses c 
+                  LEFT JOIN admission_departments d ON c.department_id = d.id 
+                  WHERE c.is_active = 1 
+                  ORDER BY c.sort_order";
+$courses_result = $conn->query($courses_query);
+if ($courses_result) {
+    while ($row = $courses_result->fetch_assoc()) {
+        $courses[] = $row['course_name'];
+    }
+}
+
+// 取得招生諮詢老師資訊 (teacher表ID=7的資料)
+$admission_teacher = [];
+$teacher_query = "SELECT u.name, t.department, t.phone 
+                  FROM teacher t 
+                  LEFT JOIN user u ON t.user_id = u.id 
+                  WHERE t.id = 7";
+$teacher_result = $conn->query($teacher_query);
+if ($teacher_result && $teacher_result->num_rows > 0) {
+    $admission_teacher = $teacher_result->fetch_assoc();
+}
+
 $message = "";
 $messageType = "";
 
@@ -60,15 +95,22 @@ if ($_POST) {
     }
     
     if (empty($missing_fields)) {
-        // 處理體驗課程多選
-        $experience_courses = [];
-        if (isset($_POST['experience_course'])) {
-            $experience_courses = $_POST['experience_course'];
+        // 處理體驗課程優先順序
+        $course_priority_1 = '';
+        $course_priority_2 = '';
+        
+        if (isset($_POST['course_priority_1']) && !empty($_POST['course_priority_1'])) {
+            $course_priority_1 = $_POST['course_priority_1'];
         }
-        $experience_course_str = implode(',', $experience_courses);
+        
+        if (isset($_POST['course_priority_2']) && !empty($_POST['course_priority_2'])) {
+            $course_priority_2 = $_POST['course_priority_2'];
+        }
         
         // 確保資料庫連接有效
-        $conn = reconnectDatabase($conn);
+        if (!$conn || $conn->ping() === false) {
+            $conn = getDatabaseConnection();
+        }
         
         // 取得選擇的場次資訊
         $session_info_query = "SELECT session_name FROM admission_sessions WHERE id = ?";
@@ -82,10 +124,20 @@ if ($_POST) {
         }
         $session_stmt->close();
         
-        // 插入資料庫
-        $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_id, session_choice, experience_course, receive_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // 檢查並添加必要的郵件字段（如果不存在）
+        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS email_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送確認郵件（0=未發送，1=已發送）'");
+        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP NULL COMMENT '確認郵件發送時間'");
+        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送活動提醒郵件（0=未發送，1=已發送）'");
+        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP NULL COMMENT '提醒郵件發送時間'");
+        
+        // 插入資料（包含郵件狀態字段）
+        $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_choice, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
         
         $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("SQL 準備失敗: " . $conn->error . " | SQL: " . $sql);
+        }
+        
         $stmt->bind_param("sssssssssss", 
             $_POST['email'],
             $_POST['school_name'],
@@ -94,14 +146,58 @@ if ($_POST) {
             $_POST['parent_name'],
             $_POST['contact_phone'],
             $_POST['line_id'],
-            $_POST['session_choice'],
             $session_name,
-            $experience_course_str,
+            $course_priority_1,
+            $course_priority_2,
             $_POST['receive_info']
         );
         
         if ($stmt->execute()) {
-            $message = "報名資料已成功提交！我們會在活動前發送提醒郵件。";
+            // 獲取新插入記錄的ID
+            $application_id = $conn->insert_id;
+            
+            // 發送歡迎郵件
+            try {
+                require_once 'includes/email_functions.php';
+                
+                // 組合課程資訊用於郵件
+                $course_info = [];
+                if (!empty($course_priority_1)) {
+                    $course_info[] = "第一選擇：" . $course_priority_1;
+                }
+                if (!empty($course_priority_2)) {
+                    $course_info[] = "第二選擇：" . $course_priority_2;
+                }
+                $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
+                
+                // 嘗試發送歡迎郵件
+                $email_sent = sendWelcomeEmail(
+                    $_POST['email'],
+                    $_POST['student_name'],
+                    $_POST['parent_name'],
+                    $session_name,
+                    $course_text
+                );
+                
+                // 更新郵件發送狀態
+                if ($email_sent) {
+                    $update_sql = "UPDATE admission_applications SET email_sent = 1, email_sent_at = NOW() WHERE id = ?";
+                    $update_stmt = $conn->prepare($update_sql);
+                    $update_stmt->bind_param("i", $application_id);
+                    $update_stmt->execute();
+                    $update_stmt->close();
+                    
+                    $message = "報名資料已成功提交！歡迎郵件已發送到您的信箱，我們會在活動前一天再次發送提醒郵件。";
+                } else {
+                    $message = "報名資料已成功提交！歡迎郵件發送失敗，但我們會在活動前一天發送提醒郵件。";
+                }
+                
+            } catch (Exception $e) {
+                // 即使郵件發送失敗，也不影響報名成功
+                $message = "報名資料已成功提交！我們會在活動前一天發送提醒郵件。";
+                error_log("歡迎郵件發送失敗: " . $e->getMessage());
+            }
+            
             $messageType = "success";
             // 提交成功後重新生成驗證碼
             $_SESSION['captcha'] = generateCaptcha();
@@ -335,6 +431,162 @@ $conn->close();
             accent-color: #667eea;
         }
 
+        /* 拖曳式課程選擇樣式 */
+        .course-selection-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .available-courses, .selected-courses {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+
+        .available-courses h4, .selected-courses h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .course-list {
+            min-height: 200px;
+        }
+
+        .course-item {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+        }
+
+        .course-item:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+        }
+
+        .course-item:active {
+            cursor: grabbing;
+        }
+
+        .course-item .fas {
+            color: #999;
+        }
+
+        .course-drop-zone {
+            min-height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .course-drop-zone.drag-over {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .drop-placeholder {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+        }
+
+        .drop-placeholder i {
+            font-size: 2em;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .drop-placeholder p {
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .selected-course-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: grab;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .selected-course-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .selected-course-item .course-name {
+            font-weight: 600;
+        }
+
+        .selected-course-item .priority-badge {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 4px 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .selected-course-item .remove-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .selected-course-item .remove-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .priority-info {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .priority-info small {
+            color: #666;
+        }
+
+        /* 響應式設計 */
+        @media (max-width: 768px) {
+            .course-selection-container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+
         .captcha-section {
             background: #f0f4ff;
             padding: 15px;
@@ -446,14 +698,17 @@ $conn->close();
         <div class="header">
             <h1><i class="fas fa-graduation-cap"></i> 康寧大學五專入學說明會</h1>
             <div class="subtitle">選擇康寧 • 人生雙贏 • 未來罩您</div>
-            <div class="hashtags">
-                #念五專有前途 #升學就業兩相宜 #五專前三年免學費<br>
-                #展翅計畫免學雜費保證就業
-            </div>
             
             <div class="contact-info">
-                <div><i class="fas fa-phone"></i> 招生諮詢電話：2632-1181*310 / 0916-051-882</div>
-                <div><i class="fab fa-line"></i> LINE ID：@ukn_taipei 招生中心高老師</div>
+                    <div><i class="fas fa-phone"></i> 招生諮詢電話：
+                        <?php echo !empty($admission_teacher['phone']) ? htmlspecialchars($admission_teacher['phone']) : '請洽學校總機'; ?>
+                    </div>
+                        <div><i class="fas fa-user"></i> 招生諮詢：
+                            <?php echo htmlspecialchars($admission_teacher['name']); ?>
+                            <?php if (!empty($admission_teacher['department'])): ?>
+                                - <?php echo htmlspecialchars($admission_teacher['department']); ?>
+                            <?php endif; ?>
+                        </div>
             </div>
         </div>
 
@@ -488,10 +743,11 @@ $conn->close();
                             <label><span class="required">*</span> 就讀年級：</label>
                             <select name="grade" required>
                                 <option value="">請選擇年級</option>
-                                <option value="九年級" <?php echo (isset($_POST['grade']) && $_POST['grade'] === '九年級') ? 'selected' : ''; ?>>九年級</option>
-                                <option value="八年級" <?php echo (isset($_POST['grade']) && $_POST['grade'] === '八年級') ? 'selected' : ''; ?>>八年級</option>
-                                <option value="七年級" <?php echo (isset($_POST['grade']) && $_POST['grade'] === '七年級') ? 'selected' : ''; ?>>七年級</option>
-                                <option value="其他" <?php echo (isset($_POST['grade']) && $_POST['grade'] === '其他') ? 'selected' : ''; ?>>其他</option>
+                                <?php foreach ($grades as $grade): ?>
+                                    <option value="<?php echo htmlspecialchars($grade); ?>" <?php echo (isset($_POST['grade']) && $_POST['grade'] === $grade) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($grade); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
@@ -537,19 +793,42 @@ $conn->close();
 
                 <!-- 體驗課程 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-book-open"></i> 體驗課程 (線上無) <span class="required">*</span></h3>
-                    <div class="checkbox-grid">
-                        <?php 
-                        $courses = ['護理科', '視光科', '應用外語科', '資訊管理科', '嬰幼兒保育科', '企業管理科', '數位影視動畫科', '現場決定'];
-                        $selected_courses = isset($_POST['experience_course']) ? $_POST['experience_course'] : [];
-                        ?>
-                        <?php foreach ($courses as $course): ?>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="experience_course[]" value="<?php echo htmlspecialchars($course); ?>" <?php echo in_array($course, $selected_courses) ? 'checked' : ''; ?>>
-                            <span><?php echo htmlspecialchars($course); ?></span>
-                        </label>
-                        <?php endforeach; ?>
+                    <h3><i class="fas fa-book-open"></i> 體驗課程選擇 <span class="required">*</span></h3>
+                    <p style="margin-bottom: 15px; color: #666;">請從下方課程中拖曳最多兩個課程到右側框框中，並可調整優先順序</p>
+                    
+                    <div class="course-selection-container">
+                        <!-- 可選課程列表 -->
+                        <div class="available-courses">
+                            <h4><i class="fas fa-list"></i> 可選課程</h4>
+                            <div class="course-list" id="availableCourses">
+                                <?php foreach ($courses as $course): ?>
+                                    <div class="course-item" draggable="true" data-course="<?php echo htmlspecialchars($course); ?>">
+                                        <i class="fas fa-grip-vertical"></i>
+                                        <span><?php echo htmlspecialchars($course); ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        
+                        <!-- 已選課程框 -->
+                        <div class="selected-courses">
+                            <h4><i class="fas fa-star"></i> 我的選擇 (最多2個)</h4>
+                            <div class="course-drop-zone" id="selectedCourses">
+                                <div class="drop-placeholder">
+                                    <i class="fas fa-hand-point-right"></i>
+                                    <p>請拖曳課程到這裡</p>
+                                    <small>第一個為優先選擇</small>
+                                </div>
+                            </div>
+                            <div class="priority-info">
+                                <small><i class="fas fa-info-circle"></i> 排序說明：上方為第一優先，下方為第二優先</small>
+                            </div>
+                        </div>
                     </div>
+                    
+                    <!-- 隱藏欄位用於表單提交 -->
+                    <input type="hidden" name="course_priority_1" id="coursePriority1" value="">
+                    <input type="hidden" name="course_priority_2" id="coursePriority2" value="">
                 </div>
 
                 <!-- 資訊接收 -->
@@ -607,6 +886,156 @@ $conn->close();
                 this.style.borderWidth = '2px';
             }
         });
+
+        // 拖曳式課程選擇功能
+        let selectedCourses = [];
+        const maxCourses = 2;
+
+        // 初始化拖曳事件
+        function initializeDragAndDrop() {
+            const availableCourses = document.getElementById('availableCourses');
+            const selectedCoursesZone = document.getElementById('selectedCourses');
+
+            // 為所有課程項目添加拖曳事件
+            availableCourses.querySelectorAll('.course-item').forEach(item => {
+                item.addEventListener('dragstart', handleDragStart);
+            });
+
+            // 為選擇區域添加放置事件
+            selectedCoursesZone.addEventListener('dragover', handleDragOver);
+            selectedCoursesZone.addEventListener('drop', handleDrop);
+            selectedCoursesZone.addEventListener('dragenter', handleDragEnter);
+            selectedCoursesZone.addEventListener('dragleave', handleDragLeave);
+        }
+
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.course);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            e.target.closest('.course-drop-zone').classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            if (!e.target.closest('.course-drop-zone').contains(e.relatedTarget)) {
+                e.target.closest('.course-drop-zone').classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const courseName = e.dataTransfer.getData('text/plain');
+            const dropZone = e.target.closest('.course-drop-zone');
+            
+            dropZone.classList.remove('drag-over');
+
+            // 檢查是否已經選擇過這個課程
+            if (selectedCourses.includes(courseName)) {
+                alert('此課程已經被選擇了！');
+                return;
+            }
+
+            // 檢查是否超過最大選擇數量
+            if (selectedCourses.length >= maxCourses) {
+                alert(`最多只能選擇 ${maxCourses} 個課程！`);
+                return;
+            }
+
+            // 添加到選擇列表
+            selectedCourses.push(courseName);
+            updateSelectedCoursesDisplay();
+            updateHiddenFields();
+        }
+
+        function updateSelectedCoursesDisplay() {
+            const selectedCoursesZone = document.getElementById('selectedCourses');
+            
+            if (selectedCourses.length === 0) {
+                selectedCoursesZone.innerHTML = `
+                    <div class="drop-placeholder">
+                        <i class="fas fa-hand-point-right"></i>
+                        <p>請拖曳課程到這裡</p>
+                        <small>第一個為優先選擇</small>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            selectedCourses.forEach((course, index) => {
+                const priorityText = index === 0 ? '第一優先' : '第二優先';
+                html += `
+                    <div class="selected-course-item" data-course="${course}">
+                        <div class="course-info">
+                            <div class="course-name">${course}</div>
+                        </div>
+                        <div class="course-actions">
+                            <span class="priority-badge">${priorityText}</span>
+                            <button type="button" class="remove-btn" onclick="removeCourse('${course}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            selectedCoursesZone.innerHTML = html;
+
+            // 為已選課程添加排序功能
+            selectedCoursesZone.querySelectorAll('.selected-course-item').forEach(item => {
+                item.addEventListener('dragstart', handleSelectedDragStart);
+                item.addEventListener('dragover', handleSelectedDragOver);
+                item.addEventListener('drop', handleSelectedDrop);
+                item.setAttribute('draggable', 'true');
+            });
+        }
+
+        function handleSelectedDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.dataset.course);
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleSelectedDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleSelectedDrop(e) {
+            e.preventDefault();
+            const draggedCourse = e.dataTransfer.getData('text/plain');
+            const targetCourse = e.target.closest('.selected-course-item').dataset.course;
+
+            if (draggedCourse !== targetCourse) {
+                // 交換位置
+                const draggedIndex = selectedCourses.indexOf(draggedCourse);
+                const targetIndex = selectedCourses.indexOf(targetCourse);
+
+                selectedCourses[draggedIndex] = targetCourse;
+                selectedCourses[targetIndex] = draggedCourse;
+
+                updateSelectedCoursesDisplay();
+                updateHiddenFields();
+            }
+        }
+
+        function removeCourse(courseName) {
+            const index = selectedCourses.indexOf(courseName);
+            if (index > -1) {
+                selectedCourses.splice(index, 1);
+                updateSelectedCoursesDisplay();
+                updateHiddenFields();
+            }
+        }
+
+        function updateHiddenFields() {
+            document.getElementById('coursePriority1').value = selectedCourses[0] || '';
+            document.getElementById('coursePriority2').value = selectedCourses[1] || '';
+        }
         
         // 表單提交驗證
         document.querySelector('form').addEventListener('submit', function(e) {
@@ -618,6 +1047,19 @@ $conn->close();
                 phoneInput.focus();
                 return false;
             }
+
+            // 檢查是否至少選擇了一個課程
+            if (selectedCourses.length === 0) {
+                e.preventDefault();
+                alert('請至少選擇一個體驗課程！');
+                document.getElementById('selectedCourses').scrollIntoView({ behavior: 'smooth' });
+                return false;
+            }
+        });
+
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDragAndDrop();
         });
     </script>
 <?php include("share/footer.php"); ?>
