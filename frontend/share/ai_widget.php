@@ -469,7 +469,7 @@ $(document).ready(function() {
 			<?php if ($isLoggedIn): ?>
 			// 從資料庫清除記錄
 			$.ajax({
-				url: '../backend/ai_chat_api.php',
+				url: '../backend/api/chat/ai_chat_api.php',
 				type: 'POST',
 				data: { action: 'clear_history' },
 				dataType: 'json',
@@ -574,7 +574,7 @@ $(document).ready(function() {
 		console.log('正在載入AI聊天記錄...');
 		// 從資料庫載入聊天記錄
 		$.ajax({
-			url: '../backend/ai_chat_api.php',
+			url: '../backend/api/chat/ai_chat_api.php',
 			type: 'GET',
 			data: { action: 'get_history' },
 			dataType: 'json',

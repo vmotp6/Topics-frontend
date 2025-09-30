@@ -489,7 +489,31 @@ function getResourcePath($resourceFile) {
 <?php if ($isLoggedIn): ?>
   <div class="user-dropdown">
                    <div class="avatar-btn" onclick="toggleDropdown()">
-             <img src="<?php echo getResourcePath('EIdROxGXsAE_LSs.jpg'); ?>" alt="頭像" class="avatar-img">
+             <?php
+             // 獲取用戶頭像
+             $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+             if (isset($_SESSION['username'])) {
+                 try {
+                     require_once 'config.php';
+                     $conn = getDatabaseConnection();
+                     if ($conn) {
+                         $stmt = $conn->prepare("SELECT profile_picture FROM user WHERE username = ?");
+                         $stmt->bind_param("s", $_SESSION['username']);
+                         $stmt->execute();
+                         $result = $stmt->get_result();
+                         if ($row = $result->fetch_assoc()) {
+                             if (!empty($row['profile_picture'])) {
+                                 $avatar_src = $row['profile_picture'];
+                             }
+                         }
+                         $conn->close();
+                     }
+                 } catch (Exception $e) {
+                     // 使用預設頭像
+                 }
+             }
+             ?>
+             <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="頭像" class="avatar-img">
         <div class="notification-dot" id="notificationDot"></div>
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
