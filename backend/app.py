@@ -14,6 +14,21 @@ import secrets
 import hashlib
 from datetime import datetime
 
+# 載入環境變數
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ 環境變數載入成功")
+except ImportError:
+    print("⚠️  python-dotenv未安裝，使用預設配置")
+
+# 載入配置檔案
+try:
+    from config import *
+    print("✅ 配置檔案載入成功")
+except ImportError:
+    print("⚠️  配置檔案不存在，使用預設配置")
+
 app = Flask(__name__)
 CORS(app)
 app.secret_key = 'your-secret-key-here'  # 請更改為安全的密鑰
