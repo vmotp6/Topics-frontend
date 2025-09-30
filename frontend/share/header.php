@@ -589,7 +589,9 @@ function getResourcePath($resourceFile) {
   document.getElementById("closeModalBtn")?.addEventListener("click", () => {
     registerModal.style.display = "none";
   });
-  document.getElementById("openLoginBtn")?.addEventListener("click", () => {
+  document.getElementById("openLoginBtn")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    console.log("登入按鈕被點擊");
     loginModal.style.display = "flex";
   });
   document.getElementById("closeLoginBtn")?.addEventListener("click", () => {
@@ -644,6 +646,7 @@ document.getElementById("registerForm")?.addEventListener("submit", function (e)
 // 👉 登入送出（呼叫 Flask /login）
 document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   e.preventDefault();
+  console.log("登入表單被提交");
   const formData = new FormData(this);
 
   fetch("http://100.79.58.120:5000/login", {
@@ -651,7 +654,9 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     body: formData
   })
   .then(async res => {
+    console.log("登入API回應狀態:", res.status);
     const data = await res.json();
+    console.log("登入API回應數據:", data);
     if (res.ok) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
