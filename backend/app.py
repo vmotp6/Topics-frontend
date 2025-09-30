@@ -192,7 +192,12 @@ def google_callback():
                 del google_states[state]
                 
                 # 重定向到前端頁面
-                redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
+                if role == '管理員':
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role={role}"
+                elif role == '老師':
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
+                else:
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
                 return redirect(redirect_url)
                 
         except Exception as e:
