@@ -569,7 +569,7 @@ function getResourcePath($resourceFile) {
     <!-- Google 登入按鈕 -->
     <div style="text-align: center; margin: 20px 0;">
       <div style="margin: 10px 0; color: #666; font-size: 14px;">或</div>
-      <a href="#" onclick="showGoogleLoginInfo()" class="google-login-btn">
+      <a href="http://localhost:5000/auth/google" class="google-login-btn">
         <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width: 20px; height: 20px; margin-right: 10px;">
         使用 Google 登入
       </a>
@@ -699,22 +699,6 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     document.getElementById("loginMessage").innerText = "登入失敗，請稍後再試。";
   });
 });
-
-function showGoogleLoginInfo() {
-  alert(`🔧 Google登入功能設定中...
-
-目前Google OAuth配置需要設定，請：
-
-1. 前往 Google Cloud Console
-2. 創建OAuth 2.0憑證
-3. 設定重定向URI: http://localhost:5000/auth/google/callback
-4. 更新 backend/config.py 檔案
-
-詳細步驟請參考：backend/GOOGLE_OAUTH_SETUP.md
-
-目前請先使用一般登入功能。`);
-  return false;
-}
 
 function toggleDropdown() {
   const menu = document.getElementById("dropdownMenu");
