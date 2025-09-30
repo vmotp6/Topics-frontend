@@ -646,7 +646,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   e.preventDefault();
   const formData = new FormData(this);
 
-              fetch("http://100.79.58.120:5000/login", {
+  fetch("http://100.79.58.120:5000/login", {
     method: "POST",
     body: formData
   })
@@ -656,42 +656,35 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
 
-      // 👉 可加 sessionStorage 或轉跳頁面
+      // 儲存到 sessionStorage
       sessionStorage.setItem("username", data.username);
-sessionStorage.setItem("role", data.role); // 儲存角色資訊
+      sessionStorage.setItem("role", data.role);
 
-if (res.ok) {
-  document.getElementById("loginMessage").style.color = "green";
-  document.getElementById("loginMessage").innerText = data.message;
-
-  // 1. 將資料儲存進 PHP session
-  fetch("<?php echo getCorrectPath('set_session.php'); ?>", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: data.username,
-      role: data.role
-    })
-  })
-  .then(() => {
-    // 2. 根據身分跳轉頁面
-    setTimeout(() => {
-      if (data.role === "老師") {
-        window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-      } else if (data.role === "學生") {
-        window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-      } else if (data.role === "廠商") {
-        window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
-      } else if (data.role === "學校行政人員") {
-        window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
-      } else {
-        window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
-      }
-    }, 500);
-  });
-}
-
-
+      // 將資料儲存進 PHP session
+      fetch("<?php echo getCorrectPath('set_session.php'); ?>", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: data.username,
+          role: data.role
+        })
+      })
+      .then(() => {
+        // 根據身分跳轉頁面
+        setTimeout(() => {
+          if (data.role === "老師") {
+            window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
+          } else if (data.role === "學生") {
+            window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
+          } else if (data.role === "廠商") {
+            window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
+          } else if (data.role === "學校行政人員") {
+            window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
+          } else {
+            window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
+          }
+        }, 500);
+      });
     } else {
       document.getElementById("loginMessage").style.color = "red";
       document.getElementById("loginMessage").innerText = data.message;
