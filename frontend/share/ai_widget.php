@@ -14,7 +14,7 @@ $isLoggedIn = isset($_SESSION['username']);
 	<div class="resize-handle-r"></div>
 	
 	<div id="ai-header">
-		AI科系推薦助手 
+		康寧大學新生科系推薦助手 
 		<span id="ai-clear" title="清除對話記錄">🗑️</span>
 		<span id="ai-close">✖</span>
 		<span id="ai-hide-permanently" title="永久關閉AI按鈕">🚫</span>
@@ -22,30 +22,31 @@ $isLoggedIn = isset($_SESSION['username']);
 	</div>
 	<div id="ai-messages">
 		<?php if ($isLoggedIn): ?>
-			<p>👋 歡迎使用AI科系推薦助手！</p>
+			<p>👋 歡迎來到康寧大學！我是您的新生科系推薦助手！</p>
 			<div class="ai-feature-intro">
-				<h4>🎯 AI助手功能介紹</h4>
+				<h4>🎓 康寧大學科系介紹</h4>
 				<ul>
-					<li><strong>科系推薦：</strong>根據您的需求推薦最適合的合作科系</li>
-					<li><strong>專業分析：</strong>分析您的專案需求與科系優勢</li>
-					<li><strong>合作建議：</strong>提供具體的合作方向與建議</li>
-					<li><strong>三大科系：</strong>資訊管理科、護理科、視光科</li>
-					<li><strong>即時回覆：</strong>AI智能分析，快速推薦</li>
-					<li><strong>專業諮詢：</strong>提供產學合作的專業建議</li>
+					<li><strong>嬰幼兒保育學系：</strong>培養嬰幼兒教育與保育專業人才，適合對幼兒教育有熱忱的學生</li>
+					<li><strong>長期照護學系：</strong>專注於長期照護領域，培養高齡照護專業能力，應對高齡化社會需求</li>
+					<li><strong>護理學系：</strong>培養專業護理人才，提供臨床實習機會，就業前景佳</li>
+					<li><strong>視光學系：</strong>專精視力保健與眼鏡配製，結合理論與實務</li>
+					<li><strong>資訊管理學系：</strong>培養資訊科技與管理整合人才，符合數位時代需求</li>
 				</ul>
 			</div>
-			<p>💡 <strong>使用提示：</strong></p>
-			<p>• 請描述您的專案需求或合作目標</p>
-			<p>• AI會分析並推薦最適合的科系</p>
-			<p>• 可詢問具體的合作方式與優勢</p>
+			<p>💡 <strong>我可以幫助您：</strong></p>
+			<p>• 根據您的興趣和特質推薦適合的科系</p>
+			<p>• 介紹各科系的課程特色與就業前景</p>
+			<p>• 解答關於入學管道、學費、住宿等問題</p>
+			<p>• 提供新生入學準備建議</p>
 		<?php else: ?>
 			<div class="ai-login-prompt">
-				<p>🔒 請先登入才能使用AI科系推薦功能</p>
+				<p>🔒 請先登入才能使用康寧大學新生科系推薦功能</p>
 				<p>登入後您可以：</p>
 				<ul style="text-align: left; display: inline-block;">
-					<li>使用AI助手推薦最適合的科系</li>
-					<li>獲得專業的合作建議與分析</li>
-					<li>了解三大科系的專業優勢</li>
+					<li>獲得個人化的科系推薦建議</li>
+					<li>了解各科系的詳細資訊與特色</li>
+					<li>獲得新生入學準備指導</li>
+					<li>解答關於康寧大學的各種問題</li>
 				</ul>
 				<p><a href="#" onclick="openLoginModal()">點擊這裡登入</a></p>
 			</div>
@@ -53,7 +54,7 @@ $isLoggedIn = isset($_SESSION['username']);
 	</div>
 	<?php if ($isLoggedIn): ?>
 		<div id="ai-input">
-			<input type="text" placeholder="輸入您的需求..." id="ai-input-field">
+			<input type="text" placeholder="請告訴我您的興趣、特質或想了解的科系..." id="ai-input-field">
 			<button id="ai-send-msg">送出</button>
 		</div>
 	<?php endif; ?>
@@ -543,7 +544,7 @@ $(document).ready(function() {
 		console.log('正在保存AI訊息:', {sender, message, messageType});
 		
 		$.ajax({
-			url: '../backend/ai_chat_api.php',
+			url: '../backend/api/chat/ai_chat_api.php',
 			type: 'POST',
 			data: {
 				action: 'save_message',
@@ -654,36 +655,60 @@ $(document).ready(function() {
 	function getAIResponse(message) {
 		message = message.toLowerCase();
 		
-		// 資訊管理科關鍵字
-		if (message.includes('程式') || message.includes('軟體') || message.includes('系統') || 
-			message.includes('資料') || message.includes('數據') || message.includes('分析') ||
-			message.includes('網站') || message.includes('app') || message.includes('應用') ||
-			message.includes('資訊') || message.includes('管理') || message.includes('開發')) {
-			return "根據您的需求，我推薦您與 <strong>資訊管理科</strong> 合作！\n\n📋 合作優勢：\n• 專業的程式開發與系統設計能力\n• 豐富的資料分析與管理經驗\n• 可協助開發網站、APP或管理系統\n• 具備最新的資訊技術知識\n\n💡 建議合作方向：\n• 企業資訊系統開發\n• 資料庫設計與管理\n• 網站與APP開發\n• 數據分析與視覺化";
+		// 嬰幼兒保育學系關鍵字
+		if (message.includes('幼兒') || message.includes('嬰兒') || message.includes('小孩') || 
+			message.includes('兒童') || message.includes('保育') || message.includes('教育') ||
+			message.includes('托育') || message.includes('幼教') || message.includes('照顧') ||
+			message.includes('育兒') || message.includes('親子') || message.includes('發展')) {
+			return "根據您的興趣，我推薦您選擇 <strong>嬰幼兒保育學系</strong>！\n\n🎓 科系特色：\n• 培養嬰幼兒教育與保育專業人才\n• 適合對幼兒教育有熱忱的學生\n• 課程涵蓋幼兒發展、教育心理學、課程設計\n• 結合理論與實務，培養專業能力\n\n💼 就業前景：\n• 幼兒園教師\n• 托育中心保育員\n• 親子教育講師\n• 兒童發展評估師\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
 		}
 		
-		// 護理科關鍵字
-		else if (message.includes('健康') || message.includes('醫療') || message.includes('護理') ||
-				 message.includes('照護') || message.includes('病人') || message.includes('醫院') ||
+		// 長期照護學系關鍵字
+		else if (message.includes('老人') || message.includes('長照') || message.includes('照護') ||
+				 message.includes('高齡') || message.includes('慢性病') || message.includes('復健') ||
+				 message.includes('居家') || message.includes('安養') || message.includes('失能') ||
+				 message.includes('銀髮') || message.includes('養老') || message.includes('護理')) {
+			return "根據您的興趣，我推薦您選擇 <strong>長期照護學系</strong>！\n\n🎓 科系特色：\n• 專注於長期照護領域的專業教育\n• 培養高齡照護專業能力\n• 應對高齡化社會的照護需求\n• 課程包括老年學、健康評估、照護計畫制定\n\n💼 就業前景：\n• 長期照護機構管理員\n• 居家照護服務員\n• 社區照護專員\n• 照護計畫規劃師\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+		}
+		
+		// 護理學系關鍵字
+		else if (message.includes('護理') || message.includes('護士') || message.includes('醫療') ||
+				 message.includes('健康') || message.includes('病人') || message.includes('醫院') ||
 				 message.includes('保健') || message.includes('衛生') || message.includes('治療') ||
-				 message.includes('診斷') || message.includes('康復')) {
-			return "根據您的需求，我推薦您與 <strong>護理科</strong> 合作！\n\n📋 合作優勢：\n• 專業的護理照護技術與知識\n• 豐富的臨床實務經驗\n• 具備醫療保健相關專業能力\n• 可提供健康促進與疾病預防服務\n\n💡 建議合作方向：\n• 社區健康促進計畫\n• 長期照護服務\n• 醫療保健諮詢\n• 健康管理與監測";
+				 message.includes('診斷') || message.includes('康復') || message.includes('臨床')) {
+			return "根據您的興趣，我推薦您選擇 <strong>護理學系</strong>！\n\n🎓 科系特色：\n• 培養專業護理人才\n• 提供豐富的臨床實習機會\n• 具備完整的護理專業知識與技能\n• 符合醫療照護產業需求\n\n💼 就業前景：\n• 醫院護理師\n• 社區護理師\n• 學校護理師\n• 護理教育工作者\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
 		}
 		
-		// 視光科關鍵字
+		// 視光學系關鍵字
 		else if (message.includes('眼睛') || message.includes('視力') || message.includes('眼鏡') ||
 				 message.includes('視光') || message.includes('光學') || message.includes('鏡片') ||
 				 message.includes('視覺') || message.includes('檢查') || message.includes('配鏡') ||
-				 message.includes('隱形眼鏡') || message.includes('視力保健')) {
-			return "根據您的需求，我推薦您與 <strong>視光科</strong> 合作！\n\n📋 合作優勢：\n• 專業的視光檢查與驗光技術\n• 豐富的配鏡與視力保健經驗\n• 具備光學儀器操作與維護能力\n• 可提供視力保健與眼鏡配製服務\n\n💡 建議合作方向：\n• 視力檢查與驗光服務\n• 眼鏡配製與銷售\n• 視力保健諮詢\n• 光學儀器維護與銷售";
+				 message.includes('隱形眼鏡') || message.includes('視力保健') || message.includes('驗光')) {
+			return "根據您的興趣，我推薦您選擇 <strong>視光學系</strong>！\n\n🎓 科系特色：\n• 專精視力保健與眼鏡配製\n• 結合理論與實務操作\n• 培養視光檢查與驗光技術\n• 具備光學儀器操作能力\n\n💼 就業前景：\n• 視光師\n• 眼鏡行配鏡師\n• 視力保健諮詢師\n• 光學儀器銷售員\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+		}
+		
+		// 資訊管理學系關鍵字
+		else if (message.includes('程式') || message.includes('軟體') || message.includes('系統') || 
+				 message.includes('資料') || message.includes('數據') || message.includes('分析') ||
+				 message.includes('網站') || message.includes('app') || message.includes('應用') ||
+				 message.includes('資訊') || message.includes('管理') || message.includes('開發') ||
+				 message.includes('電腦') || message.includes('網路') || message.includes('科技')) {
+			return "根據您的興趣，我推薦您選擇 <strong>資訊管理學系</strong>！\n\n🎓 科系特色：\n• 培養資訊科技與管理整合人才\n• 符合數位時代的產業需求\n• 課程涵蓋程式設計、系統分析、資料庫管理\n• 結合理論與實務應用\n\n💼 就業前景：\n• 軟體工程師\n• 系統分析師\n• 資料庫管理師\n• 資訊管理專員\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+		}
+		
+		// 入學相關問題
+		else if (message.includes('入學') || message.includes('報名') || message.includes('申請') ||
+				 message.includes('考試') || message.includes('分數') || message.includes('錄取') ||
+				 message.includes('繁星') || message.includes('申請入學') || message.includes('分發')) {
+			return "關於康寧大學入學資訊：\n\n📋 入學管道：\n• 繁星推薦：適合在校成績優異的學生\n• 申請入學：重視多元表現與面試\n• 分發入學：依據學測成績分發\n\n💰 學費資訊：\n• 提供學雜費減免措施\n• 可申請就學貸款\n• 設有獎學金制度\n\n🏠 住宿資訊：\n• 提供學生宿舍\n• 住宿申請詳情請洽學務處\n\n📞 聯絡方式：\n• 招生中心：02-2632-1181\n• 官網：www.ukn.edu.tw";
 		}
 		
 		// 一般回覆
 		else {
 			let generalResponses = [
-				"您好！我是AI助手，專門協助您找到最適合的科系合作夥伴。\n\n我們目前有三大科系：\n• 📊 資訊管理科 - 程式開發、系統設計、資料分析\n• 🏥 護理科 - 醫療照護、健康促進、臨床實務\n• 👁️ 視光科 - 視力檢查、配鏡服務、視力保健\n\n請告訴我您的具體需求，我會為您推薦最適合的科系！",
-				"感謝您的提問！為了更好地為您推薦合適的科系，請您詳細描述：\n• 您的專案或合作需求是什麼？\n• 需要什麼樣的技術或專業能力？\n• 希望達到什麼樣的目標？\n\n我會根據您的需求，從我們的三大科系中為您找到最佳合作夥伴！",
-				"您好！我是您的AI科系推薦助手。\n\n我們提供三大專業科系的合作機會：\n• 資訊管理科：適合程式開發、系統設計需求\n• 護理科：適合醫療保健、照護服務需求\n• 視光科：適合視力檢查、配鏡服務需求\n\n請描述您的具體需求，我會立即為您推薦最適合的科系！"
+				"歡迎來到康寧大學！我是您的新生科系推薦助手。\n\n🎓 我們提供五大科系：\n• 👶 嬰幼兒保育學系 - 幼兒教育與保育\n• 👴 長期照護學系 - 高齡照護與長照服務\n• 🏥 護理學系 - 專業護理與醫療照護\n• 👁️ 視光學系 - 視力保健與配鏡服務\n• 💻 資訊管理學系 - 資訊科技與管理\n\n請告訴我您的興趣或想了解的科系，我會為您詳細介紹！",
+				"您好！我是康寧大學的新生科系推薦助手。\n\n為了更好地為您推薦合適的科系，請告訴我：\n• 您對哪個領域感興趣？\n• 您希望未來從事什麼樣的工作？\n• 您有什麼特殊的興趣或特質？\n\n我會根據您的回答，為您推薦最適合的科系！",
+				"歡迎加入康寧大學！我是您的專屬科系推薦助手。\n\n🎯 我可以幫助您：\n• 了解各科系的特色與課程\n• 分析您的興趣與科系匹配度\n• 提供就業前景與發展方向\n• 解答入學相關問題\n\n請描述您的興趣或想了解的科系，我會為您提供專業建議！"
 			];
 			return generalResponses[Math.floor(Math.random() * generalResponses.length)];
 		}
