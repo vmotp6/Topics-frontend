@@ -569,7 +569,7 @@ function getResourcePath($resourceFile) {
     <!-- Google 登入按鈕 -->
     <div style="text-align: center; margin: 20px 0;">
       <div style="margin: 10px 0; color: #666; font-size: 14px;">或</div>
-      <a href="http://localhost:5000/auth/google" class="google-login-btn">
+      <a href="#" onclick="googleLogin()" class="google-login-btn">
         <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width: 20px; height: 20px; margin-right: 10px;">
         使用 Google 登入
       </a>
@@ -617,7 +617,7 @@ document.getElementById("registerForm")?.addEventListener("submit", function (e)
   e.preventDefault();
   const formData = new FormData(this);
 
-              fetch("http://100.79.58.120:5000/sign", {
+              fetch("http://localhost:5000/sign", {
     method: "POST",
     body: formData
   })
@@ -649,7 +649,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   console.log("登入表單被提交");
   const formData = new FormData(this);
 
-  fetch("http://100.79.58.120:5000/login", {
+  fetch("http://localhost:5000/login", {
     method: "POST",
     body: formData
   })
@@ -699,6 +699,13 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     document.getElementById("loginMessage").innerText = "登入失敗，請稍後再試。";
   });
 });
+
+function googleLogin() {
+  console.log("Google登入按鈕被點擊");
+  // 暫時禁用Google登入，直到配置完成
+  alert("Google登入功能需要配置Google OAuth，請先使用一般登入");
+  return false;
+}
 
 function toggleDropdown() {
   const menu = document.getElementById("dropdownMenu");
