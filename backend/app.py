@@ -226,6 +226,78 @@ def get_user_profile():
     finally:
         conn.close()
 
+@app.route('/login', methods=['POST'])
+def login():
+    """一般登入功能"""
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    if not username or not password:
+        return jsonify({"message": "請填寫帳號和密碼"}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"message": "資料庫連接失敗"}), 500
+    
+    try:
+        with conn.cursor() as cursor:
+            # 查詢使用者帳號、角色是否正確
+            sql = "SELECT username, role FROM user WHERE username=%s AND password=%s"
+            cursor.execute(sql, (username, password))
+            user = cursor.fetchone()
+            
+            if user:
+                return jsonify({
+                    "message": "登入成功",
+                    "username": user[0],
+                    "role": user[1]
+                }), 200
+            else:
+                return jsonify({"message": "帳號或密碼錯誤"}), 401
+                
+    except Exception as e:
+        print(f"登入錯誤: {e}")
+        return jsonify({"message": "登入失敗，請稍後再試。"}), 500
+    finally:
+        conn.close()
+
+@app.route('/sign', methods=['POST'])
+def register():
+    """註冊功能"""
+    username = request.form.get('username')
+    password = request.form.get('password')
+    email = request.form.get('email')
+    name = request.form.get('name')
+    
+    if not all([username, password, email, name]):
+        return jsonify({"message": "請填寫所有必填欄位"}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"message": "資料庫連接失敗"}), 500
+    
+    try:
+        with conn.cursor() as cursor:
+            # 檢查用戶名是否已存在
+            cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({"message": "用戶名已存在"}), 400
+            
+            # 插入新用戶
+            cursor.execute(
+                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
+                (username, password, email, name)
+            )
+            conn.commit()
+            
+            return jsonify({"message": "註冊成功"}), 200
+            
+    except Exception as e:
+        print(f"註冊錯誤: {e}")
+        return jsonify({"message": "註冊失敗，請稍後再試。"}), 500
+    finally:
+        conn.close()
+
 @app.route('/user/select-role', methods=['POST'])
 def select_role():
     """Gmail用戶選擇角色"""

@@ -430,6 +430,36 @@ function getResourcePath($resourceFile) {
     }
   }
 
+  /* Google 登入按鈕樣式 */
+  .google-login-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #333;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 20px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .google-login-btn:hover {
+    background: #f8f9fa;
+    border-color: #4285f4;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+  }
+
+  .google-login-btn img {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+  }
+
 </style>
 
 <!-- 導覽列 -->
@@ -449,7 +479,7 @@ function getResourcePath($resourceFile) {
   <div class="navbar-links">
     <a href="<?php echo getCorrectPath('index.php'); ?>">首頁</a>
     <a href="<?php echo getCorrectPath('QA.php'); ?>">招生QA問答</a>
-    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">💬 聊天設置</a>
+    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">🤖 助手設置</a>
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
@@ -535,6 +565,16 @@ function getResourcePath($resourceFile) {
       <button type="submit">登入</button>
       <p id="loginMessage" style="color: red; margin-top: 10px;"></p>
     </form>
+    
+    <!-- Google 登入按鈕 -->
+    <div style="text-align: center; margin: 20px 0;">
+      <div style="margin: 10px 0; color: #666; font-size: 14px;">或</div>
+      <a href="http://localhost:5000/auth/google" class="google-login-btn">
+        <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width: 20px; height: 20px; margin-right: 10px;">
+        使用 Google 登入
+      </a>
+    </div>
+    
     <p class="helper-text">還沒有帳號？<a href="#" id="switchToRegister">註冊</a></p>
   </div>
 </div>
