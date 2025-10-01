@@ -568,7 +568,7 @@ function getResourcePath($resourceFile) {
              $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
-                     require_once 'config.php';
+                     require_once '../config.php';
                      $conn = getDatabaseConnection();
                      if ($conn) {
                          $stmt = $conn->prepare("SELECT profile_picture FROM user WHERE username = ?");
