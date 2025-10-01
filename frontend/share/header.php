@@ -568,8 +568,15 @@ function getResourcePath($resourceFile) {
              $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
-                     require_once '../config.php';
-                     $conn = getDatabaseConnection();
+                     // 使用絕對路徑來避免相對路徑問題
+                     $configPath = dirname(__DIR__) . '/config.php';
+                     if (file_exists($configPath)) {
+                         require_once $configPath;
+                         $conn = getDatabaseConnection();
+                     } else {
+                         // 如果找不到config.php，跳過資料庫操作
+                         $conn = null;
+                     }
                      if ($conn) {
                          $stmt = $conn->prepare("SELECT profile_picture FROM user WHERE username = ?");
                          $stmt->bind_param("s", $_SESSION['username']);
