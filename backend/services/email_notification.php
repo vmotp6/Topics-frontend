@@ -225,6 +225,43 @@ class EmailNotificationService {
     }
     
     /**
+     * 發送Discord風格的通知郵件
+     * 
+     * @param string $to_email 接收者郵箱
+     * @param string $to_name 接收者姓名
+     * @param string $subject 郵件主題
+     * @param string $html_body HTML郵件內容
+     * @return bool 發送是否成功
+     */
+    public function sendDiscordLikeNotification($to_email, $to_name, $subject, $html_body) {
+        try {
+            // 設置郵件標頭
+            $headers = [
+                'MIME-Version: 1.0',
+                'Content-Type: text/html; charset=UTF-8',
+                'From: ' . $this->sender_name . ' <' . $this->sender_email . '>',
+                'Reply-To: ' . $this->sender_email,
+                'X-Mailer: PHP/' . phpversion()
+            ];
+            
+            // 發送郵件
+            $success = mail($to_email, $subject, $html_body, implode("\r\n", $headers));
+            
+            if ($success) {
+                error_log("Discord風格通知郵件發送成功: $to_email");
+            } else {
+                error_log("Discord風格通知郵件發送失敗: $to_email");
+            }
+            
+            return $success;
+            
+        } catch (Exception $e) {
+            error_log("發送Discord風格通知郵件時發生錯誤: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * 創建純文字格式的郵件內容
      */
     private function createNotificationText($to_name, $from_name, $message_content, $chat_url) {
