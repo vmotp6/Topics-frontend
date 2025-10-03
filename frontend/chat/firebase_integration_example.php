@@ -246,3 +246,4 @@ CREATE TABLE user_fcm_tokens (
     <p><a href="chat.php">← 返回聊天室</a></p>
 </body>
 </html>
+

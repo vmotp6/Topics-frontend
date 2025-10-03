@@ -74,3 +74,4 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="captcha-display"><?php echo $captcha_code; ?></div>
 </body>
 </html>
+

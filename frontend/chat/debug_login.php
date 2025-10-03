@@ -113,3 +113,4 @@ echo "<li>點擊上方的「登入」連結來登入為學生或老師</li>";
 echo "<li>登入後再訪問 <a href='chat.php'>chat.php</a></li>";
 echo "</ol>";
 ?>
+

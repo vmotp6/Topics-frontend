@@ -177,3 +177,4 @@ function updateActivity($pdo) {
     ]);
 }
 ?>
+

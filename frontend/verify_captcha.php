@@ -30,3 +30,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => false, 'message' => '只支援POST請求']);
 }
 ?>
+
