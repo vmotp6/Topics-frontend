@@ -3,28 +3,6 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
-// 處理Google登入回調
-if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
-    if (isset($_GET['username']) && isset($_GET['role'])) {
-        // 設定Session
-        $_SESSION['logged_in'] = true;
-        $_SESSION['username'] = $_GET['username'];
-        $_SESSION['role'] = $_GET['role'];
-        $_SESSION['login_method'] = 'google';
-        
-        // 重定向到相應頁面（避免URL參數顯示）
-        $redirect_url = 'index.php';
-        if ($_GET['role'] === '管理員') {
-            $redirect_url = 'admin.php';
-        } elseif ($_GET['role'] === '老師') {
-            $redirect_url = 'teacher.php';
-        }
-        
-        header("Location: $redirect_url");
-        exit();
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -215,6 +193,38 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         font-size: 0.9rem;
       }
     }
+
+    /* 載入中樣式 */
+    .loading-slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 0.8s ease-in-out;
+    }
+
+    .loading-slide .slide-content {
+      text-align: center;
+      color: white;
+    }
+
+    .loading-slide .slide-content h2 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 
@@ -223,79 +233,150 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 <body>
   <!-- 輪播圖片區域 -->
   <div class="carousel-container">
-    <!-- 輪播圖片1 -->
-    <div class="carousel-slide active" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
-      <div class="slide-overlay"></div>
-      <div class="slide-content">
-        <h2>歡迎來到康寧大學招生平台</h2>
-        <p>連結學術研究與產業發展，創造雙贏的產學合作機會</p>
-        <a href="QA.php" class="slide-btn">了解更多</a>
-      </div>
-    </div>
-
-    <!-- 輪播圖片2 -->
-    <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
-      <div class="slide-overlay"></div>
-      <div class="slide-content">
-        <h2>AI智能產學合作</h2>
-        <p>運用最新的人工智慧技術，為您的產學合作項目提供智能建議與分析</p>
-        <a href="AI.php" class="slide-btn">體驗AI服務</a>
-      </div>
-    </div>
-
-    <!-- 輪播圖片3 -->
-    <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
-      <div class="slide-overlay"></div>
-      <div class="slide-content">
-        <h2>專業團隊支持</h2>
-        <p>我們擁有豐富的產學合作經驗，為您提供全方位的專業服務與支持</p>
-        <a href="chat_settings.php" class="slide-btn">聯繫我們</a>
-      </div>
-    </div>
-
-    <!-- 輪播圖片4 -->
-    <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1559136555-9303baea8ebd?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
-      <div class="slide-overlay"></div>
-      <div class="slide-content">
-        <h2>創新合作模式</h2>
-        <p>探索創新的產學合作模式，促進學術研究與產業應用的深度融合</p>
-        <a href="QA.php" class="slide-btn">探索合作</a>
+    <div id="carouselSlides">
+      <!-- 輪播項目將由JavaScript動態載入 -->
+      <div class="loading-slide">
+        <div class="slide-content">
+          <h2>載入中...</h2>
+          <p>正在載入輪播內容</p>
+        </div>
       </div>
     </div>
 
     <!-- 控制按鈕 -->
-    <button class="carousel-arrow prev" onclick="changeSlide(-1)">❮</button>
-    <button class="carousel-arrow next" onclick="changeSlide(1)">❯</button>
+    <button class="carousel-arrow prev" onclick="changeSlide(-1)" id="prevBtn">❮</button>
+    <button class="carousel-arrow next" onclick="changeSlide(1)" id="nextBtn">❯</button>
 
     <!-- 指示點 -->
-    <div class="carousel-controls">
-      <div class="carousel-dot active" onclick="currentSlide(1)"></div>
-      <div class="carousel-dot" onclick="currentSlide(2)"></div>
-      <div class="carousel-dot" onclick="currentSlide(3)"></div>
-      <div class="carousel-dot" onclick="currentSlide(4)"></div>
+    <div class="carousel-controls" id="carouselDots">
+      <!-- 指示點將由JavaScript動態生成 -->
     </div>
   </div>
 
   <!-- 輪播圖片JavaScript -->
   <script>
+    const API_BASE_URL = 'http://localhost:5001';
     let currentSlideIndex = 0;
-    const slides = document.querySelectorAll('.carousel-slide');
-    const dots = document.querySelectorAll('.carousel-dot');
-    const totalSlides = slides.length;
+    let slides = [];
+    let dots = [];
+    let totalSlides = 0;
+    let carouselSettings = {};
+    let autoSlideInterval = null;
+
+    // 載入輪播數據
+    async function loadCarouselData() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/carousel`);
+        const data = await response.json();
+        
+        if (response.ok) {
+          carouselSettings = data.settings;
+          displayCarouselItems(data.items);
+          setupCarouselControls();
+          startAutoSlide();
+        } else {
+          console.error('載入輪播數據失敗:', data.message);
+          showDefaultCarousel();
+        }
+      } catch (error) {
+        console.error('載入輪播數據錯誤:', error);
+        showDefaultCarousel();
+      }
+    }
+
+    // 顯示輪播項目
+    function displayCarouselItems(items) {
+      const container = document.getElementById('carouselSlides');
+      
+      if (items.length === 0) {
+        showDefaultCarousel();
+        return;
+      }
+      
+      container.innerHTML = items.map((item, index) => `
+        <div class="carousel-slide ${index === 0 ? 'active' : ''}" 
+             style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${item.image_url}');">
+          <div class="slide-overlay"></div>
+          <div class="slide-content">
+            <h2>${item.title}</h2>
+            <p>${item.description || ''}</p>
+            ${item.button_text ? `<a href="${item.button_link || '#'}" class="slide-btn">${item.button_text}</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+      
+      // 更新slides數組
+      slides = document.querySelectorAll('.carousel-slide');
+      totalSlides = slides.length;
+    }
+
+    // 設置輪播控制
+    function setupCarouselControls() {
+      const dotsContainer = document.getElementById('carouselDots');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      
+      // 生成指示點
+      if (carouselSettings.enable_indicators !== 0) {
+        dotsContainer.innerHTML = slides.map((_, index) => `
+          <div class="carousel-dot ${index === 0 ? 'active' : ''}" onclick="currentSlide(${index + 1})"></div>
+        `).join('');
+        dots = document.querySelectorAll('.carousel-dot');
+      } else {
+        dotsContainer.innerHTML = '';
+        dots = [];
+      }
+      
+      // 設置控制按鈕可見性
+      if (carouselSettings.enable_controls !== 0) {
+        prevBtn.style.display = 'flex';
+        nextBtn.style.display = 'flex';
+      } else {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+      }
+    }
+
+    // 顯示預設輪播（當API載入失敗時）
+    function showDefaultCarousel() {
+      const container = document.getElementById('carouselSlides');
+      container.innerHTML = `
+        <div class="carousel-slide active" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
+          <div class="slide-overlay"></div>
+          <div class="slide-content">
+            <h2>歡迎來到康寧大學招生平台</h2>
+            <p>連結學術研究與產業發展，創造雙贏的產學合作機會</p>
+            <a href="QA.php" class="slide-btn">了解更多</a>
+          </div>
+        </div>
+      `;
+      
+      slides = document.querySelectorAll('.carousel-slide');
+      totalSlides = slides.length;
+      
+      // 設置預設控制
+      const dotsContainer = document.getElementById('carouselDots');
+      dotsContainer.innerHTML = '<div class="carousel-dot active" onclick="currentSlide(1)"></div>';
+      dots = document.querySelectorAll('.carousel-dot');
+    }
 
     // 顯示指定索引的輪播圖片
     function showSlide(index) {
+      if (totalSlides === 0) return;
+      
       // 隱藏所有輪播圖片
       slides.forEach(slide => slide.classList.remove('active'));
       dots.forEach(dot => dot.classList.remove('active'));
 
       // 顯示當前輪播圖片
-      slides[index].classList.add('active');
-      dots[index].classList.add('active');
+      if (slides[index]) slides[index].classList.add('active');
+      if (dots[index]) dots[index].classList.add('active');
     }
 
     // 切換到下一張或上一張輪播圖片
     function changeSlide(direction) {
+      if (totalSlides === 0) return;
+      
       currentSlideIndex += direction;
       
       if (currentSlideIndex >= totalSlides) {
@@ -309,17 +390,32 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 
     // 直接切換到指定輪播圖片
     function currentSlide(index) {
+      if (totalSlides === 0) return;
+      
       currentSlideIndex = index - 1;
       showSlide(currentSlideIndex);
     }
 
     // 自動輪播
     function autoSlide() {
-      changeSlide(1);
+      if (carouselSettings.enable_auto_slide !== 0 && totalSlides > 1) {
+        changeSlide(1);
+      }
     }
 
-    // 每5秒自動切換輪播圖片
-    setInterval(autoSlide, 5000);
+    // 開始自動輪播
+    function startAutoSlide() {
+      // 清除現有的自動輪播
+      if (autoSlideInterval) {
+        clearInterval(autoSlideInterval);
+      }
+      
+      // 設置新的自動輪播
+      if (carouselSettings.enable_auto_slide !== 0 && totalSlides > 1) {
+        const interval = carouselSettings.auto_slide_interval || 5000;
+        autoSlideInterval = setInterval(autoSlide, interval);
+      }
+    }
 
     // 鍵盤控制
     document.addEventListener('keydown', function(e) {
@@ -357,6 +453,11 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         }
       }
     }
+
+    // 頁面載入時執行
+    document.addEventListener('DOMContentLoaded', function() {
+      loadCarouselData();
+    });
   </script>
 
 <?php include("share/footer.php"); ?>
