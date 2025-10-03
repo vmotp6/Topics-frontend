@@ -114,3 +114,4 @@ echo "<li>登入後再訪問 <a href='chat.php'>chat.php</a></li>";
 echo "</ol>";
 ?>
 
+

@@ -97,7 +97,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         </div>
 
         <div style="margin-top: 20px;">
-            <a href="one.php" class="btn">返回首頁</a>
+            <a href="index.php" class="btn">返回首頁</a>
         </div>
     </div>
 

@@ -108,3 +108,4 @@ INSERT INTO schools (name, city, district, address, type) VALUES
 ('金門縣立金城國中', '金門縣', '金城鎮', '金門縣金城鎮民生路60號', '公立'),
 ('連江縣立介壽國中', '連江縣', '南竿鄉', '連江縣南竿鄉介壽村76號', '公立');
 
+

@@ -1,4 +1,8 @@
 <?php
+// 關閉錯誤顯示，避免輸出 HTML
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 // 載入 reCAPTCHA 設定
 require_once '../../config/recaptcha_config.php';
 
@@ -169,8 +173,10 @@ try {
     ]);
     
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => '資料庫錯誤: ' . $e->getMessage()]);
+    error_log("資料庫錯誤: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => '資料庫連接失敗，請檢查資料庫設定']);
 } catch (Exception $e) {
+    error_log("系統錯誤: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => '系統錯誤: ' . $e->getMessage()]);
 }
 ?>

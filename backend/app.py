@@ -165,7 +165,17 @@ def google_callback():
                 else:
                     # 創建新用戶
                     username = name or email.split('@')[0]
-                    role = '學生'  # 預設角色
+                    
+                    # 基於email domain自動判斷身分
+                    if email.endswith('@stu.ukn.edu.tw'):
+                        role = '學生'
+                        print(f"根據email domain判斷為學生: {email}")
+                    elif email.endswith('@ukn.edu.tw'):
+                        role = '老師'
+                        print(f"根據email domain判斷為老師: {email}")
+                    else:
+                        role = '學生'  # 預設角色
+                        print(f"使用預設身分(學生): {email}")
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -357,6 +367,117 @@ def select_role():
 def health_check():
     """健康檢查端點"""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()}), 200
+
+@app.route('/enrollment/submit', methods=['POST'])
+def submit_enrollment():
+    """提交就讀意願表單"""
+    try:
+        # 獲取表單資料
+        data = request.form.to_dict()
+        
+        # 連接資料庫
+        connection = pymysql.connect(
+            host='100.79.58.120',
+            user='root',
+            password='',
+            database='topics_good',
+            charset='utf8mb4'
+        )
+        
+        with connection.cursor() as cursor:
+            # 檢查資料表是否存在，如果不存在則創建
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS enrollment_applications (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    identity ENUM('學生', '家長') NOT NULL,
+                    gender ENUM('男', '女') NULL,
+                    phone1 VARCHAR(50) NOT NULL,
+                    phone2 VARCHAR(50) NULL,
+                    email VARCHAR(255) NULL,
+                    intention1 VARCHAR(255) DEFAULT '無特定',
+                    system1 VARCHAR(50) NULL,
+                    department1 VARCHAR(255) NULL,
+                    intention2 VARCHAR(255) DEFAULT '無特定',
+                    system2 VARCHAR(50) NULL,
+                    department2 VARCHAR(255) NULL,
+                    intention3 VARCHAR(255) DEFAULT '無特定',
+                    system3 VARCHAR(50) NULL,
+                    department3 VARCHAR(255) NULL,
+                    junior_high VARCHAR(255) NULL,
+                    current_grade VARCHAR(50) NULL,
+                    line_id VARCHAR(255) NULL,
+                    facebook VARCHAR(255) NULL,
+                    recommended_teacher VARCHAR(255) NULL,
+                    remarks TEXT NULL,
+                    status ENUM('pending', 'contacted', 'enrolled') DEFAULT 'pending',
+                    admin_comment TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_username (username),
+                    INDEX idx_status (status),
+                    INDEX idx_created_at (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            
+            # 插入資料
+            sql = """
+                INSERT INTO enrollment_applications (
+                    username, name, identity, gender, phone1, phone2, email,
+                    intention1, system1, department1,
+                    intention2, system2, department2,
+                    intention3, system3, department3,
+                    junior_high, current_grade, line_id, facebook, recommended_teacher, remarks
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s
+                )
+            """
+            
+            values = (
+                data.get('username', '訪客'),
+                data.get('name', ''),
+                data.get('identity', ''),
+                data.get('gender', ''),
+                data.get('phone1', ''),
+                data.get('phone2', ''),
+                data.get('email', ''),
+                data.get('intention1', '無特定'),
+                data.get('system1', ''),
+                data.get('department1', ''),
+                data.get('intention2', '無特定'),
+                data.get('system2', ''),
+                data.get('department2', ''),
+                data.get('intention3', '無特定'),
+                data.get('system3', ''),
+                data.get('department3', ''),
+                data.get('junior_high', ''),
+                data.get('current_grade', ''),
+                data.get('line_id', ''),
+                data.get('facebook', ''),
+                data.get('recommended_teacher', ''),
+                data.get('remarks', '')
+            )
+            
+            cursor.execute(sql, values)
+            application_id = cursor.lastrowid
+            connection.commit()
+            
+        return jsonify({
+            'success': True,
+            'message': '就讀意願登錄成功！康寧大學將儘快與您聯絡。',
+            'application_id': application_id
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'提交失敗: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     print("🚀 啟動康寧大學聊天系統後端...")

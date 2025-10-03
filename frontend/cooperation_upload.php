@@ -28,14 +28,17 @@ try {
     error_log("獲取老師資料失敗: " . $e->getMessage());
 }
 
-// 檢查是否已登入且為學生身份
+// 權限檢查已移除 - 任何人都可以訪問此頁面
+// 如果需要權限檢查，請取消註解下面的程式碼：
+/*
 if (!isset($_SESSION['username']) || ($_SESSION['role'] !== '學生' && $_SESSION['role'] !== 'student')) {
-    header('Location: one.php');
+    header('Location: index.php');
     exit;
 }
+*/
 
-$username = $_SESSION['username'];
-$role = $_SESSION['role'];
+$username = $_SESSION['username'] ?? '訪客';
+$role = $_SESSION['role'] ?? '訪客';
 ?>
 
 <!DOCTYPE html>
@@ -741,7 +744,7 @@ $role = $_SESSION['role'];
             });
         }
         
-        // 搜尋學校功能
+        // 搜尋學校功能 - 使用完整資料庫
         function searchSchool() {
             const keyword = document.getElementById('junior_high').value;
             if (keyword.trim() === '') {
@@ -755,7 +758,7 @@ $role = $_SESSION['role'];
             searchBtn.textContent = '搜尋中...';
             searchBtn.disabled = true;
             
-            // 發送搜尋請求
+            // 使用現有的API（包含全台灣國中資料）
             fetch(`school_search_simple.php?keyword=${encodeURIComponent(keyword)}`)
                 .then(response => response.json())
                 .then(data => {
@@ -767,12 +770,196 @@ $role = $_SESSION['role'];
                 })
                 .catch(error => {
                     console.error('搜尋錯誤:', error);
-                    alert('搜尋時發生錯誤，請稍後再試');
+                    // 如果API失敗，使用備用搜尋
+                    console.log('API搜尋失敗，使用備用搜尋...');
+                    searchSchoolFallback(keyword);
                 })
                 .finally(() => {
                     searchBtn.textContent = originalText;
                     searchBtn.disabled = false;
                 });
+        }
+        
+        // 備用搜尋功能（當API不可用時）
+        function searchSchoolFallback(keyword) {
+            // 基本學校資料庫（備用）
+            const fallbackSchools = [
+                {name: '台北市立中正國中', city: '台北市', district: '中正區'},
+                {name: '台北市立建國中學', city: '台北市', district: '中正區'},
+                {name: '台北市立成功國中', city: '台北市', district: '中正區'},
+                {name: '台北市立金華國中', city: '台北市', district: '大安區'},
+                {name: '台北市立敦化國中', city: '台北市', district: '大安區'},
+                {name: '台北市立仁愛國中', city: '台北市', district: '大安區'},
+                {name: '台北市立信義國中', city: '台北市', district: '信義區'},
+                {name: '台北市立松山國中', city: '台北市', district: '松山區'},
+                {name: '台北市立民生國中', city: '台北市', district: '松山區'},
+                {name: '台北市立中山國中', city: '台北市', district: '中山區'},
+                {name: '台北市立南港國中', city: '台北市', district: '南港區'},
+                {name: '台北市立內湖國中', city: '台北市', district: '內湖區'},
+                {name: '台北市立士林國中', city: '台北市', district: '士林區'},
+                {name: '台北市立天母國中', city: '台北市', district: '士林區'},
+                {name: '台北市立北投國中', city: '台北市', district: '北投區'},
+                {name: '台北市立文山國中', city: '台北市', district: '文山區'},
+                {name: '台北市立萬華國中', city: '台北市', district: '萬華區'},
+                {name: '新北市立板橋國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立新莊國中', city: '新北市', district: '新莊區'},
+                {name: '新北市立三重國中', city: '新北市', district: '三重區'},
+                {name: '新北市立中和國中', city: '新北市', district: '中和區'},
+                {name: '新北市立永和國中', city: '新北市', district: '永和區'},
+                {name: '新北市立新店國中', city: '新北市', district: '新店區'},
+                {name: '新北市立樹林國中', city: '新北市', district: '樹林區'},
+                {name: '新北市立鶯歌國中', city: '新北市', district: '鶯歌區'},
+                {name: '新北市立三峽國中', city: '新北市', district: '三峽區'},
+                {name: '新北市立淡水國中', city: '新北市', district: '淡水區'},
+                {name: '新北市立汐止國中', city: '新北市', district: '汐止區'},
+                {name: '新北市立瑞芳國中', city: '新北市', district: '瑞芳區'},
+                {name: '新北市立土城國中', city: '新北市', district: '土城區'},
+                {name: '新北市立蘆洲國中', city: '新北市', district: '蘆洲區'},
+                {name: '新北市立五股國中', city: '新北市', district: '五股區'},
+                {name: '新北市立泰山國中', city: '新北市', district: '泰山區'},
+                {name: '新北市立林口國中', city: '新北市', district: '林口區'},
+                {name: '桃園市立桃園國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立中壢國中', city: '桃園市', district: '中壢區'},
+                {name: '桃園市立平鎮國中', city: '桃園市', district: '平鎮區'},
+                {name: '桃園市立八德國中', city: '桃園市', district: '八德區'},
+                {name: '桃園市立楊梅國中', city: '桃園市', district: '楊梅區'},
+                {name: '桃園市立蘆竹國中', city: '桃園市', district: '蘆竹區'},
+                {name: '桃園市立大溪國中', city: '桃園市', district: '大溪區'},
+                {name: '桃園市立大園國中', city: '桃園市', district: '大園區'},
+                {name: '桃園市立龜山國中', city: '桃園市', district: '龜山區'},
+                {name: '桃園市立龍潭國中', city: '桃園市', district: '龍潭區'},
+                {name: '桃園市立觀音國中', city: '桃園市', district: '觀音區'},
+                {name: '桃園市立新屋國中', city: '桃園市', district: '新屋區'},
+                {name: '桃園市立復興國中', city: '桃園市', district: '復興區'},
+                {name: '台中市立台中國中', city: '台中市', district: '中區'},
+                {name: '台中市立西區國中', city: '台中市', district: '西區'},
+                {name: '台中市立北區國中', city: '台中市', district: '北區'},
+                {name: '台中市立東區國中', city: '台中市', district: '東區'},
+                {name: '台中市立南區國中', city: '台中市', district: '南區'},
+                {name: '台中市立西屯國中', city: '台中市', district: '西屯區'},
+                {name: '台中市立南屯國中', city: '台中市', district: '南屯區'},
+                {name: '台中市立北屯國中', city: '台中市', district: '北屯區'},
+                {name: '台中市立豐原國中', city: '台中市', district: '豐原區'},
+                {name: '台中市立東勢國中', city: '台中市', district: '東勢區'},
+                {name: '台中市立大甲國中', city: '台中市', district: '大甲區'},
+                {name: '台中市立清水國中', city: '台中市', district: '清水區'},
+                {name: '台中市立沙鹿國中', city: '台中市', district: '沙鹿區'},
+                {name: '台中市立梧棲國中', city: '台中市', district: '梧棲區'},
+                {name: '台中市立后里國中', city: '台中市', district: '后里區'},
+                {name: '台中市立神岡國中', city: '台中市', district: '神岡區'},
+                {name: '台中市立潭子國中', city: '台中市', district: '潭子區'},
+                {name: '台中市立大雅國中', city: '台中市', district: '大雅區'},
+                {name: '台中市立新社國中', city: '台中市', district: '新社區'},
+                {name: '台中市立石岡國中', city: '台中市', district: '石岡區'},
+                {name: '台中市立外埔國中', city: '台中市', district: '外埔區'},
+                {name: '台中市立大安國中', city: '台中市', district: '大安區'},
+                {name: '台中市立烏日國中', city: '台中市', district: '烏日區'},
+                {name: '台中市立大肚國中', city: '台中市', district: '大肚區'},
+                {name: '台中市立龍井國中', city: '台中市', district: '龍井區'},
+                {name: '台中市立霧峰國中', city: '台中市', district: '霧峰區'},
+                {name: '台中市立太平國中', city: '台中市', district: '太平區'},
+                {name: '台中市立大里國中', city: '台中市', district: '大里區'},
+                {name: '台中市立和平國中', city: '台中市', district: '和平區'},
+                {name: '台南市立台南國中', city: '台南市', district: '中西區'},
+                {name: '台南市立東區國中', city: '台南市', district: '東區'},
+                {name: '台南市立南區國中', city: '台南市', district: '南區'},
+                {name: '台南市立北區國中', city: '台南市', district: '北區'},
+                {name: '台南市立安平國中', city: '台南市', district: '安平區'},
+                {name: '台南市立安南國中', city: '台南市', district: '安南區'},
+                {name: '台南市立永康國中', city: '台南市', district: '永康區'},
+                {name: '台南市立歸仁國中', city: '台南市', district: '歸仁區'},
+                {name: '台南市立新化國中', city: '台南市', district: '新化區'},
+                {name: '台南市立左鎮國中', city: '台南市', district: '左鎮區'},
+                {name: '台南市立玉井國中', city: '台南市', district: '玉井區'},
+                {name: '台南市立楠西國中', city: '台南市', district: '楠西區'},
+                {name: '台南市立南化國中', city: '台南市', district: '南化區'},
+                {name: '台南市立仁德國中', city: '台南市', district: '仁德區'},
+                {name: '台南市立關廟國中', city: '台南市', district: '關廟區'},
+                {name: '台南市立龍崎國中', city: '台南市', district: '龍崎區'},
+                {name: '台南市立官田國中', city: '台南市', district: '官田區'},
+                {name: '台南市立麻豆國中', city: '台南市', district: '麻豆區'},
+                {name: '台南市立佳里國中', city: '台南市', district: '佳里區'},
+                {name: '台南市立西港國中', city: '台南市', district: '西港區'},
+                {name: '台南市立七股國中', city: '台南市', district: '七股區'},
+                {name: '台南市立將軍國中', city: '台南市', district: '將軍區'},
+                {name: '台南市立學甲國中', city: '台南市', district: '學甲區'},
+                {name: '台南市立北門國中', city: '台南市', district: '北門區'},
+                {name: '台南市立新營國中', city: '台南市', district: '新營區'},
+                {name: '台南市立後壁國中', city: '台南市', district: '後壁區'},
+                {name: '台南市立白河國中', city: '台南市', district: '白河區'},
+                {name: '台南市立東山國中', city: '台南市', district: '東山區'},
+                {name: '台南市立六甲國中', city: '台南市', district: '六甲區'},
+                {name: '台南市立下營國中', city: '台南市', district: '下營區'},
+                {name: '台南市立柳營國中', city: '台南市', district: '柳營區'},
+                {name: '台南市立鹽水國中', city: '台南市', district: '鹽水區'},
+                {name: '台南市立善化國中', city: '台南市', district: '善化區'},
+                {name: '台南市立大內國中', city: '台南市', district: '大內區'},
+                {name: '台南市立山上國中', city: '台南市', district: '山上區'},
+                {name: '台南市立新市國中', city: '台南市', district: '新市區'},
+                {name: '台南市立安定國中', city: '台南市', district: '安定區'},
+                {name: '高雄市立高雄國中', city: '高雄市', district: '新興區'},
+                {name: '高雄市立前金國中', city: '高雄市', district: '前金區'},
+                {name: '高雄市立苓雅國中', city: '高雄市', district: '苓雅區'},
+                {name: '高雄市立鹽埕國中', city: '高雄市', district: '鹽埕區'},
+                {name: '高雄市立鼓山國中', city: '高雄市', district: '鼓山區'},
+                {name: '高雄市立旗津國中', city: '高雄市', district: '旗津區'},
+                {name: '高雄市立前鎮國中', city: '高雄市', district: '前鎮區'},
+                {name: '高雄市立三民國中', city: '高雄市', district: '三民區'},
+                {name: '高雄市立楠梓國中', city: '高雄市', district: '楠梓區'},
+                {name: '高雄市立小港國中', city: '高雄市', district: '小港區'},
+                {name: '高雄市立左營國中', city: '高雄市', district: '左營區'},
+                {name: '高雄市立仁武國中', city: '高雄市', district: '仁武區'},
+                {name: '高雄市立大社區國中', city: '高雄市', district: '大社區'},
+                {name: '高雄市立岡山國中', city: '高雄市', district: '岡山區'},
+                {name: '高雄市立路竹國中', city: '高雄市', district: '路竹區'},
+                {name: '高雄市立阿蓮國中', city: '高雄市', district: '阿蓮區'},
+                {name: '高雄市立田寮國中', city: '高雄市', district: '田寮區'},
+                {name: '高雄市立燕巢國中', city: '高雄市', district: '燕巢區'},
+                {name: '高雄市立橋頭國中', city: '高雄市', district: '橋頭區'},
+                {name: '高雄市立梓官國中', city: '高雄市', district: '梓官區'},
+                {name: '高雄市立彌陀國中', city: '高雄市', district: '彌陀區'},
+                {name: '高雄市立永安國中', city: '高雄市', district: '永安區'},
+                {name: '高雄市立湖內國中', city: '高雄市', district: '湖內區'},
+                {name: '高雄市立鳳山國中', city: '高雄市', district: '鳳山區'},
+                {name: '高雄市立大寮國中', city: '高雄市', district: '大寮區'},
+                {name: '高雄市立林園國中', city: '高雄市', district: '林園區'},
+                {name: '高雄市立鳥松國中', city: '高雄市', district: '鳥松區'},
+                {name: '高雄市立大樹國中', city: '高雄市', district: '大樹區'},
+                {name: '高雄市立旗山國中', city: '高雄市', district: '旗山區'},
+                {name: '高雄市立美濃國中', city: '高雄市', district: '美濃區'},
+                {name: '高雄市立六龜國中', city: '高雄市', district: '六龜區'},
+                {name: '高雄市立內門國中', city: '高雄市', district: '內門區'},
+                {name: '高雄市立杉林國中', city: '高雄市', district: '杉林區'},
+                {name: '高雄市立甲仙國中', city: '高雄市', district: '甲仙區'},
+                {name: '高雄市立桃源國中', city: '高雄市', district: '桃源區'},
+                {name: '高雄市立那瑪夏國中', city: '高雄市', district: '那瑪夏區'},
+                {name: '高雄市立茂林國中', city: '高雄市', district: '茂林區'},
+                {name: '基隆市立基隆國中', city: '基隆市', district: '中正區'},
+                {name: '新竹市立新竹國中', city: '新竹市', district: '東區'},
+                {name: '嘉義市立嘉義國中', city: '嘉義市', district: '東區'},
+                {name: '新竹縣立竹北國中', city: '新竹縣', district: '竹北市'},
+                {name: '苗栗縣立苗栗國中', city: '苗栗縣', district: '苗栗市'},
+                {name: '彰化縣立彰化國中', city: '彰化縣', district: '彰化市'},
+                {name: '南投縣立南投國中', city: '南投縣', district: '南投市'},
+                {name: '雲林縣立斗六國中', city: '雲林縣', district: '斗六市'},
+                {name: '嘉義縣立朴子國中', city: '嘉義縣', district: '朴子市'},
+                {name: '屏東縣立屏東國中', city: '屏東縣', district: '屏東市'},
+                {name: '宜蘭縣立宜蘭國中', city: '宜蘭縣', district: '宜蘭市'},
+                {name: '花蓮縣立花蓮國中', city: '花蓮縣', district: '花蓮市'},
+                {name: '台東縣立台東國中', city: '台東縣', district: '台東市'},
+                {name: '澎湖縣立馬公國中', city: '澎湖縣', district: '馬公市'},
+                {name: '金門縣立金城國中', city: '金門縣', district: '金城鎮'},
+                {name: '連江縣立介壽國中', city: '連江縣', district: '南竿鄉'}
+            ];
+            
+            // 搜尋匹配的學校
+            const results = fallbackSchools.filter(school => 
+                school.name.includes(keyword) || 
+                school.city.includes(keyword) || 
+                school.district.includes(keyword)
+            );
+            
+            displaySearchResults(results, keyword);
         }
         
         // 顯示搜尋結果
@@ -887,8 +1074,8 @@ $role = $_SESSION['role'];
                 console.log(key + ': ' + value);
             }
             
-            // 提交到後端API
-            fetch('../backend/enrollment_api.php', {
+            // 提交到後端API (Python Flask)
+            fetch('http://localhost:5000/enrollment/submit', {
                 method: 'POST',
                 body: formData
             })

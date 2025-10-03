@@ -3,7 +3,7 @@ session_start();
 
 // 臨時放寬權限檢查 - 只要登入就可以訪問
 if (!isset($_SESSION['username'])) {
-    header('Location: one.php');
+    header('Location: index.php');
     exit;
 }
 
@@ -242,7 +242,7 @@ $role = $_SESSION['role'] ?? '未知';
 </head>
 <body>
     <div class="coop-container">
-        <a href="one.php" class="back-link">← 回到首頁</a>
+        <a href="index.php" class="back-link">← 回到首頁</a>
         
         <div class="user-info">
             <strong>當前用戶：</strong><?php echo htmlspecialchars($username); ?> 

@@ -77,7 +77,7 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
     echo "<p><strong>問題：</strong>未登入</p>";
     echo "<p><strong>解決方案：</strong></p>";
     echo "<ul>";
-    echo "<li><a href='one.php'>前往登入頁面</a></li>";
+    echo "<li><a href='index.php'>前往登入頁面</a></li>";
     echo "<li>使用學生身份登入</li>";
     echo "</ul>";
 } elseif ($role !== '學生' && $role !== 'student') {
@@ -86,7 +86,7 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
     echo "<ul>";
     echo "<li>需要以學生身份登入</li>";
     echo "<li>當前角色: " . htmlspecialchars($role) . "</li>";
-    echo "<li><a href='one.php'>重新登入</a></li>";
+    echo "<li><a href='index.php'>重新登入</a></li>";
     echo "</ul>";
 } else {
     echo "<p><strong>狀態：</strong>所有檢查通過！</p>";
@@ -112,7 +112,7 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
 
 echo "<h3>📋 其他選項</h3>";
 echo "<ul>";
-echo "<li><a href='one.php'>前往登入頁面</a></li>";
+echo "<li><a href='index.php'>前往登入頁面</a></li>";
 echo "<li><a href='../index.php'>返回首頁</a></li>";
 echo "<li><a href='chat/chat.php'>前往聊天室</a></li>";
 echo "</ul>";

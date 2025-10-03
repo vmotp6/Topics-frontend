@@ -189,3 +189,4 @@ if (isset($_POST['send_test'])) {
 
 <p><a href="chat.php">← 返回聊天室</a></p>
 
+

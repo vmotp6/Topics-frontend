@@ -9,7 +9,7 @@ session_start();
 if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
     echo "<h1>❌ 未登入</h1>";
     echo "<p>請先登入後再訪問此頁面。</p>";
-    echo "<p><a href='one.php'>前往登入</a></p>";
+    echo "<p><a href='index.php'>前往登入</a></p>";
     exit;
 }
 
@@ -161,4 +161,5 @@ document.getElementById('testForm').addEventListener('submit', async function(e)
 </body>
 </html>";
 ?>
+
 
