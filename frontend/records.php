@@ -400,12 +400,12 @@ $conn->close();
                                         ?>" required>
                             </div>
                             <div class="field-group">
-                                <label><span class="required">*</span> 教師姓名:</label>
+                                <label><span class="required"></span> 教師姓名:</label>
                                 <input type="text" name="teacher_name" placeholder="請輸入教師姓名" 
                                        value="<?php 
                                        echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name']) : 
                                             (isset($teacher_info['name']) ? htmlspecialchars($teacher_info['name']) : ''); 
-                                       ?>" required>
+                                       ?>" readonly>
                             </div>
                         </div>
                         <div class="form-row">
