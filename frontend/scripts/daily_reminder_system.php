@@ -92,52 +92,57 @@ function runDailyReminderSystem() {
         $conn = getDatabaseConnection();
         logMessage("資料庫連接成功");
         
-        // 獲取明天的日期
+        // 獲取今天和明天的日期
         $today = new DateTime();
         $tomorrow = new DateTime('+1 day');
+        $today_date = $today->format('Y-m-d');
         $tomorrow_date = $tomorrow->format('Y-m-d');
         
-        logMessage("今天日期：" . $today->format('Y-m-d'));
+        logMessage("今天日期：{$today_date}");
         logMessage("明天日期：{$tomorrow_date}");
         
-        // 查找明天的活動
-        logMessage("開始搜索明天的活動...");
+        // 查找今天和明天的活動
+        logMessage("開始搜索今天和明天的活動...");
         
         $activities_found = [];
         
-        // 查詢所有不同的場次選擇
-        $sessions_sql = "SELECT DISTINCT session_choice FROM admission_applications 
-                         WHERE session_choice IS NOT NULL AND session_choice != ''";
-        $sessions_result = $conn->query($sessions_sql);
+        // 查詢今天和明天的場次
+        $sessions_sql = "SELECT id, session_name, session_date, session_type FROM admission_sessions 
+                         WHERE is_active = 1 AND session_date IN (?, ?)
+                         ORDER BY session_date";
+        $sessions_stmt = $conn->prepare($sessions_sql);
+        $sessions_stmt->bind_param("ss", $today_date, $tomorrow_date);
+        $sessions_stmt->execute();
+        $sessions_result = $sessions_stmt->get_result();
         
         if ($sessions_result) {
             while ($row = $sessions_result->fetch_assoc()) {
-                $session_name = $row['session_choice'];
-                $parsed = parseTaiwanDate($session_name);
+                $session_name = $row['session_name'];
+                $session_id = $row['id'];
+                $session_date = $row['session_date'];
+                $session_type = $row['session_type'];
                 
-                logMessage("檢查場次: {$session_name}");
+                logMessage("檢查場次: {$session_name} (ID: {$session_id})");
+                logMessage("  → 活動日期: {$session_date}");
                 
-                if ($parsed['success']) {
-                    logMessage("  → 解析成功: 民國{$parsed['minguo_year']} = 西元{$parsed['western_year']}");
-                    logMessage("  → 活動日期: {$parsed['mysql_date']}");
-                    
-                    if ($parsed['mysql_date'] === $tomorrow_date) {
-                        logMessage("  ✅ 發現明天的活動！");
-                        $activities_found[] = [
-                            'session_name' => $session_name,
-                            'parsed_date' => $parsed,
-                            'session_type' => getSessionType($session_name)
-                        ];
-                    } else {
-                        logMessage("  ❌ 不是明天的活動");
-                    }
+                // 檢查是否為今天或明天的活動
+                if ($session_date === $today_date || $session_date === $tomorrow_date) {
+                    $day_type = ($session_date === $today_date) ? "今天" : "明天";
+                    logMessage("  ✅ 發現{$day_type}的活動！");
+                    $activities_found[] = [
+                        'session_id' => $session_id,
+                        'session_name' => $session_name,
+                        'session_date' => $session_date,
+                        'session_type' => $session_type
+                    ];
                 } else {
-                    logMessage("  ❌ 無法解析日期格式");
+                    logMessage("  ❌ 不是今天或明天的活動");
                 }
             }
         }
+        $sessions_stmt->close();
         
-        logMessage("找到 " . count($activities_found) . " 個明天的活動");
+        logMessage("找到 " . count($activities_found) . " 個今天或明天的活動");
         
         if (count($activities_found) > 0) {
             $total_sent = 0;
@@ -145,23 +150,24 @@ function runDailyReminderSystem() {
             $total_already_sent = 0;
             
             foreach ($activities_found as $activity) {
+                $session_id = $activity['session_id'];
                 $session_name = $activity['session_name'];
-                $parsed_date = $activity['parsed_date'];
+                $session_date = $activity['session_date'];
                 $session_type = $activity['session_type'];
                 
-                logMessage("處理活動：{$session_name}");
-                logMessage("  活動時間：{$parsed_date['formatted_datetime']}");
+                logMessage("處理活動：{$session_name} (ID: {$session_id})");
+                logMessage("  活動時間：{$session_date}");
                 logMessage("  活動類型：{$session_type}");
                 
-                // 查詢該場次的報名者
+                // 查詢該場次的報名者（使用session_id進行查詢）
                 $applications_sql = "SELECT id, email, student_name, parent_name, 
                                             course_priority_1, course_priority_2, reminder_sent
                                      FROM admission_applications 
-                                     WHERE session_choice = ? 
+                                     WHERE session_id = ? 
                                      AND email IS NOT NULL AND email != ''";
                 
                 $apps_stmt = $conn->prepare($applications_sql);
-                $apps_stmt->bind_param("s", $session_name);
+                $apps_stmt->bind_param("i", $activity['session_id']);
                 $apps_stmt->execute();
                 $apps_result = $apps_stmt->get_result();
                 
@@ -193,14 +199,12 @@ function runDailyReminderSystem() {
                         // 發送提醒郵件
                         logMessage("  📤 發送提醒郵件給：{$application['student_name']} ({$application['email']})");
                         
-                        $email_sent = sendActivityReminderEmail(
+                        $email_sent = sendReminderEmail(
                             $application['email'],
                             $application['student_name'],
                             $application['parent_name'],
                             $session_name,
-                            $parsed_date['formatted_datetime'],
-                            $course_text,
-                            $session_type
+                            $session_date
                         );
                         
                         if ($email_sent) {

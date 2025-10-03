@@ -131,14 +131,14 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
                 <p>報名成功確認通知</p>
             </div>
             <div class='content'>
-                <h2>親愛的 {$parentName} 家長，您好！</h2>
+                <h2>親愛的 {$parentName} ，您好！</h2>
                 
                 <p>感謝您為 <span class='highlight'>{$studentName}</span> 同學報名參加康寧大學五專入學說明會。我們已成功收到您的報名資料。</p>
                 
                 <div class='info-box'>
                     <h3>📋 報名資訊確認</h3>
                     <p><strong>學生姓名：</strong>{$studentName}</p>
-                    <p><strong>家長姓名：</strong>{$parentName}</p>
+                    <p><strong>姓名：</strong>{$parentName}</p>
                     <p><strong>參加場次：</strong>{$sessionName}</p>
                     <p><strong>體驗課程：</strong>{$courseText}</p>
                 </div>
@@ -176,13 +176,13 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
     $altBody = "
 康寧大學五專入學說明會 - 報名確認通知
 
-親愛的 {$parentName} 家長，您好！
+親愛的 {$parentName} ，您好！
 
 感謝您為 {$studentName} 同學報名參加康寧大學五專入學說明會。
 
 報名資訊確認：
 - 學生姓名：{$studentName}
-- 家長姓名：{$parentName}
+- 姓名：{$parentName}
 - 參加場次：{$sessionName}
 - 體驗課程：{$courseText}
 

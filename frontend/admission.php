@@ -15,9 +15,17 @@ if (!isset($_SESSION['captcha'])) {
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
-// 取得啟用的場次
+// 取得啟用的場次（包含最多人數和剩餘名額）
 $sessions = [];
-$sessions_query = "SELECT id, session_name, session_date, session_type FROM admission_sessions WHERE is_active = 1 ORDER BY session_date";
+$sessions_query = "SELECT s.id, s.session_name, s.session_date, s.session_type, s.max_participants,
+                          (s.max_participants - COUNT(a.id)) as remaining_spots
+                   FROM admission_sessions s 
+                   LEFT JOIN admission_applications a ON s.id = a.session_id 
+                   WHERE s.is_active = 1 
+                   GROUP BY s.id, s.session_name, s.session_date, s.session_type, s.max_participants
+                   ORDER BY 
+                       CASE WHEN (s.max_participants - COUNT(a.id)) <= 0 THEN 1 ELSE 0 END,
+                       s.session_date";
 $sessions_result = $conn->query($sessions_query);
 if ($sessions_result) {
     while ($row = $sessions_result->fetch_assoc()) {
@@ -49,12 +57,12 @@ if ($courses_result) {
     }
 }
 
-// 取得招生諮詢老師資訊 (teacher表ID=7的資料)
+// 取得招生諮詢老師資訊 (user_id=12的老師資料)
 $admission_teacher = [];
 $teacher_query = "SELECT u.name, t.department, t.phone 
                   FROM teacher t 
                   LEFT JOIN user u ON t.user_id = u.id 
-                  WHERE t.id = 7";
+                  WHERE t.user_id = 12";
 $teacher_result = $conn->query($teacher_query);
 if ($teacher_result && $teacher_result->num_rows > 0) {
     $admission_teacher = $teacher_result->fetch_assoc();
@@ -73,6 +81,29 @@ if ($_POST) {
         if (empty($_POST[$field])) {
             $missing_fields[] = $field;
         }
+    }
+    
+    // 驗證場次是否額滿
+    if (!empty($_POST['session_choice'])) {
+        $session_check_query = "SELECT s.max_participants, 
+                                      (s.max_participants - COUNT(a.id)) as remaining_spots
+                               FROM admission_sessions s 
+                               LEFT JOIN admission_applications a ON s.id = a.session_id 
+                               WHERE s.id = ? AND s.is_active = 1
+                               GROUP BY s.id, s.max_participants";
+        $session_check_stmt = $conn->prepare($session_check_query);
+        $session_check_stmt->bind_param("i", $_POST['session_choice']);
+        $session_check_stmt->execute();
+        $session_check_result = $session_check_stmt->get_result();
+        
+        if ($session_row = $session_check_result->fetch_assoc()) {
+            if ($session_row['remaining_spots'] <= 0) {
+                $missing_fields[] = 'session_full';
+            }
+        } else {
+            $missing_fields[] = 'session_invalid';
+        }
+        $session_check_stmt->close();
     }
     
     // 驗證驗證碼
@@ -113,11 +144,12 @@ if ($_POST) {
         }
         
         // 取得選擇的場次資訊
-        $session_info_query = "SELECT session_name FROM admission_sessions WHERE id = ?";
+        $session_info_query = "SELECT id, session_name FROM admission_sessions WHERE id = ?";
         $session_stmt = $conn->prepare($session_info_query);
         $session_stmt->bind_param("i", $_POST['session_choice']);
         $session_stmt->execute();
         $session_result = $session_stmt->get_result();
+        $session_id = $_POST['session_choice']; // 場次ID
         $session_name = '';
         if ($session_row = $session_result->fetch_assoc()) {
             $session_name = $session_row['session_name'];
@@ -130,15 +162,15 @@ if ($_POST) {
         $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送活動提醒郵件（0=未發送，1=已發送）'");
         $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP NULL COMMENT '提醒郵件發送時間'");
         
-        // 插入資料（包含郵件狀態字段）
-        $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_choice, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
+        // 插入資料（包含郵件狀態字段和session_id）
+        $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_id, session_choice, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             throw new Exception("SQL 準備失敗: " . $conn->error . " | SQL: " . $sql);
         }
         
-        $stmt->bind_param("sssssssssss", 
+        $stmt->bind_param("ssssssiissss", 
             $_POST['email'],
             $_POST['school_name'],
             $_POST['student_name'],
@@ -146,6 +178,7 @@ if ($_POST) {
             $_POST['parent_name'],
             $_POST['contact_phone'],
             $_POST['line_id'],
+            $session_id,
             $session_name,
             $course_priority_1,
             $course_priority_2,
@@ -198,6 +231,50 @@ if ($_POST) {
                 error_log("歡迎郵件發送失敗: " . $e->getMessage());
             }
             
+            // 檢查是否需要立即發送提醒郵件
+            try {
+                // 獲取場次日期
+                $session_date_query = "SELECT session_date FROM admission_sessions WHERE id = ?";
+                $session_date_stmt = $conn->prepare($session_date_query);
+                $session_date_stmt->bind_param("i", $session_id);
+                $session_date_stmt->execute();
+                $session_date_result = $session_date_stmt->get_result();
+                
+                if ($session_date_row = $session_date_result->fetch_assoc()) {
+                    $session_date = $session_date_row['session_date'];
+                    $today = new DateTime();
+                    $session_date_obj = new DateTime($session_date);
+                    $days_until_session = $today->diff($session_date_obj)->days;
+                    
+                    // 如果活動是明天或今天，立即發送提醒郵件
+                    if ($days_until_session <= 1) {
+                        $reminder_sent = sendReminderEmail(
+                            $_POST['email'],
+                            $_POST['student_name'],
+                            $_POST['parent_name'],
+                            $session_name,
+                            $session_date
+                        );
+                        
+                        if ($reminder_sent) {
+                            // 更新提醒郵件發送狀態
+                            $reminder_update_sql = "UPDATE admission_applications SET reminder_sent = 1, reminder_sent_at = NOW() WHERE id = ?";
+                            $reminder_update_stmt = $conn->prepare($reminder_update_sql);
+                            $reminder_update_stmt->bind_param("i", $application_id);
+                            $reminder_update_stmt->execute();
+                            $reminder_update_stmt->close();
+                            
+                            $message .= " 提醒郵件也已發送！";
+                        }
+                    }
+                }
+                $session_date_stmt->close();
+                
+            } catch (Exception $e) {
+                // 提醒郵件發送失敗不影響報名成功
+                error_log("提醒郵件發送失敗: " . $e->getMessage());
+            }
+            
             $messageType = "success";
             // 提交成功後重新生成驗證碼
             $_SESSION['captcha'] = generateCaptcha();
@@ -216,10 +293,12 @@ if ($_POST) {
             'school_name' => '請填寫學校名稱',
             'student_name' => '請填寫學生姓名',
             'grade' => '請選擇就讀年級',
-            'parent_name' => '請填寫家長姓名',
+            'parent_name' => '請填寫姓名',
             'contact_phone' => '請填寫聯絡電話',
             'phone_invalid' => '聯絡電話格式不正確，請輸入09開頭的10位數字',
             'session_choice' => '請選擇參加場次',
+            'session_full' => '所選場次已額滿，請選擇其他場次',
+            'session_invalid' => '所選場次無效，請重新選擇',
             'receive_info' => '請選擇是否願意收到升學訊息',
             'captcha' => '請填寫驗證碼',
             'captcha_invalid' => '驗證碼錯誤'
@@ -429,6 +508,44 @@ $conn->close();
             width: 18px;
             height: 18px;
             accent-color: #667eea;
+        }
+
+        .radio-item.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .radio-item.disabled input[type="radio"] {
+            cursor: not-allowed;
+        }
+
+        .full-session {
+            color: #999;
+            text-decoration: line-through;
+        }
+
+        .spots-info {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: normal;
+        }
+
+        .full-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .radio-item:not(.disabled) .spots-info {
+            color: #27ae60;
+        }
+
+        .radio-item:not(.disabled) .spots-info:contains("0/") {
+            color: #e74c3c;
         }
 
         /* 拖曳式課程選擇樣式 */
@@ -704,7 +821,7 @@ $conn->close();
                         <?php echo !empty($admission_teacher['phone']) ? htmlspecialchars($admission_teacher['phone']) : '請洽學校總機'; ?>
                     </div>
                         <div><i class="fas fa-user"></i> 招生諮詢：
-                            <?php echo htmlspecialchars($admission_teacher['name']); ?>
+                            <?php echo !empty($admission_teacher['name']) ? htmlspecialchars($admission_teacher['name']) : '請洽學校總機'; ?>
                             <?php if (!empty($admission_teacher['department'])): ?>
                                 - <?php echo htmlspecialchars($admission_teacher['department']); ?>
                             <?php endif; ?>
@@ -758,7 +875,7 @@ $conn->close();
                     <h3><i class="fas fa-address-book"></i> 聯絡資訊</h3>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> 家長姓名：</label>
+                            <label><span class="required">*</span> 姓名：</label>
                             <input type="text" name="parent_name" value="<?php echo isset($_POST['parent_name']) ? htmlspecialchars($_POST['parent_name']) : ''; ?>" required>
                         </div>
                         <div class="field-group">
@@ -781,10 +898,22 @@ $conn->close();
                         <?php if (empty($sessions)): ?>
                             <p style="color: #e74c3c; font-weight: bold;">目前沒有開放報名的場次，請稍後再試。</p>
                         <?php else: ?>
-                            <?php foreach ($sessions as $session): ?>
-                                <label class="radio-item">
-                                    <input type="radio" name="session_choice" value="<?php echo $session['id']; ?>" <?php echo (isset($_POST['session_choice']) && $_POST['session_choice'] == $session['id']) ? 'checked' : ''; ?> required>
-                                    <span><?php echo htmlspecialchars($session['session_name'] . ($session['session_type'] === '線上' ? ' (線上)' : '')); ?></span>
+                            <?php foreach ($sessions as $session): 
+                                $is_full = $session['remaining_spots'] <= 0;
+                                $session_display = $session['session_name'] . ($session['session_type'] === '線上' ? ' (線上)' : '');
+                                $spots_info = "（{$session['remaining_spots']}/{$session['max_participants']} 人）";
+                            ?>
+                                <label class="radio-item <?php echo $is_full ? 'disabled' : ''; ?>">
+                                    <input type="radio" name="session_choice" value="<?php echo $session['id']; ?>" 
+                                           <?php echo (isset($_POST['session_choice']) && $_POST['session_choice'] == $session['id']) ? 'checked' : ''; ?>
+                                           <?php echo $is_full ? 'disabled' : ''; ?> required>
+                                    <span class="<?php echo $is_full ? 'full-session' : ''; ?>">
+                                        <?php echo htmlspecialchars($session_display); ?>
+                                        <span class="spots-info"><?php echo $spots_info; ?></span>
+                                        <?php if ($is_full): ?>
+                                            <span class="full-badge">額滿</span>
+                                        <?php endif; ?>
+                                    </span>
                                 </label>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1053,6 +1182,14 @@ $conn->close();
                 e.preventDefault();
                 alert('請至少選擇一個體驗課程！');
                 document.getElementById('selectedCourses').scrollIntoView({ behavior: 'smooth' });
+                return false;
+            }
+
+            // 檢查是否選擇了額滿的場次
+            const selectedSession = document.querySelector('input[name="session_choice"]:checked');
+            if (selectedSession && selectedSession.disabled) {
+                e.preventDefault();
+                alert('所選場次已額滿，請選擇其他場次！');
                 return false;
             }
         });
