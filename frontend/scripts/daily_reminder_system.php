@@ -129,13 +129,13 @@ function runDailyReminderSystem() {
                 if ($session_date === $today_date || $session_date === $tomorrow_date) {
                     $day_type = ($session_date === $today_date) ? "今天" : "明天";
                     logMessage("  ✅ 發現{$day_type}的活動！");
-                    $activities_found[] = [
+                        $activities_found[] = [
                         'session_id' => $session_id,
-                        'session_name' => $session_name,
+                            'session_name' => $session_name,
                         'session_date' => $session_date,
                         'session_type' => $session_type
-                    ];
-                } else {
+                        ];
+                    } else {
                     logMessage("  ❌ 不是今天或明天的活動");
                 }
             }

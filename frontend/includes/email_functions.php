@@ -226,7 +226,7 @@ function sendReminderEmail($email, $studentName, $parentName, $sessionName, $ses
                 <p>活動提醒通知</p>
             </div>
             <div class='content'>
-                <h2>親愛的 {$parentName} 家長，您好！</h2>
+                <h2>親愛的 {$parentName} ，您好！</h2>
                 
                 <div class='reminder-box'>
                     <h3>📅 活動即將開始</h3>

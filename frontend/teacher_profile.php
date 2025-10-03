@@ -167,25 +167,46 @@
     </div>
 
     <script>
-        // 頁面載入時檢查是否已有個人資料
+        // 頁面載入時檢查是否已有個人資料（暫時禁用，避免 500 錯誤）
         window.addEventListener('load', function() {
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
             if (username) {
-                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
+                // 暫時禁用自動填入功能，等後端服務器修復後再啟用
+                console.log('個人資料檢查功能已暫時禁用');
+                return;
+                
+                // 使用 AbortController 來設置超時
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
+                
+                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+                    signal: controller.signal,
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                })
                     .then(response => {
+                        clearTimeout(timeoutId);
                         if (response.ok) {
                             return response.json();
+                        } else if (response.status === 404) {
+                            // 尚未填寫個人資料，不填入表單
+                            return null;
                         } else {
-                            throw new Error('尚未填寫個人資料');
+                            // 其他錯誤狀態碼，靜默處理
+                            return null;
                         }
                     })
                     .then(data => {
-                        // 如果已有資料，填入表單
-                        document.getElementById('department').value = data.department;
+                        if (data) {
+                            // 如果已有資料，填入表單
+                            document.getElementById('department').value = data.department;
                         document.getElementById('phone').value = data.phone;
                     })
                     .catch(error => {
-                        console.log('尚未填寫個人資料或發生錯誤');
+                        clearTimeout(timeoutId);
+                        // 靜默處理錯誤，不顯示任何錯誤訊息
                     });
             }
         });
@@ -203,11 +224,17 @@
             formData.append('department', department);
             formData.append('phone', phone);
             
-                    fetch('http://100.79.58.120:5000/teacher/profile', {
-            method: 'POST',
-            body: formData
-        })
+            // 使用 AbortController 來設置超時
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
+            
+            fetch('http://100.79.58.120:5000/teacher/profile', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            })
             .then(response => {
+                clearTimeout(timeoutId);
                 return response.json().then(data => {
                     const messageDiv = document.getElementById('message');
                     if (response.ok) {
@@ -215,11 +242,12 @@
                         messageDiv.textContent = data.message;
                     } else {
                         messageDiv.className = 'message error';
-                        messageDiv.textContent = data.message;
+                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
                     }
                 });
             })
             .catch(error => {
+                clearTimeout(timeoutId);
                 const messageDiv = document.getElementById('message');
                 messageDiv.className = 'message error';
                 messageDiv.textContent = '保存失敗，請稍後再試。';

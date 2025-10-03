@@ -225,25 +225,43 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			const role = '<?php echo isset($_SESSION['role']) ? $_SESSION['role'] : ''; ?>';
 			const reminder = document.getElementById('profileReminder');
 			
-			if (username && role === '老師' && reminder) {
-				        fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
-				.then(response => {
-					if (response.status === 404) {
-						// 尚未填寫個人資料，顯示提醒
-						reminder.style.display = 'block';
-					} else {
-						// 已填寫個人資料，隱藏提醒
-						reminder.style.display = 'none';
-					}
-				})
-				.catch(error => {
-					console.log('檢查個人資料時發生錯誤');
-				});
-			}
+			// 暫時禁用此功能，避免 500 錯誤
+			// 等後端服務器修復後再啟用
+			console.log('個人資料提醒檢查功能已暫時禁用');
+			return;
+			
+		if (username && role === '老師' && reminder) {
+			// 使用 AbortController 來設置超時
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
+			
+			fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+				signal: controller.signal,
+				method: 'GET',
+				headers: {
+					'Accept': 'application/json',
+				}
+			})
+			.then(response => {
+				clearTimeout(timeoutId);
+				if (response.status === 404) {
+					// 尚未填寫個人資料，顯示提醒
+					reminder.style.display = 'block';
+				} else if (response.ok) {
+					// 已填寫個人資料，隱藏提醒
+					reminder.style.display = 'none';
+				}
+				// 對於其他狀態碼（包括500），不做任何處理
+			})
+			.catch(error => {
+				clearTimeout(timeoutId);
+				// 靜默處理錯誤，不顯示任何錯誤訊息
+			});
+		}
 		}
 
-		// 頁面載入時檢查
-		window.addEventListener('load', checkProfileReminder);
+		// 頁面載入時檢查（暫時禁用）
+		// window.addEventListener('load', checkProfileReminder);
 	</script>
 	
     <?php include("share/footer.php"); ?>

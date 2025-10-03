@@ -12,13 +12,11 @@
 </footer>
 
 <style>
-    html, body {
+    /* 只在非推薦報名頁面應用 flexbox 佈局 */
+    body:not(.recommend-page-wrapper) {
         height: 100%;
         margin: 0;
         padding: 0;
-    }
-
-    body {
         display: flex;
         flex-direction: column;
         min-height: 100vh;
@@ -38,6 +36,23 @@
         position: relative; /* ❌ 不要再用 fixed */
         width: 100%;
         z-index: 100;
+    }
+
+    /* 推薦報名頁面的 footer 樣式 */
+    .recommend-page-wrapper + .footer {
+        margin-top: 0;
+        position: relative;
+    }
+
+    /* 確保推薦報名頁面的 footer 正確顯示 */
+    .recommend-page-wrapper {
+        position: relative;
+        min-height: 100vh;
+    }
+
+    .recommend-page-wrapper .footer {
+        margin-top: 0;
+        position: relative;
     }
 
     .footer-nav {

@@ -47,19 +47,41 @@ function getResourcePath($resourceFile) {
   }
 
   .container {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: 0 20px;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    min-width: 0;
   }
 
   .logo {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex-shrink: 0;
+    margin-right: 40px;
+  }
+
+  .navbar-links {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .navbar-user {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 40px;
   }
 
   .logo-icon {
@@ -87,6 +109,7 @@ function getResourcePath($resourceFile) {
     color: #2c3e50;
     margin: 0;
     line-height: 1.2;
+    white-space: nowrap;
   }
 
   .logo-subtitle {
@@ -94,12 +117,11 @@ function getResourcePath($resourceFile) {
     color: #7f8c8d;
     margin: 0;
     font-weight: 500;
+    white-space: nowrap;
   }
 
-  .navbar-links {
-    display: flex;
-    align-items: center;
-    gap: 30px;
+  .navbar-links::-webkit-scrollbar {
+    display: none;
   }
 
   .navbar-links a {
@@ -111,6 +133,8 @@ function getResourcePath($resourceFile) {
     border-radius: 8px;
     transition: all 0.3s ease;
     position: relative;
+    white-space: nowrap;
+    min-width: fit-content;
   }
 
   .navbar-links a:hover {
@@ -120,10 +144,6 @@ function getResourcePath($resourceFile) {
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   }
 
-  .navbar-user {
-    display: flex;
-    align-items: center;
-  }
 
   .auth-buttons {
     display: flex;
@@ -146,6 +166,8 @@ function getResourcePath($resourceFile) {
     font-weight: 600;
     cursor: pointer;
     border: none;
+    white-space: nowrap;
+    min-width: fit-content;
   }
 
   .btn-auth:hover {
@@ -382,7 +404,15 @@ function getResourcePath($resourceFile) {
   }
 
   /* 響應式設計 */
-  @media (max-width: 1024px) {
+  @media (max-width: 1200px) {
+    .logo {
+      margin-right: 30px;
+    }
+
+    .navbar-user {
+      margin-left: 30px;
+    }
+
     .navbar-links {
       gap: 20px;
     }
@@ -390,28 +420,61 @@ function getResourcePath($resourceFile) {
     .navbar-links a {
       font-size: 0.9rem;
       padding: 8px 12px;
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    .logo {
+      margin-right: 20px;
+    }
+
+    .navbar-user {
+      margin-left: 20px;
+    }
+
+    .navbar-links {
+      gap: 15px;
+    }
+
+    .navbar-links a {
+      font-size: 0.85rem;
+      padding: 8px 10px;
+      white-space: nowrap;
     }
 
     .logo-title {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
+      white-space: nowrap;
     }
 
     .logo-subtitle {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
+      white-space: nowrap;
     }
   }
 
   @media (max-width: 768px) {
+    .logo {
+      margin-right: 15px;
+    }
+
+    .navbar-user {
+      margin-left: 15px;
+    }
+
     .navbar-links {
       display: none;
     }
 
     .logo-title {
       font-size: 1rem;
+      white-space: nowrap;
     }
 
     .logo-subtitle {
       font-size: 0.7rem;
+      white-space: nowrap;
     }
 
     .logo-icon {
@@ -421,12 +484,13 @@ function getResourcePath($resourceFile) {
     }
 
     .auth-buttons {
-      gap: 10px;
+      gap: 8px;
     }
 
     .btn-auth {
-      padding: 8px 15px;
-      font-size: 0.8rem;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      white-space: nowrap;
     }
   }
 
@@ -557,7 +621,15 @@ function getResourcePath($resourceFile) {
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
-  
+    <a href="<?php echo getCorrectPath('continued_admission.php'); ?>">續招報名</a>
+    <a href="<?php echo getCorrectPath('admission.php'); ?>">五專入學說明會</a>
+    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>">推薦報名</a>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+      <a href="<?php echo getCorrectPath('records.php'); ?>">活動紀錄填報表單</a>
+    <?php endif; ?>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
+      <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>">推薦管理</a>
+    <?php endif; ?>
   </div>
 
 <?php if ($isLoggedIn): ?>
@@ -846,25 +918,43 @@ function checkTeacherProfile() {
   const role = '<?php echo isset($_SESSION['role']) ? $_SESSION['role'] : ''; ?>';
   const notificationDot = document.getElementById('notificationDot');
   
-  if (username && role === '老師') {
-                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`)
+  // 暫時禁用此功能，避免 500 錯誤
+  // 等後端服務器修復後再啟用
+  return;
+  
+  if (username && role === '老師' && notificationDot) {
+    // 使用 AbortController 來設置超時
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超時
+    
+    fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+      signal: controller.signal,
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      }
+    })
       .then(response => {
+        clearTimeout(timeoutId);
         if (response.status === 404) {
           // 尚未填寫個人資料，顯示紅點
           notificationDot.style.display = 'block';
-        } else {
+        } else if (response.ok) {
           // 已填寫個人資料，隱藏紅點
           notificationDot.style.display = 'none';
         }
+        // 對於其他狀態碼（包括500），不做任何處理
       })
       .catch(error => {
-        console.log('檢查個人資料時發生錯誤');
+        clearTimeout(timeoutId);
+        // 靜默處理錯誤，不顯示任何錯誤訊息
+        // 這樣可以避免在控制台顯示 500 錯誤或網路錯誤
       });
   }
 }
 
-// 頁面載入時檢查
-window.addEventListener('load', checkTeacherProfile);
+// 頁面載入時檢查（暫時禁用）
+// window.addEventListener('load', checkTeacherProfile);
 
 </script>
 
