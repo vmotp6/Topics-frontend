@@ -18,59 +18,56 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 根據角色獲取不同的資料
-    if ($role === '廠商') {
-        // 廠商：獲取所有教師列表
+    if ($role === '學生') {
+        // 學生：獲取所有教師列表和所有其他學生
         $contacts = [];
         
-        // 獲取所有老師
-        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
-                              FROM teacher t 
-                              JOIN user u ON t.user_id = u.id 
+        // 獲取所有老師（不依賴 teacher 表）
+        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '老師' as contact_type
+                              FROM user u 
                               WHERE u.role = '老師'
-                              ORDER BY t.name");
+                              ORDER BY u.username");
         $stmt->execute();
         $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $contacts = array_merge($contacts, $allTeachers);
+        
+        // 獲取所有其他學生（排除自己）
+        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, 
+                              CONCAT('S', LPAD(u.id, 3, '0')) as student_id, '未設定' as grade, '未設定' as class_name
+                              FROM user u 
+                              WHERE u.role = 'student' AND u.username != ?
+                              ORDER BY u.username");
+        $stmt->execute([$username]);
+        $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $contacts = array_merge($contacts, $allStudents);
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
             $contacts = [];
         }
     } elseif ($role === '老師') {
-        // 老師：獲取同科系老師和曾經有私信過的廠商
+        // 老師：獲取同科系老師和所有學生
         $contacts = [];
         
-        // 先獲取當前老師的科系
-        $stmt = $pdo->prepare("SELECT t.department FROM teacher t 
-                              JOIN user u ON t.user_id = u.id 
-                              WHERE u.username = ? AND u.role = '老師'");
+        // 獲取所有其他老師（不依賴 teacher 表）
+        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '老師' as contact_type
+                              FROM user u 
+                              WHERE u.role = '老師' AND u.username != ?
+                              ORDER BY u.username");
         $stmt->execute([$username]);
-        $currentTeacher = $stmt->fetch(PDO::FETCH_ASSOC);
+        $otherTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $contacts = array_merge($contacts, $otherTeachers);
         
-        if ($currentTeacher) {
-            $department = $currentTeacher['department'];
-            
-            // 獲取同科系的老師
-            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
-                                  FROM teacher t 
-                                  JOIN user u ON t.user_id = u.id 
-                                  WHERE u.role = '老師' AND t.department = ? AND u.username != ?
-                                  ORDER BY t.name");
-            $stmt->execute([$department, $username]);
-            $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $sameDeptTeachers);
-            
-            // 獲取曾經有私信過老師的廠商
-            $stmt = $pdo->prepare("SELECT DISTINCT u.username as username, u.username as name, '廠商' as contact_type, '廠商' as department
-                                  FROM user u 
-                                  JOIN private_chat_history pm ON (u.username COLLATE utf8mb4_unicode_ci = pm.from_user COLLATE utf8mb4_unicode_ci OR u.username COLLATE utf8mb4_unicode_ci = pm.to_user COLLATE utf8mb4_unicode_ci)
-                                  WHERE u.role = '廠商' 
-                                  AND (pm.from_user COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci OR pm.to_user COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci)
-                                  ORDER BY u.username");
-            $stmt->execute([$username, $username]);
-            $vendorsWithMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $vendorsWithMessages);
-        }
+        // 獲取所有學生（直接從 user 表）
+        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, 
+                              CONCAT('S', LPAD(u.id, 3, '0')) as student_id, '未設定' as grade, '未設定' as class_name
+                              FROM user u 
+                              WHERE u.role = 'student'
+                              ORDER BY u.username");
+        $stmt->execute();
+        $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $contacts = array_merge($contacts, $allStudents);
+        
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
@@ -93,8 +90,8 @@ try {
  
 </head>
 <body>
-  <?php if ($role === '廠商'): ?>
-    <!-- 廠商聊天介面 -->
+  <?php if ($role === '學生'): ?>
+    <!-- 學生聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
       <div class="sidebar">
@@ -113,6 +110,12 @@ try {
           <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
           <ul class="user-list">
             <?php if (!empty($contacts)): ?>
+              <?php
+              // 按照名稱排序聯絡人
+              usort($contacts, function($a, $b) {
+                  return strcmp($a['name'], $b['name']);
+              });
+              ?>
               <?php foreach ($contacts as $contact): ?>
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private">
                 <div class="user-avatar">
@@ -136,14 +139,14 @@ try {
       <div class="chat-main">
         <div class="chat-header">
           <div class="current-chat-info">
-            <div class="current-chat-name">選擇教師開始聊天</div>
+            <div class="current-chat-name">選擇聯絡人開始聊天</div>
             <div class="current-chat-role"></div>
           </div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
           <div class="no-chat-selected">
-            請從左側選擇一位教師開始聊天
+            請從左側選擇一位聯絡人開始聊天
           </div>
         </div>
         
@@ -154,16 +157,19 @@ try {
       </div>
     </div>
 
-  <?php elseif ($role === '老師' || $role === '廠商'): ?>
-    <!-- 老師和廠商聊天介面 -->
+  <?php elseif ($role === '老師'): ?>
+    <!-- 老師聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
       <div class="sidebar">
         <div class="sidebar-header">
           <h2 class="sidebar-title">聯絡人列表</h2>
-          <?php if ($role === '老師'): ?>
           <button id="createGroupBtn" style="margin-top: 10px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
-          <?php endif; ?>
+        </div>
+        
+        <!-- 搜尋功能 -->
+        <div class="search-container" style="margin: 15px 0; padding: 0 10px;">
+          <input type="text" id="searchInput" placeholder="🔍 搜尋學生或老師..." style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; outline: none;">
         </div>
         
         <!-- 群組列表 -->
@@ -175,16 +181,36 @@ try {
         <!-- 聯絡人列表 -->
         <div id="contactList">
           <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
-          <ul class="user-list">
+          <ul class="user-list" id="userList">
             <?php if (!empty($contacts)): ?>
+              <?php
+              // 按照名稱排序聯絡人
+              usort($contacts, function($a, $b) {
+                  return strcmp($a['name'], $b['name']);
+              });
+              ?>
               <?php foreach ($contacts as $contact): ?>
-              <li class="user-item" data-user-id="<?php echo $contact['username'] ?? $contact['vendor_id']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name'] ?? $contact['vendor_name']); ?>" data-chat-type="private">
+              <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-search-text="<?php echo strtolower(htmlspecialchars($contact['name'] . ' ' . ($contact['department'] ?? '') . ' ' . ($contact['student_id'] ?? '') . ' ' . ($contact['grade'] ?? '') . ' ' . ($contact['class_name'] ?? ''))); ?>">
                 <div class="user-avatar">
-                  <?php echo strtoupper(substr($contact['name'] ?? $contact['vendor_name'], 0, 1)); ?>
+                  <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                 </div>
                 <div class="user-info">
-                  <div class="user-name"><?php echo htmlspecialchars($contact['name'] ?? $contact['vendor_name']); ?></div>
-                  <div class="user-role"><?php echo htmlspecialchars($contact['department'] ?? '廠商'); ?></div>
+                  <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                  <div class="user-role">
+                    <?php 
+                    if ($contact['contact_type'] === '學生') {
+                        echo htmlspecialchars($contact['department'] ?? '學生');
+                        if (isset($contact['grade']) && isset($contact['class_name'])) {
+                            echo ' - ' . htmlspecialchars($contact['grade'] . ' ' . $contact['class_name']);
+                        }
+                        if (isset($contact['student_id'])) {
+                            echo ' (' . htmlspecialchars($contact['student_id']) . ')';
+                        }
+                    } else {
+                        echo htmlspecialchars($contact['department'] ?? '老師');
+                    }
+                    ?>
+                  </div>
                   <div class="contact-type"><?php echo $contact['contact_type']; ?></div>
                 </div>
               </li>
@@ -245,7 +271,7 @@ try {
         console.log('清除所有聊天記錄快取');
     }
     
-    <?php if ($role === '廠商' || $role === '老師'): ?>
+    <?php if ($role === '學生' || $role === '老師'): ?>
     // 載入群組列表
     async function loadGroups() {
       try {
@@ -538,16 +564,41 @@ try {
       const contacts = <?php echo json_encode($contacts ?? []); ?>;
       let html = '';
       
-      contacts.forEach(contact => {
-        const displayName = contact.name || contact.vendor_name;
-        const role = contact.contact_type;
-        html += `
-          <div style="margin: 5px 0;">
-            <input type="checkbox" id="member_${contact.username || contact.vendor_id}" value="${contact.username || contact.vendor_id}" data-role="${role}">
-            <label for="member_${contact.username || contact.vendor_id}">${displayName} (${role})</label>
-          </div>
-        `;
-      });
+      // 分組顯示：老師和學生
+      const teachers = contacts.filter(contact => contact.contact_type === '老師');
+      const students = contacts.filter(contact => contact.contact_type === '學生');
+      
+      if (teachers.length > 0) {
+        html += '<h4 style="margin: 10px 0 5px 0; color: #333;">👨‍🏫 老師</h4>';
+        teachers.forEach(contact => {
+          const displayName = contact.name;
+          const role = contact.contact_type;
+          html += `
+            <div style="margin: 5px 0; padding-left: 10px;">
+              <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}">
+              <label for="member_${contact.username}">${displayName} (${contact.department || '老師'})</label>
+            </div>
+          `;
+        });
+      }
+      
+      if (students.length > 0) {
+        html += '<h4 style="margin: 15px 0 5px 0; color: #333;">👨‍🎓 學生</h4>';
+        students.forEach(contact => {
+          const displayName = contact.name;
+          const role = contact.contact_type;
+          const studentInfo = contact.department || '學生';
+          const gradeClass = contact.grade && contact.class_name ? ` - ${contact.grade} ${contact.class_name}` : '';
+          const studentId = contact.student_id ? ` (${contact.student_id})` : '';
+          
+          html += `
+            <div style="margin: 5px 0; padding-left: 10px;">
+              <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}">
+              <label for="member_${contact.username}">${displayName} - ${studentInfo}${gradeClass}${studentId}</label>
+            </div>
+          `;
+        });
+      }
       
       return html || '<p style="color: #999;">暫無聯絡人可選擇</p>';
     }
@@ -864,8 +915,33 @@ try {
       }
     });
     
+    // 搜尋功能
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const userItems = document.querySelectorAll('.user-item');
+        
+        userItems.forEach(item => {
+          const searchText = item.getAttribute('data-search-text') || '';
+          if (searchText.includes(searchTerm)) {
+            item.style.display = 'flex';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+        
+        // 如果搜尋框為空，顯示所有項目
+        if (searchTerm === '') {
+          userItems.forEach(item => {
+            item.style.display = 'flex';
+          });
+        }
+      });
+    }
+    
     // 初始化群組列表
-    if (role === '老師' || role === '廠商') {
+    if (role === '老師' || role === '學生') {
       loadGroups();
     }
     

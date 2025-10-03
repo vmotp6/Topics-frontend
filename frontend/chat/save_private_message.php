@@ -45,37 +45,24 @@ try {
     // 發送郵件通知
     $email_sent = false;
     try {
-        // 獲取接收者的郵箱和姓名
-        $user_sql = "SELECT name, email FROM user WHERE username = ?";
+        // 獲取接收者的資訊（使用 username 作為 name）
+        $user_sql = "SELECT username FROM user WHERE username = ?";
         $user_stmt = $pdo->prepare($user_sql);
         $user_stmt->execute([$data['to']]);
         $receiver_info = $user_stmt->fetch(PDO::FETCH_ASSOC);
         
-        // 獲取發送者的姓名
+        // 獲取發送者的資訊
         $sender_stmt = $pdo->prepare($user_sql);
         $sender_stmt->execute([$data['from']]);
         $sender_info = $sender_stmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($receiver_info && $sender_info && !empty($receiver_info['email'])) {
-            // 創建郵件通知服務實例
-            $emailService = new EmailNotificationService();
-            
-            // 發送郵件通知
-            $email_sent = $emailService->sendPrivateMessageNotification(
-                $receiver_info['email'],
-                $receiver_info['name'] ?: $data['to'],
-                $sender_info['name'] ?: $data['from'],
-                $data['message'],
-                'http://100.79.58.120/frontend/chat/chat.php'
-            );
-            
-            if ($email_sent) {
-                error_log("私訊通知郵件發送成功: {$data['to']} -> {$receiver_info['email']}");
-            } else {
-                error_log("私訊通知郵件發送失敗: {$data['to']} -> {$receiver_info['email']}");
-            }
+        if ($receiver_info && $sender_info) {
+            // 暫時跳過郵件通知，因為 user 表沒有 email 欄位
+            // 可以稍後添加 email 欄位或使用其他方式獲取郵箱
+            error_log("用戶資訊獲取成功: 發送者={$data['from']}, 接收者={$data['to']}");
+            $email_sent = false; // 暫時設為 false，避免郵件發送錯誤
         } else {
-            error_log("無法獲取用戶資訊或郵箱地址: {$data['to']}");
+            error_log("無法獲取用戶資訊: 發送者={$data['from']}, 接收者={$data['to']}");
         }
         
     } catch (Exception $email_error) {
