@@ -1,6 +1,6 @@
 <?php
 // 載入 reCAPTCHA 設定
-require_once 'recaptcha_config.php';
+require_once '../../config/recaptcha_config.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -53,6 +53,7 @@ try {
             current_grade VARCHAR(50) NULL,
             line_id VARCHAR(255) NULL,
             facebook VARCHAR(255) NULL,
+            recommended_teacher VARCHAR(255) NULL,
             remarks TEXT NULL,
             status ENUM('pending', 'contacted', 'enrolled') DEFAULT 'pending',
             admin_comment TEXT NULL,
@@ -94,13 +95,18 @@ try {
         return $json['success'] === true;
     }
     
-    // 驗證 reCAPTCHA
-    $recaptcha_response = $_POST['g-recaptcha-response'] ?? '';
+    // 驗證驗證碼
+    session_start();
+    $captcha_input = $_POST['captcha'] ?? '';
+    $captcha_session = $_SESSION['captcha_code'] ?? '';
     
-    if (empty($recaptcha_response) || !verifyRecaptcha($recaptcha_response, RECAPTCHA_SECRET_KEY)) {
-        echo json_encode(['success' => false, 'message' => 'reCAPTCHA 驗證失敗，請重新驗證']);
+    if (empty($captcha_input) || empty($captcha_session) || $captcha_input !== $captcha_session) {
+        echo json_encode(['success' => false, 'message' => '驗證碼錯誤，請重新輸入']);
         exit;
     }
+    
+    // 清除已使用的驗證碼
+    unset($_SESSION['captcha_code']);
     
     // 檢查必要欄位
     $required_fields = ['username', 'name', 'identity', 'phone1'];
@@ -118,13 +124,13 @@ try {
         intention1, system1, department1,
         intention2, system2, department2,
         intention3, system3, department3,
-        junior_high, current_grade, line_id, facebook, remarks
+        junior_high, current_grade, line_id, facebook, recommended_teacher, remarks
     ) VALUES (
         :username, :name, :identity, :gender, :phone1, :phone2, :email,
         :intention1, :system1, :department1,
         :intention2, :system2, :department2,
         :intention3, :system3, :department3,
-        :junior_high, :current_grade, :line_id, :facebook, :remarks
+        :junior_high, :current_grade, :line_id, :facebook, :recommended_teacher, :remarks
     )";
     
     $stmt = $pdo->prepare($sql);
@@ -150,6 +156,7 @@ try {
         ':current_grade' => $_POST['current_grade'] ?? null,
         ':line_id' => $_POST['line_id'] ?? null,
         ':facebook' => $_POST['facebook'] ?? null,
+        ':recommended_teacher' => $_POST['recommended_teacher'] ?? null,
         ':remarks' => $_POST['remarks'] ?? null
     ]);
     

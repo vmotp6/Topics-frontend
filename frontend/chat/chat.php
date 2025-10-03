@@ -18,56 +18,69 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 根據角色獲取不同的資料
-    if ($role === '學生') {
-        // 學生：獲取所有教師列表和所有其他學生
+    if ($role === '學生' || $role === 'student') {
+        // 學生：獲取所有教師列表
         $contacts = [];
         
-        // 獲取所有老師（不依賴 teacher 表）
-        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '老師' as contact_type
-                              FROM user u 
+        // 獲取所有老師
+        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+                              FROM teacher t 
+                              JOIN user u ON t.user_id = u.id 
                               WHERE u.role = '老師'
-                              ORDER BY u.username");
+                              ORDER BY t.name");
         $stmt->execute();
         $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $contacts = array_merge($contacts, $allTeachers);
-        
-        // 獲取所有其他學生（排除自己）
-        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, 
-                              CONCAT('S', LPAD(u.id, 3, '0')) as student_id, '未設定' as grade, '未設定' as class_name
-                              FROM user u 
-                              WHERE u.role = 'student' AND u.username != ?
-                              ORDER BY u.username");
-        $stmt->execute([$username]);
-        $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $contacts = array_merge($contacts, $allStudents);
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
             $contacts = [];
         }
-    } elseif ($role === '老師') {
+    } elseif ($role === '老師' || $role === 'teacher') {
         // 老師：獲取同科系老師和所有學生
         $contacts = [];
         
-        // 獲取所有其他老師（不依賴 teacher 表）
-        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '老師' as contact_type
-                              FROM user u 
-                              WHERE u.role = '老師' AND u.username != ?
-                              ORDER BY u.username");
+        // 先獲取當前老師的科系
+        $stmt = $pdo->prepare("SELECT t.department FROM teacher t 
+                              JOIN user u ON t.user_id = u.id 
+                              WHERE u.username = ? AND u.role = '老師'");
         $stmt->execute([$username]);
-        $otherTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $contacts = array_merge($contacts, $otherTeachers);
+        $currentTeacher = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // 獲取所有學生（直接從 user 表）
-        $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, 
-                              CONCAT('S', LPAD(u.id, 3, '0')) as student_id, '未設定' as grade, '未設定' as class_name
-                              FROM user u 
-                              WHERE u.role = 'student'
-                              ORDER BY u.username");
-        $stmt->execute();
-        $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $contacts = array_merge($contacts, $allStudents);
-        
+        if ($currentTeacher) {
+            $department = $currentTeacher['department'];
+            
+            // 獲取同科系的老師
+            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+                                  FROM teacher t 
+                                  JOIN user u ON t.user_id = u.id 
+                                  WHERE u.role = '老師' AND t.department = ? AND u.username != ?
+                                  ORDER BY t.name");
+            $stmt->execute([$department, $username]);
+            $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $contacts = array_merge($contacts, $sameDeptTeachers);
+            
+            // 獲取所有學生
+            try {
+                $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, '學生' as contact_type, s.grade, s.class_name
+                                      FROM student s 
+                                      JOIN user u ON s.user_id = u.id 
+                                      WHERE u.role = '學生'
+                                      ORDER BY s.department, s.grade, s.name");
+                $stmt->execute();
+                $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $contacts = array_merge($contacts, $allStudents);
+            } catch (PDOException $e) {
+                // 如果學生表不存在或結構不同，使用用戶表
+                $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
+                                      FROM user u 
+                                      WHERE u.role = '學生'
+                                      ORDER BY u.username");
+                $stmt->execute();
+                $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $contacts = array_merge($contacts, $allStudents);
+            }
+        }
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
@@ -86,11 +99,13 @@ try {
   <meta charset="UTF-8">
   <?php include("../share/header.php"); ?>
   <link rel="stylesheet" href="../assets/csp/chat.css">
+  <link rel="stylesheet" href="color_schemes.css">
   <title>聊天室</title>
+  <script src="fcm_client.js"></script>
  
 </head>
 <body>
-  <?php if ($role === '學生'): ?>
+  <?php if ($role === '學生' || $role === 'student'): ?>
     <!-- 學生聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
@@ -110,12 +125,6 @@ try {
           <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
           <ul class="user-list">
             <?php if (!empty($contacts)): ?>
-              <?php
-              // 按照名稱排序聯絡人
-              usort($contacts, function($a, $b) {
-                  return strcmp($a['name'], $b['name']);
-              });
-              ?>
               <?php foreach ($contacts as $contact): ?>
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private">
                 <div class="user-avatar">
@@ -139,14 +148,14 @@ try {
       <div class="chat-main">
         <div class="chat-header">
           <div class="current-chat-info">
-            <div class="current-chat-name">選擇聯絡人開始聊天</div>
+            <div class="current-chat-name">選擇老師開始聊天</div>
             <div class="current-chat-role"></div>
           </div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
           <div class="no-chat-selected">
-            請從左側選擇一位聯絡人開始聊天
+            請從左側選擇一位老師開始聊天
           </div>
         </div>
         
@@ -157,20 +166,29 @@ try {
       </div>
     </div>
 
-  <?php elseif ($role === '老師'): ?>
-    <!-- 老師聊天介面 -->
+  <?php elseif ($role === '老師' || $role === 'teacher' || $role === '學生' || $role === 'student'): ?>
+    <!-- 老師和學生聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
       <div class="sidebar">
         <div class="sidebar-header">
-          <h2 class="sidebar-title">聯絡人列表</h2>
-          <button id="createGroupBtn" style="margin-top: 10px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+          <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
+          <div style="margin-top: 10px;">
+            <?php if ($role === '老師' || $role === 'teacher'): ?>
+            <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+            <?php endif; ?>
+            <button id="notificationSettingsBtn" style="margin-right: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔔 通知設定</button>
+            <button id="colorPickerBtn" style="padding: 8px 16px; background: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎨 配色方案</button>
+          </div>
         </div>
         
-        <!-- 搜尋功能 -->
-        <div class="search-container" style="margin: 15px 0; padding: 0 10px;">
-          <input type="text" id="searchInput" placeholder="🔍 搜尋學生或老師..." style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 20px; font-size: 14px; outline: none;">
+        <!-- 搜尋框 -->
+        <?php if ($role === '老師' || $role === 'teacher'): ?>
+        <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
+          <input type="text" id="studentSearch" placeholder="搜尋學生姓名、學號或科系..." 
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
         </div>
+        <?php endif; ?>
         
         <!-- 群組列表 -->
         <div id="groupList" style="margin-bottom: 20px;">
@@ -181,36 +199,24 @@ try {
         <!-- 聯絡人列表 -->
         <div id="contactList">
           <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人</h3>
-          <ul class="user-list" id="userList">
+          <ul class="user-list">
             <?php if (!empty($contacts)): ?>
-              <?php
-              // 按照名稱排序聯絡人
-              usort($contacts, function($a, $b) {
-                  return strcmp($a['name'], $b['name']);
-              });
-              ?>
               <?php foreach ($contacts as $contact): ?>
-              <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-search-text="<?php echo strtolower(htmlspecialchars($contact['name'] . ' ' . ($contact['department'] ?? '') . ' ' . ($contact['student_id'] ?? '') . ' ' . ($contact['grade'] ?? '') . ' ' . ($contact['class_name'] ?? ''))); ?>">
+              <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-contact-type="<?php echo $contact['contact_type']; ?>" data-department="<?php echo htmlspecialchars($contact['department'] ?? ''); ?>" data-grade="<?php echo htmlspecialchars($contact['grade'] ?? ''); ?>" data-class="<?php echo htmlspecialchars($contact['class_name'] ?? ''); ?>">
                 <div class="user-avatar">
                   <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                 </div>
                 <div class="user-info">
                   <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                  <div class="user-role">
-                    <?php 
-                    if ($contact['contact_type'] === '學生') {
-                        echo htmlspecialchars($contact['department'] ?? '學生');
-                        if (isset($contact['grade']) && isset($contact['class_name'])) {
-                            echo ' - ' . htmlspecialchars($contact['grade'] . ' ' . $contact['class_name']);
-                        }
-                        if (isset($contact['student_id'])) {
-                            echo ' (' . htmlspecialchars($contact['student_id']) . ')';
-                        }
-                    } else {
-                        echo htmlspecialchars($contact['department'] ?? '老師');
-                    }
-                    ?>
+                  <div class="user-role"><?php echo htmlspecialchars($contact['department'] ?? ''); ?></div>
+                  <?php if ($contact['contact_type'] === '學生' && isset($contact['grade'])): ?>
+                  <div class="student-info" style="font-size: 12px; color: #666;">
+                    <?php echo htmlspecialchars($contact['grade']); ?>
+                    <?php if (isset($contact['class_name'])): ?>
+                    - <?php echo htmlspecialchars($contact['class_name']); ?>
+                    <?php endif; ?>
                   </div>
+                  <?php endif; ?>
                   <div class="contact-type"><?php echo $contact['contact_type']; ?></div>
                 </div>
               </li>
@@ -271,7 +277,7 @@ try {
         console.log('清除所有聊天記錄快取');
     }
     
-    <?php if ($role === '學生' || $role === '老師'): ?>
+    <?php if ($role === '學生' || $role === 'student' || $role === '老師' || $role === 'teacher'): ?>
     // 載入群組列表
     async function loadGroups() {
       try {
@@ -520,6 +526,22 @@ try {
       });
     }
     
+    // 通知設定按鈕事件
+    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn');
+    if (notificationSettingsBtn) {
+      notificationSettingsBtn.addEventListener('click', function() {
+        showNotificationSettings();
+      });
+    }
+    
+    // 配色方案按鈕事件
+    const colorPickerBtn = document.getElementById('colorPickerBtn');
+    if (colorPickerBtn) {
+      colorPickerBtn.addEventListener('click', function() {
+        window.open('color_picker.php', '_blank', 'width=800,height=600');
+      });
+    }
+    
     // 顯示建立群組模態框
     function showCreateGroupModal() {
       const modal = document.createElement('div');
@@ -564,41 +586,17 @@ try {
       const contacts = <?php echo json_encode($contacts ?? []); ?>;
       let html = '';
       
-      // 分組顯示：老師和學生
-      const teachers = contacts.filter(contact => contact.contact_type === '老師');
-      const students = contacts.filter(contact => contact.contact_type === '學生');
-      
-      if (teachers.length > 0) {
-        html += '<h4 style="margin: 10px 0 5px 0; color: #333;">👨‍🏫 老師</h4>';
-        teachers.forEach(contact => {
-          const displayName = contact.name;
-          const role = contact.contact_type;
-          html += `
-            <div style="margin: 5px 0; padding-left: 10px;">
-              <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}">
-              <label for="member_${contact.username}">${displayName} (${contact.department || '老師'})</label>
-            </div>
-          `;
-        });
-      }
-      
-      if (students.length > 0) {
-        html += '<h4 style="margin: 15px 0 5px 0; color: #333;">👨‍🎓 學生</h4>';
-        students.forEach(contact => {
-          const displayName = contact.name;
-          const role = contact.contact_type;
-          const studentInfo = contact.department || '學生';
-          const gradeClass = contact.grade && contact.class_name ? ` - ${contact.grade} ${contact.class_name}` : '';
-          const studentId = contact.student_id ? ` (${contact.student_id})` : '';
-          
-          html += `
-            <div style="margin: 5px 0; padding-left: 10px;">
-              <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}">
-              <label for="member_${contact.username}">${displayName} - ${studentInfo}${gradeClass}${studentId}</label>
-            </div>
-          `;
-        });
-      }
+      contacts.forEach(contact => {
+        const displayName = contact.name;
+        const role = contact.contact_type;
+        const additionalInfo = contact.contact_type === '學生' && contact.grade ? ` - ${contact.grade}` : '';
+        html += `
+          <div style="margin: 5px 0;">
+            <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}">
+            <label for="member_${contact.username}">${displayName} (${role})${additionalInfo}</label>
+          </div>
+        `;
+      });
       
       return html || '<p style="color: #999;">暫無聯絡人可選擇</p>';
     }
@@ -609,6 +607,151 @@ try {
       if (modal) {
         modal.remove();
       }
+    }
+    
+    // 顯示通知設定
+    function showNotificationSettings() {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      `;
+      
+      modal.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; width: 400px; max-height: 80vh; overflow-y: auto;">
+          <h3>🔔 通知設定</h3>
+          
+          <div style="margin: 15px 0;">
+            <label style="display: flex; align-items: center; margin-bottom: 10px;">
+              <input type="checkbox" id="chatNotifications" checked style="margin-right: 10px;">
+              聊天訊息通知
+            </label>
+            
+            <label style="display: flex; align-items: center; margin-bottom: 10px;">
+              <input type="checkbox" id="groupNotifications" checked style="margin-right: 10px;">
+              群組訊息通知
+            </label>
+            
+            <label style="display: flex; align-items: center; margin-bottom: 15px;">
+              <input type="checkbox" id="systemNotifications" checked style="margin-right: 10px;">
+              系統通知
+            </label>
+          </div>
+          
+          <div style="margin: 15px 0;">
+            <label>安靜時間：</label>
+            <div style="display: flex; align-items: center; margin-top: 5px;">
+              <input type="time" id="quietStart" value="22:00" style="margin-right: 10px;">
+              <span>到</span>
+              <input type="time" id="quietEnd" value="08:00" style="margin-left: 10px;">
+            </div>
+          </div>
+          
+          <div style="margin: 15px 0;">
+            <label>通知權限狀態：</label>
+            <div id="notificationStatus" style="margin-top: 5px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+              ${Notification.permission === 'granted' ? 
+                '<span style="color: green;">✅ 已啟用推播通知</span>' : 
+                '<span style="color: orange;">⚠️ 推播通知未啟用</span>'}
+            </div>
+          </div>
+          
+          <div style="text-align: right; margin-top: 20px;">
+            <button onclick="closeNotificationSettings()" style="margin-right: 10px; padding: 8px 16px;">取消</button>
+            <button onclick="saveNotificationSettings()" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px;">儲存</button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // 載入現有設定
+      loadNotificationSettings();
+    }
+    
+    // 載入通知設定
+    async function loadNotificationSettings() {
+      try {
+        const response = await fetch('fcm_api.php?action=get_notification_settings&username=' + username);
+        const result = await response.json();
+        
+        if (result.success && result.settings) {
+          const settings = result.settings;
+          document.getElementById('chatNotifications').checked = settings.chat_notifications;
+          document.getElementById('groupNotifications').checked = settings.group_notifications;
+          document.getElementById('systemNotifications').checked = settings.system_notifications;
+          document.getElementById('quietStart').value = settings.quiet_hours_start || '22:00';
+          document.getElementById('quietEnd').value = settings.quiet_hours_end || '08:00';
+        }
+      } catch (error) {
+        console.error('載入通知設定失敗:', error);
+      }
+    }
+    
+    // 儲存通知設定
+    async function saveNotificationSettings() {
+      try {
+        const settings = {
+          chat_notifications: document.getElementById('chatNotifications').checked,
+          group_notifications: document.getElementById('groupNotifications').checked,
+          system_notifications: document.getElementById('systemNotifications').checked,
+          quiet_hours_start: document.getElementById('quietStart').value,
+          quiet_hours_end: document.getElementById('quietEnd').value
+        };
+        
+        const response = await fetch('fcm_api.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update_notification_settings',
+            username: username,
+            settings: settings
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert('通知設定已儲存！');
+          closeNotificationSettings();
+        } else {
+          alert('儲存失敗: ' + result.error);
+        }
+        
+      } catch (error) {
+        console.error('儲存通知設定失敗:', error);
+        alert('儲存失敗: ' + error.message);
+      }
+    }
+    
+    // 關閉通知設定
+    function closeNotificationSettings() {
+      const modal = document.querySelector('div[style*="position: fixed"]');
+      if (modal) {
+        modal.remove();
+      }
+    }
+    
+    // 應用配色方案
+    function applyColorScheme() {
+      // 從PHP獲取配色方案
+      const colorScheme = '<?php echo $_SESSION["chat_color_scheme"] ?? "white"; ?>';
+      
+      // 移除現有的配色方案類
+      document.body.classList.remove('color-scheme-white', 'color-scheme-warm', 'color-scheme-mint', 'color-scheme-pink', 'color-scheme-gray', 'color-scheme-blue');
+      
+      // 添加新的配色方案類
+      document.body.classList.add(`color-scheme-${colorScheme}`);
     }
     
     // 建立群組
@@ -803,6 +946,7 @@ try {
       messages.forEach(message => {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
+        messageDiv.dataset.messageId = message.id;
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
@@ -811,6 +955,33 @@ try {
         const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = new Date(message.timestamp).toLocaleString();
+        
+        // 添加已讀狀態
+        if (message.from_user === username) {
+          // 自己發送的訊息，顯示已讀狀態
+          const readStatusDiv = document.createElement('div');
+          readStatusDiv.className = 'read-status';
+          readStatusDiv.style.cssText = `
+            font-size: 11px; 
+            margin-top: 4px; 
+            text-align: right;
+            font-weight: 500;
+          `;
+          
+          if (message.is_read && message.read_at) {
+            readStatusDiv.innerHTML = `
+              <span class="read-indicator read">✓ 已讀</span>
+              <span class="read-time">${new Date(message.read_at).toLocaleTimeString()}</span>
+            `;
+          } else {
+            readStatusDiv.innerHTML = '<span class="read-indicator unread">⏳ 未讀</span>';
+          }
+          
+          contentDiv.appendChild(readStatusDiv);
+        } else {
+          // 接收的訊息，標記為已讀
+          markMessageAsRead(message.id);
+        }
         
         contentDiv.appendChild(timeDiv);
         messageDiv.appendChild(contentDiv);
@@ -908,6 +1079,204 @@ try {
       }
     }
     
+    // 標記訊息為已讀
+    async function markMessageAsRead(messageId) {
+      try {
+        const response = await fetch('update_read_status.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'mark_as_read',
+            message_ids: [messageId],
+            reader: username
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          console.log('訊息已標記為已讀:', messageId);
+        }
+      } catch (error) {
+        console.error('標記已讀失敗:', error);
+      }
+    }
+    
+    // 獲取未讀訊息數量
+    async function getUnreadCount() {
+      try {
+        const response = await fetch(`update_read_status.php?action=get_unread_count&username=${username}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          // 更新未讀數量顯示
+          const unreadBadge = document.getElementById('unreadBadge');
+          if (unreadBadge) {
+            if (result.unread_count > 0) {
+              unreadBadge.textContent = result.unread_count;
+              unreadBadge.style.display = 'inline';
+            } else {
+              unreadBadge.style.display = 'none';
+            }
+          }
+        }
+      } catch (error) {
+        console.error('獲取未讀數量失敗:', error);
+      }
+    }
+    
+    // 更新用戶活動時間
+    async function updateUserActivity() {
+      try {
+        const response = await fetch('update_read_status.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update_activity',
+            username: username,
+            is_online: true
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          console.log('活動時間已更新');
+        }
+      } catch (error) {
+        console.error('更新活動時間失敗:', error);
+      }
+    }
+    
+    // 初始化FCM推播通知
+    async function initializeFCM() {
+      try {
+        // 檢查瀏覽器是否支援通知
+        if (!('Notification' in window)) {
+          console.log('此瀏覽器不支援推播通知');
+          return;
+        }
+        
+        // 請求通知權限
+        if (Notification.permission === 'default') {
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            console.log('用戶拒絕了通知權限');
+            return;
+          }
+        }
+        
+        if (Notification.permission === 'granted') {
+          // 註冊FCM token（模擬）
+          const fcmToken = 'web-token-' + username + '-' + Date.now();
+          await registerFCMToken(fcmToken);
+          
+          // 設置通知點擊處理
+          setupNotificationHandlers();
+          
+          console.log('FCM推播通知已啟用');
+        }
+        
+      } catch (error) {
+        console.error('FCM初始化失敗:', error);
+      }
+    }
+    
+    // 註冊FCM token
+    async function registerFCMToken(token) {
+      try {
+        const response = await fetch('fcm_api.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'register_token',
+            username: username,
+            fcm_token: token,
+            device_type: 'web',
+            device_info: JSON.stringify({
+              userAgent: navigator.userAgent,
+              platform: navigator.platform,
+              language: navigator.language,
+              timestamp: new Date().toISOString()
+            })
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          console.log('FCM token註冊成功');
+        } else {
+          console.error('FCM token註冊失敗:', result.error);
+        }
+        
+      } catch (error) {
+        console.error('註冊FCM token時發生錯誤:', error);
+      }
+    }
+    
+    // 設置通知處理器
+    function setupNotificationHandlers() {
+      // 監聽頁面可見性變化
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          // 頁面隱藏時，可以發送推播通知
+          console.log('頁面已隱藏，推播通知已啟用');
+        } else {
+          // 頁面可見時，更新活動狀態
+          updateUserActivity();
+        }
+      });
+      
+      // 監聽頁面關閉事件
+      window.addEventListener('beforeunload', function() {
+        // 標記用戶為離線
+        navigator.sendBeacon('update_read_status.php', JSON.stringify({
+          action: 'update_activity',
+          username: username,
+          is_online: false
+        }));
+      });
+    }
+    
+    // 顯示本地通知
+    function showLocalNotification(title, body, data = {}) {
+      if (Notification.permission === 'granted') {
+        const options = {
+          body: body,
+          icon: '/assets/icon-192x192.png',
+          badge: '/assets/badge-72x72.png',
+          tag: 'chat-notification',
+          data: data,
+          requireInteraction: false,
+          silent: false
+        };
+        
+        const notification = new Notification(title, options);
+        
+        notification.onclick = function(event) {
+          event.preventDefault();
+          window.focus();
+          
+          if (data.chat_url) {
+            window.open(data.chat_url, '_blank');
+          }
+          
+          notification.close();
+        };
+        
+        // 自動關閉通知
+        setTimeout(() => {
+          notification.close();
+        }, 5000);
+        
+        return notification;
+      }
+    }
+    
     // 按Enter發送訊息
     document.getElementById('messageInput').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
@@ -915,35 +1284,74 @@ try {
       }
     });
     
-    // 搜尋功能
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-      searchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const userItems = document.querySelectorAll('.user-item');
+    // 學生搜尋功能
+    <?php if ($role === '老師' || $role === 'teacher'): ?>
+    const studentSearchInput = document.getElementById('studentSearch');
+    if (studentSearchInput) {
+      studentSearchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        const userItems = document.querySelectorAll('.user-item[data-contact-type="學生"]');
         
         userItems.forEach(item => {
-          const searchText = item.getAttribute('data-search-text') || '';
-          if (searchText.includes(searchTerm)) {
+          const name = item.dataset.userName.toLowerCase();
+          const department = (item.dataset.department || '').toLowerCase();
+          const grade = (item.dataset.grade || '').toLowerCase();
+          const className = (item.dataset.class || '').toLowerCase();
+          
+          const matches = name.includes(searchTerm) || 
+                         department.includes(searchTerm) || 
+                         grade.includes(searchTerm) || 
+                         className.includes(searchTerm);
+          
+          if (matches || searchTerm === '') {
             item.style.display = 'flex';
           } else {
             item.style.display = 'none';
           }
         });
         
-        // 如果搜尋框為空，顯示所有項目
-        if (searchTerm === '') {
-          userItems.forEach(item => {
-            item.style.display = 'flex';
-          });
-        }
+        // 更新聯絡人計數
+        updateContactCount();
       });
     }
     
+    // 更新聯絡人計數
+    function updateContactCount() {
+      const visibleStudents = document.querySelectorAll('.user-item[data-contact-type="學生"]:not([style*="display: none"])');
+      const visibleTeachers = document.querySelectorAll('.user-item[data-contact-type="老師"]:not([style*="display: none"])');
+      
+      const contactListHeader = document.querySelector('#contactList h3');
+      if (contactListHeader) {
+        const searchTerm = studentSearchInput ? studentSearchInput.value.trim() : '';
+        if (searchTerm) {
+          contactListHeader.textContent = `聯絡人 (學生: ${visibleStudents.length}, 老師: ${visibleTeachers.length})`;
+        } else {
+          contactListHeader.textContent = '聯絡人';
+        }
+      }
+    }
+    <?php endif; ?>
+    
     // 初始化群組列表
-    if (role === '老師' || role === '學生') {
+    if (role === '老師' || role === 'teacher' || role === '學生' || role === 'student') {
       loadGroups();
     }
+    
+    // 初始化已讀功能
+    updateUserActivity(); // 更新活動時間
+    getUnreadCount(); // 獲取未讀數量
+    
+    // 初始化FCM推播通知
+    initializeFCM();
+    
+    // 應用配色方案
+    applyColorScheme();
+    
+    // 定期更新未讀數量和活動時間（每30秒）
+    setInterval(() => {
+      getUnreadCount();
+      updateUserActivity();
+    }, 30000);
     
     // 定期清理快取（每5分鐘清理一次）
     setInterval(() => {

@@ -42,38 +42,37 @@ try {
     
     $message_id = $pdo->lastInsertId();
     
-    // 發送郵件通知
-    $email_sent = false;
+    // 發送FCM推播通知
+    $notification_sent = false;
     try {
-        // 獲取接收者的資訊（使用 username 作為 name）
-        $user_sql = "SELECT username FROM user WHERE username = ?";
-        $user_stmt = $pdo->prepare($user_sql);
-        $user_stmt->execute([$data['to']]);
-        $receiver_info = $user_stmt->fetch(PDO::FETCH_ASSOC);
+        // 引入FCM服務
+        require_once 'fcm_service.php';
+        $fcmService = new FCMService();
         
-        // 獲取發送者的資訊
-        $sender_stmt = $pdo->prepare($user_sql);
-        $sender_stmt->execute([$data['from']]);
-        $sender_info = $sender_stmt->fetch(PDO::FETCH_ASSOC);
+        // 發送FCM推播通知
+        $fcmResult = $fcmService->sendChatNotification(
+            $data['to'],      // 接收者
+            $data['from'],    // 發送者
+            $data['message'], // 訊息內容
+            $message_id       // 訊息ID
+        );
         
-        if ($receiver_info && $sender_info) {
-            // 暫時跳過郵件通知，因為 user 表沒有 email 欄位
-            // 可以稍後添加 email 欄位或使用其他方式獲取郵箱
-            error_log("用戶資訊獲取成功: 發送者={$data['from']}, 接收者={$data['to']}");
-            $email_sent = false; // 暫時設為 false，避免郵件發送錯誤
+        if ($fcmResult && isset($fcmResult['success']) && $fcmResult['success'] > 0) {
+            $notification_sent = true;
+            error_log("FCM推播通知發送成功: 發送者={$data['from']}, 接收者={$data['to']}");
         } else {
-            error_log("無法獲取用戶資訊: 發送者={$data['from']}, 接收者={$data['to']}");
+            error_log("FCM推播通知發送失敗: " . json_encode($fcmResult));
         }
         
-    } catch (Exception $email_error) {
-        error_log("發送郵件通知時發生錯誤: " . $email_error->getMessage());
+    } catch (Exception $notification_error) {
+        error_log("發送FCM推播通知時發生錯誤: " . $notification_error->getMessage());
     }
     
     echo json_encode([
         'success' => true,
         'message' => '私聊訊息已儲存',
         'id' => $message_id,
-        'email_notification' => $email_sent ? 'sent' : 'failed'
+        'fcm_notification' => $notification_sent ? 'sent' : 'failed'
     ]);
     
 } catch(PDOException $e) {
