@@ -40,9 +40,9 @@ CREATE TABLE enrollment_applications (
 
 -- 插入一些測試資料（可選）
 INSERT INTO enrollment_applications (username, name, identity, gender, phone1, email, intention1, system1, department1, junior_high, current_grade, status) VALUES
-('test_student1', '張小明', '學生', '男', '0912345678', 'test1@example.com', '資訊工程學系', '大學部', '資訊工程學系', '中正國中', '國三', 'pending'),
-('test_parent1', '李媽媽', '家長', '女', '0923456789', 'test2@example.com', '企業管理學系', '大學部', '企業管理學系', '建國國中', '國二', 'contacted'),
-('test_student2', '王小華', '學生', '女', '0934567890', 'test3@example.com', '外國語文學系', '大學部', '外國語文學系', '復興國中', '國三', 'enrolled');
+('test_student1', '張小明', '學生', '男', '0912345678', 'test1@example.com', '資訊管理科', '五專', '資訊管理科', '中正國中', '國三', 'pending'),
+('test_parent1', '李媽媽', '家長', '女', '0923456789', 'test2@example.com', '企業管理科', '五專', '企業管理科', '建國國中', '國二', 'contacted'),
+('test_student2', '王小華', '學生', '女', '0934567890', 'test3@example.com', '應用外語科', '五專', '應用外語科', '復興國中', '國三', 'enrolled');
 
 -- 顯示建立結果
 SELECT 'enrollment_applications 資料表建立成功！' AS message;

@@ -108,7 +108,7 @@ try {
     
     echo "找到 " . count($teachers) . " 個老師用戶<br>";
     
-    $departments = ['資訊工程學系', '企業管理學系', '外國語文學系', '護理學系', '幼兒保育學系'];
+    $departments = ['資訊管理科', '企業管理科', '護理科', '幼保科', '應用外語科', '視光科', '動畫科'];
     
     foreach ($teachers as $index => $teacher) {
         // 檢查是否已經有老師詳細資料
@@ -139,7 +139,7 @@ try {
     
     echo "找到 " . count($students) . " 個學生用戶<br>";
     
-    $departments = ['資訊工程學系', '企業管理學系', '外國語文學系', '護理學系', '幼兒保育學系'];
+    $departments = ['資訊管理科', '企業管理科', '護理科', '幼保科', '應用外語科', '視光科', '動畫科'];
     $grades = ['一年級', '二年級', '三年級', '四年級'];
     
     foreach ($students as $index => $student) {
@@ -253,5 +253,7 @@ try {
     echo "<p>資料庫錯誤: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 ?>
+
+
 
 

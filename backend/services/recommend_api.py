@@ -7,7 +7,7 @@ from collections import defaultdict
 app = Flask(__name__)
 CORS(app)
 
-with open('departments_keywords.json', 'r', encoding='utf-8') as f:
+with open('../../scripts/setup/departments_keywords.json', 'r', encoding='utf-8') as f:
     DEPARTMENT_KEYWORDS = json.load(f)
 
 def count_weighted_keywords(text, keywords):

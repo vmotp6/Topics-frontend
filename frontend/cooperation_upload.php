@@ -498,12 +498,13 @@ $role = $_SESSION['role'] ?? '訪客';
                     <label for="intention1">就讀意願一:</label>
                     <select id="intention1" name="intention1">
                         <option value="無特定">無特定</option>
-                        <option value="資訊工程學系">資訊管理科科</option>
-                        <option value="電機工程學系">企業管理科</option>
-                        <option value="機械工程學系">護理科護理科學系</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
                         <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
                         <option value="應用外語科">應用外語科</option>
                         <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -521,12 +522,13 @@ $role = $_SESSION['role'] ?? '訪客';
                     <select id="department1" name="department1">
                         <option value="">請選擇</option>
                         <option value="無特定">無特定</option>
-                        <option value="資訊工程學系">資訊管理科科</option>
-                        <option value="電機工程學系">企業管理科</option>
-                        <option value="機械工程學系">護理科護理科學系</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
                         <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
                         <option value="應用外語科">應用外語科</option>
                         <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
             </div>
@@ -535,13 +537,14 @@ $role = $_SESSION['role'] ?? '訪客';
                 <div class="form-group">
                     <label for="intention2">就讀意願二:</label>
                     <select id="intention2" name="intention2">
-                    <option value="無特定">無特定</option>
-                        <option value="資訊工程學系">資訊管理科科</option>
-                        <option value="電機工程學系">企業管理科</option>
-                        <option value="機械工程學系">護理科護理科學系</option>
+                        <option value="無特定">無特定</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
                         <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
                         <option value="應用外語科">應用外語科</option>
                         <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -557,13 +560,15 @@ $role = $_SESSION['role'] ?? '訪客';
                 <div class="form-group">
                     <label for="department2">科系:</label>
                     <select id="department2" name="department2">
-                    <option value="無特定">無特定</option>
-                        <option value="資訊工程學系">資訊管理科科</option>
-                        <option value="電機工程學系">企業管理科</option>
-                        <option value="機械工程學系">護理科護理科學系</option>
+                        <option value="">請選擇</option>
+                        <option value="無特定">無特定</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
                         <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
                         <option value="應用外語科">應用外語科</option>
                         <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
             </div>
@@ -573,14 +578,13 @@ $role = $_SESSION['role'] ?? '訪客';
                     <label for="intention3">就讀意願三:</label>
                     <select id="intention3" name="intention3">
                         <option value="無特定">無特定</option>
-                        <option value="資訊工程學系">資訊工程學系</option>
-                        <option value="電機工程學系">電機工程學系</option>
-                        <option value="機械工程學系">機械工程學系</option>
-                        <option value="企業管理學系">企業管理學系</option>
-                        <option value="會計學系">會計學系</option>
-                        <option value="財務金融學系">財務金融學系</option>
-                        <option value="外國語文學系">外國語文學系</option>
-                        <option value="中國文學系">中國文學系</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
+                        <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
+                        <option value="應用外語科">應用外語科</option>
+                        <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -597,14 +601,14 @@ $role = $_SESSION['role'] ?? '訪客';
                     <label for="department3">科系:</label>
                     <select id="department3" name="department3">
                         <option value="">請選擇</option>
-                        <option value="資訊工程學系">資訊工程學系</option>
-                        <option value="電機工程學系">電機工程學系</option>
-                        <option value="機械工程學系">機械工程學系</option>
-                        <option value="企業管理學系">企業管理學系</option>
-                        <option value="會計學系">會計學系</option>
-                        <option value="財務金融學系">財務金融學系</option>
-                        <option value="外國語文學系">外國語文學系</option>
-                        <option value="中國文學系">中國文學系</option>
+                        <option value="無特定">無特定</option>
+                        <option value="資訊管理科">資訊管理科</option>
+                        <option value="企業管理科">企業管理科</option>
+                        <option value="護理科">護理科</option>
+                        <option value="幼保科">幼保科</option>
+                        <option value="應用外語科">應用外語科</option>
+                        <option value="視光科">視光科</option>
+                        <option value="動畫科">動畫科</option>
                     </select>
                 </div>
             </div>
@@ -782,52 +786,138 @@ $role = $_SESSION['role'] ?? '訪客';
         
         // 備用搜尋功能（當API不可用時）
         function searchSchoolFallback(keyword) {
-            // 基本學校資料庫（備用）
+            // 完整的台灣北部國中資料庫（備用）
             const fallbackSchools = [
+                // 台北市立國中
                 {name: '台北市立中正國中', city: '台北市', district: '中正區'},
                 {name: '台北市立建國中學', city: '台北市', district: '中正區'},
                 {name: '台北市立成功國中', city: '台北市', district: '中正區'},
+                {name: '台北市立弘道國中', city: '台北市', district: '中正區'},
+                {name: '台北市立古亭國中', city: '台北市', district: '中正區'},
+                {name: '台北市立螢橋國中', city: '台北市', district: '中正區'},
                 {name: '台北市立金華國中', city: '台北市', district: '大安區'},
                 {name: '台北市立敦化國中', city: '台北市', district: '大安區'},
                 {name: '台北市立仁愛國中', city: '台北市', district: '大安區'},
+                {name: '台北市立龍門國中', city: '台北市', district: '大安區'},
+                {name: '台北市立懷生國中', city: '台北市', district: '大安區'},
                 {name: '台北市立信義國中', city: '台北市', district: '信義區'},
+                {name: '台北市立興雅國中', city: '台北市', district: '信義區'},
+                {name: '台北市立永吉國中', city: '台北市', district: '信義區'},
                 {name: '台北市立松山國中', city: '台北市', district: '松山區'},
                 {name: '台北市立民生國中', city: '台北市', district: '松山區'},
+                {name: '台北市立西松國中', city: '台北市', district: '松山區'},
+                {name: '台北市立介壽國中', city: '台北市', district: '松山區'},
                 {name: '台北市立中山國中', city: '台北市', district: '中山區'},
+                {name: '台北市立大直國中', city: '台北市', district: '中山區'},
+                {name: '台北市立新興國中', city: '台北市', district: '中山區'},
                 {name: '台北市立南港國中', city: '台北市', district: '南港區'},
+                {name: '台北市立成德國中', city: '台北市', district: '南港區'},
+                {name: '台北市立誠正國中', city: '台北市', district: '南港區'},
                 {name: '台北市立內湖國中', city: '台北市', district: '內湖區'},
+                {name: '台北市立麗山國中', city: '台北市', district: '內湖區'},
+                {name: '台北市立三民國中', city: '台北市', district: '內湖區'},
+                {name: '台北市立東湖國中', city: '台北市', district: '內湖區'},
+                {name: '台北市立明湖國中', city: '台北市', district: '內湖區'},
                 {name: '台北市立士林國中', city: '台北市', district: '士林區'},
                 {name: '台北市立天母國中', city: '台北市', district: '士林區'},
+                {name: '台北市立格致國中', city: '台北市', district: '士林區'},
+                {name: '台北市立蘭雅國中', city: '台北市', district: '士林區'},
+                {name: '台北市立至善國中', city: '台北市', district: '士林區'},
                 {name: '台北市立北投國中', city: '台北市', district: '北投區'},
+                {name: '台北市立明德國中', city: '台北市', district: '北投區'},
+                {name: '台北市立石牌國中', city: '台北市', district: '北投區'},
+                {name: '台北市立關渡國中', city: '台北市', district: '北投區'},
                 {name: '台北市立文山國中', city: '台北市', district: '文山區'},
+                {name: '台北市立景美國中', city: '台北市', district: '文山區'},
+                {name: '台北市立木柵國中', city: '台北市', district: '文山區'},
+                {name: '台北市立實踐國中', city: '台北市', district: '文山區'},
                 {name: '台北市立萬華國中', city: '台北市', district: '萬華區'},
+                {name: '台北市立大理國中', city: '台北市', district: '萬華區'},
+                {name: '台北市立雙園國中', city: '台北市', district: '萬華區'},
+                {name: '台北市立龍山國中', city: '台北市', district: '萬華區'},
+                // 新北市立國中
                 {name: '新北市立板橋國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立海山國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立中山國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立重慶國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立江翠國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立大觀國中', city: '新北市', district: '板橋區'},
+                {name: '新北市立溪崑國中', city: '新北市', district: '板橋區'},
                 {name: '新北市立新莊國中', city: '新北市', district: '新莊區'},
+                {name: '新北市立頭前國中', city: '新北市', district: '新莊區'},
+                {name: '新北市立福營國中', city: '新北市', district: '新莊區'},
+                {name: '新北市立丹鳳國中', city: '新北市', district: '新莊區'},
+                {name: '新北市立中平國中', city: '新北市', district: '新莊區'},
                 {name: '新北市立三重國中', city: '新北市', district: '三重區'},
+                {name: '新北市立明志國中', city: '新北市', district: '三重區'},
+                {name: '新北市立碧華國中', city: '新北市', district: '三重區'},
+                {name: '新北市立正義國中', city: '新北市', district: '三重區'},
+                {name: '新北市立三和國中', city: '新北市', district: '三重區'},
+                {name: '新北市立光榮國中', city: '新北市', district: '三重區'},
                 {name: '新北市立中和國中', city: '新北市', district: '中和區'},
+                {name: '新北市立積穗國中', city: '新北市', district: '中和區'},
                 {name: '新北市立永和國中', city: '新北市', district: '永和區'},
+                {name: '新北市立福和國中', city: '新北市', district: '永和區'},
                 {name: '新北市立新店國中', city: '新北市', district: '新店區'},
+                {name: '新北市立安康國中', city: '新北市', district: '新店區'},
+                {name: '新北市立五峰國中', city: '新北市', district: '新店區'},
+                {name: '新北市立文山國中', city: '新北市', district: '新店區'},
                 {name: '新北市立樹林國中', city: '新北市', district: '樹林區'},
+                {name: '新北市立柑園國中', city: '新北市', district: '樹林區'},
+                {name: '新北市立三多國中', city: '新北市', district: '樹林區'},
                 {name: '新北市立鶯歌國中', city: '新北市', district: '鶯歌區'},
                 {name: '新北市立三峽國中', city: '新北市', district: '三峽區'},
+                {name: '新北市立安坑國中', city: '新北市', district: '三峽區'},
                 {name: '新北市立淡水國中', city: '新北市', district: '淡水區'},
+                {name: '新北市立竹圍國中', city: '新北市', district: '淡水區'},
+                {name: '新北市立正德國中', city: '新北市', district: '淡水區'},
                 {name: '新北市立汐止國中', city: '新北市', district: '汐止區'},
+                {name: '新北市立秀峰國中', city: '新北市', district: '汐止區'},
+                {name: '新北市立青山國中', city: '新北市', district: '汐止區'},
                 {name: '新北市立瑞芳國中', city: '新北市', district: '瑞芳區'},
+                {name: '新北市立欽賢國中', city: '新北市', district: '瑞芳區'},
                 {name: '新北市立土城國中', city: '新北市', district: '土城區'},
+                {name: '新北市立清水國中', city: '新北市', district: '土城區'},
+                {name: '新北市立中正國中', city: '新北市', district: '土城區'},
                 {name: '新北市立蘆洲國中', city: '新北市', district: '蘆洲區'},
+                {name: '新北市立三民國中', city: '新北市', district: '蘆洲區'},
+                {name: '新北市立鷺江國中', city: '新北市', district: '蘆洲區'},
                 {name: '新北市立五股國中', city: '新北市', district: '五股區'},
                 {name: '新北市立泰山國中', city: '新北市', district: '泰山區'},
+                {name: '新北市立明志國中', city: '新北市', district: '泰山區'},
                 {name: '新北市立林口國中', city: '新北市', district: '林口區'},
+                {name: '新北市立崇林國中', city: '新北市', district: '林口區'},
+                // 桃園市立國中
                 {name: '桃園市立桃園國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立中興國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立文昌國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立青溪國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立大有國中', city: '桃園市', district: '桃園區'},
+                {name: '桃園市立建國國中', city: '桃園市', district: '桃園區'},
                 {name: '桃園市立中壢國中', city: '桃園市', district: '中壢區'},
+                {name: '桃園市立內壢國中', city: '桃園市', district: '中壢區'},
+                {name: '桃園市立興南國中', city: '桃園市', district: '中壢區'},
+                {name: '桃園市立自強國中', city: '桃園市', district: '中壢區'},
+                {name: '桃園市立東興國中', city: '桃園市', district: '中壢區'},
                 {name: '桃園市立平鎮國中', city: '桃園市', district: '平鎮區'},
+                {name: '桃園市立平興國中', city: '桃園市', district: '平鎮區'},
+                {name: '桃園市立平南國中', city: '桃園市', district: '平鎮區'},
                 {name: '桃園市立八德國中', city: '桃園市', district: '八德區'},
+                {name: '桃園市立大安國中', city: '桃園市', district: '八德區'},
                 {name: '桃園市立楊梅國中', city: '桃園市', district: '楊梅區'},
+                {name: '桃園市立富岡國中', city: '桃園市', district: '楊梅區'},
+                {name: '桃園市立瑞原國中', city: '桃園市', district: '楊梅區'},
                 {name: '桃園市立蘆竹國中', city: '桃園市', district: '蘆竹區'},
+                {name: '桃園市立大竹國中', city: '桃園市', district: '蘆竹區'},
                 {name: '桃園市立大溪國中', city: '桃園市', district: '大溪區'},
+                {name: '桃園市立仁和國中', city: '桃園市', district: '大溪區'},
                 {name: '桃園市立大園國中', city: '桃園市', district: '大園區'},
+                {name: '桃園市立竹圍國中', city: '桃園市', district: '大園區'},
                 {name: '桃園市立龜山國中', city: '桃園市', district: '龜山區'},
+                {name: '桃園市立大崗國中', city: '桃園市', district: '龜山區'},
                 {name: '桃園市立龍潭國中', city: '桃園市', district: '龍潭區'},
+                {name: '桃園市立石門國中', city: '桃園市', district: '龍潭區'},
+                {name: '桃園市立凌雲國中', city: '桃園市', district: '龍潭區'},
                 {name: '桃園市立觀音國中', city: '桃園市', district: '觀音區'},
                 {name: '桃園市立新屋國中', city: '桃園市', district: '新屋區'},
                 {name: '桃園市立復興國中', city: '桃園市', district: '復興區'},
@@ -934,10 +1024,41 @@ $role = $_SESSION['role'] ?? '訪客';
                 {name: '高雄市立桃源國中', city: '高雄市', district: '桃源區'},
                 {name: '高雄市立那瑪夏國中', city: '高雄市', district: '那瑪夏區'},
                 {name: '高雄市立茂林國中', city: '高雄市', district: '茂林區'},
+                // 基隆市立國中
                 {name: '基隆市立基隆國中', city: '基隆市', district: '中正區'},
+                {name: '基隆市立中正國中', city: '基隆市', district: '中正區'},
+                {name: '基隆市立信義國中', city: '基隆市', district: '信義區'},
+                {name: '基隆市立仁愛國中', city: '基隆市', district: '仁愛區'},
+                {name: '基隆市立中山國中', city: '基隆市', district: '中山區'},
+                {name: '基隆市立安樂國中', city: '基隆市', district: '安樂區'},
+                {name: '基隆市立暖暖國中', city: '基隆市', district: '暖暖區'},
+                {name: '基隆市立七堵國中', city: '基隆市', district: '七堵區'},
+                // 新竹市立國中
                 {name: '新竹市立新竹國中', city: '新竹市', district: '東區'},
-                {name: '嘉義市立嘉義國中', city: '嘉義市', district: '東區'},
+                {name: '新竹市立光華國中', city: '新竹市', district: '東區'},
+                {name: '新竹市立育賢國中', city: '新竹市', district: '東區'},
+                {name: '新竹市立三民國中', city: '新竹市', district: '東區'},
+                {name: '新竹市立建華國中', city: '新竹市', district: '東區'},
+                {name: '新竹市立香山國中', city: '新竹市', district: '香山區'},
+                {name: '新竹市立富禮國中', city: '新竹市', district: '香山區'},
+                {name: '新竹市立虎林國中', city: '新竹市', district: '香山區'},
+                // 新竹縣立國中
                 {name: '新竹縣立竹北國中', city: '新竹縣', district: '竹北市'},
+                {name: '新竹縣立博愛國中', city: '新竹縣', district: '竹北市'},
+                {name: '新竹縣立六家國中', city: '新竹縣', district: '竹北市'},
+                {name: '新竹縣立成功國中', city: '新竹縣', district: '竹北市'},
+                {name: '新竹縣立竹東國中', city: '新竹縣', district: '竹東鎮'},
+                {name: '新竹縣立二重國中', city: '新竹縣', district: '竹東鎮'},
+                {name: '新竹縣立關西國中', city: '新竹縣', district: '關西鎮'},
+                {name: '新竹縣立新埔國中', city: '新竹縣', district: '新埔鎮'},
+                {name: '新竹縣立湖口國中', city: '新竹縣', district: '湖口鄉'},
+                {name: '新竹縣立新豐國中', city: '新竹縣', district: '新豐鄉'},
+                {name: '新竹縣立芎林國中', city: '新竹縣', district: '芎林鄉'},
+                {name: '新竹縣立寶山國中', city: '新竹縣', district: '寶山鄉'},
+                {name: '新竹縣立北埔國中', city: '新竹縣', district: '北埔鄉'},
+                {name: '新竹縣立峨眉國中', city: '新竹縣', district: '峨眉鄉'},
+                {name: '新竹縣立尖石國中', city: '新竹縣', district: '尖石鄉'},
+                {name: '新竹縣立五峰國中', city: '新竹縣', district: '五峰鄉'},
                 {name: '苗栗縣立苗栗國中', city: '苗栗縣', district: '苗栗市'},
                 {name: '彰化縣立彰化國中', city: '彰化縣', district: '彰化市'},
                 {name: '南投縣立南投國中', city: '南投縣', district: '南投市'},

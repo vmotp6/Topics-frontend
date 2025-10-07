@@ -20,7 +20,7 @@ try {
         teacher_username, department, project_title, company_name, 
         project_amount, status, created_at
     ) VALUES (
-        'teacher1', '資訊工程學系', 'AI技術研發合作計畫', '科技公司A',
+        'teacher1', '資訊管理科', 'AI技術研發合作計畫', '科技公司A',
         150000.00, 'pending', NOW()
     )";
     
@@ -33,7 +33,7 @@ try {
         teacher_username, department, project_title, company_name, 
         project_amount, status, admin_username, admin_comment, review_date, created_at
     ) VALUES (
-        'teacher2', '電機工程學系', '智慧電網技術合作', '電子公司B',
+        'teacher2', '企業管理科', '智慧電網技術合作', '電子公司B',
         200000.00, 'approved', 'admin1', '計畫內容完整，經費編列合理', NOW(), NOW()
     )";
     
@@ -46,7 +46,7 @@ try {
         teacher_username, department, project_title, company_name, 
         project_amount, status, admin_username, admin_comment, review_date, created_at
     ) VALUES (
-        'teacher3', '機械工程學系', '精密製造技術研發', '製造公司C',
+        'teacher3', '護理科', '精密製造技術研發', '製造公司C',
         120000.00, 'rejected', 'admin1', '經費編列過於樂觀，需要重新評估', NOW(), NOW()
     )";
     

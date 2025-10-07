@@ -32,13 +32,15 @@ INSERT IGNORE INTO user (username, password, role) VALUES
 ('student2', '123456', '學生'),
 ('student3', '123456', '學生'),
 ('student4', '123456', '學生'),
-('student5', '123456', '學生');
+('student5', '123456', '學生'),
+('student6', '123456', '學生');
 
 -- 插入學生詳細資料
 INSERT IGNORE INTO student (user_id, name, student_id, department, grade, class_name, email, phone) VALUES
-((SELECT id FROM user WHERE username = 'student1'), '張小明', 'S001', '資訊工程學系', '一年級', '資工一甲', 'student1@example.com', '0912345678'),
-((SELECT id FROM user WHERE username = 'student2'), '李美華', 'S002', '資訊工程學系', '一年級', '資工一乙', 'student2@example.com', '0923456789'),
-((SELECT id FROM user WHERE username = 'student3'), '王大偉', 'S003', '企業管理學系', '二年級', '企管二甲', 'student3@example.com', '0934567890'),
-((SELECT id FROM user WHERE username = 'student4'), '陳小芳', 'S004', '外國語文學系', '三年級', '外文三甲', 'student4@example.com', '0945678901'),
-((SELECT id FROM user WHERE username = 'student5'), '林志強', 'S005', '資訊工程學系', '二年級', '資工二甲', 'student5@example.com', '0956789012');
+((SELECT id FROM user WHERE username = 'student1'), '張小明', 'S001', '資訊管理科', '一年級', '資管一甲', 'student1@example.com', '0912345678'),
+((SELECT id FROM user WHERE username = 'student2'), '李美華', 'S002', '資訊管理科', '一年級', '資管一乙', 'student2@example.com', '0923456789'),
+((SELECT id FROM user WHERE username = 'student3'), '王大偉', 'S003', '企業管理科', '二年級', '企管二甲', 'student3@example.com', '0934567890'),
+((SELECT id FROM user WHERE username = 'student4'), '陳小芳', 'S004', '應用外語科', '三年級', '應外三甲', 'student4@example.com', '0945678901'),
+((SELECT id FROM user WHERE username = 'student5'), '林志強', 'S005', '護理科', '二年級', '護理二甲', 'student5@example.com', '0956789012'),
+((SELECT id FROM user WHERE username = 'student6'), '黃小華', 'S006', '動畫科', '一年級', '動畫一甲', 'student6@example.com', '0967890123');
 
