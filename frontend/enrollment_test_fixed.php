@@ -97,10 +97,15 @@ echo "</div>";
 echo "<div class='form-group'>";
 echo "<label for='intention1'>就讀意願:</label>";
 echo "<select id='intention1' name='intention1'>";
+echo "<option value=''>請選擇</option>";
 echo "<option value='無特定'>無特定</option>";
-echo "<option value='資訊工程學系'>資訊工程學系</option>";
-echo "<option value='企業管理學系'>企業管理學系</option>";
-echo "<option value='外國語文學系'>外國語文學系</option>";
+echo "<option value='資訊管理科'>資訊管理科</option>";
+echo "<option value='企業管理科'>企業管理科</option>";
+echo "<option value='護理科'>護理科</option>";
+echo "<option value='幼保科'>幼保科</option>";
+echo "<option value='應用外語科'>應用外語科</option>";
+echo "<option value='視光科'>視光科</option>";
+echo "<option value='動畫科'>動畫科</option>";
 echo "</select>";
 echo "</div>";
 

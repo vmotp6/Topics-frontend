@@ -26,11 +26,13 @@ $isLoggedIn = isset($_SESSION['username']);
 			<div class="ai-feature-intro">
 				<h4>🎓 康寧大學科系介紹</h4>
 				<ul>
-					<li><strong>嬰幼兒保育學系：</strong>培養嬰幼兒教育與保育專業人才，適合對幼兒教育有熱忱的學生</li>
-					<li><strong>長期照護學系：</strong>專注於長期照護領域，培養高齡照護專業能力，應對高齡化社會需求</li>
-					<li><strong>護理學系：</strong>培養專業護理人才，提供臨床實習機會，就業前景佳</li>
-					<li><strong>視光學系：</strong>專精視力保健與眼鏡配製，結合理論與實務</li>
-					<li><strong>資訊管理學系：</strong>培養資訊科技與管理整合人才，符合數位時代需求</li>
+					<li><strong>資訊管理科：</strong>培養資訊科技與管理整合人才，符合數位時代需求</li>
+					<li><strong>企業管理科：</strong>培養企業經營管理專業人才，適合對商業管理有興趣的學生</li>
+					<li><strong>護理科：</strong>培養專業護理人才，提供臨床實習機會，就業前景佳</li>
+					<li><strong>幼保科：</strong>培養嬰幼兒教育與保育專業人才，適合對幼兒教育有熱忱的學生</li>
+					<li><strong>應用外語科：</strong>培養外語應用與國際商務專業人才，提升語言能力與國際視野</li>
+					<li><strong>視光科：</strong>專精視力保健與眼鏡配製，結合理論與實務</li>
+					<li><strong>動畫科：</strong>培養動畫製作與多媒體設計專業人才，適合對創意設計有興趣的學生</li>
 				</ul>
 			</div>
 			<p>💡 <strong>我可以幫助您：</strong></p>
@@ -655,45 +657,61 @@ $(document).ready(function() {
 	function getAIResponse(message) {
 		message = message.toLowerCase();
 		
-		// 嬰幼兒保育學系關鍵字
+		// 幼保科關鍵字
 		if (message.includes('幼兒') || message.includes('嬰兒') || message.includes('小孩') || 
 			message.includes('兒童') || message.includes('保育') || message.includes('教育') ||
 			message.includes('托育') || message.includes('幼教') || message.includes('照顧') ||
 			message.includes('育兒') || message.includes('親子') || message.includes('發展')) {
-			return "根據您的興趣，我推薦您選擇 <strong>嬰幼兒保育學系</strong>！\n\n🎓 科系特色：\n• 培養嬰幼兒教育與保育專業人才\n• 適合對幼兒教育有熱忱的學生\n• 課程涵蓋幼兒發展、教育心理學、課程設計\n• 結合理論與實務，培養專業能力\n\n💼 就業前景：\n• 幼兒園教師\n• 托育中心保育員\n• 親子教育講師\n• 兒童發展評估師\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+			return "根據您的興趣，我推薦您選擇 <strong>幼保科</strong>！\n\n🎓 科系特色：\n• 培養嬰幼兒教育與保育專業人才\n• 適合對幼兒教育有熱忱的學生\n• 課程涵蓋幼兒發展、教育心理學、課程設計\n• 結合理論與實務，培養專業能力\n\n💼 就業前景：\n• 幼兒園教師\n• 托育中心保育員\n• 親子教育講師\n• 兒童發展評估師\n\n📚 入學管道：五專申請入學、免試入學";
 		}
 		
-		// 長期照護學系關鍵字
-		else if (message.includes('老人') || message.includes('長照') || message.includes('照護') ||
-				 message.includes('高齡') || message.includes('慢性病') || message.includes('復健') ||
-				 message.includes('居家') || message.includes('安養') || message.includes('失能') ||
-				 message.includes('銀髮') || message.includes('養老') || message.includes('護理')) {
-			return "根據您的興趣，我推薦您選擇 <strong>長期照護學系</strong>！\n\n🎓 科系特色：\n• 專注於長期照護領域的專業教育\n• 培養高齡照護專業能力\n• 應對高齡化社會的照護需求\n• 課程包括老年學、健康評估、照護計畫制定\n\n💼 就業前景：\n• 長期照護機構管理員\n• 居家照護服務員\n• 社區照護專員\n• 照護計畫規劃師\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+		// 企業管理科關鍵字
+		else if (message.includes('管理') || message.includes('企業') || message.includes('商業') ||
+				 message.includes('行銷') || message.includes('財務') || message.includes('人資') ||
+				 message.includes('營運') || message.includes('策略') || message.includes('創業') ||
+				 message.includes('經營') || message.includes('領導') || message.includes('組織')) {
+			return "根據您的興趣，我推薦您選擇 <strong>企業管理科</strong>！\n\n🎓 科系特色：\n• 培養企業經營管理專業人才\n• 適合對商業管理有興趣的學生\n• 課程涵蓋行銷管理、財務管理、人力資源管理\n• 結合理論與實務，培養管理能力\n\n💼 就業前景：\n• 企業管理專員\n• 行銷企劃人員\n• 人力資源專員\n• 創業家\n\n📚 入學管道：五專申請入學、免試入學";
 		}
 		
-		// 護理學系關鍵字
+		// 護理科關鍵字
 		else if (message.includes('護理') || message.includes('護士') || message.includes('醫療') ||
 				 message.includes('健康') || message.includes('病人') || message.includes('醫院') ||
 				 message.includes('保健') || message.includes('衛生') || message.includes('治療') ||
 				 message.includes('診斷') || message.includes('康復') || message.includes('臨床')) {
-			return "根據您的興趣，我推薦您選擇 <strong>護理學系</strong>！\n\n🎓 科系特色：\n• 培養專業護理人才\n• 提供豐富的臨床實習機會\n• 具備完整的護理專業知識與技能\n• 符合醫療照護產業需求\n\n💼 就業前景：\n• 醫院護理師\n• 社區護理師\n• 學校護理師\n• 護理教育工作者\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+			return "根據您的興趣，我推薦您選擇 <strong>護理科</strong>！\n\n🎓 科系特色：\n• 培養專業護理人才\n• 提供豐富的臨床實習機會\n• 具備完整的護理專業知識與技能\n• 符合醫療照護產業需求\n\n💼 就業前景：\n• 醫院護理師\n• 社區護理師\n• 學校護理師\n• 護理教育工作者\n\n📚 入學管道：五專申請入學、免試入學";
 		}
 		
-		// 視光學系關鍵字
+		// 視光科關鍵字
 		else if (message.includes('眼睛') || message.includes('視力') || message.includes('眼鏡') ||
 				 message.includes('視光') || message.includes('光學') || message.includes('鏡片') ||
 				 message.includes('視覺') || message.includes('檢查') || message.includes('配鏡') ||
 				 message.includes('隱形眼鏡') || message.includes('視力保健') || message.includes('驗光')) {
-			return "根據您的興趣，我推薦您選擇 <strong>視光學系</strong>！\n\n🎓 科系特色：\n• 專精視力保健與眼鏡配製\n• 結合理論與實務操作\n• 培養視光檢查與驗光技術\n• 具備光學儀器操作能力\n\n💼 就業前景：\n• 視光師\n• 眼鏡行配鏡師\n• 視力保健諮詢師\n• 光學儀器銷售員\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+			return "根據您的興趣，我推薦您選擇 <strong>視光科</strong>！\n\n🎓 科系特色：\n• 專精視力保健與眼鏡配製\n• 結合理論與實務操作\n• 培養視光檢查與驗光技術\n• 具備光學儀器操作能力\n\n💼 就業前景：\n• 視光師\n• 眼鏡行配鏡師\n• 視力保健諮詢師\n• 光學儀器銷售員\n\n📚 入學管道：五專申請入學、免試入學";
 		}
 		
-		// 資訊管理學系關鍵字
+		// 資訊管理科關鍵字
 		else if (message.includes('程式') || message.includes('軟體') || message.includes('系統') || 
 				 message.includes('資料') || message.includes('數據') || message.includes('分析') ||
 				 message.includes('網站') || message.includes('app') || message.includes('應用') ||
 				 message.includes('資訊') || message.includes('管理') || message.includes('開發') ||
 				 message.includes('電腦') || message.includes('網路') || message.includes('科技')) {
-			return "根據您的興趣，我推薦您選擇 <strong>資訊管理學系</strong>！\n\n🎓 科系特色：\n• 培養資訊科技與管理整合人才\n• 符合數位時代的產業需求\n• 課程涵蓋程式設計、系統分析、資料庫管理\n• 結合理論與實務應用\n\n💼 就業前景：\n• 軟體工程師\n• 系統分析師\n• 資料庫管理師\n• 資訊管理專員\n\n📚 入學管道：繁星推薦、申請入學、分發入學";
+			return "根據您的興趣，我推薦您選擇 <strong>資訊管理科</strong>！\n\n🎓 科系特色：\n• 培養資訊科技與管理整合人才\n• 符合數位時代的產業需求\n• 課程涵蓋程式設計、系統分析、資料庫管理\n• 結合理論與實務應用\n\n💼 就業前景：\n• 軟體工程師\n• 系統分析師\n• 資料庫管理師\n• 資訊管理專員\n\n📚 入學管道：五專申請入學、免試入學";
+		}
+		
+		// 應用外語科關鍵字
+		else if (message.includes('外語') || message.includes('英語') || message.includes('日語') ||
+				 message.includes('韓語') || message.includes('翻譯') || message.includes('口譯') ||
+				 message.includes('語言') || message.includes('國際') || message.includes('商務') ||
+				 message.includes('溝通') || message.includes('文書') || message.includes('貿易')) {
+			return "根據您的興趣，我推薦您選擇 <strong>應用外語科</strong>！\n\n🎓 科系特色：\n• 培養外語應用與國際商務專業人才\n• 提升語言能力與國際視野\n• 課程涵蓋多國語言、商務溝通、國際貿易\n• 結合理論與實務，培養跨文化溝通能力\n\n💼 就業前景：\n• 外語翻譯人員\n• 國際商務專員\n• 觀光導遊\n• 語言教學工作者\n\n📚 入學管道：五專申請入學、免試入學";
+		}
+		
+		// 動畫科關鍵字
+		else if (message.includes('動畫') || message.includes('影片') || message.includes('3d') ||
+				 message.includes('渲染') || message.includes('影像') || message.includes('剪輯') ||
+				 message.includes('多媒體') || message.includes('視覺效果') || message.includes('角色設計') ||
+				 message.includes('動態') || message.includes('分鏡') || message.includes('2d')) {
+			return "根據您的興趣，我推薦您選擇 <strong>動畫科</strong>！\n\n🎓 科系特色：\n• 培養動畫製作與多媒體設計專業人才\n• 適合對創意設計有興趣的學生\n• 課程涵蓋2D/3D動畫、影像剪輯、視覺特效\n• 結合理論與實務，培養創意設計能力\n\n💼 就業前景：\n• 動畫師\n• 多媒體設計師\n• 影片剪輯師\n• 遊戲美術設計師\n\n📚 入學管道：五專申請入學、免試入學";
 		}
 		
 		// 入學相關問題
@@ -706,7 +724,7 @@ $(document).ready(function() {
 		// 一般回覆
 		else {
 			let generalResponses = [
-				"歡迎來到康寧大學！我是您的新生科系推薦助手。\n\n🎓 我們提供五大科系：\n• 👶 嬰幼兒保育學系 - 幼兒教育與保育\n• 👴 長期照護學系 - 高齡照護與長照服務\n• 🏥 護理學系 - 專業護理與醫療照護\n• 👁️ 視光學系 - 視力保健與配鏡服務\n• 💻 資訊管理學系 - 資訊科技與管理\n\n請告訴我您的興趣或想了解的科系，我會為您詳細介紹！",
+				"歡迎來到康寧大學！我是您的新生科系推薦助手。\n\n🎓 我們提供七大科系：\n• 💻 資訊管理科 - 資訊科技與管理\n• 🏢 企業管理科 - 企業經營管理\n• 🏥 護理科 - 專業護理與醫療照護\n• 👶 幼保科 - 幼兒教育與保育\n• 🌍 應用外語科 - 外語應用與國際商務\n• 👁️ 視光科 - 視力保健與配鏡服務\n• 🎨 動畫科 - 動畫製作與多媒體設計\n\n請告訴我您的興趣或想了解的科系，我會為您詳細介紹！",
 				"您好！我是康寧大學的新生科系推薦助手。\n\n為了更好地為您推薦合適的科系，請告訴我：\n• 您對哪個領域感興趣？\n• 您希望未來從事什麼樣的工作？\n• 您有什麼特殊的興趣或特質？\n\n我會根據您的回答，為您推薦最適合的科系！",
 				"歡迎加入康寧大學！我是您的專屬科系推薦助手。\n\n🎯 我可以幫助您：\n• 了解各科系的特色與課程\n• 分析您的興趣與科系匹配度\n• 提供就業前景與發展方向\n• 解答入學相關問題\n\n請描述您的興趣或想了解的科系，我會為您提供專業建議！"
 			];

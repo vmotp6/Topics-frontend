@@ -46,7 +46,7 @@ try {
     // 2. 為缺少的老師創建詳細資料
     echo "<h2>2. 創建缺少的老師資料</h2>";
     
-    $departments = ['資訊工程學系', '企業管理學系', '外國語文學系', '護理學系', '幼兒保育學系'];
+    $departments = ['資訊管理科', '企業管理科', '護理科', '幼保科', '應用外語科', '視光科', '動畫科'];
     $createdCount = 0;
     
     foreach ($teacherUsers as $index => $teacher) {
@@ -130,5 +130,7 @@ try {
     echo "<p>資料庫錯誤: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 ?>
+
+
 
 

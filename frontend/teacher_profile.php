@@ -113,43 +113,13 @@
                 <label for="department">科系</label>
                 <select id="department" name="department" required>
                     <option value="" disabled selected>請選擇科系</option>
-                    <option value="資訊工程學系">資訊工程學系</option>
-                    <option value="電機工程學系">電機工程學系</option>
-                    <option value="機械工程學系">機械工程學系</option>
-                    <option value="化學工程學系">化學工程學系</option>
-                    <option value="土木工程學系">土木工程學系</option>
-                    <option value="工業工程學系">工業工程學系</option>
-                    <option value="材料科學與工程學系">材料科學與工程學系</option>
-                    <option value="生物科技學系">生物科技學系</option>
-                    <option value="應用化學系">應用化學系</option>
-                    <option value="應用數學系">應用數學系</option>
-                    <option value="物理學系">物理學系</option>
-                    <option value="企業管理學系">企業管理學系</option>
-                    <option value="會計學系">會計學系</option>
-                    <option value="財務金融學系">財務金融學系</option>
-                    <option value="國際企業學系">國際企業學系</option>
-                    <option value="經濟學系">經濟學系</option>
-                    <option value="統計學系">統計學系</option>
-                    <option value="外國語文學系">外國語文學系</option>
-                    <option value="中國文學系">中國文學系</option>
-                    <option value="歷史學系">歷史學系</option>
-                    <option value="哲學系">哲學系</option>
-                    <option value="社會學系">社會學系</option>
-                    <option value="心理學系">心理學系</option>
-                    <option value="政治學系">政治學系</option>
-                    <option value="法律學系">法律學系</option>
-                    <option value="教育學系">教育學系</option>
-                    <option value="體育學系">體育學系</option>
-                    <option value="藝術學系">藝術學系</option>
-                    <option value="音樂學系">音樂學系</option>
-                    <option value="戲劇學系">戲劇學系</option>
-                    <option value="傳播學系">傳播學系</option>
-                    <option value="新聞學系">新聞學系</option>
-                    <option value="廣告學系">廣告學系</option>
-                    <option value="公共關係學系">公共關係學系</option>
-                    <option value="圖書資訊學系">圖書資訊學系</option>
-                    <option value="資訊管理學系">資訊管理學系</option>
-                    <option value="其他">其他</option>
+                    <option value="資訊管理科">資訊管理科</option>
+                    <option value="企業管理科">企業管理科</option>
+                    <option value="護理科">護理科</option>
+                    <option value="幼保科">幼保科</option>
+                    <option value="應用外語科">應用外語科</option>
+                    <option value="視光科">視光科</option>
+                    <option value="動畫科">動畫科</option>
                 </select>
             </div>
             

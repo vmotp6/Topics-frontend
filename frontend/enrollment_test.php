@@ -314,12 +314,15 @@ $role = $_SESSION['role'] ?? '未知';
                     <div class="form-group">
                         <label for="intention1">意願</label>
                         <select id="intention1" name="intention1">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="護理學系">護理學系</option>
-                            <option value="幼兒保育學系">幼兒保育學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -345,12 +348,15 @@ $role = $_SESSION['role'] ?? '未知';
                     <div class="form-group">
                         <label for="intention2">意願</label>
                         <select id="intention2" name="intention2">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="護理學系">護理學系</option>
-                            <option value="幼兒保育學系">幼兒保育學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -376,12 +382,15 @@ $role = $_SESSION['role'] ?? '未知';
                     <div class="form-group">
                         <label for="intention3">意願</label>
                         <select id="intention3" name="intention3">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="護理學系">護理學系</option>
-                            <option value="幼兒保育學系">幼兒保育學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
