@@ -62,26 +62,28 @@ function getResourcePath($resourceFile) {
     align-items: center;
     gap: 15px;
     flex-shrink: 0;
-    margin-right: 40px;
+    margin-right: 20px;
+    margin-left: -15px;
   }
 
   .navbar-links {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: 25px;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
     flex: 1;
     justify-content: center;
+    padding: 0 20px;
   }
 
   .navbar-user {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    margin-left: 40px;
+    margin-left: 45px;
   }
 
   .logo-icon {
@@ -406,15 +408,17 @@ function getResourcePath($resourceFile) {
   /* 響應式設計 */
   @media (max-width: 1200px) {
     .logo {
-      margin-right: 30px;
+      margin-right: 15px;
+      margin-left: -15px;
     }
 
     .navbar-user {
-      margin-left: 30px;
+      margin-left: 35px;
     }
 
     .navbar-links {
-      gap: 20px;
+      gap: 18px;
+      padding: 0 15px;
     }
 
     .navbar-links a {
@@ -426,15 +430,17 @@ function getResourcePath($resourceFile) {
 
   @media (max-width: 1024px) {
     .logo {
-      margin-right: 20px;
+      margin-right: 10px;
+      margin-left: -15px;
     }
 
     .navbar-user {
-      margin-left: 20px;
+      margin-left: 30px;
     }
 
     .navbar-links {
-      gap: 15px;
+      gap: 12px;
+      padding: 0 10px;
     }
 
     .navbar-links a {
@@ -456,11 +462,12 @@ function getResourcePath($resourceFile) {
 
   @media (max-width: 768px) {
     .logo {
-      margin-right: 15px;
+      margin-right: 10px;
+      margin-left: -15px;
     }
 
     .navbar-user {
-      margin-left: 15px;
+      margin-left: 30px;
     }
 
     .navbar-links {
