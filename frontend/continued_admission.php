@@ -240,9 +240,9 @@ if (session_status() === PHP_SESSION_NONE) {
                   <i class="fas fa-grip-vertical"></i>
                   <span>視光科</span>
                 </div>
-                <div class="choice-item" draggable="true" data-choice="嬰幼兒保育學系(科)">
+                <div class="choice-item" draggable="true" data-choice="幼保科">
                   <i class="fas fa-grip-vertical"></i>
-                  <span>嬰幼兒保育學系(科)</span>
+                  <span>幼保科</span>
                 </div>
                 <div class="choice-item" draggable="true" data-choice="應用外語科">
                   <i class="fas fa-grip-vertical"></i>
@@ -256,9 +256,9 @@ if (session_status() === PHP_SESSION_NONE) {
                   <i class="fas fa-grip-vertical"></i>
                   <span>企業管理科</span>
                 </div>
-                <div class="choice-item" draggable="true" data-choice="數位影視動畫科">
+                <div class="choice-item" draggable="true" data-choice="動畫科">
                   <i class="fas fa-grip-vertical"></i>
-                  <span>數位影視動畫科</span>
+                  <span>動畫科</span>
                 </div>
               </div>
             </div>
@@ -501,11 +501,11 @@ if (session_status() === PHP_SESSION_NONE) {
           const choiceMap = {
             '護理科': 'choice_nursing',
             '視光科': 'choice_optometry', 
-            '嬰幼兒保育學系(科)': 'choice_childcare',
+            '幼保科': 'choice_childcare',
             '應用外語科': 'choice_language',
             '資訊管理科': 'choice_im',
             '企業管理科': 'choice_ba',
-            '數位影視動畫科': 'choice_animation'
+            '動畫科': 'choice_animation'
           };
           
           const inputName = choiceMap[choice];

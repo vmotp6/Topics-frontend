@@ -109,3 +109,5 @@ INSERT INTO schools (name, city, district, address, type) VALUES
 ('連江縣立介壽國中', '連江縣', '南竿鄉', '連江縣南竿鄉介壽村76號', '公立');
 
 
+
+

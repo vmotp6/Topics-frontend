@@ -264,15 +264,15 @@ if (file_exists($recaptcha_file)) {
                     <div class="form-group">
                         <label for="intention1">就讀意願一:</label>
                         <select id="intention1" name="intention1">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="電機工程學系">電機工程學系</option>
-                            <option value="機械工程學系">機械工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="會計學系">會計學系</option>
-                            <option value="財務金融學系">財務金融學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="中國文學系">中國文學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -291,15 +291,15 @@ if (file_exists($recaptcha_file)) {
                     <div class="form-group">
                         <label for="intention2">就讀意願二:</label>
                         <select id="intention2" name="intention2">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="電機工程學系">電機工程學系</option>
-                            <option value="機械工程學系">機械工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="會計學系">會計學系</option>
-                            <option value="財務金融學系">財務金融學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="中國文學系">中國文學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -318,15 +318,15 @@ if (file_exists($recaptcha_file)) {
                     <div class="form-group">
                         <label for="intention3">就讀意願三:</label>
                         <select id="intention3" name="intention3">
+                            <option value="">請選擇</option>
                             <option value="無特定">無特定</option>
-                            <option value="資訊工程學系">資訊工程學系</option>
-                            <option value="電機工程學系">電機工程學系</option>
-                            <option value="機械工程學系">機械工程學系</option>
-                            <option value="企業管理學系">企業管理學系</option>
-                            <option value="會計學系">會計學系</option>
-                            <option value="財務金融學系">財務金融學系</option>
-                            <option value="外國語文學系">外國語文學系</option>
-                            <option value="中國文學系">中國文學系</option>
+                            <option value="資訊管理科">資訊管理科</option>
+                            <option value="企業管理科">企業管理科</option>
+                            <option value="護理科">護理科</option>
+                            <option value="幼保科">幼保科</option>
+                            <option value="應用外語科">應用外語科</option>
+                            <option value="視光科">視光科</option>
+                            <option value="動畫科">動畫科</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -462,5 +462,6 @@ if (file_exists($recaptcha_file)) {
     </script>
 </body>
 </html>
+
 
 
