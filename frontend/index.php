@@ -266,6 +266,13 @@ if (session_status() === PHP_SESSION_NONE) {
     // 載入輪播數據
     async function loadCarouselData() {
       try {
+        // 暫時禁用API調用，直接使用預設輪播
+        console.log('使用預設輪播內容');
+        showDefaultCarousel();
+        return;
+        
+        // 原始API調用代碼（已註解）
+        /*
         const response = await fetch(`${API_BASE_URL}/api/carousel`);
         const data = await response.json();
         
@@ -278,6 +285,7 @@ if (session_status() === PHP_SESSION_NONE) {
           console.error('載入輪播數據失敗:', data.message);
           showDefaultCarousel();
         }
+        */
       } catch (error) {
         console.error('載入輪播數據錯誤:', error);
         showDefaultCarousel();
@@ -349,6 +357,22 @@ if (session_status() === PHP_SESSION_NONE) {
             <a href="QA.php" class="slide-btn">了解更多</a>
           </div>
         </div>
+        <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+          <div class="slide-overlay"></div>
+          <div class="slide-content">
+            <h2>產學合作新契機</h2>
+            <p>與企業攜手共創未來，提供學生實務學習機會</p>
+            <a href="admission_recommend.php" class="slide-btn">推薦報名</a>
+          </div>
+        </div>
+        <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+          <div class="slide-overlay"></div>
+          <div class="slide-content">
+            <h2>五專入學說明會</h2>
+            <p>深入了解五專課程特色與未來發展方向</p>
+            <a href="admission.php" class="slide-btn">立即報名</a>
+          </div>
+        </div>
       `;
       
       slides = document.querySelectorAll('.carousel-slide');
@@ -356,8 +380,14 @@ if (session_status() === PHP_SESSION_NONE) {
       
       // 設置預設控制
       const dotsContainer = document.getElementById('carouselDots');
-      dotsContainer.innerHTML = '<div class="carousel-dot active" onclick="currentSlide(1)"></div>';
+      dotsContainer.innerHTML = '';
+      for (let i = 0; i < totalSlides; i++) {
+        dotsContainer.innerHTML += `<div class="carousel-dot ${i === 0 ? 'active' : ''}" onclick="currentSlide(${i + 1})"></div>`;
+      }
       dots = document.querySelectorAll('.carousel-dot');
+      
+      // 啟動自動輪播
+      startAutoSlide();
     }
 
     // 顯示指定索引的輪播圖片

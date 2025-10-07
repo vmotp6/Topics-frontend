@@ -64,6 +64,14 @@ function getResourcePath($resourceFile) {
     flex-shrink: 0;
     margin-right: 20px;
     margin-left: -15px;
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 5px;
+  }
+
+  .logo:hover {
+    background: rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
   }
 
   .navbar-links {
@@ -611,7 +619,7 @@ function getResourcePath($resourceFile) {
 <div class="navbar">
 <div class="container">
   <!-- Logo 區域 -->
-  <div class="logo">
+  <a href="<?php echo getCorrectPath('index.php'); ?>" class="logo" style="text-decoration: none; color: inherit;">
     <div class="logo-icon">
       <i class="fas fa-university"></i>
     </div>
@@ -619,7 +627,7 @@ function getResourcePath($resourceFile) {
       <h1 class="logo-title">康寧大學招生平台</h1>
       <p class="logo-subtitle">Kang Ning University Industry-Academia Cooperation Platform</p>
     </div>
-  </div>
+  </a>
 
   <div class="navbar-links">
     <a href="<?php echo getCorrectPath('index.php'); ?>">首頁</a>

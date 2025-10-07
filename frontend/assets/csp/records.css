@@ -276,6 +276,34 @@ input[name="contact_phone"]:valid:not(:placeholder-shown) {
     border-color: #28a745;
 }
 
+/* 唯讀欄位樣式 - 從資料庫撈取的資料 */
+input[readonly] {
+    background: #f8f9fa !important;
+    border: 2px solid #ced4da !important;
+    color: #495057 !important;
+    cursor: not-allowed !important;
+    opacity: 0.8;
+}
+
+input[readonly]:focus {
+    outline: none !important;
+    border-color: #ced4da !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+input[readonly]:hover {
+    border-color: #ced4da !important;
+    transform: none !important;
+}
+
+
+/* 唯讀欄位標籤樣式 */
+.readonly-field label {
+    color: #6c757d !important;
+    position: relative;
+}
+
 textarea {
     height: 120px;
     resize: vertical;

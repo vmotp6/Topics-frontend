@@ -391,16 +391,16 @@ $conn->close();
                                 <label><span class="required">*</span> 活動日期:</label>
                                 <input type="date" name="activity_date" value="<?php echo isset($_POST['activity_date']) ? htmlspecialchars($_POST['activity_date']) : ''; ?>" required>
                             </div>
-                            <div class="field-group">
-                                <label><span class="required">*</span> 教師單位:</label>
+                            <div class="field-group readonly-field">
+                                <label><span class="required">*</span> 教師單位: <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small></label>
                                                                  <input type="text" name="teacher_unit" placeholder="請輸入教師單位" 
                                         value="<?php 
                                         echo isset($_POST['teacher_unit']) ? htmlspecialchars($_POST['teacher_unit']) : 
                                              (isset($teacher_info['department']) ? htmlspecialchars($teacher_info['department']) : ''); 
-                                        ?>" required>
+                                        ?>" readonly>
                             </div>
-                            <div class="field-group">
-                                <label><span class="required"></span> 教師姓名:</label>
+                            <div class="field-group readonly-field">
+                                <label><span class="required"></span> 教師姓名: <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small></label>
                                 <input type="text" name="teacher_name" placeholder="請輸入教師姓名" 
                                        value="<?php 
                                        echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name']) : 
