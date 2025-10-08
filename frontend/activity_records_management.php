@@ -168,17 +168,20 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
                     
 
 
-    $records_stmt = $conn->prepare($records_sql);
-    
-    if ($records_result) {
-        while ($row = $records_result->fetch_assoc()) {
-            $activity_records[] = $row;
-        }
-    }
 
 } elseif ($teacher_id) {
-    // 🔹 若是一般老師 → 只看自己的
-    $records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY activity_date DESC, id DESC";
+    // 🔹 若是一般老師 → 只看自己的，並包含所屬系所
+    $records_sql = "
+        SELECT 
+            ar.*, 
+            t.name AS teacher_name, 
+            t.department AS teacher_department
+        FROM activity_records ar
+        LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+        WHERE ar.teacher_id = ?
+        ORDER BY ar.activity_date DESC, ar.id DESC
+    ";
+
     $records_stmt = $conn->prepare($records_sql);
     if ($records_stmt) {
         $records_stmt->bind_param("i", $teacher_id);
@@ -778,7 +781,7 @@ $conn->close();
             modalBody.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                     <div><strong>活動日期:</strong><br>${record.activity_date}</div>
-                    <div><strong>教師單位:</strong><br>${record.teacher_unit}</div>
+                    <div><strong>教師單位:</strong><br>${record.teacher_department}</div>
                     <div><strong>教師姓名:</strong><br>${record.teacher_name}</div>
                     <div><strong>學校名稱:</strong><br>${record.school_name}</div>
                     <div><strong>聯絡窗口:</strong><br>${record.contact_person || '未填寫'}</div>
