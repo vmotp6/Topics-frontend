@@ -4,7 +4,7 @@
         <a href="/Topics-frontend/frontend/index.php" class="footer-link">首頁</a>
         <a href="/Topics-frontend/frontend/QA.php" class="footer-link">認識招生平台</a>
         <a href="/Topics-frontend/frontend/AI.php" class="footer-link">AI招生平台</a>
-        <a href="/Topics-frontend/frontend/chat_settings.php" class="footer-link">💬 聊天設置</a>
+        <a href="/Topics-frontend/frontend/sitemap.php" class="footer-link">網站導覽</a>
     </nav>
     <div class="footer-copy">
         <p>© 2025 康寧大學招生平台</p>
@@ -83,8 +83,88 @@
     }
 
     @media (max-width: 768px) {
+        .footer {
+            padding: 15px 0;
+        }
+
+        .footer-nav {
+            gap: 8px 12px;
+            padding: 6px 8px 2px;
+            font-size: 0.8rem;
+        }
+
+        .footer-link {
+            padding: 0 2px;
+        }
+
+        .footer-link + .footer-link::before {
+            margin-right: 8px;
+        }
+
         .footer-copy {
             font-size: 10px;
+            padding: 2px 8px 8px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .footer {
+            padding: 12px 0;
+        }
+
+        .footer-nav {
+            gap: 6px 8px;
+            padding: 4px 6px 2px;
+            font-size: 0.75rem;
+        }
+
+        .footer-link {
+            padding: 0 1px;
+        }
+
+        .footer-link + .footer-link::before {
+            margin-right: 6px;
+        }
+
+        .footer-copy {
+            font-size: 9px;
+            padding: 2px 6px 6px;
+        }
+    }
+
+    /* 手機橫式模式滿版顯示 */
+    @media (max-width: 768px) and (orientation: landscape) {
+        .footer {
+            width: 100%;
+            margin: 0;
+            padding: 10px 0;
+        }
+
+        .footer-nav {
+            padding: 4px 10px 2px;
+            font-size: 0.8rem;
+        }
+
+        .footer-copy {
+            padding: 2px 10px 6px;
+            font-size: 10px;
+        }
+    }
+
+    /* 極小螢幕橫式模式 */
+    @media (max-width: 768px) and (orientation: landscape) and (max-height: 500px) {
+        .footer {
+            padding: 8px 0;
+        }
+
+        .footer-nav {
+            padding: 2px 8px 1px;
+            font-size: 0.75rem;
+        }
+
+        .footer-copy {
+            padding: 1px 8px 4px;
+            font-size: 9px;
         }
     }
 </style>

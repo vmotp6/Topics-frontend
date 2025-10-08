@@ -2,13 +2,18 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-$isLoggedIn = isset($_SESSION['username']);
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 
 // 路徑配置
 $config = [
     'base_url' => '/Topics-frontend/frontend/',
     'share_url' => '/Topics-frontend/frontend/share/'
 ];
+
+// 獲取當前域名和端口
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$base_url = $protocol . '://' . $host;
 
 // 路徑生成函數
 function getCorrectPath($targetFile) {
@@ -63,7 +68,7 @@ function getResourcePath($resourceFile) {
     gap: 15px;
     flex-shrink: 0;
     margin-right: 20px;
-    margin-left: -15px;
+    margin-left: -25px;
     transition: all 0.3s ease;
     border-radius: 8px;
     padding: 5px;
@@ -91,7 +96,124 @@ function getResourcePath($resourceFile) {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    margin-left: 45px;
+    margin-left: 55px;
+  }
+
+  /* 漢堡選單樣式 */
+  .hamburger-menu {
+    display: none;
+    cursor: pointer;
+    padding: 10px;
+    z-index: 1001;
+  }
+
+  .hamburger-icon {
+    width: 25px;
+    height: 20px;
+    position: relative;
+    transform: rotate(0deg);
+    transition: 0.5s ease-in-out;
+  }
+
+  .hamburger-icon span {
+    display: block;
+    position: absolute;
+    height: 3px;
+    width: 100%;
+    background: #2c3e50;
+    border-radius: 2px;
+    opacity: 1;
+    left: 0;
+    transform: rotate(0deg);
+    transition: 0.25s ease-in-out;
+  }
+
+  .hamburger-icon span:nth-child(1) {
+    top: 0px;
+  }
+
+  .hamburger-icon span:nth-child(2) {
+    top: 8px;
+  }
+
+  .hamburger-icon span:nth-child(3) {
+    top: 16px;
+  }
+
+  /* 漢堡選單動畫 */
+  .hamburger-menu.active .hamburger-icon span:nth-child(1) {
+    top: 8px;
+    transform: rotate(135deg);
+  }
+
+  .hamburger-menu.active .hamburger-icon span:nth-child(2) {
+    opacity: 0;
+    left: -60px;
+  }
+
+  .hamburger-menu.active .hamburger-icon span:nth-child(3) {
+    top: 8px;
+    transform: rotate(-135deg);
+  }
+
+  /* 手機版選單 */
+  .mobile-menu {
+    display: none;
+    position: fixed;
+    top: 80px;
+    left: 0;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 20px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  .mobile-menu.active {
+    display: block;
+  }
+
+  .mobile-menu .mobile-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
+  .mobile-menu .mobile-nav-links a {
+    color: #2c3e50;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 15px 20px;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+  }
+
+  .mobile-menu .mobile-nav-links a:hover {
+    background: #667eea;
+    color: white;
+    transform: translateX(5px);
+  }
+
+  .mobile-menu .mobile-auth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+  }
+
+  .mobile-menu .mobile-auth-buttons .btn-auth {
+    width: 100%;
+    text-align: center;
+    padding: 15px 20px;
+    font-size: 1.1rem;
   }
 
   .logo-icon {
@@ -417,11 +539,11 @@ function getResourcePath($resourceFile) {
   @media (max-width: 1200px) {
     .logo {
       margin-right: 15px;
-      margin-left: -15px;
+      margin-left: -20px;
     }
 
     .navbar-user {
-      margin-left: 35px;
+      margin-left: 40px;
     }
 
     .navbar-links {
@@ -439,11 +561,11 @@ function getResourcePath($resourceFile) {
   @media (max-width: 1024px) {
     .logo {
       margin-right: 10px;
-      margin-left: -15px;
+      margin-left: -20px;
     }
 
     .navbar-user {
-      margin-left: 30px;
+      margin-left: 35px;
     }
 
     .navbar-links {
@@ -469,43 +591,77 @@ function getResourcePath($resourceFile) {
   }
 
   @media (max-width: 768px) {
+    .navbar {
+      padding: 10px 15px;
+    }
+
+    .container {
+      padding: 0 15px;
+    }
+
     .logo {
       margin-right: 10px;
-      margin-left: -15px;
+      margin-left: -20px;
+      flex-shrink: 0;
     }
 
-    .navbar-user {
-      margin-left: 30px;
+    .logo-text {
+      display: flex;
+      flex-direction: column;
     }
-
-    .navbar-links {
-      display: none;
-    }
-
+    
     .logo-title {
       font-size: 1rem;
-      white-space: nowrap;
+      font-weight: 600;
     }
-
+    
     .logo-subtitle {
-      font-size: 0.7rem;
-      white-space: nowrap;
+      display: none;
     }
 
     .logo-icon {
       width: 40px;
       height: 40px;
       font-size: 20px;
+      margin-right: 0;
+    }
+
+    .navbar-links {
+      display: none;
+    }
+
+    .hamburger-menu {
+      display: block;
+    }
+
+    .navbar-user {
+      margin-left: 15px;
+      flex-shrink: 0;
     }
 
     .auth-buttons {
-      gap: 8px;
+      display: none;
     }
 
     .btn-auth {
       padding: 8px 12px;
       font-size: 0.75rem;
       white-space: nowrap;
+    }
+
+    .avatar-btn {
+      width: 35px;
+      height: 35px;
+    }
+
+    .avatar-img {
+      width: 28px;
+      height: 28px;
+    }
+
+    .dropdown-menu {
+      right: -10px;
+      min-width: 120px;
     }
   }
 
@@ -575,16 +731,59 @@ function getResourcePath($resourceFile) {
 
   /* 響應式設計 */
   @media (max-width: 480px) {
+    .navbar {
+      padding: 8px 10px;
+    }
+
+    .logo {
+      margin-left: -15px;
+    }
+
+    .logo-icon {
+      width: 35px;
+      height: 35px;
+      font-size: 18px;
+    }
+
+    .navbar-user {
+      margin-left: 10px;
+    }
+
+    .auth-buttons {
+      gap: 5px;
+    }
+
+    .btn-auth {
+      padding: 6px 8px;
+      font-size: 0.7rem;
+    }
+
+    .avatar-btn {
+      width: 30px;
+      height: 30px;
+    }
+
+    .avatar-img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .dropdown-menu {
+      right: -15px;
+      min-width: 100px;
+      padding: 10px;
+    }
+
     .google-login-btn {
-      min-width: 180px;
-      padding: 10px 14px;
-      font-size: 13px;
+      min-width: 160px;
+      padding: 8px 12px;
+      font-size: 12px;
     }
     
     .google-login-btn svg {
-      width: 16px;
-      height: 16px;
-      margin-right: 10px;
+      width: 14px;
+      height: 14px;
+      margin-right: 8px;
     }
   }
 
@@ -630,7 +829,6 @@ function getResourcePath($resourceFile) {
   </a>
 
   <div class="navbar-links">
-    <a href="<?php echo getCorrectPath('index.php'); ?>">首頁</a>
     <a href="<?php echo getCorrectPath('QA.php'); ?>">招生QA問答</a>
     <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">🤖 助手設置</a>
     <?php if ($isLoggedIn): ?>
@@ -647,12 +845,21 @@ function getResourcePath($resourceFile) {
     <?php endif; ?>
   </div>
 
+  <!-- 漢堡選單按鈕 -->
+  <div class="hamburger-menu" id="hamburgerMenu">
+    <div class="hamburger-icon">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+
 <?php if ($isLoggedIn): ?>
   <div class="user-dropdown">
                    <div class="avatar-btn" onclick="toggleDropdown()">
              <?php
              // 獲取用戶頭像
-             $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+             $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
                      // 使用絕對路徑來避免相對路徑問題
@@ -671,13 +878,19 @@ function getResourcePath($resourceFile) {
                          $result = $stmt->get_result();
                          if ($row = $result->fetch_assoc()) {
                              if (!empty($row['profile_picture'])) {
-                                 $avatar_src = $row['profile_picture'];
+                                 // 檢查是否為完整URL或相對路徑
+                                 if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
+                                     $avatar_src = $row['profile_picture'];
+                                 } else {
+                                     $avatar_src = './share/' . $row['profile_picture'];
+                                 }
                              }
                          }
                          $conn->close();
                      }
                  } catch (Exception $e) {
                      // 使用預設頭像
+                     error_log("頭像載入錯誤: " . $e->getMessage());
                  }
              }
              ?>
@@ -710,6 +923,38 @@ function getResourcePath($resourceFile) {
 </div>
 </div>
 
+<!-- 手機版選單 -->
+<div class="mobile-menu" id="mobileMenu">
+  <div class="mobile-nav-links">
+    <a href="<?php echo getCorrectPath('QA.php'); ?>">招生QA問答</a>
+    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>">🤖 助手設置</a>
+    <?php if ($isLoggedIn): ?>
+      <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
+    <?php endif; ?>
+    <a href="<?php echo getCorrectPath('continued_admission.php'); ?>">續招報名</a>
+    <a href="<?php echo getCorrectPath('admission.php'); ?>">五專入學說明會</a>
+    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>">推薦報名</a>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+      <a href="<?php echo getCorrectPath('records.php'); ?>">活動紀錄填報表單</a>
+    <?php endif; ?>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
+      <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>">推薦管理</a>
+    <?php endif; ?>
+  </div>
+  
+  <?php if (!$isLoggedIn): ?>
+    <div class="mobile-auth-buttons">
+      <a href="#" id="mobileOpenModalBtn" class="btn-auth btn-register">
+        <i class="fas fa-user-plus"></i>
+        註冊
+      </a>
+      <a href="#" id="mobileOpenLoginBtn" class="btn-auth btn-login">
+        <i class="fas fa-sign-in-alt"></i>
+        登入
+      </a>
+    </div>
+  <?php endif; ?>
+</div>
 
 <!-- 註冊視窗 -->
 <div class="modal" id="registerModal">
@@ -918,6 +1163,28 @@ function toggleDropdown() {
   }
 }
 
+// 漢堡選單功能
+function toggleMobileMenu() {
+  const hamburgerMenu = document.getElementById('hamburgerMenu');
+  const mobileMenu = document.getElementById('mobileMenu');
+  
+  if (hamburgerMenu && mobileMenu) {
+    hamburgerMenu.classList.toggle('active');
+    mobileMenu.classList.toggle('active');
+  }
+}
+
+// 關閉手機版選單
+function closeMobileMenu() {
+  const hamburgerMenu = document.getElementById('hamburgerMenu');
+  const mobileMenu = document.getElementById('mobileMenu');
+  
+  if (hamburgerMenu && mobileMenu) {
+    hamburgerMenu.classList.remove('active');
+    mobileMenu.classList.remove('active');
+  }
+}
+
 // 點擊外部收起選單
 window.addEventListener("click", function (e) {
   const dropdown = document.getElementById("dropdownMenu");
@@ -925,6 +1192,60 @@ window.addEventListener("click", function (e) {
   if (dropdown && avatar && !avatar.contains(e.target) && !dropdown.contains(e.target)) {
     dropdown.style.display = "none";
   }
+});
+
+// 漢堡選單事件監聽器
+document.addEventListener('DOMContentLoaded', function() {
+  const hamburgerMenu = document.getElementById('hamburgerMenu');
+  const mobileMenu = document.getElementById('mobileMenu');
+  const mobileOpenLoginBtn = document.getElementById('mobileOpenLoginBtn');
+  const mobileOpenModalBtn = document.getElementById('mobileOpenModalBtn');
+  
+  // 漢堡選單點擊事件
+  if (hamburgerMenu) {
+    hamburgerMenu.addEventListener('click', toggleMobileMenu);
+  }
+  
+  // 手機版選單連結點擊後關閉選單
+  if (mobileMenu) {
+    const mobileLinks = mobileMenu.querySelectorAll('a');
+    mobileLinks.forEach(link => {
+      link.addEventListener('click', closeMobileMenu);
+    });
+  }
+  
+  // 手機版登入按鈕
+  if (mobileOpenLoginBtn) {
+    mobileOpenLoginBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      closeMobileMenu();
+      const loginModal = document.getElementById('loginModal');
+      if (loginModal) {
+        loginModal.style.display = 'flex';
+      }
+    });
+  }
+  
+  // 手機版註冊按鈕
+  if (mobileOpenModalBtn) {
+    mobileOpenModalBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      closeMobileMenu();
+      const registerModal = document.getElementById('registerModal');
+      if (registerModal) {
+        registerModal.style.display = 'flex';
+      }
+    });
+  }
+  
+  // 點擊外部關閉手機版選單
+  document.addEventListener('click', function(e) {
+    if (mobileMenu && mobileMenu.classList.contains('active')) {
+      if (!hamburgerMenu.contains(e.target) && !mobileMenu.contains(e.target)) {
+        closeMobileMenu();
+      }
+    }
+  });
 });
 
 // 檢查老師個人資料是否已填寫
