@@ -25,7 +25,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 }
 
 // 檢查管理員權限
-if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'admin') {
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '管理員') {
     header('Location: index.php');
     exit();
 }

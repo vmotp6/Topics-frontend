@@ -2,13 +2,18 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-$isLoggedIn = isset($_SESSION['username']);
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 
 // 路徑配置
 $config = [
     'base_url' => '/Topics-frontend/frontend/',
     'share_url' => '/Topics-frontend/frontend/share/'
 ];
+
+// 獲取當前域名和端口
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$base_url = $protocol . '://' . $host;
 
 // 路徑生成函數
 function getCorrectPath($targetFile) {
@@ -652,7 +657,7 @@ function getResourcePath($resourceFile) {
                    <div class="avatar-btn" onclick="toggleDropdown()">
              <?php
              // 獲取用戶頭像
-             $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+             $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
                      // 使用絕對路徑來避免相對路徑問題
@@ -671,13 +676,19 @@ function getResourcePath($resourceFile) {
                          $result = $stmt->get_result();
                          if ($row = $result->fetch_assoc()) {
                              if (!empty($row['profile_picture'])) {
-                                 $avatar_src = $row['profile_picture'];
+                                 // 檢查是否為完整URL或相對路徑
+                                 if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
+                                     $avatar_src = $row['profile_picture'];
+                                 } else {
+                                     $avatar_src = './share/' . $row['profile_picture'];
+                                 }
                              }
                          }
                          $conn->close();
                      }
                  } catch (Exception $e) {
                      // 使用預設頭像
+                     error_log("頭像載入錯誤: " . $e->getMessage());
                  }
              }
              ?>
