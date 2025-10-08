@@ -9,7 +9,11 @@ $debug_mode = true; // 設為 false 可關閉調試模式
 
 if ($debug_mode) {
     // 調試模式：顯示詳細資訊
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+   if (
+    (!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) ||
+    !isset($_SESSION['role']) ||
+    !in_array($_SESSION['role'], ['老師', '學校行政人員'])
+) {
         echo "<div style='background: #f8d7da; color: #721c24; padding: 20px; margin: 20px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
         echo "<h3>⚠️ 登入驗證失敗</h3>";
         echo "<p><strong>原因分析：</strong>您需要以教師身分登入才能使用此功能</p>";
@@ -118,8 +122,25 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
 }
 
 // 查詢該教師的活動記錄
+// 查詢活動記錄
 $activity_records = [];
-if ($teacher_id) {
+
+if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
+    // 🔹 若是招生中心 → 查看所有老師紀錄
+    $records_sql = "SELECT ar.*, t.name AS teacher_name, t.department AS teacher_department
+                    FROM activity_records ar
+                    LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+                    ORDER BY ar.activity_date DESC, ar.id DESC";
+    $records_result = $conn->query($records_sql);
+    
+    if ($records_result) {
+        while ($row = $records_result->fetch_assoc()) {
+            $activity_records[] = $row;
+        }
+    }
+
+} elseif ($teacher_id) {
+    // 🔹 若是一般老師 → 只看自己的
     $records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY activity_date DESC, id DESC";
     $records_stmt = $conn->prepare($records_sql);
     if ($records_stmt) {
@@ -572,6 +593,8 @@ $conn->close();
                     <thead>
                         <tr>
                             <th><i class="fas fa-calendar"></i> 活動日期</th>
+                            <th><i class="fas fa-user"></i> 教師姓名</th>
+                            <th><i class="fas fa-building"></i> 所屬系所</th>
                             <th><i class="fas fa-school"></i> 學校名稱</th>
                             <th><i class="fas fa-tag"></i> 活動類型</th>
                             <th><i class="fas fa-clock"></i> 活動時間</th>
@@ -583,6 +606,8 @@ $conn->close();
                         <?php foreach ($activity_records as $record): ?>
                             <tr class="record-row">
                                 <td><?php echo htmlspecialchars($record['activity_date']); ?></td>
+                                <td><?php echo htmlspecialchars($record['teacher_name'] ?? '—'); ?></td>
+                                 <td><?php echo htmlspecialchars($record['teacher_department'] ?? '—'); ?></td>
                                 <td><?php echo htmlspecialchars($record['school_name']); ?></td>
                                 <td>
                                     <span class="activity-type"><?php echo htmlspecialchars($record['activity_type']); ?></span>
