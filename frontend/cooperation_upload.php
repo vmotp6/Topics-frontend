@@ -1,5 +1,6 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
 
 // 載入 reCAPTCHA 設定
 require_once '../backend/config/recaptcha_config.php';
@@ -246,13 +247,20 @@ $role = $_SESSION['role'] ?? '訪客';
             
             <div class="form-group">
                 <label for="junior_high">就讀或畢業國中:</label>
-                <div class="school-search-section">
-                    <input type="text" id="junior_high" name="junior_high" placeholder="校名關鍵字,如中正">
-                    <button type="button" class="search-btn" onclick="searchSchool()">搜尋學校>></button>
-                    <div id="schoolResults" class="school-results"></div>
+                <div class="modern-search-container">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="junior_high" name="junior_high" placeholder="請輸入學校名稱..." autocomplete="off">
+                        <div class="search-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="clear-btn" id="clearSearch" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </div>
+                    </div>
+                    <div id="schoolResults" class="modern-search-results"></div>
                 </div>
                 <div class="help-text">
-                    請在左方空格輸入校名關鍵字,並按下「搜尋學校」鈕
+                    <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，支援模糊匹配
                 </div>
             </div>
 
@@ -339,70 +347,77 @@ $role = $_SESSION['role'] ?? '訪客';
             document.getElementById('captchaDisplay').textContent = newCaptcha;
         }
 
-        // 學校搜尋功能
-        function searchSchool() {
+        // 即時搜尋功能 - 使用教育部API
+        function performSearch() {
             const keyword = document.getElementById('junior_high').value.trim();
             const resultsDiv = document.getElementById('schoolResults');
+            const clearBtn = document.getElementById('clearSearch');
+            
+            // 顯示/隱藏清除按鈕
+            if (keyword.length > 0) {
+                clearBtn.style.display = 'block';
+            } else {
+                clearBtn.style.display = 'none';
+                resultsDiv.classList.remove('show');
+                return;
+            }
             
             if (keyword.length < 2) {
-                resultsDiv.innerHTML = '<div class="school-result-item">請輸入至少2個字元</div>';
+                resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
                 resultsDiv.classList.add('show');
                 return;
             }
             
-            // 台灣北部國中學校列表
-            const schools = [
-                // 台北市
-                '中正國中', '建國中學', '北一女中', '成功高中', '中山女中', '松山高中', '大同高中', '大安高工',
-                '西松國中', '永吉國中', '信義國中', '松山國中', '敦化國中', '介壽國中', '中崙高中', '松山工農',
-                '南港高中', '內湖高中', '麗山高中', '大直高中', '百齡高中', '陽明高中', '士林高商', '復興高中',
-                '萬華國中', '大理高中', '華江高中', '成淵高中', '雙園國中', '龍山國中', '螢橋國中', '古亭國中',
-                '景美國中', '木柵國中', '實踐國中', '興福國中', '文山國中', '北政國中', '景興國中', '萬芳高中',
-                // 新北市
-                '板橋國中', '海山高中', '板橋高中', '華僑高中', '新北高工', '新莊國中', '新莊高中', '丹鳳高中',
-                '泰山高中', '林口國中', '林口高中', '五股國中', '蘆洲國中', '三民高中', '三重國中', '三重高中',
-                '新北高商', '永和國中', '永平高中', '中和高中', '錦和高中', '新店高中', '安康高中', '石碇高中',
-                '深坑國中', '坪林國中', '烏來國中', '三峽國中', '明德高中', '樹林高中', '樹林國中', '鶯歌國中',
-                '鶯歌工商', '三芝國中', '石門國中', '金山高中', '萬里國中', '瑞芳國中', '瑞芳高工', '雙溪高中',
-                '貢寮國中', '平溪國中', '汐止國中', '秀峰高中', '金山高中', '淡水國中', '淡江高中', '竹圍國中',
-                // 桃園市
-                '桃園國中', '武陵高中', '桃園高中', '中壢國中', '中壢高中', '內壢高中', '平鎮高中', '楊梅高中',
-                '大園國中', '大園高中', '蘆竹國中', '南崁高中', '龜山國中', '八德國中', '八德高中', '大溪國中',
-                '大溪高中', '復興國中', '復興高中', '龍潭國中', '龍潭高中', '新屋國中', '觀音國中', '草漯國中',
-                // 基隆市
-                '基隆國中', '基隆女中', '基隆高中', '安樂國中', '八斗國中', '中正國中', '正濱國中', '信義國中',
-                '暖暖國中', '碇內國中', '七堵國中', '百福國中', '中山高中', '海大附中', '聖心高中', '二信高中',
-                // 新竹市
-                '新竹國中', '新竹女中', '新竹高中', '光復高中', '香山高中', '成德高中', '建功高中', '實驗高中',
-                // 新竹縣
-                '竹北國中', '竹北高中', '六家高中', '湖口高中', '新湖國中', '新豐國中', '新豐高中', '關西國中',
-                '關西高中', '芎林國中', '橫山國中', '北埔國中', '峨眉國中', '寶山國中', '竹東國中', '竹東高中',
-                '五峰國中', '尖石國中'
-            ];
-            
-            // 搜尋匹配的學校
-            const matches = schools.filter(school => school.includes(keyword));
-            
-            if (matches.length === 0) {
-                resultsDiv.innerHTML = '<div class="school-result-item">找不到匹配的學校</div>';
-            } else {
-                resultsDiv.innerHTML = matches.map(school => 
-                    `<div class="school-result-item" onclick="selectSchool('${school}')">${school}</div>`
-                ).join('');
-            }
-            
+            // 顯示載入中
+            resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
             resultsDiv.classList.add('show');
+            
+            // 從API獲取搜尋結果
+            fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.schools && data.schools.length > 0) {
+                        resultsDiv.innerHTML = data.schools.map(school => 
+                            `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                                <i class="fas fa-school"></i>
+                                <div class="school-info">
+                                    <span class="school-name">${school.name}</span>
+                                    <span class="school-location">${school.city} ${school.district}</span>
+                                </div>
+                            </div>`
+                        ).join('');
+                        
+                        if (data.total > 20) {
+                            resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
+                        }
+                    } else {
+                        resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('搜尋錯誤:', error);
+                    resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+                });
+        }
+
+        // 清除搜尋
+        function clearSearch() {
+            document.getElementById('junior_high').value = '';
+            document.getElementById('schoolResults').classList.remove('show');
+            document.getElementById('clearSearch').style.display = 'none';
         }
         
         // 選擇學校
-        function selectSchool(schoolName) {
-            document.getElementById('junior_high').value = schoolName;
+        function selectSchool(schoolName, city, district) {
+            const fullSchoolName = `${schoolName} (${city}${district})`;
+            document.getElementById('junior_high').value = fullSchoolName;
             document.getElementById('schoolResults').classList.remove('show');
+            document.getElementById('clearSearch').style.display = 'block';
         }
         
         // 點擊其他地方隱藏搜尋結果
         document.addEventListener('click', function(e) {
-            if (!e.target.closest('.school-search-section')) {
+            if (!e.target.closest('.modern-search-container')) {
                 document.getElementById('schoolResults').classList.remove('show');
             }
         });
@@ -460,9 +475,26 @@ $role = $_SESSION['role'] ?? '訪客';
             });
         });
 
-        // 頁面載入時初始化驗證碼
+        // 頁面載入時初始化
         document.addEventListener('DOMContentLoaded', function() {
             refreshCaptcha();
+            
+            // 綁定即時搜尋事件
+            const searchInput = document.getElementById('junior_high');
+            const clearBtn = document.getElementById('clearSearch');
+            
+            // 輸入事件（即時搜尋）
+            searchInput.addEventListener('input', performSearch);
+            
+            // 清除按鈕事件
+            clearBtn.addEventListener('click', clearSearch);
+            
+            // 鍵盤事件
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    clearSearch();
+                }
+            });
         });
     </script>
 </body>

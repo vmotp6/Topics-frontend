@@ -150,48 +150,63 @@
   font-style: italic;
 }
 
-.cooperation-page-wrapper .school-search-section {
+/* 現代化搜尋容器 */
+.cooperation-page-wrapper .modern-search-container {
   position: relative;
 }
 
-.cooperation-page-wrapper .school-search-section input {
+.cooperation-page-wrapper .search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cooperation-page-wrapper .search-input-wrapper input {
   width: 100%;
-  padding: 12px 15px;
+  padding: 12px 45px 12px 15px;
   border: 2px solid #e1e8ed;
   border-radius: 8px;
   font-size: 1rem;
   transition: all 0.3s ease;
+  box-sizing: border-box;
 }
 
-.cooperation-page-wrapper .school-search-section input:focus {
+.cooperation-page-wrapper .search-input-wrapper input:focus {
   outline: none;
   border-color: #28a745;
   box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
 }
 
-.cooperation-page-wrapper .search-btn {
-  background: #28a745;
-  color: white;
+.cooperation-page-wrapper .search-icon {
+  position: absolute;
+  right: 15px;
+  color: #6c757d;
+  pointer-events: none;
+}
+
+.cooperation-page-wrapper .clear-btn {
+  position: absolute;
+  right: 40px;
+  background: none;
   border: none;
-  padding: 12px 20px;
-  border-radius: 8px;
+  color: #6c757d;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  margin-top: 10px;
+  padding: 5px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
-.cooperation-page-wrapper .search-btn:hover {
-  background: #218838;
-  transform: translateY(-1px);
+.cooperation-page-wrapper .clear-btn:hover {
+  background: #f8f9fa;
+  color: #dc3545;
 }
 
-.cooperation-page-wrapper .search-btn:active {
-  transform: translateY(0);
-}
-
-.cooperation-page-wrapper .school-results {
+.cooperation-page-wrapper .modern-search-results {
   position: absolute;
   top: 100%;
   left: 0;
@@ -200,29 +215,79 @@
   border: 1px solid #e1e8ed;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
   z-index: 1000;
   display: none;
+  margin-top: 2px;
 }
 
-.cooperation-page-wrapper .school-results.show {
+.cooperation-page-wrapper .modern-search-results.show {
   display: block;
 }
 
-.cooperation-page-wrapper .school-result-item {
+.cooperation-page-wrapper .search-result-item {
   padding: 12px 15px;
   cursor: pointer;
   border-bottom: 1px solid #f1f3f4;
   transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.cooperation-page-wrapper .school-result-item:hover {
+.cooperation-page-wrapper .search-result-item:hover {
   background: #f8f9fa;
 }
 
-.cooperation-page-wrapper .school-result-item:last-child {
+.cooperation-page-wrapper .search-result-item:last-child {
   border-bottom: none;
+}
+
+.cooperation-page-wrapper .search-result-item i {
+  color: #28a745;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.cooperation-page-wrapper .school-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.cooperation-page-wrapper .school-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.cooperation-page-wrapper .school-location {
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+.cooperation-page-wrapper .search-result-item.more-results {
+  background: #e9ecef;
+  color: #6c757d;
+  font-style: italic;
+  cursor: default;
+  justify-content: center;
+}
+
+.cooperation-page-wrapper .search-result-item.more-results:hover {
+  background: #e9ecef;
+}
+
+/* 載入動畫 */
+.cooperation-page-wrapper .fa-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .cooperation-page-wrapper .captcha-section {
