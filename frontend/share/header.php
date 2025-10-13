@@ -1117,34 +1117,35 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
 
-      // 儲存到 sessionStorage
-      sessionStorage.setItem("username", data.username);
-      sessionStorage.setItem("role", data.role);
-
       // 將資料儲存進 PHP session
       fetch("<?php echo getCorrectPath('set_session.php'); ?>", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          logged_in: true, // 增加 logged_in 狀態
           username: data.username,
           role: data.role
         })
       })
+      .then(response => response.json())
       .then(() => {
-        // 根據身分跳轉頁面
-        setTimeout(() => {
-          if (data.role === "老師") {
-            window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-          } else if (data.role === "學生") {
-            window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-          } else if (data.role === "廠商") {
-            window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
-          } else if (data.role === "學校行政人員") {
-            window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
-          } else {
-            window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
-          }
-        }, 500);
+        // 在 set_session.php 成功後才進行頁面跳轉
+        if (data.role === "老師") {
+          window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
+        } else if (data.role === "學生") {
+          window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
+        } else if (data.role === "廠商") {
+          window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
+        } else if (data.role === "學校行政人員") {
+          window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
+        } else {
+          // 預設跳轉或重新載入當前頁面
+          window.location.reload();
+        }
+      })
+      .catch(err => {
+        console.error('設定 Session 失敗:', err);
+        document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";
       });
     } else {
       document.getElementById("loginMessage").style.color = "red";
@@ -1293,4 +1294,3 @@ function checkTeacherProfile() {
 // window.addEventListener('load', checkTeacherProfile);
 
 </script>
-
