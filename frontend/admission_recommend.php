@@ -49,7 +49,7 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                 $message = "找到 " . count($search_results) . " 筆推薦記錄";
                 $messageType = "success";
             } else {
-                $message = "未找到學號 " . htmlspecialchars($search_student_id) . " 的推薦記錄";
+                $message = "未找到學號或教師編號 " . htmlspecialchars($search_student_id) . " 的推薦記錄";
                 $messageType = "error";
             }
             $stmt->close();
@@ -73,8 +73,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $required_fields = [
             'recommender_name', 'recommender_student_id', 'recommender_grade', 
             'recommender_department', 'recommender_phone', 'recommender_email',
-            'student_name', 'student_school', 'student_grade', 
-            'student_phone', 'student_email', 'recommendation_reason'
+            'student_name', 'student_school', 
+            'student_phone', 'recommendation_reason'
         ];
         
         $missing_fields = [];
@@ -94,9 +94,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 'recommender_email' => '推薦人電子郵件',
                 'student_name' => '學生姓名',
                 'student_school' => '就讀學校',
-                'student_grade' => '學生年級',
                 'student_phone' => '學生聯絡電話',
-                'student_email' => '學生電子郵件',
                 'recommendation_reason' => '推薦理由'
             ];
             
@@ -113,7 +111,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             throw new Exception('推薦人電子郵件格式不正確');
         }
         
-        if (!filter_var($_POST['student_email'], FILTER_VALIDATE_EMAIL)) {
+        // 如果學生有填寫電子郵件，則驗證格式
+        if (!empty($_POST['student_email']) && !filter_var($_POST['student_email'], FILTER_VALIDATE_EMAIL)) {
             throw new Exception('被推薦學生電子郵件格式不正確');
         }
         
@@ -123,20 +122,54 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             recommender_department, recommender_phone, recommender_email,
             student_name, student_school, student_grade, 
             student_phone, student_email, student_line_id,
-            recommendation_reason, student_interest, additional_info
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            recommendation_reason, student_interest, additional_info, proof_evidence
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             throw new Exception("SQL 準備失敗: " . $conn->error);
         }
         
+        // 處理檔案上傳
+        $proof_evidence_path = '';
+        $has_other_proof = isset($_POST['other_proof_checkbox']) && $_POST['other_proof_checkbox'] === '1';
+        
+        if ($has_other_proof && isset($_FILES['proof_evidence']) && $_FILES['proof_evidence']['error'] === UPLOAD_ERR_OK) {
+            $upload_dir = 'uploads/proof_evidence/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            
+            $file_info = pathinfo($_FILES['proof_evidence']['name']);
+            $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'];
+            $max_file_size = 5 * 1024 * 1024; // 5MB
+            
+            if (!in_array(strtolower($file_info['extension']), $allowed_extensions)) {
+                throw new Exception('不支援的檔案格式。請上傳圖片檔（JPG, PNG, GIF）、PDF或Word文件。');
+            }
+            
+            if ($_FILES['proof_evidence']['size'] > $max_file_size) {
+                throw new Exception('檔案大小超過5MB限制。');
+            }
+            
+            $new_filename = uniqid() . '_' . time() . '.' . $file_info['extension'];
+            $upload_path = $upload_dir . $new_filename;
+            
+            if (move_uploaded_file($_FILES['proof_evidence']['tmp_name'], $upload_path)) {
+                $proof_evidence_path = $upload_path;
+            } else {
+                throw new Exception('檔案上傳失敗，請重試。');
+            }
+        }
+        
         // 準備變數，避免 bind_param 的引用問題
+        $student_grade = $_POST['student_grade'] ?? '';
+        $student_email = $_POST['student_email'] ?? '';
         $student_line_id = $_POST['student_line_id'] ?? '';
         $student_interest = $_POST['student_interest'] ?? '';
         $additional_info = $_POST['additional_info'] ?? '';
         
-        $stmt->bind_param("sssssssssssssss",
+        $stmt->bind_param("ssssssssssssssss",
             $_POST['recommender_name'],
             $_POST['recommender_student_id'],
             $_POST['recommender_grade'],
@@ -145,13 +178,14 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $_POST['recommender_email'],
             $_POST['student_name'],
             $_POST['student_school'],
-            $_POST['student_grade'],
+            $student_grade,
             $_POST['student_phone'],
-            $_POST['student_email'],
+            $student_email,
             $student_line_id,
             $_POST['recommendation_reason'],
             $student_interest,
-            $additional_info
+            $additional_info,
+            $proof_evidence_path
         );
         
         if ($stmt->execute()) {
@@ -277,10 +311,10 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
     </div>
     <?php endif; ?>
 
-    <form method="POST" action="">
+    <form method="POST" action="" enctype="multipart/form-data">
       <!-- 推薦人資訊 -->
       <div class="form-section">
-        <h3><i class="fas fa-user"></i> 推薦人資訊（在校生）</h3>
+        <h3><i class="fas fa-user"></i> 推薦人資訊（在校生或教職員）</h3>
         
         <div class="form-row">
           <div class="form-group">
@@ -290,7 +324,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </div>
           
           <div class="form-group">
-            <label for="recommender_student_id">學號 <span class="required">*</span></label>
+            <label for="recommender_student_id">學號或教師編號 <span class="required">*</span></label>
             <input type="text" id="recommender_student_id" name="recommender_student_id" 
                    value="<?php echo isset($_POST['recommender_student_id']) ? htmlspecialchars($_POST['recommender_student_id']) : ''; ?>" required>
           </div>
@@ -358,8 +392,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
         <div class="form-row">
           <div class="form-group">
-            <label for="student_grade">年級 <span class="required">*</span></label>
-            <select id="student_grade" name="student_grade" required>
+            <label for="student_grade">年級（選填）</label>
+            <select id="student_grade" name="student_grade">
               <option value="">請選擇年級</option>
               <option value="七年級" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '七年級') ? 'selected' : ''; ?>>七年級</option>
               <option value="八年級" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '八年級') ? 'selected' : ''; ?>>八年級</option>
@@ -376,9 +410,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
         <div class="form-row">
           <div class="form-group">
-            <label for="student_email">電子郵件 <span class="required">*</span></label>
+            <label for="student_email">電子郵件（選填）</label>
             <input type="email" id="student_email" name="student_email" 
-                   value="<?php echo isset($_POST['student_email']) ? htmlspecialchars($_POST['student_email']) : ''; ?>" required>
+                   value="<?php echo isset($_POST['student_email']) ? htmlspecialchars($_POST['student_email']) : ''; ?>">
           </div>
           
           <div class="form-group">
@@ -403,6 +437,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           <label for="student_interest">學生興趣領域（選填）</label>
           <select id="student_interest" name="student_interest">
             <option value="">請選擇興趣領域</option>
+            <option value="不限定" <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === '不限定') ? 'selected' : ''; ?>>不限定</option>
             <?php foreach ($courses as $course): ?>
               <option value="<?php echo htmlspecialchars($course); ?>" 
                       <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === $course) ? 'selected' : ''; ?>>
@@ -410,6 +445,17 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               </option>
             <?php endforeach; ?>
           </select>
+        </div>
+
+        <div class="form-group full-width">
+          <div class="document-item">
+            <label>其他相關證明文件</label>
+            <input type="file" id="proof_evidence" name="proof_evidence" 
+                   accept="image/*,.pdf,.doc,.docx" class="file-input">
+          </div>
+          <div class="note">
+            <i class="fas fa-info-circle"></i> 請上傳相關證明文件(支援PDF、JPG、PNG格式,單個文件大小不超過5MB)
+          </div>
         </div>
 
         <div class="form-group full-width">
@@ -428,5 +474,44 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 </div>
 
 <?php include("share/footer.php"); ?>
+
+<script>
+// 檔案上傳區域互動功能
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.querySelector('input[name="other_proof_checkbox"]');
+    const fileInput = document.getElementById('proof_evidence');
+    const documentItem = document.querySelector('.document-item');
+    
+    // 控制檔案上傳區域的顯示/隱藏
+    function updateFileUploadVisibility() {
+        if (checkbox.checked) {
+            fileInput.style.display = 'block';
+            fileInput.disabled = false;
+        } else {
+            fileInput.style.display = 'none';
+            fileInput.disabled = true;
+            fileInput.value = ''; // 清空檔案選擇
+        }
+    }
+    
+    // 監聽複選框變化
+    checkbox.addEventListener('change', updateFileUploadVisibility);
+    
+    // 初始化
+    updateFileUploadVisibility();
+    
+    // 檔案選擇後的視覺反饋
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            this.style.borderColor = '#28a745';
+            this.style.backgroundColor = '#f8fff9';
+        } else {
+            this.style.borderColor = '#ddd';
+            this.style.backgroundColor = 'white';
+        }
+    });
+});
+</script>
+
 </body>
 </html>
