@@ -49,14 +49,14 @@ $role = $_SESSION['role'] ?? '訪客';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>康寧大學就讀意願登錄</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/csp/cooperation_upload.css">
+    <link rel="stylesheet" href="assets/csp/cooperation_upload.css?v=20241014-2">
 </head>
 
 <body>
     <?php include("share/header.php"); ?>
     <div class="cooperation-page-wrapper">
         <div class="cooperation-container">
-            <div class="cooperation-header">
+            <div class="cooperation-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;">
                 <h1><i class="fas fa-graduation-cap"></i> 康寧大學就讀意願登錄</h1>
                 <p>填寫您的就讀意願，我們將儘快與您聯絡</p>
             </div>
@@ -131,13 +131,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention1">就讀意願一:</label>
                             <select id="intention1" name="intention1">
                                 <option value="無特定">無特定</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -152,13 +153,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="department1">科系:</label>
                             <select id="department1" name="department1">
                                 <option value="">請選擇</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                     </div>
@@ -168,13 +170,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention2">就讀意願二:</label>
                             <select id="intention2" name="intention2">
                                 <option value="無特定">無特定</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -189,13 +192,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="department2">科系:</label>
                             <select id="department2" name="department2">
                                 <option value="">請選擇</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                     </div>
@@ -205,13 +209,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention3">就讀意願三:</label>
                             <select id="intention3" name="intention3">
                                 <option value="無特定">無特定</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -226,13 +231,14 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="department3">科系:</label>
                             <select id="department3" name="department3">
                                 <option value="">請選擇</option>
+                                <option value="護理科">護理科</option>
+                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
+                                <option value="視光科">視光科</option>
+                                <option value="數位影視動畫科">數位影視動畫科</option>
                                 <option value="資訊管理科">資訊管理科</option>
                                 <option value="企業管理科">企業管理科</option>
-                                <option value="護理科">護理科</option>
-                                <option value="幼保科">幼保科</option>
                                 <option value="應用外語科">應用外語科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="動畫科">動畫科</option>
+                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                     </div>
@@ -493,18 +499,16 @@ $role = $_SESSION['role'] ?? '訪客';
         });
        // (你的其他JS程式碼：像驗證碼、搜尋、送出表單的程式...)
 
-        // ✅ 然後在最下面這裡貼上我剛給你的「科系對應學制」這一段 👇
+        // 科系對應學制設定
         const departmentSystems = {
-            "企業管理學系": ["四技"],
-            "長期照護學系": ["四技"],
-            "嬰幼兒保育學系": ["四技"],
             "護理科": ["五專"],
-            "幼保科": ["五專"],
+            "嬰幼兒保育科": ["五專", "四技"],
             "視光科": ["五專"],
-            "動畫科": ["五專"],
+            "數位影視動畫科": ["五專"],
             "資訊管理科": ["五專"],
-            "企業管理科": ["五專"],
-            "應用外語科": ["五專"]
+            "企業管理科": ["五專", "四技"],
+            "應用外語科": ["五專"],
+            "長期照護學系": ["四技"]
         };
 
         function updateSystemOptions(departmentSelectId, systemSelectId) {
@@ -525,6 +529,9 @@ $role = $_SESSION['role'] ?? '訪客';
 
         document.addEventListener("DOMContentLoaded", function() {
             const pairs = [
+                { dep: "intention1", sys: "system1" },
+                { dep: "intention2", sys: "system2" },
+                { dep: "intention3", sys: "system3" },
                 { dep: "department1", sys: "system1" },
                 { dep: "department2", sys: "system2" },
                 { dep: "department3", sys: "system3" }
