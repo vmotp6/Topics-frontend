@@ -1,3 +1,22 @@
+<?php
+// 載入 session 配置
+require_once 'session_config.php';
+
+// 檢查登入狀態
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
+
+// 如果未登入，重定向到首頁
+if (!$isLoggedIn) {
+    header("Location: index.php");
+    exit;
+}
+
+// 檢查是否為老師角色
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+    header("Location: index.php");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
 

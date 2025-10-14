@@ -1,5 +1,6 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
 
 // 引入配置檔案
 require_once 'config.php';
@@ -211,6 +212,7 @@ $conn->close();
     <title>活動記錄管理系統</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/records.css">
+<<<<<<< HEAD
     <script src="https://cdn.jsdelivr.net/npm/chart.js?v=2.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2?v=2.0"></script>
     <style>
@@ -541,6 +543,9 @@ $conn->close();
              text-align: center;
          }
     </style>
+=======
+    <link rel="stylesheet" href="assets/csp/activity_records_management.css">
+>>>>>>> 9e216731cdb08f4b37bc5fa33d9b45a117cad662
 </head>
 
 <?php include("share/header.php"); ?>
@@ -639,6 +644,10 @@ $conn->close();
                 <div class="form-group">
                     <label><i class="fas fa-search"></i> 搜索記錄</label>
                     <input type="text" id="searchRecords" placeholder="輸入學校名稱或活動類型..." onkeyup="filterRecords()">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-calendar-alt"></i> 活動日期</label>
+                    <input type="date" id="filterActivityDate" onchange="filterRecords()">
                 </div>
                 
                 <div class="form-group">
@@ -809,6 +818,7 @@ $conn->close();
         function filterRecords() {
             const searchValue = document.getElementById('searchRecords').value.toLowerCase();
             const filterType = document.getElementById('filterActivityType').value;
+            const filterDate = document.getElementById('filterActivityDate').value;
             const rows = document.querySelectorAll('.record-row');
             let visibleCount = 0;
             
@@ -821,8 +831,10 @@ $conn->close();
                                     activityType.includes(searchValue);
                                     
                 const matchesType = filterType === '' || activityType.includes(filterType.toLowerCase());
-                
-                if (matchesSearch && matchesType) {
+                const activityDate = row.cells[0].textContent.trim(); // 假設活動日期是第0欄
+                const matchesDate = filterDate === '' || activityDate === filterDate;
+
+                if (matchesSearch && matchesType && matchesDate) {
                     row.style.display = '';
                     visibleCount++;
                 } else {
@@ -844,6 +856,7 @@ $conn->close();
         function resetRecordsFilter() {
             document.getElementById('searchRecords').value = '';
             document.getElementById('filterActivityType').value = '';
+            document.getElementById('filterActivityDate').value = '';
             filterRecords();
         }
         

@@ -18,7 +18,7 @@
 }
 
 .cooperation-page-wrapper .cooperation-header {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
   border-radius: 10px;
   color: white;
   padding: 40px;
@@ -42,9 +42,9 @@
 }
 
 .cooperation-page-wrapper .form-description {
-  background: #e8f5e8;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background: #f0f6ff;
+  border: 1px solid #e3f2fd;
+  color: #1565c0;
   padding: 15px 20px;
   border-radius: 8px;
   margin-bottom: 30px;
@@ -53,7 +53,7 @@
 
 .cooperation-page-wrapper .form-description i {
   margin-right: 8px;
-  color: #28a745;
+  color: #667eea;
 }
 
 .cooperation-page-wrapper .section-title {
@@ -62,14 +62,14 @@
   font-weight: 600;
   margin: 40px 0 25px 0;
   padding-bottom: 10px;
-  border-bottom: 3px solid #28a745;
+  border-bottom: 3px solid #667eea !important;
   display: flex;
   align-items: center;
 }
 
 .cooperation-page-wrapper .section-title i {
   margin-right: 10px;
-  color: #28a745;
+  color: #667eea !important;
   font-size: 1.2rem;
 }
 
@@ -114,8 +114,8 @@
 .cooperation-page-wrapper .form-group select:focus,
 .cooperation-page-wrapper .form-group textarea:focus {
   outline: none;
-  border-color: #28a745;
-  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .cooperation-page-wrapper .form-group textarea {
@@ -173,8 +173,8 @@
 
 .cooperation-page-wrapper .search-input-wrapper input:focus {
   outline: none;
-  border-color: #28a745;
-  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .cooperation-page-wrapper .search-icon {
@@ -245,7 +245,7 @@
 }
 
 .cooperation-page-wrapper .search-result-item i {
-  color: #28a745;
+  color: #667eea;
   font-size: 0.9rem;
   flex-shrink: 0;
 }
@@ -339,7 +339,7 @@
 }
 
 .cooperation-page-wrapper .submit-btn {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
   padding: 15px 40px;
@@ -355,7 +355,7 @@
 
 .cooperation-page-wrapper .submit-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 }
 
 .cooperation-page-wrapper .submit-btn:active {
@@ -462,3 +462,6 @@
     font-size: 0.95rem;
   }
 }
+/ *   7_6R�f�e�_�S  * / 
+ 
+ 

@@ -13,8 +13,8 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查是否為學生角色
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
     header("Location: index.php");
     exit;
 }
@@ -32,7 +32,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         $redirect_url = 'index.php';
         if ($_GET['role'] === '管理員') {
             $redirect_url = 'admin.php';
-        } elseif ($_GET['role'] === '老師') {
+        } elseif ($_GET['role'] === '學生') {
             $redirect_url = 'teacher.php';
         }
         
@@ -47,7 +47,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 <head>
 	<meta charset="UTF-8">
 	<?php include("share/header.php"); ?>
-	<title>老師</title>
+	<title>學生</title>
 	<link rel="stylesheet" href="assets/csp/QA.css">
 	<style>
 		body { padding-top: 100px; }
@@ -172,11 +172,10 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 	<main>
 	<div class="teacher-container">
 		<div class="welcome-section">
-			<h1 class="welcome-title">歡迎，老師！</h1>
-			<p class="welcome-subtitle">您可以在這裡管理您的產學合作相關事務</p>
+			<h1 class="welcome-title">歡迎，學生！</h1>
 		</div>
 
-		<?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+		<?php if (isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
 			<div class="profile-reminder" id="profileReminder" style="display: none;">
 				<h3>📝 完善個人資料</h3>
 				<p>請填寫您的科系和聯絡電話，以便我們為您提供更好的服務。</p>
@@ -187,40 +186,37 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 		<div class="features-grid">
 			<div class="feature-card">
 				<div class="feature-icon">🤝</div>
-				<h3 class="feature-title">產學合作</h3>
-				<p class="feature-description">瀏覽和管理您的產學合作專案，與企業建立合作關係。</p>
-				<a href="cooperation_upload.php" class="feature-link">📝 上傳申請表</a>
-				<a href="teacher_cooperation_status.php" class="feature-link">📋 查看申請狀態</a>
+				<h3 class="feature-title">招生QA問答</h3>
+				<p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
+				<a href="QA.php" class="feature-link">招生QA問答</a>
 			</div>
 			
 			<div class="feature-card">
 				<div class="feature-icon">📚</div>
-				<h3 class="feature-title">課程管理</h3>
-				<p class="feature-description">管理您的課程內容，整合產學合作資源到教學中。</p>
+				<h3 class="feature-title">私訊聊天室</h3>
+				<p class="feature-description">老師或其他學生進行聊天。</p>
+				<a href="chat/chat.php" class="feature-link">私訊聊天室</a>
 			</div>
 			
 			<div class="feature-card">
 				<div class="feature-icon">👥</div>
-				<h3 class="feature-title">學生管理</h3>
-				<p class="feature-description">查看參與產學合作專案的學生名單和進度。</p>
+				<h3 class="feature-title">續招報名</h3>
+				<p class="feature-description">查看續招報名情況和進度。</p>
+				<a href="continued_admission.php" class="feature-link">續招報名</a>
 			</div>
 			
 			<div class="feature-card">
 				<div class="feature-icon">📊</div>
-				<h3 class="feature-title">數據分析</h3>
-				<p class="feature-description">查看產學合作專案的統計數據和成效分析。</p>
+				<h3 class="feature-title">五專入學說明會</h3>
+				<p class="feature-description">查看五專入學說明會情況和進度。</p>
+				<a href="admission.php" class="feature-link">五專入學說明會</a>
 			</div>
 			
 			<div class="feature-card">
-				<div class="feature-icon">💼</div>
-				<h3 class="feature-title">企業合作</h3>
-				<p class="feature-description">與企業建立合作關係，尋找合適的合作夥伴。</p>
-			</div>
-			
-			<div class="feature-card">
-				<div class="feature-icon">📋</div>
-				<h3 class="feature-title">報告管理</h3>
-				<p class="feature-description">管理產學合作專案的報告和文件。</p>
+				<div class="feature-icon">👥</div>
+				<h3 class="feature-title">推薦報名</h3>
+				<p class="feature-description">查看推薦報名情況和進度。</p>
+				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
 			</div>
 			
 			<div class="feature-card">
@@ -245,7 +241,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			console.log('個人資料提醒檢查功能已暫時禁用');
 			return;
 			
-		if (username && role === '老師' && reminder) {
+		if (username && role === '學生' && reminder) {
 			// 使用 AbortController 來設置超時
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
