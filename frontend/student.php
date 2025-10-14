@@ -1,7 +1,22 @@
 <?php
-// 在文件最開始啟動 session
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// 載入 session 配置
+require_once 'session_config.php';
+
+// 檢查登入狀態（與 header.php 保持一致）
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 如果未登入，重定向到首頁
+if (!$isLoggedIn) {
+    header("Location: index.php");
+    exit;
+}
+
+// 檢查是否為學生角色
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
+    header("Location: index.php");
+    exit;
 }
 
 // 處理Google登入回調

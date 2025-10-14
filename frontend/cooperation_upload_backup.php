@@ -1,5 +1,6 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
 
 // 載入 reCAPTCHA 設定
 require_once '../backend/config/recaptcha_config.php';

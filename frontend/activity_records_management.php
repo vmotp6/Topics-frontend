@@ -1,5 +1,6 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
 
 // 引入配置檔案
 require_once 'config.php';

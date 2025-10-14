@@ -1,3 +1,7 @@
+<?php
+// 載入 session 配置
+require_once 'session_config.php';
+?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>

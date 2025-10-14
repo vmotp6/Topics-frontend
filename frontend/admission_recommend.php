@@ -1,9 +1,6 @@
 <?php
-// 確保 session 正確啟動
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+// 載入 session 配置
+require_once 'session_config.php';
 require_once 'config.php';
 require_once 'config/email_notification_config.php';
 
@@ -544,7 +541,6 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
 <?php include("share/footer.php"); ?>
 
-<<<<<<< HEAD
 <script>
 // 檔案上傳區域互動功能
 document.addEventListener('DOMContentLoaded', function() {
@@ -767,7 +763,6 @@ document.addEventListener('DOMContentLoaded', function() {
       row.setAttribute('data-id', idCell.textContent.trim());
     }
   });
->>>>>>> 843dbd6e916d1d212fef61891f309aa43dda7e21
 });
 </script>
 
