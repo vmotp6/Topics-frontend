@@ -3,16 +3,18 @@
 // 解決Google登入後自動登出的問題
 
 // 設定 session 參數
-ini_set('session.cookie_lifetime', 86400); // 24小時
-ini_set('session.gc_maxlifetime', 86400);  // 24小時
-ini_set('session.cookie_httponly', 1);     // 防止XSS攻擊
-ini_set('session.cookie_secure', 0);       // 本地開發設為0，生產環境設為1
-ini_set('session.use_strict_mode', 1);     // 嚴格模式
-ini_set('session.cookie_path', '/');       // 設定cookie路徑為根目錄
-ini_set('session.cookie_domain', '');      // 清空域名設定，讓瀏覽器自動處理
-
-// 設定 session 名稱
-session_name('KANGNING_SESSION');
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.cookie_lifetime', 86400); // 24小時
+    ini_set('session.gc_maxlifetime', 86400);  // 24小時
+    ini_set('session.cookie_httponly', 1);     // 防止XSS攻擊
+    ini_set('session.cookie_secure', 0);       // 本地開發設為0，生產環境設為1
+    ini_set('session.use_strict_mode', 1);     // 嚴格模式
+    ini_set('session.cookie_path', '/');       // 設定cookie路徑為根目錄
+    ini_set('session.cookie_domain', '');      // 清空域名設定，讓瀏覽器自動處理
+    
+    // 設定 session 名稱
+    session_name('KANGNING_SESSION');
+}
 
 // 設定 session 儲存路徑（可選）
 // session_save_path('/tmp/sessions');
