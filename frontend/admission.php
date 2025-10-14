@@ -324,8 +324,9 @@ $conn->close();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 	<link rel="stylesheet" href="assets/csp/admission.css">
 </head>
-<?php include("share/header.php"); ?>
 <body>
+<?php include("share/header.php"); ?>
+<main>
     <div class="admission-container">
         <div class="header">
             <h1><i class="fas fa-graduation-cap"></i> 康寧大學五專入學說明會</h1>
@@ -714,6 +715,7 @@ $conn->close();
             initializeDragAndDrop();
         });
     </script>
+</main>
 <?php include("share/footer.php"); ?>
 </body>
 </html>

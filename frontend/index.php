@@ -248,9 +248,9 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
   </style>
 </head>
 
-<?php include("share/header.php"); ?>
-
 <body>
+<?php include("share/header.php"); ?>
+<main>
   <!-- 輪播圖片區域 -->
   <div class="carousel-container">
     <div id="carouselSlides">
@@ -509,7 +509,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
       loadCarouselData();
     });
   </script>
-
+</main>
 <?php include("share/footer.php"); ?>
 <?php include("share/ai_widget.php"); ?>
 

@@ -1,20 +1,26 @@
 <?php
-session_start();
-$username = $_SESSION['username'] ?? '匿名';
-$role = $_SESSION['role'] ?? '訪客';
-if (!isset($_SESSION['username']) || !isset($_SESSION['role'])) {
-    echo "請先登入後再使用聊天室。";
+// 載入 session 配置
+require_once '../session_config.php';
+
+// 檢查登入狀態（與 header.php 保持一致）
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 如果未登入，重定向到首頁
+if (!$isLoggedIn) {
+    header("Location: ../index.php");
     exit;
 }
 
-// 資料庫連接
-$host = '100.79.58.120';
-$dbname = 'topics_good';
-$db_username = 'root';
-$db_password = '';
+$username = $_SESSION['username'];
+$role = $_SESSION['role'];
+
+// 載入資料庫配置
+require_once '../config.php';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 根據角色獲取不同的資料
@@ -97,14 +103,14 @@ try {
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <?php include("../share/header.php"); ?>
   <link rel="stylesheet" href="../assets/csp/chat.css">
   <link rel="stylesheet" href="color_schemes.css">
   <title>聊天室</title>
   <script src="fcm_client.js"></script>
- 
 </head>
 <body>
+<?php include("../share/header.php"); ?>
+<main>
   <?php if ($role === '學生' || $role === 'student'): ?>
     <!-- 學生聊天介面 -->
     <div class="chat-container">
@@ -1406,5 +1412,7 @@ try {
     }, 3000);
     <?php endif; ?>
   </script>
+</main>
+<?php include("../share/footer.php"); ?>
 </body>
 </html>
