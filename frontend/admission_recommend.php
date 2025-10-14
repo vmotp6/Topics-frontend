@@ -9,7 +9,7 @@ require_once 'config/email_notification_config.php';
 
 $message = '';
 $messageType = '';
-$courses = [];
+$courses = []; 
 $search_results = [];
 $search_student_id = '';
 
