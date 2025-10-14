@@ -1,14 +1,19 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-$isLoggedIn = isset($_SESSION['username']);
+// 載入 session 配置
+require_once 'session_config.php';
+
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 
 // 路徑配置
 $config = [
     'base_url' => '/Topics-frontend/frontend/',
     'share_url' => '/Topics-frontend/frontend/share/'
 ];
+
+// 獲取當前域名和端口
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$base_url = $protocol . '://' . $host;
 
 // 路徑生成函數
 function getCorrectPath($targetFile) {
@@ -854,7 +859,7 @@ function getResourcePath($resourceFile) {
                    <div class="avatar-btn" onclick="toggleDropdown()">
              <?php
              // 獲取用戶頭像
-             $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+             $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
                      // 使用絕對路徑來避免相對路徑問題
@@ -873,13 +878,19 @@ function getResourcePath($resourceFile) {
                          $result = $stmt->get_result();
                          if ($row = $result->fetch_assoc()) {
                              if (!empty($row['profile_picture'])) {
-                                 $avatar_src = $row['profile_picture'];
+                                 // 檢查是否為完整URL或相對路徑
+                                 if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
+                                     $avatar_src = $row['profile_picture'];
+                                 } else {
+                                     $avatar_src = './share/' . $row['profile_picture'];
+                                 }
                              }
                          }
                          $conn->close();
                      }
                  } catch (Exception $e) {
                      // 使用預設頭像
+                     error_log("頭像載入錯誤: " . $e->getMessage());
                  }
              }
              ?>
@@ -1106,34 +1117,35 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
 
-      // 儲存到 sessionStorage
-      sessionStorage.setItem("username", data.username);
-      sessionStorage.setItem("role", data.role);
-
       // 將資料儲存進 PHP session
       fetch("<?php echo getCorrectPath('set_session.php'); ?>", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          logged_in: true, // 增加 logged_in 狀態
           username: data.username,
           role: data.role
         })
       })
+      .then(response => response.json())
       .then(() => {
-        // 根據身分跳轉頁面
-        setTimeout(() => {
-          if (data.role === "老師") {
-            window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-          } else if (data.role === "學生") {
-            window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-          } else if (data.role === "廠商") {
-            window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
-          } else if (data.role === "學校行政人員") {
-            window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
-          } else {
-            window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
-          }
-        }, 500);
+        // 在 set_session.php 成功後才進行頁面跳轉
+        if (data.role === "老師") {
+          window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
+        } else if (data.role === "學生") {
+          window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
+        } else if (data.role === "廠商") {
+          window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
+        } else if (data.role === "學校行政人員") {
+          window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
+        } else {
+          // 預設跳轉或重新載入當前頁面
+          window.location.reload();
+        }
+      })
+      .catch(err => {
+        console.error('設定 Session 失敗:', err);
+        document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";
       });
     } else {
       document.getElementById("loginMessage").style.color = "red";
@@ -1282,4 +1294,3 @@ function checkTeacherProfile() {
 // window.addEventListener('load', checkTeacherProfile);
 
 </script>
-

@@ -30,7 +30,7 @@ except ImportError:
     print("⚠️  配置檔案不存在，使用預設配置")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True, origins=['http://localhost', 'http://localhost:80', 'http://127.0.0.1'])
 app.secret_key = 'your-secret-key-here'  # 請更改為安全的密鑰
 
 # 資料庫連接配置
@@ -208,6 +208,8 @@ def google_callback():
                     redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
                 else:
                     redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
+                
+                print(f"重定向到: {redirect_url}")
                 return redirect(redirect_url)
                 
         except Exception as e:

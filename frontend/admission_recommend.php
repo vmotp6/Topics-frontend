@@ -5,10 +5,11 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'config.php';
+require_once 'config/email_notification_config.php';
 
 $message = '';
 $messageType = '';
-$courses = [];
+$courses = []; 
 $search_results = [];
 $search_student_id = '';
 
@@ -189,7 +190,58 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         );
         
         if ($stmt->execute()) {
-            $message = "推薦報名表單提交成功！我們會盡快處理您的推薦申請。";
+            // 獲取新插入的記錄ID
+            $recommendation_id = $conn->insert_id;
+            
+            // 準備郵件資料
+            $email_data = [
+                'recommender_name' => $_POST['recommender_name'],
+                'recommender_student_id' => $_POST['recommender_student_id'],
+                'recommender_department' => $_POST['recommender_department'],
+                'student_name' => $_POST['student_name'],
+                'student_school' => $_POST['student_school'],
+                'student_grade' => $_POST['student_grade'],
+                'submission_time' => date('Y-m-d H:i:s')
+            ];
+            
+            // 發送推薦成功通知郵件
+            try {
+                $email_sent = sendNotificationEmail(
+                    $_POST['recommender_email'],
+                    $_POST['recommender_name'],
+                    'recommendation_success',
+                    $email_data
+                );
+                
+                if ($email_sent) {
+                    // 記錄郵件發送成功
+                    logNotification(
+                        $recommendation_id,
+                        'recommendation_success',
+                        $_POST['recommender_email'],
+                        'sent'
+                    );
+                } else {
+                    // 記錄郵件發送失敗
+                    logNotification(
+                        $recommendation_id,
+                        'recommendation_success',
+                        $_POST['recommender_email'],
+                        'failed'
+                    );
+                }
+            } catch (Exception $email_error) {
+                // 郵件發送失敗不影響主要流程，只記錄錯誤
+                error_log("推薦成功郵件發送失敗: " . $email_error->getMessage());
+                logNotification(
+                    $recommendation_id,
+                    'recommendation_success',
+                    $_POST['recommender_email'],
+                    'failed'
+                );
+            }
+            
+            $message = "推薦報名表單提交成功！我們會盡快處理您的推薦申請。確認郵件已發送至您的信箱。";
             $messageType = "success";
             // 清空表單
             $_POST = array();
@@ -261,6 +313,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <th>狀態</th>
               <th>入學狀態</th>
               <th>建立時間</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -303,6 +356,22 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 </span>
               </td>
               <td><?php echo date('Y-m-d H:i', strtotime($result['created_at'])); ?></td>
+              <td>
+                <div class="action-buttons">
+                  <button class="btn-status" onclick="updateStatus(<?php echo $result['id']; ?>, 'registered')" 
+                          title="審核通過（被推薦學生）">
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button class="btn-status" onclick="updateStatus(<?php echo $result['id']; ?>, 'rejected')" 
+                          title="審核拒絕（被推薦學生）">
+                    <i class="fas fa-times"></i>
+                  </button>
+                  <button class="btn-enrollment" onclick="updateEnrollment(<?php echo $result['id']; ?>, '已入學')" 
+                          title="確認入學（被推薦學生）">
+                    <i class="fas fa-graduation-cap"></i>
+                  </button>
+                </div>
+              </td>
             </tr>
             <?php endforeach; ?>
           </tbody>
@@ -475,6 +544,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
 <?php include("share/footer.php"); ?>
 
+<<<<<<< HEAD
 <script>
 // 檔案上傳區域互動功能
 document.addEventListener('DOMContentLoaded', function() {
@@ -510,6 +580,194 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.backgroundColor = 'white';
         }
     });
+=======
+<style>
+.action-buttons {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+.btn-status, .btn-enrollment {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.btn-status:hover {
+  background: #5a6fd8;
+  transform: translateY(-2px);
+}
+
+.btn-enrollment {
+  background: #28a745;
+}
+
+.btn-enrollment:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+.btn-status:disabled, .btn-enrollment:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.status-updating {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.notification-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #28a745;
+  color: white;
+  padding: 15px 20px;
+  border-radius: 5px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  z-index: 1000;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+}
+
+.notification-toast.show {
+  transform: translateX(0);
+}
+
+.notification-toast.error {
+  background: #dc3545;
+}
+</style>
+
+<script>
+// 更新推薦狀態
+function updateStatus(recommendationId, status) {
+  if (!confirm('確定要更新狀態嗎？')) {
+    return;
+  }
+  
+  const row = document.querySelector(`tr[data-id="${recommendationId}"]`);
+  if (row) {
+    row.classList.add('status-updating');
+  }
+  
+  fetch('api/update_recommendation_status.php', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recommendation_id: recommendationId,
+      status: status
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification('狀態更新成功！' + (data.email_sent ? ' 已發送通知郵件。' : ''), 'success');
+      // 重新載入頁面以顯示更新後的狀態
+      setTimeout(() => {
+        location.reload();
+      }, 2000);
+    } else {
+      showNotification('更新失敗：' + data.message, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification('更新失敗，請稍後再試', 'error');
+  })
+  .finally(() => {
+    if (row) {
+      row.classList.remove('status-updating');
+    }
+  });
+}
+
+// 更新入學狀態
+function updateEnrollment(recommendationId, enrollmentStatus) {
+  if (!confirm('確定要更新入學狀態嗎？')) {
+    return;
+  }
+  
+  const row = document.querySelector(`tr[data-id="${recommendationId}"]`);
+  if (row) {
+    row.classList.add('status-updating');
+  }
+  
+  fetch('api/update_recommendation_status.php', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recommendation_id: recommendationId,
+      enrollment_status: enrollmentStatus
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showNotification('入學狀態更新成功！' + (data.email_sent ? ' 已發送通知郵件。' : ''), 'success');
+      // 重新載入頁面以顯示更新後的狀態
+      setTimeout(() => {
+        location.reload();
+      }, 2000);
+    } else {
+      showNotification('更新失敗：' + data.message, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    showNotification('更新失敗，請稍後再試', 'error');
+  })
+  .finally(() => {
+    if (row) {
+      row.classList.remove('status-updating');
+    }
+  });
+}
+
+// 顯示通知
+function showNotification(message, type = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `notification-toast ${type}`;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  // 顯示動畫
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 100);
+  
+  // 自動隱藏
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      document.body.removeChild(toast);
+    }, 300);
+  }, 3000);
+}
+
+// 為表格行添加data-id屬性
+document.addEventListener('DOMContentLoaded', function() {
+  const rows = document.querySelectorAll('.results-table tbody tr');
+  rows.forEach((row, index) => {
+    const idCell = row.querySelector('td:first-child');
+    if (idCell) {
+      row.setAttribute('data-id', idCell.textContent.trim());
+    }
+  });
+>>>>>>> 843dbd6e916d1d212fef61891f309aa43dda7e21
 });
 </script>
 

@@ -130,18 +130,58 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
     $records_sql = "SELECT ar.*, t.name AS teacher_name, t.department AS teacher_department
                     FROM activity_records ar
                     LEFT JOIN teacher t ON ar.teacher_id = t.user_id
-                    ORDER BY ar.activity_date DESC, ar.id DESC";
-    $records_result = $conn->query($records_sql);
-    
-    if ($records_result) {
-        while ($row = $records_result->fetch_assoc()) {
-            $activity_records[] = $row;
-        }
+                    WHERE 1 ";
+
+                     // 篩選參數
+    $params = [];
+    $types = '';
+
+    if (!empty($_GET['teacher_name'])) {
+        $records_sql .= " AND t.name LIKE ? ";
+        $params[] = "%" . $_GET['teacher_name'] . "%";
+        $types .= 's';
     }
 
+    if (!empty($_GET['department'])) {
+        $records_sql .= " AND t.department = ? ";
+        $params[] = $_GET['department'];
+        $types .= 's';
+    }
+
+    $records_sql .= " ORDER BY ar.activity_date DESC, ar.id DESC";
+
+    $records_stmt = $conn->prepare($records_sql);
+    if ($records_stmt) {
+        if (!empty($params)) {
+            $records_stmt->bind_param($types, ...$params);
+        }
+        $records_stmt->execute();
+        $records_result = $records_stmt->get_result();
+
+        if ($records_result) {
+            while ($row = $records_result->fetch_assoc()) {
+                $activity_records[] = $row;
+            }
+        }
+        $records_stmt->close();
+    }
+                    
+
+
+
 } elseif ($teacher_id) {
-    // 🔹 若是一般老師 → 只看自己的
-    $records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY activity_date DESC, id DESC";
+    // 🔹 若是一般老師 → 只看自己的，並包含所屬系所
+    $records_sql = "
+        SELECT 
+            ar.*, 
+            t.name AS teacher_name, 
+            t.department AS teacher_department
+        FROM activity_records ar
+        LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+        WHERE ar.teacher_id = ?
+        ORDER BY ar.activity_date DESC, ar.id DESC
+    ";
+
     $records_stmt = $conn->prepare($records_sql);
     if ($records_stmt) {
         $records_stmt->bind_param("i", $teacher_id);
@@ -300,7 +340,30 @@ $conn->close();
         <!-- 記錄列表 -->
         <div class="records-table-container">
             <h3><i class="fas fa-table"></i> 活動記錄列表</h3>
-            
+            <div class="filter-bar" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+    <form method="GET" action="activity_records_management.php" style="display: flex; gap: 10px;">
+        <input type="text" name="teacher_name" placeholder="搜尋教師姓名"
+               value="<?php echo htmlspecialchars($_GET['teacher_name'] ?? ''); ?>"
+               style="padding: 5px 10px; border-radius: 6px; border: 1px solid #ccc;">
+
+        <select name="department" style="padding: 5px 10px; border-radius: 6px; border: 1px solid #ccc;">
+            <option value="">全部科系</option>
+            <option value="資訊管理科" <?php if(($_GET['department'] ?? '') == '資訊管理科') echo 'selected'; ?>>資訊管理科</option>
+            <option value="企業管理科" <?php if(($_GET['department'] ?? '') == '企業管理科') echo 'selected'; ?>>企業管理科</option>
+            <option value="應用外語科" <?php if(($_GET['department'] ?? '') == '應用外語科') echo 'selected'; ?>>應用外語科</option>
+            <!-- 可依實際資料庫科系補上更多選項 -->
+        </select>
+
+        <button type="submit" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #4CAF50; color: white; cursor: pointer;">
+            🔍 篩選
+        </button>
+        <a href="activity_records_management.php" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #888; color: white; text-decoration: none;">
+            重置
+        </a>
+    </form>
+
+    
+</div>
             <?php if (!empty($activity_records)): ?>
                 <table class="records-table">
                     <thead>
@@ -435,7 +498,7 @@ $conn->close();
             modalBody.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                     <div><strong>活動日期:</strong><br>${record.activity_date}</div>
-                    <div><strong>教師單位:</strong><br>${record.teacher_unit}</div>
+                    <div><strong>教師單位:</strong><br>${record.teacher_department}</div>
                     <div><strong>教師姓名:</strong><br>${record.teacher_name}</div>
                     <div><strong>學校名稱:</strong><br>${record.school_name}</div>
                     <div><strong>聯絡窗口:</strong><br>${record.contact_person || '未填寫'}</div>
