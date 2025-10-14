@@ -1,5 +1,6 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
 require_once 'config.php';
 
 // 產生驗證碼函數

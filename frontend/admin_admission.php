@@ -1,5 +1,22 @@
 <?php
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
+
+// 檢查登入狀態
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
+
+// 如果未登入，重定向到首頁
+if (!$isLoggedIn) {
+    header("Location: index.php");
+    exit;
+}
+
+// 檢查是否為管理員角色
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '管理員') {
+    header("Location: index.php");
+    exit;
+}
+
 require_once 'config.php';
 
 // 處理Google登入回調

@@ -2,7 +2,19 @@
 // 載入 session 配置
 require_once 'session_config.php';
 
-$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
+// 更嚴格的登入狀態檢查
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 如果 session 資料不完整，清除登入狀態
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    if (!isset($_SESSION['username']) || empty($_SESSION['username']) || 
+        !isset($_SESSION['role']) || empty($_SESSION['role'])) {
+        $_SESSION['logged_in'] = false;
+        $isLoggedIn = false;
+    }
+}
 
 // 路徑配置
 $config = [
@@ -818,7 +830,30 @@ function getResourcePath($resourceFile) {
 <div class="navbar">
 <div class="container">
   <!-- Logo 區域 -->
-  <a href="<?php echo getCorrectPath('index.php'); ?>" class="logo" style="text-decoration: none; color: inherit;">
+  <a href="<?php 
+    // 根據登入狀態和角色決定導向頁面
+    if ($isLoggedIn && isset($_SESSION['role'])) {
+      switch ($_SESSION['role']) {
+        case '學生':
+          echo getCorrectPath('student.php');
+          break;
+        case '老師':
+          echo getCorrectPath('teacher.php');
+          break;
+        case '廠商':
+          echo getCorrectPath('company.php');
+          break;
+        case '學校行政人員':
+          echo getCorrectPath('admin.php');
+          break;
+        default:
+          echo getCorrectPath('index.php');
+          break;
+      }
+    } else {
+      echo getCorrectPath('index.php');
+    }
+  ?>" class="logo" style="text-decoration: none; color: inherit;">
     <div class="logo-icon">
       <i class="fas fa-university"></i>
     </div>
@@ -898,8 +933,8 @@ function getResourcePath($resourceFile) {
         <div class="notification-dot" id="notificationDot"></div>
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
-         <span class="username"><?php echo htmlspecialchars($_SESSION['username']); ?></span>
-         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+         <span class="username"><?php echo $isLoggedIn ? htmlspecialchars($_SESSION['username']) : '未知用戶'; ?></span>
+         <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
            <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>
@@ -1128,19 +1163,27 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
         })
       })
       .then(response => response.json())
-      .then(() => {
-        // 在 set_session.php 成功後才進行頁面跳轉
-        if (data.role === "老師") {
-          window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-        } else if (data.role === "學生") {
-          window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-        } else if (data.role === "廠商") {
-          window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
-        } else if (data.role === "學校行政人員") {
-          window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
+      .then((sessionResult) => {
+        console.log("Session 設定結果:", sessionResult);
+        if (sessionResult.success) {
+          // 在 set_session.php 成功後才進行頁面跳轉
+          console.log("準備跳轉，角色:", data.role);
+          if (data.role === "老師") {
+            window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
+          } else if (data.role === "學生") {
+            window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
+          } else if (data.role === "廠商") {
+            window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
+          } else if (data.role === "學校行政人員") {
+            window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
+          } else {
+            // 預設跳轉或重新載入當前頁面
+            console.log("未知角色，重新載入頁面");
+            window.location.reload();
+          }
         } else {
-          // 預設跳轉或重新載入當前頁面
-          window.location.reload();
+          console.error('Session 設定失敗:', sessionResult);
+          document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";
         }
       })
       .catch(err => {
@@ -1251,8 +1294,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 檢查老師個人資料是否已填寫
 function checkTeacherProfile() {
-  const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
-  const role = '<?php echo isset($_SESSION['role']) ? $_SESSION['role'] : ''; ?>';
+  const username = '<?php echo $isLoggedIn ? $_SESSION['username'] : ''; ?>';
+  const role = '<?php echo $isLoggedIn ? $_SESSION['role'] : ''; ?>';
   const notificationDot = document.getElementById('notificationDot');
   
   // 暫時禁用此功能，避免 500 錯誤

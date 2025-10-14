@@ -110,6 +110,62 @@
   min-height: 100px;
 }
 
+/* 文件上傳樣式 - 參考 continued_admission.php */
+.document-item {
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #e1e5e9;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.document-item label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.recommend-page-wrapper .file-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.recommend-page-wrapper .file-input:hover {
+  border-color: #4facfe;
+  background: #f0f4ff;
+}
+
+.recommend-page-wrapper .file-input:focus {
+  outline: none;
+  border-color: #4facfe;
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+}
+
+/* 資訊提示樣式 */
+.recommend-page-wrapper .note {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 15px;
+  color: #856404;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommend-page-wrapper .note i {
+  color: #856404;
+  flex-shrink: 0;
+}
+
 .recommend-page-wrapper .submit-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
