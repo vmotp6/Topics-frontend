@@ -48,12 +48,12 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
-              <label>姓名</label>
-              <input type="text" name="name" required>
+              <label for="student_name">姓名</label>
+              <input type="text" id="student_name" name="student_name" required>
             </div>
             <div class="form-group">
               <label>身分證字號</label>
-              <input type="text" name="id" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10" required>
+              <input type="text" name="id" id="id_number_input" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10" required>
             </div>
           </div>
           
@@ -540,6 +540,9 @@ require_once 'session_config.php';
       // 初始化查詢功能
       initializeQueryFunction();
       
+      // 初始化身分證字號欄位為可編輯
+      setIdNumberReadOnly(false);
+      
       // 初始化表單提交 - 直接使用 submit-btn 來找到表單
       const submitBtn = document.querySelector('.submit-btn');
       let form = null;
@@ -663,6 +666,10 @@ require_once 'session_config.php';
         }
         
         console.log('Form found in submitForm:', form);
+        
+        // 確保隱藏字段被更新
+        updateHiddenFields();
+        
         const formData = new FormData(form);
         
         // 顯示載入狀態
@@ -679,6 +686,16 @@ require_once 'session_config.php';
         for (let [key, value] of formData.entries()) {
           console.log(key + ': ' + value);
         }
+        
+        // 調試：檢查志願序隱藏字段
+        console.log('志願序隱藏字段檢查:');
+        const choiceFields = ['choice_nursing', 'choice_optometry', 'choice_childcare', 'choice_language', 'choice_im', 'choice_ba', 'choice_animation'];
+        choiceFields.forEach(field => {
+          const input = document.getElementById(`hidden_${field}`);
+          if (input) {
+            console.log(`${field}: ${input.value}`);
+          }
+        });
         
         // 檢查表單是否有數據
         if (formData.entries().next().done) {
@@ -726,6 +743,7 @@ require_once 'session_config.php';
               selectedChoices = [];
               updateSelectedChoicesDisplay();
               updateHiddenFields();
+              setIdNumberReadOnly(false); // 清空表單後設置身分證字號為可編輯
             }, 2000);
           } else {
             showMessage(data.message, 'error');
@@ -823,14 +841,17 @@ require_once 'session_config.php';
           .then(data => {
             if (data.success) {
               if (data.reviewed) {
-                // 已檢測，顯示結果並禁用表單
-                showQueryResult(`錄取結果：${data.status_text}`, 'success');
-                disableForm();
+                // 已檢測，顯示結果並填充表單資料（只讀模式）
+                showQueryResult(data.message, 'success');
+                fillFormWithData(data.form_data);
+                setFormReadOnly(true);
+                setIdNumberReadOnly(true); // 查詢到資料時設置身分證字號為只讀
               } else {
                 // 未檢測，填充表單資料
                 showQueryResult(data.message, 'info');
                 fillFormWithData(data.form_data);
-                enableForm();
+                setFormReadOnly(false);
+                setIdNumberReadOnly(true); // 查詢到資料時設置身分證字號為只讀
               }
             } else {
               showQueryResult(data.message, 'error');
@@ -858,29 +879,64 @@ require_once 'session_config.php';
       }
     }
     
-    // 禁用表單
-    function disableForm() {
+    // 設置表單只讀模式
+    function setFormReadOnly(readOnly) {
+      console.log('設置表單只讀模式:', readOnly);
       const formContent = document.getElementById('formContent');
       if (formContent) {
-        formContent.classList.add('form-disabled');
-        isFormDisabled = true;
+        if (readOnly) {
+          formContent.classList.add('form-readonly');
+          // 禁用所有輸入框
+          const inputs = formContent.querySelectorAll('input, textarea, select');
+          inputs.forEach(input => {
+            input.disabled = true;
+          });
+          // 隱藏提交按鈕
+          const submitBtn = document.querySelector('.submit-btn');
+          if (submitBtn) {
+            submitBtn.style.display = 'none';
+          }
+        } else {
+          formContent.classList.remove('form-readonly');
+          // 啟用所有輸入框
+          const inputs = formContent.querySelectorAll('input, textarea, select');
+          inputs.forEach(input => {
+            input.disabled = false;
+          });
+          // 顯示提交按鈕
+          const submitBtn = document.querySelector('.submit-btn');
+          if (submitBtn) {
+            submitBtn.style.display = 'block';
+          }
+        }
+        isFormDisabled = readOnly;
+        console.log('表單狀態已更新，isFormDisabled:', isFormDisabled);
       }
     }
     
-    // 啟用表單
-    function enableForm() {
-      const formContent = document.getElementById('formContent');
-      if (formContent) {
-        formContent.classList.remove('form-disabled');
-        isFormDisabled = false;
+    // 設置身分證字號欄位只讀狀態
+    function setIdNumberReadOnly(readOnly) {
+      console.log('設置身分證字號只讀狀態:', readOnly);
+      const idInput = document.getElementById('id_number_input');
+      if (idInput) {
+        if (readOnly) {
+          idInput.setAttribute('readonly', 'readonly');
+          console.log('身分證字號設為只讀');
+        } else {
+          idInput.removeAttribute('readonly');
+          console.log('身分證字號設為可編輯');
+        }
       }
     }
     
     // 填充表單資料
     function fillFormWithData(formData) {
+      console.log('收到的表單資料:', formData);
+      console.log('開始填充表單資料，姓名值:', formData.student_name);
+      
       // 填充基本資料
       const fields = [
-        'exam_no', 'name', 'id', 'birth_year', 'birth_month', 'birth_day', 'gender',
+        'exam_no', 'student_name', 'id', 'birth_year', 'birth_month', 'birth_day', 'gender',
         'phone', 'mobile', 'school_city', 'school_name', 'zip', 'city', 'district',
         'village', 'neighbor', 'road', 'section', 'lane', 'alley', 'no', 'floor',
         'guardian', 'guardian_phone', 'guardian_mobile', 'self_intro', 'skills'
@@ -888,13 +944,56 @@ require_once 'session_config.php';
       
       fields.forEach(field => {
         const input = document.querySelector(`[name="${field}"]`);
+        console.log(`處理欄位 ${field}:`, {
+          input: input,
+          value: formData[field],
+          hasValue: formData[field] !== undefined
+        });
+        
         if (input && formData[field] !== undefined) {
           if (input.type === 'radio') {
             const radioInput = document.querySelector(`[name="${field}"][value="${formData[field]}"]`);
             if (radioInput) radioInput.checked = true;
           } else {
             input.value = formData[field];
+            console.log(`已設置 ${field} 的值:`, formData[field]);
+            
+            // 特別檢查姓名字段
+            if (field === 'student_name') {
+              console.log('姓名字段詳細信息:', {
+                input: input,
+                inputValue: input.value,
+                inputDisplay: input.style.display,
+                inputVisibility: input.style.visibility,
+                inputOpacity: input.style.opacity,
+                inputDisabled: input.disabled,
+                inputReadOnly: input.readOnly,
+                parentDisplay: input.parentElement.style.display,
+                parentVisibility: input.parentElement.style.visibility,
+                computedStyle: window.getComputedStyle(input),
+                formDisabled: input.form ? input.form.disabled : 'no form',
+                formContent: document.getElementById('formContent') ? document.getElementById('formContent').classList.toString() : 'no formContent'
+              });
+              
+              // 強制確保姓名字段可見和可編輯
+              input.disabled = false;
+              input.readOnly = false;
+              input.style.display = 'block';
+              input.style.visibility = 'visible';
+              input.style.opacity = '1';
+              input.style.background = '#fff';
+              input.style.color = '#333';
+              
+              // 再次設置值
+              input.value = formData[field];
+              console.log('姓名字段強制設置後的值:', input.value);
+            }
           }
+        } else {
+          console.log(`跳過欄位 ${field}:`, {
+            inputFound: !!input,
+            hasValue: formData[field] !== undefined
+          });
         }
       });
       
@@ -913,9 +1012,124 @@ require_once 'session_config.php';
       
       // 填充文件上傳信息
       if (formData.documents && Array.isArray(formData.documents)) {
-        // 這裡可以顯示已上傳的文件信息
+        // 顯示已上傳的文件信息
         console.log('已上傳的文件:', formData.documents);
+        
+        // 填充文件上傳狀態
+        formData.documents.forEach(doc => {
+          if (doc.type && doc.filename) {
+            // 勾選對應的checkbox
+            const checkbox = document.querySelector(`input[name="docs[]"][value="${doc.type}"]`);
+            if (checkbox) {
+              checkbox.checked = true;
+            }
+            
+            // 顯示文件名稱
+            const fileInput = document.querySelector(`input[name="doc_${doc.type}"]`);
+            if (fileInput) {
+              // 創建一個顯示已上傳文件的元素
+              const fileDisplay = document.createElement('div');
+              fileDisplay.className = 'uploaded-file';
+              fileDisplay.innerHTML = `
+                <i class="fas fa-file"></i>
+                <span>已上傳: ${doc.filename}</span>
+              `;
+              fileDisplay.style.cssText = `
+                background: #d4edda;
+                border: 1px solid #c3e6cb;
+                color: #155724;
+                padding: 8px 12px;
+                border-radius: 4px;
+                margin-top: 5px;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+              `;
+              
+              // 將顯示元素插入到文件輸入框後面
+              fileInput.parentNode.insertBefore(fileDisplay, fileInput.nextSibling);
+            }
+          }
+        });
       }
+      
+      // 強制確保姓名字段可見
+      setTimeout(() => {
+        // 首先確保表單是啟用狀態
+        const formContent = document.getElementById('formContent');
+        if (formContent) {
+          formContent.classList.remove('form-readonly', 'form-disabled');
+          console.log('強制移除表單禁用狀態');
+        }
+        
+        const nameInput = document.querySelector('input[name="student_name"]');
+        if (nameInput) {
+          console.log('強制檢查姓名字段:', {
+            value: nameInput.value,
+            disabled: nameInput.disabled,
+            style: nameInput.style.cssText,
+            computedStyle: window.getComputedStyle(nameInput),
+            parentElement: nameInput.parentElement,
+            parentStyle: nameInput.parentElement ? window.getComputedStyle(nameInput.parentElement) : null
+          });
+          
+          // 強制啟用輸入框
+          nameInput.disabled = false;
+          nameInput.readOnly = false;
+          
+          // 強制設置樣式確保可見
+          nameInput.style.display = 'block';
+          nameInput.style.visibility = 'visible';
+          nameInput.style.opacity = '1';
+          nameInput.style.background = '#fff';
+          nameInput.style.color = '#333';
+          nameInput.style.border = '2px solid #e1e5e9';
+          nameInput.style.padding = '12px 15px';
+          nameInput.style.borderRadius = '8px';
+          nameInput.style.fontSize = '14px';
+          nameInput.style.width = '100%';
+          nameInput.style.boxSizing = 'border-box';
+          
+          // 確保正確值被設置
+          if (formData.student_name) {
+            // 方法1：設置value屬性
+            nameInput.value = formData.student_name;
+            
+            // 方法2：直接設置HTML屬性
+            nameInput.setAttribute('value', formData.student_name);
+            
+            // 方法3：使用defaultValue
+            nameInput.defaultValue = formData.student_name;
+            
+            console.log('最終設置姓名值:', formData.student_name);
+            console.log('設置後輸入框的值:', nameInput.value);
+            console.log('設置後輸入框的屬性值:', nameInput.getAttribute('value'));
+            console.log('設置後輸入框的defaultValue:', nameInput.defaultValue);
+            console.log('設置後輸入框的顯示值:', nameInput.outerHTML);
+            
+            // 觸發事件確保瀏覽器知道值已改變
+            nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+            nameInput.dispatchEvent(new Event('blur', { bubbles: true }));
+            nameInput.dispatchEvent(new Event('focus', { bubbles: true }));
+            
+            // 強制重新渲染
+            nameInput.style.display = 'none';
+            nameInput.offsetHeight; // 觸發重排
+            nameInput.style.display = 'block';
+            
+            // 最後檢查
+            setTimeout(() => {
+              console.log('延遲檢查 - 輸入框的值:', nameInput.value);
+              console.log('延遲檢查 - 輸入框的屬性值:', nameInput.getAttribute('value'));
+              console.log('延遲檢查 - 輸入框的HTML:', nameInput.outerHTML);
+            }, 50);
+          }
+        } else {
+          console.error('找不到姓名字段！');
+        }
+      }, 100);
     }
   </script>
 

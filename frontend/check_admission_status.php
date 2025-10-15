@@ -87,8 +87,8 @@ try {
             'message' => '尚未檢測，您可以修改報名資料',
             'form_data' => [
                 'exam_no' => $record['exam_no'],
-                'name' => $record['name'],
-                'id_number' => $record['id_number'],
+                'student_name' => $record['name'],
+                'id' => $record['id_number'],  // 修正：資料庫欄位 id_number 對應表單欄位 id
                 'birth_year' => $record['birth_year'],
                 'birth_month' => $record['birth_month'],
                 'birth_day' => $record['birth_day'],
@@ -97,7 +97,7 @@ try {
                 'mobile' => $record['mobile'],
                 'school_city' => $record['school_city'],
                 'school_name' => $record['school_name'],
-                'zip_code' => $record['zip_code'],
+                'zip' => $record['zip_code'],  // 修正：資料庫欄位 zip_code 對應表單欄位 zip
                 'city' => $record['city'],
                 'district' => $record['district'],
                 'village' => $record['village'],
@@ -106,11 +106,11 @@ try {
                 'section' => $record['section'],
                 'lane' => $record['lane'],
                 'alley' => $record['alley'],
-                'house_no' => $record['house_no'],
+                'no' => $record['house_no'],  // 修正：資料庫欄位 house_no 對應表單欄位 no
                 'floor' => $record['floor'],
                 'same_address' => $record['same_address'] ? 'yes' : 'no',
                 'contact_address' => $record['contact_address'],
-                'guardian_name' => $record['guardian_name'],
+                'guardian' => $record['guardian_name'],  // 修正：資料庫欄位 guardian_name 對應表單欄位 guardian
                 'guardian_phone' => $record['guardian_phone'],
                 'guardian_mobile' => $record['guardian_mobile'],
                 'self_intro' => $record['self_intro'],

@@ -42,8 +42,8 @@ body {
 .form-header h1 {
   margin: 0;
   font-size: 2.2em;
-  font-weight: 300;
-  letter-spacing: 1px;
+  margin-bottom: 10px;
+  text-shadow: none;
 }
 
 .form-content {
@@ -91,6 +91,7 @@ legend {
   flex: 1;
 }
 
+
 .form-group.small {
   min-width: 80px;
   flex: 0 1 auto;
@@ -115,6 +116,11 @@ input, select, textarea {
   font-size: 14px;
   transition: all 0.3s ease;
   background: white;
+  box-sizing: border-box;
+}
+
+input, select {
+  height: 48px;
 }
 
 input:focus, select:focus, textarea:focus {
@@ -130,11 +136,37 @@ input:disabled {
   cursor: not-allowed;
 }
 
-.radio-group, .checkbox-group {
+input:read-only {
+  background: #f8f9fa;
+  color: #333;
+  cursor: default;
+  border-color: #e1e5e9;
+}
+
+.radio-group {
+  margin: 10px 0;
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+  cursor: pointer;
+  font-weight: normal;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.checkbox-group {
   margin: 10px 0;
 }
 
-.radio-group label, .checkbox-group label {
+.checkbox-group label {
   display: flex;
   align-items: center;
   margin-bottom: 8px;
@@ -571,7 +603,7 @@ textarea {
 .query-form {
   display: flex;
   gap: 15px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .query-form .form-group {
@@ -579,15 +611,21 @@ textarea {
 }
 
 .query-btn {
+  width: 45%;
   background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
   color: white;
   border: none;
   padding: 12px 24px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
   transition: all 0.3s ease;
   white-space: nowrap;
+  height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .query-btn:hover {
@@ -623,4 +661,31 @@ textarea {
 .form-disabled {
   opacity: 0.6;
   pointer-events: none;
+}
+
+.form-readonly {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.form-readonly input:disabled,
+.form-readonly textarea:disabled,
+.form-readonly select:disabled {
+  background: #f8f9fa;
+  color: #333;
+  cursor: default;
+}
+
+/* 只讀輸入框樣式 */
+input[readonly] {
+  background-color: #f8f9fa !important;
+  color: #6c757d !important;
+  cursor: not-allowed !important;
+  border-color: #dee2e6 !important;
+}
+
+input[readonly]:focus {
+  border-color: #dee2e6 !important;
+  box-shadow: none !important;
+  outline: none !important;
 }

@@ -31,221 +31,320 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
   <title>康寧大學招生平台</title>
   
   <!-- 輪播圖片樣式 -->
-  <style>
-    /* 輪播圖片容器 */
-    .carousel-container {
-      position: relative;
-      width: 100%;
-      height: 500px;
-      overflow: hidden;
-      margin-top: 80px; /* 為固定導覽列留出空間 */
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    }
+	<style>
+		body { padding-top: 100px; }
+		main { flex: 1; }
+		.teacher-container {
+			max-width: 1200px;
+			margin: 40px auto 40px;
+			padding: 40px;
+			background: white;
+			border-radius: 16px;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+		}
 
-    .carousel-slide {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      transition: opacity 0.8s ease-in-out;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-    }
+		.welcome-section {
+			text-align: center;
+			margin-bottom: 40px;
+		}
 
-    .carousel-slide.active {
-      opacity: 1;
-    }
+		.welcome-title {
+			color: #003366;
+			font-size: 32px;
+			font-weight: bold;
+			margin-bottom: 10px;
+		}
 
-    /* 輪播圖片內容 */
-    .slide-content {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      color: white;
-      z-index: 2;
-      width: 80%;
-      max-width: 800px;
-    }
+		.welcome-subtitle {
+			color: #666;
+			font-size: 18px;
+			margin-bottom: 30px;
+		}
 
-    .slide-content h2 {
-      font-size: 3rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
-      font-family: 'Microsoft JhengHei', sans-serif;
-    }
+		.features-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			gap: 30px;
+			margin-top: 40px;
+		}
 
-    .slide-content p {
-      font-size: 1.2rem;
-      margin-bottom: 2rem;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-      line-height: 1.6;
-    }
+		.feature-card {
+			background: #f8f9fa;
+			padding: 30px;
+			border-radius: 12px;
+			text-align: center;
+			transition: transform 0.3s, box-shadow 0.3s;
+		}
 
-    .slide-btn {
-      display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 15px 30px;
-      border-radius: 30px;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 1.1rem;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
+		.feature-card:hover {
+			transform: translateY(-5px);
+			box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+		}
 
-    .slide-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-      color: white;
-    }
+		.feature-icon {
+			font-size: 48px;
+			margin-bottom: 20px;
+			color: #007bff;
+		}
 
-    /* 輪播控制按鈕 */
-    .carousel-controls {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 15px;
-      z-index: 3;
-    }
+		.feature-title {
+			color: #003366;
+			font-size: 20px;
+			font-weight: bold;
+			margin-bottom: 15px;
+		}
 
-    .carousel-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.5);
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
+		.feature-description {
+			color: #666;
+			line-height: 1.6;
+		}
 
-    .carousel-dot.active {
-      background: white;
-      transform: scale(1.2);
-    }
+		.profile-reminder {
+			background: #fff3cd;
+			border: 1px solid #ffeaa7;
+			border-radius: 8px;
+			padding: 20px;
+			margin-bottom: 30px;
+			text-align: center;
+		}
 
-    /* 左右箭頭 */
-    .carousel-arrow {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      background: rgba(255, 255, 255, 0.2);
-      color: white;
-      border: none;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 1.5rem;
-      transition: all 0.3s ease;
-      z-index: 3;
-      backdrop-filter: blur(10px);
-    }
+		.profile-reminder h3 {
+			color: #856404;
+			margin-bottom: 10px;
+		}
 
-    .carousel-arrow:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: translateY(-50%) scale(1.1);
-    }
+		.profile-reminder p {
+			color: #856404;
+			margin-bottom: 15px;
+		}
 
-    .carousel-arrow.prev {
-      left: 20px;
-    }
+		.profile-btn {
+			background: #007bff;
+			color: white;
+			text-decoration: none;
+			padding: 10px 20px;
+			border-radius: 6px;
+			font-weight: 600;
+			transition: background-color 0.3s;
+		}
 
-    .carousel-arrow.next {
-      right: 20px;
-    }
+		.profile-btn:hover {
+			background: #0056b3;
+		}
 
-    /* 輪播圖片遮罩 */
-    .slide-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
-      z-index: 1;
-    }
+		.feature-link {
+			display: inline-block;
+			background: #007bff;
+			color: white;
+			text-decoration: none;
+			padding: 8px 16px;
+			border-radius: 4px;
+			font-size: 14px;
+			margin: 5px;
+			transition: background-color 0.3s;
+		}
 
-    /* 響應式設計 */
-    @media (max-width: 768px) {
-      .carousel-container {
-        height: 400px;
-        margin-top: 70px;
-      }
+		.feature-link:hover {
+			background: #0056b3;
+		}
 
-      .slide-content h2 {
-        font-size: 2rem;
-      }
+		/* 輪播圖片樣式 */
+		.carousel-container {
+			position: relative;
+			width: 100%;
+			height: 500px;
+			overflow: hidden;
+			margin-top: 80px;
+			box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+		}
 
-      .slide-content p {
-        font-size: 1rem;
-      }
+		.carousel-slide {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			opacity: 0;
+			transition: opacity 0.8s ease-in-out;
+			background-size: cover;
+			background-position: center;
+			background-repeat: no-repeat;
+		}
 
-      .slide-btn {
-        padding: 12px 25px;
-        font-size: 1rem;
-      }
+		.carousel-slide.active {
+			opacity: 1;
+		}
 
-      .carousel-arrow {
-        width: 40px;
-        height: 40px;
-        font-size: 1.2rem;
-      }
-    }
+		.slide-content {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			text-align: center;
+			color: white;
+			z-index: 2;
+			width: 80%;
+			max-width: 800px;
+		}
 
-    @media (max-width: 480px) {
-      .carousel-container {
-        height: 350px;
-      }
+		.slide-content h2 {
+			font-size: 3rem;
+			font-weight: 700;
+			margin-bottom: 1rem;
+			text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+			color: white;
+			font-family: 'Microsoft JhengHei', sans-serif;
+		}
 
-      .slide-content h2 {
-        font-size: 1.5rem;
-      }
+		.slide-content p {
+			font-size: 1.2rem;
+			margin-bottom: 2rem;
+			text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+			line-height: 1.6;
+		}
 
-      .slide-content p {
-        font-size: 0.9rem;
-      }
-    }
+		.slide-btn {
+			display: inline-block;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 15px 30px;
+			border-radius: 30px;
+			text-decoration: none;
+			font-weight: 600;
+			font-size: 1.1rem;
+			transition: all 0.3s ease;
+			box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+		}
 
-    /* 載入中樣式 */
-    .loading-slide {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 1;
-      transition: opacity 0.8s ease-in-out;
-    }
+		.slide-btn:hover {
+			transform: translateY(-3px);
+			box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+			color: white;
+		}
 
-    .loading-slide .slide-content {
-      text-align: center;
-      color: white;
-    }
+		.carousel-controls {
+			position: absolute;
+			bottom: 30px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			gap: 15px;
+			z-index: 3;
+		}
 
-    .loading-slide .slide-content h2 {
-      font-size: 2rem;
-      margin-bottom: 1rem;
-      animation: pulse 2s infinite;
-    }
+		.carousel-dot {
+			width: 12px;
+			height: 12px;
+			border-radius: 50%;
+			background: rgba(255, 255, 255, 0.5);
+			cursor: pointer;
+			transition: all 0.3s ease;
+		}
 
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.5; }
-      100% { opacity: 1; }
-    }
-  </style>
+		.carousel-dot.active {
+			background: white;
+			transform: scale(1.2);
+		}
+
+		.carousel-arrow {
+			position: absolute;
+			top: 50%;
+			transform: translateY(-50%);
+			background: rgba(255, 255, 255, 0.2);
+			color: white;
+			border: none;
+			width: 50px;
+			height: 50px;
+			border-radius: 50%;
+			cursor: pointer;
+			font-size: 1.5rem;
+			transition: all 0.3s ease;
+			z-index: 3;
+			backdrop-filter: blur(10px);
+		}
+
+		.carousel-arrow:hover {
+			background: rgba(255, 255, 255, 0.3);
+			transform: translateY(-50%) scale(1.1);
+		}
+
+		.carousel-arrow.prev {
+			left: 20px;
+		}
+
+		.carousel-arrow.next {
+			right: 20px;
+		}
+
+		.slide-overlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
+			z-index: 1;
+		}
+
+		.loading-slide {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			opacity: 1;
+			transition: opacity 0.8s ease-in-out;
+		}
+
+		.loading-slide .slide-content {
+			color: white;
+		}
+
+		/* 響應式設計 */
+		@media (max-width: 768px) {
+			.carousel-container {
+				height: 400px;
+				margin-top: 70px;
+			}
+
+			.slide-content h2 {
+				font-size: 2rem;
+			}
+
+			.slide-content p {
+				font-size: 1rem;
+			}
+
+			.slide-btn {
+				padding: 12px 25px;
+				font-size: 1rem;
+			}
+
+			.carousel-arrow {
+				width: 40px;
+				height: 40px;
+				font-size: 1.2rem;
+			}
+		}
+
+		@media (max-width: 480px) {
+			.carousel-container {
+				height: 350px;
+			}
+
+			.slide-content h2 {
+				font-size: 1.5rem;
+			}
+
+			.slide-content p {
+				font-size: 0.9rem;
+			}
+		}
+	</style>
 </head>
 
 <body>
@@ -272,7 +371,51 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
       <!-- 指示點將由JavaScript動態生成 -->
     </div>
   </div>
-
+  <div class="teacher-container">
+    <div class="features-grid">
+			<div class="feature-card">
+				<div class="feature-icon">🤝</div>
+				<h3 class="feature-title">招生QA問答</h3>
+				<p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
+				<a href="QA.php" class="feature-link">招生QA問答</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">📚</div>
+				<h3 class="feature-title">私訊聊天室</h3>
+				<p class="feature-description">學生或其他學生進行聊天。</p>
+				<a href="chat/chat.php" class="feature-link">私訊聊天室</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">👥</div>
+				<h3 class="feature-title">續招報名</h3>
+				<p class="feature-description">查看續招報名情況和進度。</p>
+				<a href="continued_admission.php" class="feature-link">續招報名</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">📊</div>
+				<h3 class="feature-title">五專入學說明會</h3>
+				<p class="feature-description">查看五專入學說明會情況和進度。</p>
+				<a href="admission.php" class="feature-link">五專入學說明會</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">👑</div>
+				<h3 class="feature-title">推薦報名</h3>
+				<p class="feature-description">查看推薦報名情況和進度。</p>
+				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">🎓</div>
+				<h3 class="feature-title">就讀意願管理</h3>
+				<p class="feature-description">管理學生和家長的就讀意願登錄，查看申請狀態並進行聯絡。</p>
+				<a href="admin_enrollment_review_fixed.php" class="feature-link">管理就讀意願</a>
+			</div>
+		</div>
+	</div>
   <!-- 輪播圖片JavaScript -->
   <script>
     const API_BASE_URL = 'http://localhost:5001';
