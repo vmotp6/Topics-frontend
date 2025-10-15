@@ -49,18 +49,20 @@ try {
     $review_notes = $record['review_notes'] ?? '';
     $reviewed_at = $record['reviewed_at'] ?? null;
     
-    // 判斷是否已檢測
-    $is_reviewed = !empty($reviewed_at);
+    // 判斷是否已審核（只有pending狀態可以修改）
+    $is_reviewed = ($status !== 'pending');
     
     if ($is_reviewed) {
-        // 已檢測，顯示結果
+        // 已審核，顯示結果並返回表單資料（只讀模式）
         $status_text = '';
+        $display_type = 'success'; // 預設為成功樣式
         switch ($status) {
             case 'approved':
                 $status_text = '錄取';
                 break;
             case 'rejected':
-                $status_text = '未錄取';
+                $status_text = '不錄取';
+                $display_type = 'rejected'; // 設為拒絕樣式（紅色）
                 break;
             case 'waitlist':
                 $status_text = '備取';
@@ -76,15 +78,50 @@ try {
             'status_text' => $status_text,
             'review_notes' => $review_notes,
             'reviewed_at' => $reviewed_at,
-            'message' => "錄取結果：{$status_text}"
+            'message' => "審核結果：{$status_text}",
+            'display_type' => $display_type,
+            'form_data' => [
+                'exam_no' => $record['exam_no'],
+                'student_name' => $record['name'],
+                'id' => $record['id_number'],
+                'birth_year' => $record['birth_year'],
+                'birth_month' => $record['birth_month'],
+                'birth_day' => $record['birth_day'],
+                'gender' => $record['gender'],
+                'phone' => $record['phone'],
+                'mobile' => $record['mobile'],
+                'school_city' => $record['school_city'],
+                'school_name' => $record['school_name'],
+                'zip' => $record['zip_code'],
+                'city' => $record['city'],
+                'district' => $record['district'],
+                'village' => $record['village'],
+                'neighbor' => $record['neighbor'],
+                'road' => $record['road'],
+                'section' => $record['section'],
+                'lane' => $record['lane'],
+                'alley' => $record['alley'],
+                'no' => $record['house_no'],
+                'floor' => $record['floor'],
+                'same_address' => $record['same_address'] ? 'yes' : 'no',
+                'contact_address' => $record['contact_address'],
+                'guardian' => $record['guardian_name'],
+                'guardian_phone' => $record['guardian_phone'],
+                'guardian_mobile' => $record['guardian_mobile'],
+                'self_intro' => $record['self_intro'],
+                'skills' => $record['skills'],
+                'choices' => json_decode($record['choices'], true) ?: [],
+                'documents' => json_decode($record['documents'], true) ?: []
+            ]
         ], JSON_UNESCAPED_UNICODE);
     } else {
-        // 未檢測，返回表單資料供修改
+        // 待審核狀態，返回表單資料供修改
         echo json_encode([
             'success' => true,
             'reviewed' => false,
             'status' => $status,
-            'message' => '尚未檢測，您可以修改報名資料',
+            'message' => '待審核狀態，您可以修改報名資料',
+            'display_type' => 'info',
             'form_data' => [
                 'exam_no' => $record['exam_no'],
                 'student_name' => $record['name'],

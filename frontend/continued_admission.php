@@ -352,6 +352,12 @@ require_once 'session_config.php';
         const availableChoices = document.getElementById('availableChoices');
         const selectedChoicesZone = document.getElementById('selectedChoices');
 
+        // 檢查表單是否處於只讀模式
+        if (isFormDisabled) {
+          console.log('表單處於只讀模式，跳過拖曳功能初始化');
+          return;
+        }
+
         // 為所有科系項目添加拖曳事件
         availableChoices.querySelectorAll('.choice-item').forEach(item => {
           item.addEventListener('dragstart', handleDragStart);
@@ -796,8 +802,7 @@ require_once 'session_config.php';
         }
       }
 
-      // 頁面載入完成後初始化
-      initializeDragAndDrop();
+      // 頁面載入完成後初始化（拖曳功能在DOMContentLoaded中已初始化）
     });
     
     // 初始化查詢功能
@@ -841,17 +846,27 @@ require_once 'session_config.php';
           .then(data => {
             if (data.success) {
               if (data.reviewed) {
-                // 已檢測，顯示結果並填充表單資料（只讀模式）
-                showQueryResult(data.message, 'success');
+                // 已審核，顯示結果並填充表單資料（只讀模式）
+                let statusMessage = data.message;
+                if (data.status_text) {
+                  statusMessage += ` (${data.status_text})`;
+                }
+                if (data.review_notes) {
+                  statusMessage += `\n備註：${data.review_notes}`;
+                }
+                // 使用後端返回的 display_type
+                const displayType = data.display_type || 'success';
+                showQueryResult(statusMessage, displayType);
                 fillFormWithData(data.form_data);
-                setFormReadOnly(true);
-                setIdNumberReadOnly(true); // 查詢到資料時設置身分證字號為只讀
+                setFormReadOnly(true); // 所有欄位設為只讀
+                setIdNumberReadOnly(true); // 身分證字號也設為只讀
               } else {
-                // 未檢測，填充表單資料
-                showQueryResult(data.message, 'info');
+                // 待審核狀態，填充表單資料供修改
+                const displayType = data.display_type || 'info';
+                showQueryResult(data.message, displayType);
                 fillFormWithData(data.form_data);
-                setFormReadOnly(false);
-                setIdNumberReadOnly(true); // 查詢到資料時設置身分證字號為只讀
+                setFormReadOnly(false); // 允許編輯所有欄位
+                setIdNumberReadOnly(true); // 但身分證字號仍為只讀
               }
             } else {
               showQueryResult(data.message, 'error');
@@ -873,7 +888,8 @@ require_once 'session_config.php';
     function showQueryResult(message, type) {
       const queryResult = document.getElementById('queryResult');
       if (queryResult) {
-        queryResult.textContent = message;
+        // 支持多行文本顯示
+        queryResult.innerHTML = message.replace(/\n/g, '<br>');
         queryResult.className = `query-result ${type}`;
         queryResult.style.display = 'block';
       }
@@ -891,6 +907,21 @@ require_once 'session_config.php';
           inputs.forEach(input => {
             input.disabled = true;
           });
+          
+          // 禁用志願序拖曳功能
+          const choiceItems = formContent.querySelectorAll('.choice-item');
+          choiceItems.forEach(item => {
+            item.draggable = false;
+            item.style.pointerEvents = 'none';
+            item.style.opacity = '0.6';
+          });
+          
+          const selectedChoiceItems = formContent.querySelectorAll('.selected-choice-item');
+          selectedChoiceItems.forEach(item => {
+            item.draggable = false;
+            item.style.pointerEvents = 'none';
+          });
+          
           // 隱藏提交按鈕
           const submitBtn = document.querySelector('.submit-btn');
           if (submitBtn) {
@@ -903,6 +934,21 @@ require_once 'session_config.php';
           inputs.forEach(input => {
             input.disabled = false;
           });
+          
+          // 啟用志願序拖曳功能
+          const choiceItems = formContent.querySelectorAll('.choice-item');
+          choiceItems.forEach(item => {
+            item.draggable = true;
+            item.style.pointerEvents = 'auto';
+            item.style.opacity = '1';
+          });
+          
+          const selectedChoiceItems = formContent.querySelectorAll('.selected-choice-item');
+          selectedChoiceItems.forEach(item => {
+            item.draggable = true;
+            item.style.pointerEvents = 'auto';
+          });
+          
           // 顯示提交按鈕
           const submitBtn = document.querySelector('.submit-btn');
           if (submitBtn) {
@@ -972,21 +1018,28 @@ require_once 'session_config.php';
                 parentVisibility: input.parentElement.style.visibility,
                 computedStyle: window.getComputedStyle(input),
                 formDisabled: input.form ? input.form.disabled : 'no form',
-                formContent: document.getElementById('formContent') ? document.getElementById('formContent').classList.toString() : 'no formContent'
+                formContent: document.getElementById('formContent') ? document.getElementById('formContent').classList.toString() : 'no formContent',
+                isFormDisabled: isFormDisabled
               });
               
-              // 強制確保姓名字段可見和可編輯
-              input.disabled = false;
-              input.readOnly = false;
-              input.style.display = 'block';
-              input.style.visibility = 'visible';
-              input.style.opacity = '1';
-              input.style.background = '#fff';
-              input.style.color = '#333';
+              // 只有在表單不是只讀模式時才強制設為可編輯
+              if (!isFormDisabled) {
+                // 強制確保姓名字段可見和可編輯
+                input.disabled = false;
+                input.readOnly = false;
+                input.style.display = 'block';
+                input.style.visibility = 'visible';
+                input.style.opacity = '1';
+                input.style.background = '#fff';
+                input.style.color = '#333';
+                console.log('姓名字段設為可編輯模式');
+              } else {
+                console.log('表單處於只讀模式，保持姓名字段只讀狀態');
+              }
               
               // 再次設置值
               input.value = formData[field];
-              console.log('姓名字段強制設置後的值:', input.value);
+              console.log('姓名字段設置後的值:', input.value);
             }
           }
         } else {
@@ -1056,11 +1109,13 @@ require_once 'session_config.php';
       
       // 強制確保姓名字段可見
       setTimeout(() => {
-        // 首先確保表單是啟用狀態
-        const formContent = document.getElementById('formContent');
-        if (formContent) {
-          formContent.classList.remove('form-readonly', 'form-disabled');
-          console.log('強制移除表單禁用狀態');
+        // 只有在表單不是只讀模式時才強制移除禁用狀態
+        if (!isFormDisabled) {
+          const formContent = document.getElementById('formContent');
+          if (formContent) {
+            formContent.classList.remove('form-readonly', 'form-disabled');
+            console.log('強制移除表單禁用狀態');
+          }
         }
         
         const nameInput = document.querySelector('input[name="student_name"]');
@@ -1071,25 +1126,31 @@ require_once 'session_config.php';
             style: nameInput.style.cssText,
             computedStyle: window.getComputedStyle(nameInput),
             parentElement: nameInput.parentElement,
-            parentStyle: nameInput.parentElement ? window.getComputedStyle(nameInput.parentElement) : null
+            parentStyle: nameInput.parentElement ? window.getComputedStyle(nameInput.parentElement) : null,
+            isFormDisabled: isFormDisabled
           });
           
-          // 強制啟用輸入框
-          nameInput.disabled = false;
-          nameInput.readOnly = false;
+          // 只有在表單不是只讀模式時才強制啟用輸入框
+          if (!isFormDisabled) {
+            // 強制啟用輸入框
+            nameInput.disabled = false;
+            nameInput.readOnly = false;
           
-          // 強制設置樣式確保可見
-          nameInput.style.display = 'block';
-          nameInput.style.visibility = 'visible';
-          nameInput.style.opacity = '1';
-          nameInput.style.background = '#fff';
-          nameInput.style.color = '#333';
-          nameInput.style.border = '2px solid #e1e5e9';
-          nameInput.style.padding = '12px 15px';
-          nameInput.style.borderRadius = '8px';
-          nameInput.style.fontSize = '14px';
-          nameInput.style.width = '100%';
-          nameInput.style.boxSizing = 'border-box';
+            // 強制設置樣式確保可見
+            nameInput.style.display = 'block';
+            nameInput.style.visibility = 'visible';
+            nameInput.style.opacity = '1';
+            nameInput.style.background = '#fff';
+            nameInput.style.color = '#333';
+            nameInput.style.border = '2px solid #e1e5e9';
+            nameInput.style.padding = '12px 15px';
+            nameInput.style.borderRadius = '8px';
+            nameInput.style.fontSize = '14px';
+            nameInput.style.width = '100%';
+            nameInput.style.boxSizing = 'border-box';
+          } else {
+            console.log('表單處於只讀模式，保持姓名字段只讀狀態');
+          }
           
           // 確保正確值被設置
           if (formData.student_name) {
