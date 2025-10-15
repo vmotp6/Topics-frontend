@@ -83,7 +83,11 @@ def google_auth():
         f"state={state}"
     )
     
-    return redirect(google_auth_url)
+    # 檢查是否為 AJAX 請求
+    if request.headers.get('Content-Type') == 'application/json' or request.args.get('format') == 'json':
+        return jsonify({"auth_url": google_auth_url})
+    else:
+        return redirect(google_auth_url)
 
 @app.route('/auth/google/callback', methods=['GET'])
 def google_callback():
@@ -174,8 +178,8 @@ def google_callback():
                         role = '老師'
                         print(f"根據email domain判斷為老師: {email}")
                     else:
-                        role = '學生'  # 預設角色
-                        print(f"使用預設身分(學生): {email}")
+                        role = '學生'  # 非學校帳號都視為學生
+                        print(f"非學校帳號，判斷為學生: {email}")
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -206,6 +210,8 @@ def google_callback():
                     redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role={role}"
                 elif role == '老師':
                     redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
+                elif role == '學生':
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role={role}"
                 else:
                     redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
                 

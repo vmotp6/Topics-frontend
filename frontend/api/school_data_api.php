@@ -68,6 +68,13 @@ function normalizeSchoolName($schoolName) {
     // 統一「國中」和「國民中學」的寫法
     $normalized = str_replace('國民中學', '國中', $normalized);
     
+    // 特殊處理：將「高中附設國中部」轉換為「國中」
+    $normalized = str_replace('高中附設國中部', '國中', $normalized);
+    $normalized = str_replace('附設國中部', '國中', $normalized);
+    
+    // 移除「附設」相關詞彙
+    $normalized = str_replace('附設', '', $normalized);
+    
     return $normalized;
 }
 
@@ -91,16 +98,21 @@ function chooseBestSchoolName($currentName, $existingSchools, $normalizedName) {
         return $currentName;
     }
     
-    // 優先順序：較短的名稱 > 不包含前綴的名稱 > 原始名稱
-    $currentScore = calculateNameScore($currentName);
-    $bestName = $currentName;
-    $bestScore = $currentScore;
-    
+    // 收集所有候選名稱
+    $candidateNames = [$currentName];
     foreach ($existingSchools as $school) {
-        $score = calculateNameScore($school['name']);
+        $candidateNames[] = $school['name'];
+    }
+    
+    // 選擇最佳名稱
+    $bestName = $currentName;
+    $bestScore = calculateNameScore($currentName);
+    
+    foreach ($candidateNames as $name) {
+        $score = calculateNameScore($name);
         if ($score > $bestScore) {
             $bestScore = $score;
-            $bestName = $school['name'];
+            $bestName = $name;
         }
     }
     
@@ -111,20 +123,42 @@ function chooseBestSchoolName($currentName, $existingSchools, $normalizedName) {
 function calculateNameScore($schoolName) {
     $score = 0;
     
-    // 較短的名稱得分更高
+    // 較短的名稱得分更高（基礎分數）
     $score += (100 - strlen($schoolName));
     
     // 不包含前綴詞的名稱得分更高
     $prefixes = ['市立', '縣立', '國立', '私立', '台北市立', '新北市立', '桃園市立', '台中市立', '台南市立', '高雄市立'];
+    $hasPrefix = false;
     foreach ($prefixes as $prefix) {
         if (strpos($schoolName, $prefix) === 0) {
-            $score -= 20; // 有前綴詞扣分
+            $score -= 30; // 有前綴詞扣分
+            $hasPrefix = true;
             break;
         }
     }
     
+    // 如果沒有前綴詞，額外加分
+    if (!$hasPrefix) {
+        $score += 20;
+    }
+    
     // 包含「國中」而不是「國民中學」的得分更高
     if (strpos($schoolName, '國中') !== false && strpos($schoolName, '國民中學') === false) {
+        $score += 15;
+    }
+    
+    // 不包含「附設」的名稱得分更高
+    if (strpos($schoolName, '附設') === false) {
+        $score += 25;
+    }
+    
+    // 不包含「高中」的名稱得分更高（因為我們要找國中）
+    if (strpos($schoolName, '高中') === false) {
+        $score += 20;
+    }
+    
+    // 包含「國中」的額外加分
+    if (strpos($schoolName, '國中') !== false) {
         $score += 10;
     }
     
@@ -136,7 +170,12 @@ function findExistingSchoolIndex($matches, $uniqueKey) {
     foreach ($matches as $index => $school) {
         $normalized_name = normalizeSchoolName($school['name']);
         $normalized_city = normalizeCityName($school['city']);
-        $school_unique_key = $normalized_city . '_' . $normalized_name; // 移除區域，只使用城市+學校名稱
+        
+        // 進一步簡化學校名稱，移除「高中」等詞彙
+        $simplified_name = str_replace(['高中', '附設', '部'], '', $normalized_name);
+        $simplified_name = trim($simplified_name);
+        
+        $school_unique_key = $normalized_city . '_' . $simplified_name; // 使用簡化後的名稱
         if ($school_unique_key === $uniqueKey) {
             return $index;
         }
@@ -207,7 +246,12 @@ switch ($action) {
                 // 創建學校的唯一識別碼（使用城市+學校名稱的標準化版本，忽略區域差異）
                 $normalized_name = normalizeSchoolName($school['name']);
                 $normalized_city = normalizeCityName($school['city']);
-                $unique_key = $normalized_city . '_' . $normalized_name; // 移除區域，只使用城市+學校名稱
+                
+                // 進一步簡化學校名稱，移除「高中」等詞彙
+                $simplified_name = str_replace(['高中', '附設', '部'], '', $normalized_name);
+                $simplified_name = trim($simplified_name);
+                
+                $unique_key = $normalized_city . '_' . $simplified_name; // 使用簡化後的名稱
                 
                 // 檢查是否已經存在相同的學校
                 if (!isset($seen_schools[$unique_key])) {
@@ -228,11 +272,22 @@ switch ($action) {
                         }
                         
                         // 選擇最佳名稱作為顯示名稱
-                        $best_name = chooseBestSchoolName($school['name'], [$matches[$existing_index]], $normalized_name);
-                        if ($best_name !== $matches[$existing_index]['name']) {
-                            $matches[$existing_index]['name'] = $best_name;
-                            $matches[$existing_index]['display_name'] = $best_name;
+                        $all_names = $matches[$existing_index]['all_names'];
+                        $best_name = $all_names[0]; // 預設使用第一個名稱
+                        $best_score = calculateNameScore($best_name);
+                        
+                        // 從所有名稱中選擇分數最高的
+                        foreach ($all_names as $name) {
+                            $score = calculateNameScore($name);
+                            if ($score > $best_score) {
+                                $best_score = $score;
+                                $best_name = $name;
+                            }
                         }
+                        
+                        // 更新顯示名稱
+                        $matches[$existing_index]['name'] = $best_name;
+                        $matches[$existing_index]['display_name'] = $best_name;
                         
                         // 合併其他可能有用的資訊
                         if (empty($matches[$existing_index]['address']) && !empty($school['address'])) {
@@ -308,6 +363,30 @@ switch ($action) {
                 'success' => false,
                 'message' => '更新失敗: ' . $e->getMessage()
             ]);
+        }
+        break;
+        
+    case 'check_school':
+        // 檢查特定學校是否存在
+        $school_name = $_GET['school_name'] ?? '';
+        if (empty($school_name)) {
+            echo json_encode(['error' => '請提供學校名稱']);
+            exit;
+        }
+        
+        try {
+            $stmt = $pdo->prepare("SELECT name, city, district, type, school_code, address, phone, website FROM school_data WHERE name LIKE ? AND is_active = 1");
+            $stmt->execute(["%$school_name%"]);
+            $schools = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'school_name' => $school_name,
+                'found' => count($schools) > 0,
+                'count' => count($schools),
+                'schools' => $schools
+            ]);
+        } catch (PDOException $e) {
+            echo json_encode(['error' => '查詢失敗: ' . $e->getMessage()]);
         }
         break;
         
