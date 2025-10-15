@@ -1,6 +1,6 @@
 <?php
 // 載入 session 配置
-require_once 'session_config.php';
+require_once dirname(__DIR__) . '/session_config.php';
 
 // 更嚴格的登入狀態檢查
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 

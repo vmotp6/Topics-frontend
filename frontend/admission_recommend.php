@@ -130,9 +130,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         
         // 處理檔案上傳
         $proof_evidence_path = '';
-        $has_other_proof = isset($_POST['other_proof_checkbox']) && $_POST['other_proof_checkbox'] === '1';
         
-        if ($has_other_proof && isset($_FILES['proof_evidence']) && $_FILES['proof_evidence']['error'] === UPLOAD_ERR_OK) {
+        if (isset($_FILES['proof_evidence']) && $_FILES['proof_evidence']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = 'uploads/proof_evidence/';
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0755, true);
@@ -310,7 +309,6 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <th>狀態</th>
               <th>入學狀態</th>
               <th>建立時間</th>
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -353,22 +351,6 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 </span>
               </td>
               <td><?php echo date('Y-m-d H:i', strtotime($result['created_at'])); ?></td>
-              <td>
-                <div class="action-buttons">
-                  <button class="btn-status" onclick="updateStatus(<?php echo $result['id']; ?>, 'registered')" 
-                          title="審核通過（被推薦學生）">
-                    <i class="fas fa-check"></i>
-                  </button>
-                  <button class="btn-status" onclick="updateStatus(<?php echo $result['id']; ?>, 'rejected')" 
-                          title="審核拒絕（被推薦學生）">
-                    <i class="fas fa-times"></i>
-                  </button>
-                  <button class="btn-enrollment" onclick="updateEnrollment(<?php echo $result['id']; ?>, '已入學')" 
-                          title="確認入學（被推薦學生）">
-                    <i class="fas fa-graduation-cap"></i>
-                  </button>
-                </div>
-              </td>
             </tr>
             <?php endforeach; ?>
           </tbody>
@@ -544,27 +526,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 <script>
 // 檔案上傳區域互動功能
 document.addEventListener('DOMContentLoaded', function() {
-    const checkbox = document.querySelector('input[name="other_proof_checkbox"]');
     const fileInput = document.getElementById('proof_evidence');
     const documentItem = document.querySelector('.document-item');
-    
-    // 控制檔案上傳區域的顯示/隱藏
-    function updateFileUploadVisibility() {
-        if (checkbox.checked) {
-            fileInput.style.display = 'block';
-            fileInput.disabled = false;
-        } else {
-            fileInput.style.display = 'none';
-            fileInput.disabled = true;
-            fileInput.value = ''; // 清空檔案選擇
-        }
-    }
-    
-    // 監聽複選框變化
-    checkbox.addEventListener('change', updateFileUploadVisibility);
-    
-    // 初始化
-    updateFileUploadVisibility();
     
     // 檔案選擇後的視覺反饋
     fileInput.addEventListener('change', function() {
@@ -576,49 +539,10 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.backgroundColor = 'white';
         }
     });
-=======
+});
+</script>
+
 <style>
-.action-buttons {
-  display: flex;
-  gap: 5px;
-  justify-content: center;
-}
-
-.btn-status, .btn-enrollment {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.btn-status:hover {
-  background: #5a6fd8;
-  transform: translateY(-2px);
-}
-
-.btn-enrollment {
-  background: #28a745;
-}
-
-.btn-enrollment:hover {
-  background: #218838;
-  transform: translateY(-2px);
-}
-
-.btn-status:disabled, .btn-enrollment:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.status-updating {
-  opacity: 0.6;
-  pointer-events: none;
-}
 
 .notification-toast {
   position: fixed;
@@ -644,93 +568,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 
 <script>
-// 更新推薦狀態
-function updateStatus(recommendationId, status) {
-  if (!confirm('確定要更新狀態嗎？')) {
-    return;
-  }
-  
-  const row = document.querySelector(`tr[data-id="${recommendationId}"]`);
-  if (row) {
-    row.classList.add('status-updating');
-  }
-  
-  fetch('api/update_recommendation_status.php', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      recommendation_id: recommendationId,
-      status: status
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      showNotification('狀態更新成功！' + (data.email_sent ? ' 已發送通知郵件。' : ''), 'success');
-      // 重新載入頁面以顯示更新後的狀態
-      setTimeout(() => {
-        location.reload();
-      }, 2000);
-    } else {
-      showNotification('更新失敗：' + data.message, 'error');
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    showNotification('更新失敗，請稍後再試', 'error');
-  })
-  .finally(() => {
-    if (row) {
-      row.classList.remove('status-updating');
-    }
-  });
-}
-
-// 更新入學狀態
-function updateEnrollment(recommendationId, enrollmentStatus) {
-  if (!confirm('確定要更新入學狀態嗎？')) {
-    return;
-  }
-  
-  const row = document.querySelector(`tr[data-id="${recommendationId}"]`);
-  if (row) {
-    row.classList.add('status-updating');
-  }
-  
-  fetch('api/update_recommendation_status.php', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      recommendation_id: recommendationId,
-      enrollment_status: enrollmentStatus
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      showNotification('入學狀態更新成功！' + (data.email_sent ? ' 已發送通知郵件。' : ''), 'success');
-      // 重新載入頁面以顯示更新後的狀態
-      setTimeout(() => {
-        location.reload();
-      }, 2000);
-    } else {
-      showNotification('更新失敗：' + data.message, 'error');
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    showNotification('更新失敗，請稍後再試', 'error');
-  })
-  .finally(() => {
-    if (row) {
-      row.classList.remove('status-updating');
-    }
-  });
-}
 
 // 顯示通知
 function showNotification(message, type = 'success') {
