@@ -356,9 +356,7 @@ $conn->close();
                 <h4 style="color: #856404; margin-bottom: 15px;">
                     <i class="fas fa-database"></i> 活動記錄管理
                 </h4>
-                <p style="color: #856404; margin-bottom: 20px;">
-                    進入專門的管理頁面來查看、編輯、刪除
-                </p>
+
                 <button type="button" id="toggleRecordsBtn" class="toggle-records-btn" onclick="window.location.href='activity_records_management.php'" 
                         style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
                     <i class="fas fa-cogs" id="recordsIcon"></i> 

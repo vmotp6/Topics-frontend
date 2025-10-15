@@ -57,21 +57,22 @@ function getResourcePath($resourceFile) {
     background: rgba(217, 229, 234, 0.95);
     backdrop-filter: blur(10px);
     box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-    height: 80px;
-    padding: 0;
+    min-height: 80px;
+    padding: 10px 0;
     color: #2c3e50;
     font-family: 'Microsoft JhengHei', sans-serif;
   }
 
   .container {
-    max-width: 1600px;
+    max-width: 1800px;
     margin: 0 auto;
     padding: 0 20px;
-    height: 100%;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     min-width: 0;
+    flex-wrap: wrap;
   }
 
   .logo {
@@ -94,14 +95,13 @@ function getResourcePath($resourceFile) {
   .navbar-links {
     display: flex;
     align-items: center;
-    gap: 25px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    gap: 20px;
+    flex-wrap: wrap;
+    overflow: visible;
     flex: 1;
     justify-content: center;
     padding: 0 20px;
+    max-width: calc(100vw - 300px);
   }
 
   .navbar-user {
@@ -559,8 +559,9 @@ function getResourcePath($resourceFile) {
     }
 
     .navbar-links {
-      gap: 18px;
+      gap: 15px;
       padding: 0 15px;
+      max-width: calc(100vw - 250px);
     }
 
     .navbar-links a {
@@ -873,6 +874,7 @@ function getResourcePath($resourceFile) {
     <a href="<?php echo getCorrectPath('continued_admission.php'); ?>">續招報名</a>
     <a href="<?php echo getCorrectPath('admission.php'); ?>">五專入學說明會</a>
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>">推薦報名</a>
+    <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>">就讀意願表</a>
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>

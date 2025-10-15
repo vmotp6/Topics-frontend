@@ -27,6 +27,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
         .profile-container {
+            width: 80%;
             max-width: 600px;
             margin: 120px auto 40px;
             padding: 40px;
@@ -191,7 +192,8 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
                         if (data) {
                             // 如果已有資料，填入表單
                             document.getElementById('department').value = data.department;
-                        document.getElementById('phone').value = data.phone;
+                            document.getElementById('phone').value = data.phone;
+                        }
                     })
                     .catch(error => {
                         clearTimeout(timeoutId);
@@ -243,8 +245,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
             });
         });
     </script>
-    
-    <?php include("share/ai_widget.php"); ?>
+<?php include("share/footer.php"); ?>
+<?php include("share/ai_widget.php"); ?>
+
 </body>
 
 </html> 
