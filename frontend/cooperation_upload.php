@@ -49,7 +49,7 @@ $role = $_SESSION['role'] ?? '訪客';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>康寧大學就讀意願登錄</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/csp/cooperation_upload.css?v=20241014-2">
+    <link rel="stylesheet" href="assets/csp/cooperation_upload.css?v=20241014-3">
 </head>
 
 <body>
@@ -149,20 +149,6 @@ $role = $_SESSION['role'] ?? '訪客';
                                 <option value="四技">四技</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="department1">科系:</label>
-                            <select id="department1" name="department1">
-                                <option value="">請選擇</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
-                            </select>
-                        </div>
                     </div>
 
                     <div class="form-row-3">
@@ -188,20 +174,6 @@ $role = $_SESSION['role'] ?? '訪客';
                                 <option value="四技">四技</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="department2">科系:</label>
-                            <select id="department2" name="department2">
-                                <option value="">請選擇</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
-                            </select>
-                        </div>
                     </div>
 
                     <div class="form-row-3">
@@ -225,20 +197,6 @@ $role = $_SESSION['role'] ?? '訪客';
                                 <option value="">請選擇</option>
                                 <option value="五專">五專</option>
                                 <option value="四技">四技</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="department3">科系:</label>
-                            <select id="department3" name="department3">
-                                <option value="">請選擇</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
                             </select>
                         </div>
                     </div>
@@ -374,19 +332,29 @@ $role = $_SESSION['role'] ?? '訪客';
             resultsDiv.classList.add('show');
 
             // 從API獲取搜尋結果
-            fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}`)
+            fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
                 .then(response => response.json())
                 .then(data => {
+                    console.log('搜尋結果:', data); // 調試信息
                     if (data.schools && data.schools.length > 0) {
-                        resultsDiv.innerHTML = data.schools.map(school =>
-                            `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                        resultsDiv.innerHTML = data.schools.map(school => {
+                            // 如果有多個名稱，顯示整合資訊
+                            let displayName = school.name;
+                            let additionalInfo = '';
+                            
+                            if (school.all_names && school.all_names.length > 1) {
+                                additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
+                            }
+                            
+                            return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
                                 <i class="fas fa-school"></i>
                                 <div class="school-info">
-                                    <span class="school-name">${school.name}</span>
+                                    <span class="school-name">${displayName}</span>
                                     <span class="school-location">${school.city} ${school.district}</span>
+                                    ${additionalInfo}
                                 </div>
-                            </div>`
-                        ).join('');
+                            </div>`;
+                        }).join('');
 
                         if (data.total > 20) {
                             resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
@@ -531,10 +499,7 @@ $role = $_SESSION['role'] ?? '訪客';
             const pairs = [
                 { dep: "intention1", sys: "system1" },
                 { dep: "intention2", sys: "system2" },
-                { dep: "intention3", sys: "system3" },
-                { dep: "department1", sys: "system1" },
-                { dep: "department2", sys: "system2" },
-                { dep: "department3", sys: "system3" }
+                { dep: "intention3", sys: "system3" }
             ];
 
             pairs.forEach(({ dep, sys }) => {
