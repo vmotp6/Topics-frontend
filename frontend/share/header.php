@@ -870,6 +870,7 @@ function getResourcePath($resourceFile) {
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
+    <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>">就讀意願登錄</a>
     <a href="<?php echo getCorrectPath('continued_admission.php'); ?>">續招報名</a>
     <a href="<?php echo getCorrectPath('admission.php'); ?>">五專入學說明會</a>
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>">推薦報名</a>
@@ -968,6 +969,7 @@ function getResourcePath($resourceFile) {
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
+    <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>">就讀意願登錄</a>
     <a href="<?php echo getCorrectPath('continued_admission.php'); ?>">續招報名</a>
     <a href="<?php echo getCorrectPath('admission.php'); ?>">五專入學說明會</a>
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>">推薦報名</a>
@@ -1055,6 +1057,10 @@ function getResourcePath($resourceFile) {
         </svg>
         使用 Google 登入
       </a>
+      <div style="margin-top: 10px; color: #666; font-size: 12px; font-style: italic;">
+        <i class="fas fa-info-circle" style="margin-right: 5px;"></i>
+        教職員(@ukn.edu.tw)為老師，學生(@stu.ukn.edu.tw)及其他帳號為學生
+      </div>
     </div>
     
     <p class="helper-text">還沒有帳號？<a href="#" id="switchToRegister">註冊</a></p>

@@ -17,6 +17,8 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
             $redirect_url = 'admin_admission.php';
         } elseif ($_GET['role'] === '老師') {
             $redirect_url = 'teacher.php';
+        } elseif ($_GET['role'] === '學生') {
+            $redirect_url = 'student.php';
         }
         
         header("Location: $redirect_url");

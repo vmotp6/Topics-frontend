@@ -217,8 +217,14 @@ document.getElementById('searchInput').addEventListener('keypress', function(e) 
     }
 });
 </script>
+
+<!-- 浮動助手組件 -->
 </body>
 </html>";
+
+// 在 echo 語句外部包含助手組件
+include("share/chat_widget.php"); 
+include("share/ai_widget.php"); 
 ?>
 
 

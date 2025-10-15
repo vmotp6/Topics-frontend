@@ -2,6 +2,30 @@
 // 載入 session 配置
 require_once 'session_config.php';
 
+// 處理Google登入回調（必須在登入檢查之前）
+if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
+    if (isset($_GET['username']) && isset($_GET['role'])) {
+        // 設定Session
+        $_SESSION['logged_in'] = true;
+        $_SESSION['username'] = $_GET['username'];
+        $_SESSION['role'] = $_GET['role'];
+        $_SESSION['login_method'] = 'google';
+        
+        // 重定向到相應頁面（避免URL參數顯示）
+        $redirect_url = 'index.php';
+        if ($_GET['role'] === '管理員') {
+            $redirect_url = 'admin_admission.php';
+        } elseif ($_GET['role'] === '老師') {
+            $redirect_url = 'teacher.php';
+        } elseif ($_GET['role'] === '學生') {
+            $redirect_url = 'student.php';
+        }
+        
+        header("Location: $redirect_url");
+        exit();
+    }
+}
+
 // 檢查登入狀態（與 header.php 保持一致）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
@@ -17,28 +41,6 @@ if (!$isLoggedIn) {
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
     header("Location: index.php");
     exit;
-}
-
-// 處理Google登入回調
-if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
-    if (isset($_GET['username']) && isset($_GET['role'])) {
-        // 設定Session
-        $_SESSION['logged_in'] = true;
-        $_SESSION['username'] = $_GET['username'];
-        $_SESSION['role'] = $_GET['role'];
-        $_SESSION['login_method'] = 'google';
-        
-        // 重定向到相應頁面（避免URL參數顯示）
-        $redirect_url = 'index.php';
-        if ($_GET['role'] === '管理員') {
-            $redirect_url = 'admin.php';
-        } elseif ($_GET['role'] === '老師') {
-            $redirect_url = 'teacher.php';
-        }
-        
-        header("Location: $redirect_url");
-        exit();
-    }
 }
 ?>
 <!DOCTYPE html>

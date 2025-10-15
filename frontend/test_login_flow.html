@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入流程測試</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #log { background: #f5f5f5; padding: 10px; height: 300px; overflow-y: auto; }
+        .google-login-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            color: #3c4043;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 12px 16px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .google-login-btn:hover {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>登入流程測試</h1>
+    
+    <div class="section">
+        <h2>1. 直接 Google 登入測試</h2>
+        <a href="http://localhost:5000/auth/google" class="google-login-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 12px;">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            使用 Google 登入
+        </a>
+    </div>
+    
+    <div class="section">
+        <h2>2. 測試頁面連結</h2>
+        <a href="index.php">首頁</a> | 
+        <a href="student.php">學生頁面</a> | 
+        <a href="teacher.php">老師頁面</a> | 
+        <a href="admin_admission.php">管理員頁面</a>
+    </div>
+    
+    <div class="section">
+        <h2>3. 調試頁面</h2>
+        <a href="debug_google_login.php">Session 調試</a> | 
+        <a href="test_google_login.html">Google 登入測試</a>
+    </div>
+    
+    <div class="section">
+        <h2>4. 當前 URL 參數</h2>
+        <div id="url-params"></div>
+    </div>
+    
+    <div class="section">
+        <h2>5. 調試日誌</h2>
+        <div id="log"></div>
+        <button onclick="clearLog()">清除日誌</button>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // 頁面載入時檢查 URL 參數
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramsDiv = document.getElementById('url-params');
+            
+            if (urlParams.toString()) {
+                paramsDiv.innerHTML = '<pre>' + urlParams.toString() + '</pre>';
+                log('檢測到 URL 參數: ' + urlParams.toString(), 'info');
+                
+                if (urlParams.has('google_login')) {
+                    log('檢測到 Google 登入回調', 'info');
+                    log('google_login: ' + urlParams.get('google_login'));
+                    log('username: ' + urlParams.get('username'));
+                    log('role: ' + urlParams.get('role'));
+                    
+                    if (urlParams.get('google_login') === 'success') {
+                        log('Google 登入成功！', 'success');
+                        
+                        // 檢查是否會自動重定向
+                        setTimeout(() => {
+                            log('檢查頁面是否會自動重定向...', 'info');
+                        }, 2000);
+                    } else {
+                        log('Google 登入失敗', 'error');
+                    }
+                }
+            } else {
+                paramsDiv.innerHTML = '無 URL 參數';
+                log('無 URL 參數', 'info');
+            }
+            
+            // 檢查當前頁面
+            log('當前頁面: ' + window.location.pathname, 'info');
+            log('完整 URL: ' + window.location.href, 'info');
+        };
+    </script>
+</body>
+</html>
