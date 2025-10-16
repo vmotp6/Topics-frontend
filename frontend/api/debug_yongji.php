@@ -98,3 +98,4 @@ foreach ($schools as $school) {
 echo "</body></html>";
 ?>
 
+
