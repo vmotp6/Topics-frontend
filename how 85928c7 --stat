@@ -1,0 +1,49 @@
+[33mcommit a05b29934d2ab06105f6e9b36f3811c4f3f0ebea[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Merge: 85928c7 72fdc9c
+Author: [1;31mBob02315213[m <ssps101064@gmail.com>
+Date:   Wed Oct 15 14:39:56 2025 +0800
+
+    Merge branch 'main' of https://github.com/vmotp6/Topics-frontend
+
+[33mcommit 85928c74abbcb344ded380e89a0fd00bee9099b0[m
+Author: [1;31mBob02315213[m <ssps101064@gmail.com>
+Date:   Wed Oct 15 14:39:54 2025 +0800
+
+    Enhance Google authentication and role-based redirection; add chat and AI widgets across multiple pages
+    
+    - Updated `google_auth` function to return JSON for AJAX requests and handle redirection based on user role.
+    - Added role-based redirection for students in `index.php`, `admin_admission.php`, `teacher.php`, and `student.php`.
+    - Included chat and AI widgets in various frontend files for improved user interaction.
+    - Improved styling and structure in `chat_settings.php` for better user experience.
+
+ backend/__pycache__/config.cpython-313.pyc | Bin [31m602[m -> [32m550[m bytes
+ backend/app.py                             |  12 [32m+[m[31m-[m
+ backend/config.py                          |  15 [32m++[m
+ backend/test_db_connection.py              |  83 [32m+++++++[m
+ backend/test_google_config.py              |  93 [32m++++++++[m
+ frontend/activity_records_management.php   |   4 [32m+[m
+ frontend/admin_admission.php               |  42 [32m++[m[31m--[m
+ frontend/admin_school_data.php             |   4 [32m+[m
+ frontend/admission.php                     |   4 [32m+[m
+ frontend/admission_recommend.php           |   3 [32m+[m
+ frontend/api/school_data_api.php           | 107 [32m+++++++[m[31m--[m
+ frontend/chat_settings.php                 | 349 [32m+++++++++++++++++++++++++[m[31m----[m
+ frontend/continued_admission.php           |   4 [32m+[m
+ frontend/cooperation_upload.php            |   4 [32m+[m
+ frontend/debug_google_login.php            |  67 [32m++++++[m
+ frontend/index.php                         |   2 [32m+[m
+ frontend/my_records.php                    |   4 [32m+[m
+ frontend/records.php                       |   4 [32m+[m
+ frontend/school_management.php             |   6 [32m+[m
+ frontend/share/header.php                  |   6 [32m+[m
+ frontend/simulate_google_login.php         |  76 [32m+++++++[m
+ frontend/sitemap.php                       |   4 [32m+[m
+ frontend/student.php                       |  42 [32m++[m[31m--[m
+ frontend/teacher.php                       |  40 [32m++[m[31m--[m
+ frontend/test_google_login.html            | 145 [32m++++++++++++[m
+ frontend/test_login_flow.html              | 125 [32m+++++++++++[m
+ frontend/test_session_fix.php              |  75 [32m+++++++[m
+ frontend/test_widgets.php                  | 179 [32m+++++++++++++++[m
+ how --stat 2289061                         |  54 [32m+++++[m
+ t_school_dedup.php                         |  54 [32m+++++[m
+ 30 files changed, 1487 insertions(+), 120 deletions(-)

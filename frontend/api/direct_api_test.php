@@ -56,3 +56,4 @@ if ($data && isset($data['schools'])) {
 echo "</body></html>";
 ?>
 
+
