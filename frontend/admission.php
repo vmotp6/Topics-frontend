@@ -71,9 +71,274 @@ if ($teacher_result && $teacher_result->num_rows > 0) {
 
 $message = "";
 $messageType = "";
+$search_results = [];
+$search_email = "";
+
+// 處理成功訊息
+if (isset($_SESSION['success_message'])) {
+    $success_message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+    
+    if (isset($_SESSION['should_refresh'])) {
+        unset($_SESSION['should_refresh']);
+        // 設定全域變數供 JavaScript 使用
+        echo "<script>
+            window.successMessage = '" . addslashes($success_message) . "';
+        </script>";
+    }
+}
+
+// 處理搜尋請求
+if (isset($_GET['action']) && $_GET['action'] === 'search' && isset($_GET['email'])) {
+    $search_email = trim($_GET['email']);
+    
+    if (!empty($search_email) && filter_var($search_email, FILTER_VALIDATE_EMAIL)) {
+        // 搜尋該電子郵件的所有報名記錄
+        $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                        FROM admission_applications a 
+                        LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                        WHERE a.email = ? 
+                        ORDER BY a.created_at DESC";
+        $search_stmt = $conn->prepare($search_query);
+        $search_stmt->bind_param("s", $search_email);
+        $search_stmt->execute();
+        $search_result = $search_stmt->get_result();
+        
+        while ($row = $search_result->fetch_assoc()) {
+            $search_results[] = $row;
+        }
+        $search_stmt->close();
+        
+        if (empty($search_results)) {
+            $message = "未找到此電子郵件的報名記錄。";
+            $messageType = "info";
+        }
+    } else {
+        $message = "請輸入有效的電子郵件地址。";
+        $messageType = "error";
+    }
+} else {
+    // 如果沒有搜尋請求，清除搜尋狀態
+    $search_email = "";
+    $search_results = [];
+}
+
+// 處理取消報名請求
+if (isset($_POST['action']) && $_POST['action'] === 'cancel' && isset($_POST['application_id'])) {
+    $application_id = intval($_POST['application_id']);
+    $email = trim($_POST['email']);
+    
+    // 調試信息
+    error_log("Cancel request: application_id={$application_id}, email={$email}");
+    
+    // 驗證電子郵件和申請ID的匹配
+    $verify_query = "SELECT id, student_name, session_id FROM admission_applications WHERE id = ? AND email = ?";
+    $verify_stmt = $conn->prepare($verify_query);
+    $verify_stmt->bind_param("is", $application_id, $email);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows > 0) {
+        $application_data = $verify_result->fetch_assoc();
+        error_log("Found application: " . json_encode($application_data));
+        
+        // 刪除報名記錄
+        $delete_query = "DELETE FROM admission_applications WHERE id = ? AND email = ?";
+        $delete_stmt = $conn->prepare($delete_query);
+        $delete_stmt->bind_param("is", $application_id, $email);
+        
+        if ($delete_stmt->execute()) {
+            $success_message = "報名已成功取消！";
+            
+            // 重新搜尋以更新結果
+            $search_email = $email;
+            $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                            FROM admission_applications a 
+                            LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                            WHERE a.email = ? 
+                            ORDER BY a.created_at DESC";
+            $search_stmt = $conn->prepare($search_query);
+            $search_stmt->bind_param("s", $search_email);
+            $search_stmt->execute();
+            $search_result = $search_stmt->get_result();
+            $search_results = [];
+            while ($row = $search_result->fetch_assoc()) {
+                $search_results[] = $row;
+            }
+            $search_stmt->close();
+            
+            error_log("Application cancelled successfully");
+            
+            // 設定成功訊息和重整標記
+            $_SESSION['success_message'] = $success_message;
+            $_SESSION['should_refresh'] = true;
+            
+            // 立即重新導向到同一頁面以觸發彈跳視窗
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        } else {
+            $message = "取消報名失敗，請稍後再試。";
+            $messageType = "error";
+            error_log("Delete failed: " . $delete_stmt->error);
+        }
+        $delete_stmt->close();
+    } else {
+        $message = "無效的申請記錄，無法取消。";
+        $messageType = "error";
+        error_log("No matching application found for id={$application_id}, email={$email}");
+    }
+    $verify_stmt->close();
+}
+
+// 處理修改報名請求
+if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['application_id'])) {
+    $application_id = intval($_POST['application_id']);
+    $email = trim($_POST['email']);
+    $new_session_id = intval($_POST['new_session_id']);
+    $new_course_priority_1 = trim($_POST['new_course_priority_1']);
+    $new_course_priority_2 = trim($_POST['new_course_priority_2']);
+    
+    // 驗證電子郵件和申請ID的匹配
+    $verify_query = "SELECT id FROM admission_applications WHERE id = ? AND email = ?";
+    $verify_stmt = $conn->prepare($verify_query);
+    $verify_stmt->bind_param("is", $application_id, $email);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows > 0) {
+        // 檢查新場次是否額滿
+        $session_check_query = "SELECT s.max_participants, 
+                                      (s.max_participants - COUNT(a.id)) as remaining_spots
+                               FROM admission_sessions s 
+                               LEFT JOIN admission_applications a ON s.id = a.session_id 
+                               WHERE s.id = ? AND s.is_active = 1
+                               GROUP BY s.id, s.max_participants";
+        $session_check_stmt = $conn->prepare($session_check_query);
+        $session_check_stmt->bind_param("i", $new_session_id);
+        $session_check_stmt->execute();
+        $session_check_result = $session_check_stmt->get_result();
+        
+        if ($session_row = $session_check_result->fetch_assoc()) {
+            if ($session_row['remaining_spots'] <= 0) {
+                $message = "所選場次已額滿，請選擇其他場次。";
+                $messageType = "error";
+            } else {
+                // 取得新場次資訊
+                $session_info_query = "SELECT session_name FROM admission_sessions WHERE id = ?";
+                $session_info_stmt = $conn->prepare($session_info_query);
+                $session_info_stmt->bind_param("i", $new_session_id);
+                $session_info_stmt->execute();
+                $session_info_result = $session_info_stmt->get_result();
+                $new_session_name = '';
+                if ($session_info_row = $session_info_result->fetch_assoc()) {
+                    $new_session_name = $session_info_row['session_name'];
+                }
+                $session_info_stmt->close();
+                
+                // 更新報名記錄
+                $update_query = "UPDATE admission_applications 
+                                SET session_id = ?, session_choice = ?, course_priority_1 = ?, course_priority_2 = ?
+                                WHERE id = ? AND email = ?";
+                $update_stmt = $conn->prepare($update_query);
+                $update_stmt->bind_param("isssis", $new_session_id, $new_session_name, $new_course_priority_1, $new_course_priority_2, $application_id, $email);
+                
+                if ($update_stmt->execute()) {
+                    $success_message = "報名已成功修改！";
+                    
+                    // 發送修改確認郵件
+                    try {
+                        require_once 'includes/email_functions.php';
+                        
+                        // 取得修改後的完整資料
+                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                                        FROM admission_applications a 
+                                        LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                                        WHERE a.id = ?";
+                        $updated_stmt = $conn->prepare($updated_query);
+                        $updated_stmt->bind_param("i", $application_id);
+                        $updated_stmt->execute();
+                        $updated_result = $updated_stmt->get_result();
+                        
+                        if ($updated_row = $updated_result->fetch_assoc()) {
+                            // 組合課程資訊用於郵件
+                            $course_info = [];
+                            if (!empty($updated_row['course_priority_1'])) {
+                                $course_info[] = "第一選擇：" . $updated_row['course_priority_1'];
+                            }
+                            if (!empty($updated_row['course_priority_2'])) {
+                                $course_info[] = "第二選擇：" . $updated_row['course_priority_2'];
+                            }
+                            $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
+                            
+                            // 發送修改確認郵件
+                            $modify_email_sent = sendModifyConfirmationEmail(
+                                $updated_row['email'],
+                                $updated_row['student_name'],
+                                $updated_row['parent_name'],
+                                $updated_row['session_name'],
+                                $course_text
+                            );
+                            
+                            if ($modify_email_sent) {
+                                $success_message .= " 修改確認郵件已發送到您的信箱。";
+                            } else {
+                                $success_message .= " 修改確認郵件發送失敗，但報名已成功修改。";
+                            }
+                        }
+                        $updated_stmt->close();
+                        
+                    } catch (Exception $e) {
+                        error_log("修改確認郵件發送失敗: " . $e->getMessage());
+                        $success_message .= " 修改確認郵件發送失敗，但報名已成功修改。";
+                    }
+                    
+                    // 重新搜尋以更新結果
+                    $search_email = $email;
+                    $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                                    FROM admission_applications a 
+                                    LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                                    WHERE a.email = ? 
+                                    ORDER BY a.created_at DESC";
+                    $search_stmt = $conn->prepare($search_query);
+                    $search_stmt->bind_param("s", $search_email);
+                    $search_stmt->execute();
+                    $search_result = $search_stmt->get_result();
+                    $search_results = [];
+                    while ($row = $search_result->fetch_assoc()) {
+                        $search_results[] = $row;
+                    }
+                    $search_stmt->close();
+                    
+                    error_log("Application modified successfully");
+                    
+                    // 設定成功訊息和重整標記
+                    $_SESSION['success_message'] = $success_message;
+                    $_SESSION['should_refresh'] = true;
+                    
+                    // 立即重新導向到同一頁面以觸發彈跳視窗
+                    header("Location: " . $_SERVER['PHP_SELF']);
+                    exit();
+                } else {
+                    $message = "修改報名失敗，請稍後再試。";
+                    $messageType = "error";
+                    error_log("Update failed: " . $update_stmt->error);
+                }
+                $update_stmt->close();
+            }
+        } else {
+            $message = "所選場次無效，請重新選擇。";
+            $messageType = "error";
+        }
+        $session_check_stmt->close();
+    } else {
+        $message = "無效的申請記錄，無法修改。";
+        $messageType = "error";
+    }
+    $verify_stmt->close();
+}
 
 // 處理表單提交
-if ($_POST) {
+if ($_POST && !isset($_POST['action'])) {
     // 驗證必填欄位 (移除 line_id，改為選填)
     $required_fields = ['email', 'school_name', 'student_name', 'grade', 'parent_name', 'contact_phone', 'session_choice', 'receive_info', 'captcha'];
     $missing_fields = [];
@@ -162,6 +427,7 @@ if ($_POST) {
         $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP NULL COMMENT '確認郵件發送時間'");
         $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送活動提醒郵件（0=未發送，1=已發送）'");
         $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP NULL COMMENT '提醒郵件發送時間'");
+        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '報名時間'");
         
         // 插入資料（包含郵件狀態字段和session_id）
         $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_id, session_choice, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
@@ -344,6 +610,99 @@ $conn->close();
                         </div>
             </div>
         </div>
+
+        <!-- 搜尋報名記錄區域 -->
+        <div class="search-container">
+            <div class="search-header">
+                <div class="search-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <div class="search-title">
+                    <h2>查詢我的報名記錄</h2>
+                    <p>輸入您的電子郵件地址，即可查看、取消或修改您的報名場次</p>
+                </div>
+            </div>
+            
+            <form method="GET" action="" class="search-form">
+                <input type="hidden" name="action" value="search">
+                <div class="search-input-group">
+                    <div class="input-wrapper">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" name="email" placeholder="請輸入您的電子郵件地址" 
+                               value="<?php echo isset($_GET['action']) && $_GET['action'] === 'search' ? htmlspecialchars($search_email) : ''; ?>" required>
+                    </div>
+                    <button type="submit" class="search-btn">
+                        <i class="fas fa-search"></i>
+                        <span>查詢</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 搜尋結果區域 -->
+        <?php if (!empty($search_results)): ?>
+        <div class="search-results">
+            <h3><i class="fas fa-list"></i> 您的報名記錄</h3>
+            <div class="applications-list">
+                <?php foreach ($search_results as $application): ?>
+                <div class="application-card">
+                    <div class="application-header">
+                        <h4><?php echo htmlspecialchars($application['session_name']); ?></h4>
+                        <span class="session-type <?php echo $application['session_type'] === '線上' ? 'online' : 'offline'; ?>">
+                            <?php echo htmlspecialchars($application['session_type']); ?>
+                        </span>
+                    </div>
+                    <div class="application-details">
+                        <div class="detail-row">
+                            <span class="label">學生姓名：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['student_name']); ?></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">學校：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['school_name']); ?></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">年級：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['grade']); ?></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">聯絡人：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['parent_name']); ?></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">聯絡電話：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['contact_phone']); ?></span>
+                        </div>
+                        <?php if (!empty($application['course_priority_1'])): ?>
+                        <div class="detail-row">
+                            <span class="label">第一選擇課程：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['course_priority_1']); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <?php if (!empty($application['course_priority_2'])): ?>
+                        <div class="detail-row">
+                            <span class="label">第二選擇課程：</span>
+                            <span class="value"><?php echo htmlspecialchars($application['course_priority_2']); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="detail-row">
+                            <span class="label">報名時間：</span>
+                            <span class="value"><?php echo date('Y-m-d H:i', strtotime($application['created_at'])); ?></span>
+                        </div>
+                    </div>
+                    <div class="application-actions">
+                        <button type="button" class="btn-modify" onclick="showModifyForm(<?php echo $application['id']; ?>, '<?php echo htmlspecialchars($application['email'], ENT_QUOTES); ?>', <?php echo $application['session_id']; ?>, '<?php echo htmlspecialchars($application['course_priority_1'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($application['course_priority_2'], ENT_QUOTES); ?>')">
+                            <i class="fas fa-edit"></i> 修改
+                        </button>
+                        <button type="button" class="btn-cancel" onclick="confirmCancel(<?php echo $application['id']; ?>, '<?php echo htmlspecialchars($application['email'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($application['session_name'], ENT_QUOTES); ?>')">
+                            <i class="fas fa-times"></i> 刪除
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <div class="form-container">
             <?php if ($message): ?>
@@ -712,8 +1071,226 @@ $conn->close();
 
         // 頁面載入完成後初始化
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, checking for success message...');
             initializeDragAndDrop();
+            
+            // 檢查是否有成功訊息需要顯示
+            if (window.successMessage) {
+                console.log('Found success message:', window.successMessage);
+                showSuccessModal(window.successMessage);
+                // 清除全域變數
+                window.successMessage = null;
+            } else {
+                console.log('No success message found');
+            }
         });
+
+        // 修改報名功能
+        function showModifyForm(applicationId, email, currentSessionId, currentCourse1, currentCourse2) {
+            console.log('showModifyForm called with:', {applicationId, email, currentSessionId, currentCourse1, currentCourse2});
+            
+            try {
+                // 創建修改表單的模態框
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3><i class="fas fa-edit"></i> 修改報名場次</h3>
+                            <button type="button" class="close-btn" onclick="closeModal()">&times;</button>
+                        </div>
+                        <form method="POST" action="" class="modify-form">
+                            <input type="hidden" name="action" value="modify">
+                            <input type="hidden" name="application_id" value="${applicationId}">
+                            <input type="hidden" name="email" value="${email}">
+                            
+                            <div class="form-group">
+                                <label>選擇新場次：</label>
+                                <select name="new_session_id" required>
+                                    <option value="">請選擇場次</option>
+                                    ${generateSessionOptions(currentSessionId)}
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>第一選擇課程：</label>
+                                <select name="new_course_priority_1">
+                                    <option value="">請選擇課程</option>
+                                    ${generateCourseOptions(currentCourse1)}
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>第二選擇課程：</label>
+                                <select name="new_course_priority_2">
+                                    <option value="">請選擇課程</option>
+                                    ${generateCourseOptions(currentCourse2)}
+                                </select>
+                            </div>
+                            
+                            <div class="modal-actions">
+                                <button type="button" class="btn-cancel" onclick="closeModal()">取消</button>
+                                <button type="submit" class="btn-submit">確認修改</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                console.log('Modal created and added to body');
+            } catch (error) {
+                console.error('Error in showModifyForm:', error);
+                alert('開啟修改表單時發生錯誤，請重新整理頁面後再試。');
+            }
+        }
+
+        // 生成場次選項
+        function generateSessionOptions(currentSessionId) {
+            try {
+                const sessions = <?php echo json_encode($sessions); ?>;
+                let options = '';
+                
+                if (sessions && Array.isArray(sessions)) {
+                    sessions.forEach(session => {
+                        const selected = session.id == currentSessionId ? 'selected' : '';
+                        const sessionDisplay = session.session_name + (session.session_type === '線上' ? ' (線上)' : '');
+                        const spotsInfo = `（${session.remaining_spots}/${session.max_participants} 人）`;
+                        const isFull = session.remaining_spots <= 0;
+                        const fullText = isFull ? ' - 已滿' : '';
+                        const disabled = isFull ? 'disabled' : '';
+                        
+                        options += `<option value="${session.id}" ${selected} ${disabled}>${sessionDisplay} ${spotsInfo}${fullText}</option>`;
+                    });
+                } else {
+                    options = '<option value="">暫無可用場次</option>';
+                }
+                
+                return options;
+            } catch (error) {
+                console.error('Error in generateSessionOptions:', error);
+                return '<option value="">載入場次時發生錯誤</option>';
+            }
+        }
+
+        // 生成課程選項
+        function generateCourseOptions(currentCourse) {
+            try {
+                const courses = <?php echo json_encode($courses); ?>;
+                let options = '';
+                
+                if (courses && Array.isArray(courses)) {
+                    courses.forEach(course => {
+                        const selected = course === currentCourse ? 'selected' : '';
+                        options += `<option value="${course}" ${selected}>${course}</option>`;
+                    });
+                } else {
+                    options = '<option value="">暫無可用課程</option>';
+                }
+                
+                return options;
+            } catch (error) {
+                console.error('Error in generateCourseOptions:', error);
+                return '<option value="">載入課程時發生錯誤</option>';
+            }
+        }
+
+        // 確認取消報名
+        function confirmCancel(applicationId, email, sessionName) {
+            console.log('confirmCancel called with:', {applicationId, email, sessionName});
+            
+            if (confirm(`確定要取消「${sessionName}」的報名嗎？\n\n此操作無法復原！`)) {
+                try {
+                    // 創建隱藏表單提交取消請求
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '';
+                    
+                    const actionInput = document.createElement('input');
+                    actionInput.type = 'hidden';
+                    actionInput.name = 'action';
+                    actionInput.value = 'cancel';
+                    
+                    const idInput = document.createElement('input');
+                    idInput.type = 'hidden';
+                    idInput.name = 'application_id';
+                    idInput.value = applicationId;
+                    
+                    const emailInput = document.createElement('input');
+                    emailInput.type = 'hidden';
+                    emailInput.name = 'email';
+                    emailInput.value = email;
+                    
+                    form.appendChild(actionInput);
+                    form.appendChild(idInput);
+                    form.appendChild(emailInput);
+                    
+                    document.body.appendChild(form);
+                    console.log('Form created and submitting:', {action: 'cancel', application_id: applicationId, email: email});
+                    form.submit();
+                } catch (error) {
+                    console.error('Error in confirmCancel:', error);
+                    alert('取消報名時發生錯誤，請重新整理頁面後再試。');
+                }
+            }
+        }
+
+        // 關閉模態框
+        function closeModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 點擊模態框外部關閉
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal-overlay')) {
+                closeModal();
+            }
+        });
+
+        // 顯示成功小視窗
+        function showSuccessModal(message) {
+            console.log('showSuccessModal called with message:', message);
+            
+            const modal = document.createElement('div');
+            modal.className = 'success-modal-overlay';
+            modal.innerHTML = `
+                <div class="success-modal-content">
+                    <div class="success-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="success-message">
+                        <h3>操作成功！</h3>
+                        <p>${message}</p>
+                    </div>
+                    <div class="success-actions">
+                        <button type="button" class="btn-ok" onclick="closeSuccessModalAndRefresh()">確定</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            console.log('Success modal added to body');
+        }
+
+        // 關閉成功小視窗
+        function closeSuccessModal() {
+            const modal = document.querySelector('.success-modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 關閉成功小視窗並重整頁面
+        function closeSuccessModalAndRefresh() {
+            const modal = document.querySelector('.success-modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+            // 重整頁面並清空資料
+            window.location.href = window.location.pathname;
+        }
     </script>
 </main>
 <?php include("share/footer.php"); ?>

@@ -278,4 +278,80 @@ function testEmailFunction($testEmail = null) {
     
     return sendEmail($testEmail, $subject, $body);
 }
+
+/**
+ * 發送修改確認郵件
+ */
+function sendModifyConfirmationEmail($email, $studentName, $parentName, $sessionName, $courseText) {
+    $subject = "康寧大學五專入學說明會 - 報名修改確認";
+    
+    $body = "
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px 15px 0 0; text-align: center;'>
+            <h1 style='margin: 0; font-size: 24px;'>康寧大學五專入學說明會</h1>
+            <p style='margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;'>報名修改確認通知</p>
+        </div>
+        
+        <div style='background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 15px 15px;'>
+            <h2 style='color: #667eea; margin-bottom: 20px;'>親愛的 {$parentName} 您好：</h2>
+            
+            <p style='font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 20px;'>
+                感謝您對康寧大學五專入學說明會的關注！我們已收到您的報名修改申請，並已成功更新您的報名資料。
+            </p>
+            
+            <div style='background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;'>
+                <h3 style='color: #667eea; margin-top: 0; margin-bottom: 15px;'>修改後的報名資訊：</h3>
+                <table style='width: 100%; border-collapse: collapse;'>
+                    <tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555; width: 120px;'>學生姓名：</td>
+                        <td style='padding: 8px 0; color: #333;'>{$studentName}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>參加場次：</td>
+                        <td style='padding: 8px 0; color: #333;'>{$sessionName}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>體驗課程：</td>
+                        <td style='padding: 8px 0; color: #333;'>{$courseText}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>修改時間：</td>
+                        <td style='padding: 8px 0; color: #333;'>" . date('Y-m-d H:i:s') . "</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style='background: #e8f4fd; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #667eea;'>
+                <h4 style='color: #667eea; margin-top: 0; margin-bottom: 10px;'>📋 重要提醒：</h4>
+                <ul style='margin: 0; padding-left: 20px; color: #333;'>
+                    <li>請確認修改後的場次時間和地點</li>
+                    <li>活動前一天我們會再次發送提醒郵件</li>
+                    <li>如有任何疑問，請聯繫招生諮詢老師</li>
+                    <li>您可隨時透過電子郵件查詢您的報名狀態</li>
+                </ul>
+            </div>
+            
+            <p style='font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 20px;'>
+                再次感謝您選擇康寧大學！我們期待在說明會上與您見面，為您詳細介紹我們的五專課程特色和未來發展機會。
+            </p>
+            
+            <div style='text-align: center; margin: 30px 0;'>
+                <p style='color: #667eea; font-size: 18px; font-weight: bold; margin: 0;'>
+                    選擇康寧 • 人生雙贏 • 未來罩您
+                </p>
+            </div>
+            
+            <hr style='border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;'>
+            
+            <div style='text-align: center; color: #666; font-size: 14px;'>
+                <p>此郵件由系統自動發送，請勿直接回覆。</p>
+                <p>如有疑問，請聯繫康寧大學招生處。</p>
+                <p>© " . date('Y') . " 康寧大學 版權所有</p>
+            </div>
+        </div>
+    </div>
+    ";
+    
+    return sendEmail($email, $subject, $body);
+}
 ?>
