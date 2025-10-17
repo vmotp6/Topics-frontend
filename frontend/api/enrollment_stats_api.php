@@ -2,29 +2,30 @@
 // 載入 session 配置
 require_once '../session_config.php';
 
+// 移除權限檢查，允許直接查看統計分析
 // 檢查權限 - 支援多種登入方式
-$is_admin = false;
+// $is_admin = false;
 
-// 檢查後台管理系統登入狀態
-if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
-    $is_admin = true;
-}
+// // 檢查後台管理系統登入狀態
+// if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in']) {
+//     $is_admin = true;
+// }
 
-// 檢查前台系統的行政人員權限
-if (!$is_admin) {
-    $role = $_SESSION['role'] ?? '訪客';
-    $is_admin = ($role === '管理員' || $role === 'admin' || $role === '行政人員' || $role === '學校行政人員');
-}
+// // 檢查前台系統的行政人員權限
+// if (!$is_admin) {
+//     $role = $_SESSION['role'] ?? '訪客';
+//     $is_admin = ($role === '管理員' || $role === 'admin' || $role === '行政人員' || $role === '學校行政人員');
+// }
 
-if (!$is_admin) {
-    http_response_code(403);
-    echo json_encode(['error' => '權限不足', 'debug' => [
-        'admin_logged_in' => $_SESSION['admin_logged_in'] ?? 'not_set',
-        'role' => $_SESSION['role'] ?? 'not_set',
-        'session_data' => $_SESSION
-    ]]);
-    exit;
-}
+// if (!$is_admin) {
+//     http_response_code(403);
+//     echo json_encode(['error' => '權限不足', 'debug' => [
+//         'admin_logged_in' => $_SESSION['admin_logged_in'] ?? 'not_set',
+//         'role' => $_SESSION['role'] ?? 'not_set',
+//         'session_data' => $_SESSION
+//     ]]);
+//     exit;
+// }
 
 // 資料庫連接
 $host = '100.79.58.120';
