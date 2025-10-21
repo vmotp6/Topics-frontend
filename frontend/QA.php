@@ -55,19 +55,40 @@ function getFAQFromDatabase() {
         
         <!-- 智能問答留言區 -->
         <section class="qa-chat-section">
-            <h3>🎓 招生智能問答助手(並非AI)</h3>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3>🎓 康寧大學智能問答助手</h3>
+                <div>
+                    <span class="badge bg-success me-2" id="ai-status">AI驅動</span>
+                    <span class="badge bg-info">Ollama增強</span>
+                </div>
+            </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chat-messages">
                     <div class="chat-message bot-message">
                         <div class="message-content">
-                            🎓 您好！我是康寧大學招生智能助手，有任何招生相關問題都可以問我喔！歡迎詢問招生、學費、科系、申請流程等資訊～
+                            🎓 您好！我是康寧大學智能問答助手，基於Ollama AI技術為您提供準確的招生資訊。歡迎詢問招生、學費、科系、申請流程等相關問題！
                         </div>
                         <div class="message-time"></div>
                     </div>
                 </div>
                 <div class="chat-input-container">
-                    <input type="text" id="user-question" placeholder="請輸入您的問題..." maxlength="200">
-                    <button id="send-question">發送</button>
+                    <div class="input-group mb-2">
+                        <input type="text" id="user-question" class="form-control" placeholder="請輸入您的問題..." maxlength="500">
+                        <button id="send-question" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> 發送
+                        </button>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="fas fa-lightbulb"></i> 提示：您可以問關於招生、學費、科系、校園生活等問題
+                        </small>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="use-ai" checked>
+                            <label class="form-check-label" for="use-ai">
+                                使用AI回答
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -170,11 +191,89 @@ $(document).ready(function() {
 
     // 載入資料庫 FAQ
     loadFAQFromDatabase();
+    
+    // 檢查Ollama服務狀態
+    checkOllamaHealth();
+    
+    // 檢查Ollama健康狀態
+    function checkOllamaHealth() {
+        $.get('../backend/api/ollama/ollama_api.php?action=check_health')
+            .done(function(response) {
+                if (response.success) {
+                    $('#ai-status').removeClass('bg-warning').addClass('bg-success').text('AI驅動');
+                } else {
+                    $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('AI離線');
+                }
+            })
+            .fail(function() {
+                $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('AI離線');
+            });
+    }
 
-    // 4. 智能問答功能
+    // 4. 智能問答功能 - 整合Ollama AI
     function findAnswer(question) {
+        return new Promise((resolve, reject) => {
+            const useAI = $('#use-ai').is(':checked');
+            
+            if (useAI) {
+                // 使用Ollama AI回答
+                $.ajax({
+                    url: '../backend/api/ollama/ollama_api.php',
+                    type: 'POST',
+                    data: {
+                        action: 'ask_question',
+                        question: question,
+                        use_context: true
+                    },
+                    dataType: 'json',
+                    success: function(response) {
+                        if (response.success) {
+                            resolve({
+                                answer: response.answer,
+                                source_type: 'ollama_ai',
+                                confidence_score: 0.9,
+                                response_time: response.response_time_ms,
+                                model: response.model
+                            });
+                        } else {
+                            // AI失敗時回退到關鍵詞匹配
+                            const fallbackAnswer = findFallbackAnswer(question);
+                            resolve({
+                                answer: fallbackAnswer,
+                                source_type: 'fallback',
+                                confidence_score: 0.3,
+                                response_time: 0
+                            });
+                        }
+                    },
+                    error: function() {
+                        // 網路錯誤時回退到關鍵詞匹配
+                        const fallbackAnswer = findFallbackAnswer(question);
+                        resolve({
+                            answer: fallbackAnswer,
+                            source_type: 'fallback',
+                            confidence_score: 0.3,
+                            response_time: 0
+                        });
+                    }
+                });
+            } else {
+                // 直接使用關鍵詞匹配
+                const answer = findFallbackAnswer(question);
+                resolve({
+                    answer: answer,
+                    source_type: 'keyword_match',
+                    confidence_score: 0.7,
+                    response_time: 0
+                });
+            }
+        });
+    }
+    
+    // 回退的關鍵詞匹配功能
+    function findFallbackAnswer(question) {
         if (!qaKeywords || !qaKeywords.responses) {
-            return qaKeywords ? qaKeywords.default_response : "系統尚未準備就緒，請稍後再試。";
+            return qaKeywords ? qaKeywords.default_response : "系統暫時無法回應，請稍後再試。";
         }
 
         const userQuestion = question.toLowerCase().trim();
@@ -192,16 +291,37 @@ $(document).ready(function() {
         return qaKeywords.default_response;
     }
 
-    function addMessage(content, isUser = false) {
+    function addMessage(content, isUser = false, metadata = null) {
         const messageClass = isUser ? 'user-message' : 'bot-message';
         const time = new Date().toLocaleTimeString('zh-TW', { 
             hour: '2-digit', 
             minute: '2-digit' 
         });
         
+        let metadataHtml = '';
+        if (metadata && !isUser) {
+            let sourceBadge = '';
+            if (metadata.source_type === 'ollama_ai') {
+                sourceBadge = '<span class="badge bg-success me-1">AI</span>';
+            } else if (metadata.source_type === 'keyword_match') {
+                sourceBadge = '<span class="badge bg-info me-1">關鍵詞</span>';
+            } else {
+                sourceBadge = '<span class="badge bg-warning me-1">回退</span>';
+            }
+            
+            metadataHtml = `
+                <div class="message-metadata mt-1">
+                    ${sourceBadge}
+                    ${metadata.model ? `<small class="text-muted">模型: ${metadata.model}</small>` : ''}
+                    ${metadata.response_time ? `<small class="text-muted ms-2">回應時間: ${metadata.response_time}ms</small>` : ''}
+                </div>
+            `;
+        }
+        
         const messageHtml = `
             <div class="chat-message ${messageClass}">
                 <div class="message-content">${content}</div>
+                ${metadataHtml}
                 <div class="message-time">${time}</div>
             </div>
         `;
@@ -244,13 +364,17 @@ $(document).ready(function() {
         // 顯示打字動畫
         showTypingIndicator();
 
-        // 模擬思考時間，然後回答
-        setTimeout(function() {
+        // 使用AI回答
+        findAnswer(question).then(function(result) {
             removeTypingIndicator();
-            const answer = findAnswer(question);
-            addMessage(answer, false);
+            addMessage(result.answer, false, result);
             $('#send-question').prop('disabled', false);
-        }, 800 + Math.random() * 1000); // 0.8-1.8秒的隨機延遲
+        }).catch(function(error) {
+            removeTypingIndicator();
+            addMessage('抱歉，系統暫時無法回應，請稍後再試。', false, {source_type: 'error'});
+            $('#send-question').prop('disabled', false);
+            console.error('問答錯誤:', error);
+        });
     }
 
     // 5. 綁定事件
