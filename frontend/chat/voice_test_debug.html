@@ -116,7 +116,11 @@
                 <strong>步驟 1:</strong> 確保使用 Chrome 或 Edge 瀏覽器
             </div>
             <div class="step">
-                <strong>步驟 2:</strong> 允許麥克風權限（點擊瀏覽器地址欄的鎖頭圖示）
+                <strong>步驟 2:</strong> 🔴 <strong>重要！</strong> 允許麥克風權限
+                <br><small>• 點擊瀏覽器地址欄左側的鎖頭圖示 🔒</small>
+                <br><small>• 找到「麥克風」選項</small>
+                <br><small>• 選擇「允許」</small>
+                <br><small>• 重新整理頁面</small>
             </div>
             <div class="step">
                 <strong>步驟 3:</strong> 在安靜環境中測試
@@ -128,8 +132,10 @@
 
         <div class="test-section">
             <h3>🔧 語音識別測試</h3>
+            <button id="checkMicBtn" class="test-btn">🎤 檢查麥克風權限</button>
             <button id="startBtn" class="start-btn">🎤 開始語音識別</button>
             <button id="stopBtn" class="stop-btn" disabled>⏹️ 停止語音識別</button>
+            <button id="simpleBtn" class="test-btn">🔧 簡單語音識別</button>
             <button id="testBtn" class="test-btn">🧪 測試模擬結果</button>
             <button id="clearBtn" class="clear-btn">🗑️ 清除結果</button>
             
@@ -195,9 +201,37 @@
             } catch (error) {
                 updateStatus('❌ 麥克風權限被拒絕', 'error');
                 log('❌ 麥克風權限被拒絕: ' + error.message);
+                
+                if (error.name === 'NotAllowedError') {
+                    log('🚫 用戶拒絕了麥克風權限');
+                    updateStatus('❌ 麥克風權限被拒絕，請允許麥克風存取', 'error');
+                } else if (error.name === 'NotFoundError') {
+                    log('🔍 找不到麥克風設備');
+                    updateStatus('❌ 找不到麥克風設備，請檢查麥克風連接', 'error');
+                } else if (error.name === 'NotReadableError') {
+                    log('🔒 麥克風被其他應用程式佔用');
+                    updateStatus('❌ 麥克風被其他應用程式佔用，請關閉其他使用麥克風的程式', 'error');
+                }
+                
                 return false;
             }
         }
+        
+        // 檢查麥克風權限按鈕
+        document.getElementById('checkMicBtn').onclick = async function() {
+            log('🎤 檢查麥克風權限...');
+            updateStatus('🔍 檢查麥克風權限中...', 'info');
+            
+            const hasPermission = await checkMicrophonePermission();
+            
+            if (hasPermission) {
+                log('✅ 麥克風權限檢查通過');
+                updateStatus('✅ 麥克風權限正常，可以開始語音識別', 'success');
+            } else {
+                log('❌ 麥克風權限檢查失敗');
+                updateStatus('❌ 麥克風權限檢查失敗，請允許麥克風存取', 'error');
+            }
+        };
         
         // 開始語音識別
         document.getElementById('startBtn').onclick = async function() {
@@ -227,6 +261,10 @@
             recognition.interimResults = true;
             recognition.lang = 'zh-TW';
             recognition.maxAlternatives = 5;
+            
+            // 嘗試不同的語言設置
+            const languages = ['zh-TW', 'zh-CN', 'en-US', 'cmn-Hans-CN', 'cmn-Hant-TW'];
+            recognition.lang = languages[0];
             
             log('🔧 語音識別配置: ' + JSON.stringify({
                 continuous: recognition.continuous,
@@ -322,6 +360,75 @@
             if (recognition && isListening) {
                 recognition.stop();
                 log('⏹️ 停止語音識別');
+            }
+        };
+        
+        // 簡單語音識別
+        document.getElementById('simpleBtn').onclick = function() {
+            log('🔧 開始簡單語音識別測試');
+            
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                updateStatus('❌ 瀏覽器不支援語音識別', 'error');
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const simpleRecognition = new SpeechRecognition();
+            
+            // 最簡單的配置
+            simpleRecognition.continuous = false;
+            simpleRecognition.interimResults = false;
+            simpleRecognition.lang = 'zh-TW';
+            simpleRecognition.maxAlternatives = 1;
+            
+            log('🔧 簡單語音識別配置: ' + JSON.stringify({
+                continuous: simpleRecognition.continuous,
+                interimResults: simpleRecognition.interimResults,
+                lang: simpleRecognition.lang,
+                maxAlternatives: simpleRecognition.maxAlternatives
+            }));
+            
+            simpleRecognition.onstart = function() {
+                updateStatus('🎤 簡單語音識別開始...', 'info');
+                log('🎤 簡單語音識別開始');
+            };
+            
+            simpleRecognition.onresult = function(event) {
+                log('🔍 簡單語音識別收到結果: ' + event.results.length + ' 個結果');
+                
+                for (let i = 0; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    const transcript = result[0].transcript;
+                    const confidence = result[0].confidence;
+                    
+                    log('📝 簡單識別結果: "' + transcript + '" (信心度: ' + Math.round(confidence * 100) + '%)');
+                    
+                    if (result.isFinal) {
+                        document.getElementById('result').innerHTML = 
+                            '<strong>簡單識別結果:</strong> ' + transcript + '<br>' +
+                            '<em>信心度:</em> ' + Math.round(confidence * 100) + '%';
+                        updateStatus('✅ 簡單語音識別成功！', 'success');
+                        log('✅ 簡單語音識別成功: "' + transcript + '"');
+                    }
+                }
+            };
+            
+            simpleRecognition.onerror = function(event) {
+                log('❌ 簡單語音識別錯誤: ' + event.error);
+                updateStatus('❌ 簡單語音識別錯誤: ' + event.error, 'error');
+            };
+            
+            simpleRecognition.onend = function() {
+                log('🏁 簡單語音識別結束');
+                updateStatus('🏁 簡單語音識別結束', 'info');
+            };
+            
+            try {
+                simpleRecognition.start();
+                log('🚀 簡單語音識別已啟動');
+            } catch (error) {
+                log('❌ 啟動簡單語音識別失敗: ' + error.message);
+                updateStatus('❌ 啟動失敗: ' + error.message, 'error');
             }
         };
         
