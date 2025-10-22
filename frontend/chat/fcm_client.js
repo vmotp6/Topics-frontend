@@ -19,16 +19,29 @@ class FCMClient {
         }
         
         try {
+            // 檢查通知權限狀態
+            if (Notification.permission === 'denied') {
+                console.log('通知權限已被拒絕，請在瀏覽器設定中啟用');
+                this.showNotificationPermissionGuide();
+                return false;
+            }
+            
             // 請求通知權限
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') {
                 console.log('用戶拒絕了通知權限');
+                this.showNotificationPermissionGuide();
                 return false;
             }
             
             // 註冊Service Worker
-            this.registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-            console.log('Service Worker註冊成功');
+            try {
+                this.registration = await navigator.serviceWorker.register('../firebase-messaging-sw.js');
+                console.log('Service Worker註冊成功');
+            } catch (error) {
+                console.log('Service Worker註冊失敗，使用簡化模式:', error);
+                // 如果Service Worker註冊失敗，繼續使用簡化的通知功能
+            }
             
             // 獲取FCM token
             await this.getToken();
@@ -69,23 +82,23 @@ class FCMClient {
         if (!this.currentToken) return;
         
         try {
-            const response = await fetch('fcm_api.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'register_token',
-                    username: window.username || 'test_user',
-                    fcm_token: this.currentToken,
-                    device_type: 'web',
-                    device_info: JSON.stringify({
-                        userAgent: navigator.userAgent,
-                        platform: navigator.platform,
-                        language: navigator.language
-                    })
+        const response = await fetch('simple_fcm_api.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'register_token',
+                username: window.username || 'test_user',
+                fcm_token: this.currentToken,
+                device_type: 'web',
+                device_info: JSON.stringify({
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    language: navigator.language
                 })
-            });
+            })
+        });
             
             const result = await response.json();
             if (result.success) {
@@ -109,8 +122,8 @@ class FCMClient {
         
         const options = {
             body: body,
-            icon: '/assets/icon-192x192.png',
-            badge: '/assets/badge-72x72.png',
+            icon: '../assets/icon-192x192.svg',
+            badge: '../assets/badge-72x72.svg',
             tag: 'chat-notification',
             data: data,
             actions: [
@@ -202,6 +215,59 @@ class FCMClient {
             return { success: false, error: error.message };
         }
     }
+    
+    /**
+     * 顯示通知權限設定指南
+     */
+    showNotificationPermissionGuide() {
+        const guideModal = document.createElement('div');
+        guideModal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+        
+        guideModal.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; margin: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+                <h3 style="margin: 0 0 20px 0; color: #333; text-align: center;">🔔 通知權限設定</h3>
+                <div style="color: #666; line-height: 1.6;">
+                    <p><strong>推播通知功能需要瀏覽器權限才能使用。</strong></p>
+                    <p>請按照以下步驟啟用通知權限：</p>
+                    <ol style="margin: 15px 0; padding-left: 20px;">
+                        <li>點擊瀏覽器地址欄左側的鎖頭圖示 🔒</li>
+                        <li>找到「通知」選項</li>
+                        <li>選擇「允許」</li>
+                        <li>重新整理頁面</li>
+                    </ol>
+                    <p style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <strong>⚠️ 注意：</strong>如果權限被多次拒絕，可能需要手動在瀏覽器設定中啟用。
+                    </p>
+                </div>
+                <div style="text-align: center; margin-top: 25px;">
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                            style="background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                        我知道了
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(guideModal);
+        
+        // 點擊背景關閉
+        guideModal.addEventListener('click', (e) => {
+            if (e.target === guideModal) {
+                guideModal.remove();
+            }
+        });
+    }
 }
 
 // 全域FCM實例
@@ -220,6 +286,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = FCMClient;
 }
+
+
+
+
 
 
 

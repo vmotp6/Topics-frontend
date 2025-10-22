@@ -7,9 +7,9 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-// 如果未登入，重定向到首頁
+// 如果未登入，重定向到 Google 登入頁面
 if (!$isLoggedIn) {
-    header("Location: ../index.php");
+    header("Location: google_chat_integration.php");
     exit;
 }
 
@@ -105,8 +105,10 @@ try {
   <meta charset="UTF-8">
   <link rel="stylesheet" href="../assets/csp/chat.css">
   <link rel="stylesheet" href="color_schemes.css">
+  <link rel="stylesheet" href="voice_styles.css">
   <title>聊天室</title>
   <script src="fcm_client.js"></script>
+  <script src="voice_recorder.js"></script>
 </head>
 <body>
 <?php include("../share/header.php"); ?>
@@ -167,6 +169,7 @@ try {
         
         <div class="chat-input">
           <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
+          <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
           <button onclick="sendMessage()" disabled>發送</button>
         </div>
       </div>
@@ -251,7 +254,25 @@ try {
         
         <div class="chat-input">
           <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
+          <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
           <button onclick="sendMessage()" disabled>發送</button>
+        </div>
+        
+        <!-- 語音錄製指示器 -->
+        <div id="recordingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+          <div style="text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 10px;">🎤</div>
+            <div>正在錄製語音...</div>
+            <div id="recordingTimer" style="font-size: 18px; margin-top: 5px;"></div>
+          </div>
+        </div>
+        
+        <!-- 處理中指示器 -->
+        <div id="processingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+          <div style="text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+            <div>正在轉換語音為文字...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -686,7 +707,7 @@ try {
     // 載入通知設定
     async function loadNotificationSettings() {
       try {
-        const response = await fetch('fcm_api.php?action=get_notification_settings&username=' + username);
+        const response = await fetch('simple_fcm_api.php?action=get_notification_settings&username=' + username);
         const result = await response.json();
         
         if (result.success && result.settings) {
@@ -713,7 +734,7 @@ try {
           quiet_hours_end: document.getElementById('quietEnd').value
         };
         
-        const response = await fetch('fcm_api.php', {
+        const response = await fetch('simple_fcm_api.php', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -854,6 +875,7 @@ try {
         // 啟用輸入框
         document.getElementById('messageInput').disabled = false;
         document.querySelector('.chat-input button').disabled = false;
+        updateVoiceButtonState();
         
         // 隱藏提示訊息
         const noChatSelected = document.querySelector('.no-chat-selected');
@@ -1193,7 +1215,7 @@ try {
     // 註冊FCM token
     async function registerFCMToken(token) {
       try {
-        const response = await fetch('fcm_api.php', {
+        const response = await fetch('simple_fcm_api.php', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1253,8 +1275,8 @@ try {
       if (Notification.permission === 'granted') {
         const options = {
           body: body,
-          icon: '/assets/icon-192x192.png',
-          badge: '/assets/badge-72x72.png',
+          icon: '../assets/icon-192x192.svg',
+          badge: '../assets/badge-72x72.svg',
           tag: 'chat-notification',
           data: data,
           requireInteraction: false,
@@ -1289,6 +1311,33 @@ try {
         sendMessage();
       }
     });
+    
+    // 語音錄製功能 - 類似LINE的開關模式
+    function toggleVoiceRecording() {
+      if (!voiceRecorder) {
+        alert('語音錄製功能尚未初始化');
+        return;
+      }
+      
+      if (voiceRecorder.isCurrentlyRecording()) {
+        // 如果正在錄製，停止錄製
+        voiceRecorder.stopRecording();
+      } else {
+        // 如果沒有在錄製，開始錄製
+        voiceRecorder.startRecording();
+      }
+    }
+    
+    // 更新語音按鈕狀態
+    function updateVoiceButtonState() {
+      const voiceBtn = document.getElementById('voiceRecordBtn');
+      const messageInput = document.getElementById('messageInput');
+      
+      if (voiceBtn && messageInput) {
+        // 當輸入框啟用時，語音按鈕也啟用
+        voiceBtn.disabled = messageInput.disabled;
+      }
+    }
     
     // 學生搜尋功能
     <?php if ($role === '老師' || $role === 'teacher'): ?>

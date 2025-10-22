@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>語音測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-area {
+            border: 2px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .start-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        .stop-btn {
+            background: #f44336;
+            color: white;
+        }
+        .test-btn {
+            background: #2196F3;
+            color: white;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>語音轉文字測試</h1>
+    
+    <div class="test-area">
+        <h3>Web Speech API 測試</h3>
+        <button id="startBtn" class="start-btn">開始語音識別</button>
+        <button id="stopBtn" class="stop-btn" disabled>停止語音識別</button>
+        <button id="testBtn" class="test-btn">測試模擬結果</button>
+        
+        <div id="status"></div>
+        <div id="result">識別結果將顯示在這裡...</div>
+    </div>
+
+    <script>
+        let recognition = null;
+        let isListening = false;
+        
+        // 檢查瀏覽器支援
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            document.getElementById('status').innerHTML = '<div class="success">✅ 瀏覽器支援語音識別</div>';
+        } else {
+            document.getElementById('status').innerHTML = '<div class="error">❌ 瀏覽器不支援語音識別</div>';
+        }
+        
+        // 開始語音識別
+        document.getElementById('startBtn').onclick = function() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('您的瀏覽器不支援語音識別');
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'zh-TW';
+            recognition.maxAlternatives = 3;
+            
+            let finalTranscript = '';
+            let interimTranscript = '';
+            
+            recognition.onstart = function() {
+                isListening = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('status').innerHTML = '<div class="success">🎤 正在聆聽...</div>';
+                console.log('語音識別開始');
+            };
+            
+            recognition.onresult = function(event) {
+                interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    const transcript = result[0].transcript;
+                    const confidence = result[0].confidence;
+                    
+                    if (result.isFinal) {
+                        finalTranscript += transcript;
+                        console.log('最終結果:', finalTranscript, '信心度:', confidence);
+                    } else {
+                        interimTranscript += transcript;
+                        console.log('臨時結果:', interimTranscript, '信心度:', confidence);
+                    }
+                }
+                
+                document.getElementById('result').innerHTML = 
+                    '<strong>最終結果:</strong> ' + finalTranscript + '<br>' +
+                    '<em>臨時結果:</em> ' + interimTranscript;
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('語音識別錯誤:', event.error);
+                document.getElementById('status').innerHTML = 
+                    '<div class="error">❌ 語音識別錯誤: ' + event.error + '</div>';
+            };
+            
+            recognition.onend = function() {
+                isListening = false;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('status').innerHTML = '<div class="success">✅ 語音識別結束</div>';
+                console.log('語音識別結束');
+            };
+            
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('啟動語音識別失敗:', error);
+                document.getElementById('status').innerHTML = 
+                    '<div class="error">❌ 啟動失敗: ' + error.message + '</div>';
+            }
+        };
+        
+        // 停止語音識別
+        document.getElementById('stopBtn').onclick = function() {
+            if (recognition && isListening) {
+                recognition.stop();
+            }
+        };
+        
+        // 測試模擬結果
+        document.getElementById('testBtn').onclick = function() {
+            const mockResults = [
+                '你好，這是一個測試訊息',
+                '今天天氣很好',
+                '我正在測試語音功能',
+                '請確認收到此訊息',
+                '語音轉文字功能正常運作'
+            ];
+            
+            const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
+            document.getElementById('result').innerHTML = 
+                '<strong>模擬結果:</strong> ' + randomResult;
+            document.getElementById('status').innerHTML = 
+                '<div class="success">✅ 模擬結果已生成</div>';
+        };
+    </script>
+</body>
+</html>
