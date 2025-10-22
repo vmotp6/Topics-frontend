@@ -125,6 +125,7 @@ def get_teacher_profile(username):
 def save_teacher_profile():
     username = request.form.get('username')
     department = request.form.get('department')
+    name = request.form.get('name')  # 新增：獲取 name 欄位
     phone = request.form.get('phone')
 
     try:
@@ -146,12 +147,12 @@ def save_teacher_profile():
             
             if exists:
                 # 更新現有資料
-                sql_update = "UPDATE teacher SET department = %s, phone = %s WHERE user_id = %s"
-                cursor.execute(sql_update, (department, phone, user_id))
+                sql_update = "UPDATE teacher SET name = %s, department = %s, phone = %s WHERE user_id = %s"
+                cursor.execute(sql_update, (name, department, phone, user_id))
             else:
                 # 新增資料
-                sql_insert = "INSERT INTO teacher (user_id, department, phone) VALUES (%s, %s, %s)"
-                cursor.execute(sql_insert, (user_id, department, phone))
+                sql_insert = "INSERT INTO teacher (user_id, name, department, phone) VALUES (%s, %s, %s, %s)"
+                cursor.execute(sql_insert, (user_id, name, department, phone))
             
             db.commit()
             return jsonify({"message": "個人資料保存成功"}), 200

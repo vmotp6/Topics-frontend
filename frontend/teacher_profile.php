@@ -16,6 +16,26 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
     header("Location: index.php");
     exit;
 }
+
+// 獲取老師姓名
+require_once 'config.php'; // 引入資料庫配置
+$teacher_name = '';
+try {
+    $conn = getDatabaseConnection();
+    if ($conn) {
+        $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
+        $stmt->bind_param("s", $_SESSION['username']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            $teacher_name = $row['name'];
+        }
+        $conn->close();
+    }
+} catch (Exception $e) {
+    // 如果查詢失敗，teacher_name 會是空字串，但頁面仍可正常運作
+    error_log("無法從資料庫獲取老師姓名: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -207,11 +227,13 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
             e.preventDefault();
             
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
+            const name = '<?php echo htmlspecialchars($teacher_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
             const department = document.getElementById('department').value;
             const phone = document.getElementById('phone').value;
             
             const formData = new FormData();
             formData.append('username', username);
+            formData.append('name', name); // 將姓名加入表單數據
             formData.append('department', department);
             formData.append('phone', phone);
             
