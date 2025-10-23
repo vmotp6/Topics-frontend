@@ -1216,8 +1216,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       // 特別處理停用帳號的錯誤訊息
       if (res.status === 403) {
         document.getElementById("loginMessage").innerText = data.message;
-        document.getElementById("loginMessage").style.color = "#e74c3c"; // 更明顯的紅色
-        document.getElementById("loginMessage").style.fontWeight = "bold";
+        document.getElementById("loginMessage").style.color = "#e74c3c";
       } else {
         document.getElementById("loginMessage").innerText = data.message;
       }
