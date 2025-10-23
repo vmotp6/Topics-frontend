@@ -338,9 +338,13 @@ main h2 {
 .chat-input-container {
   padding: 20px;
   background: white;
+}
+
+.input-group {
   display: flex;
   gap: 12px;
   align-items: center;
+  margin-bottom: 15px;
 }
 
 #user-question {
@@ -351,6 +355,7 @@ main h2 {
   font-size: 14px;
   outline: none;
   transition: border-color 0.3s ease;
+  margin-right: 12px;
 }
 
 #user-question:focus {
@@ -359,6 +364,7 @@ main h2 {
 }
 
 #send-question {
+  width:45%;
   background: #00bcd4;
   color: white;
   border: none;
@@ -369,7 +375,8 @@ main h2 {
   font-size: 14px;
   transition: all 0.3s ease;
   min-width: 80px;
-  width:  170px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 #send-question:hover {
@@ -473,12 +480,16 @@ main h2 {
   
   .chat-input-container {
     padding: 15px;
+  }
+  
+  .input-group {
     gap: 8px;
   }
   
   #user-question {
     padding: 10px 14px;
     font-size: 13px;
+    margin-right: 8px;
   }
   
   #send-question {

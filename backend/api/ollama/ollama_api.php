@@ -70,20 +70,7 @@ function handleAskQuestion($ollama) {
     $start_time = microtime(true);
     
     try {
-        // 先嘗試從訓練資料中直接匹配答案（針對特定問題）
-        $direct_answer = getDirectAnswerFromTrainingData($question);
-        if ($direct_answer) {
-            $response_time = round((microtime(true) - $start_time) * 1000);
-            
-            echo json_encode([
-                'success' => true,
-                'answer' => $direct_answer,
-                'model' => 'training_data_direct',
-                'response_time_ms' => $response_time,
-                'context_used' => true
-            ]);
-            return;
-        }
+        // 所有問題都使用 AI 回答，確保一致性
         
         $context = '';
         if ($use_context) {
@@ -242,8 +229,8 @@ function getRelevantContext($question) {
             foreach ($training_data as $data) {
                 $context .= $data['content'] . "\n\n";
                 
-                // 限制總上下文長度
-                if (strlen($context) > 2000) {
+                // 限制總上下文長度（增加長度以包含完整科系資訊）
+                if (strlen($context) > 3000) {
                     break;
                 }
             }
@@ -264,8 +251,8 @@ function getDirectAnswerFromTrainingData($question) {
         $question_lower = strtolower($question);
         
         // 檢查是否問科系
-        if (strpos($question_lower, '科系') !== false || strpos($question_lower, '科') !== false) {
-            $sql = "SELECT content_data FROM ollama_training_data WHERE content_data LIKE '%科系%' ORDER BY created_at DESC LIMIT 1";
+        if (strpos($question_lower, '科系') !== false || strpos($question_lower, '科') !== false || strpos($question_lower, '系') !== false) {
+            $sql = "SELECT content_data FROM ollama_training_data WHERE content_data LIKE '%科系%' OR content_data LIKE '%科%' ORDER BY created_at DESC LIMIT 1";
             $stmt = $conn->prepare($sql);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -315,13 +302,32 @@ function getRelevantTrainingData($question) {
     try {
         $conn = getOllamaDatabaseConnection();
         $question_lower = strtolower($question);
-        $keywords = explode(' ', $question_lower);
+        
+        // 針對中文問題的特殊處理
+        $chinese_keywords = [];
+        if (strpos($question_lower, '科系') !== false || strpos($question_lower, '科') !== false) {
+            $chinese_keywords[] = '科系';
+            $chinese_keywords[] = '科';
+        }
+        if (strpos($question_lower, '學費') !== false || strpos($question_lower, '費用') !== false) {
+            $chinese_keywords[] = '學費';
+            $chinese_keywords[] = '費用';
+        }
         
         // 構建 SQL 查詢，尋找包含關鍵詞的訓練資料
         $where_conditions = [];
         $params = [];
         $param_types = '';
         
+        // 添加中文關鍵詞
+        foreach ($chinese_keywords as $keyword) {
+            $where_conditions[] = "content_data LIKE ?";
+            $params[] = '%' . $keyword . '%';
+            $param_types .= 's';
+        }
+        
+        // 也添加英文關鍵詞（如果有的話）
+        $keywords = explode(' ', $question_lower);
         foreach ($keywords as $keyword) {
             if (strlen($keyword) > 2) {
                 $where_conditions[] = "content_data LIKE ?";
@@ -567,15 +573,114 @@ function processUploadedFile($file) {
             return file_get_contents($temp_path);
             
         case 'pdf':
-            // 簡化的 PDF 處理 - 嘗試讀取文字內容
+            // 專業 PDF 文字提取 - 支援中文和複雜格式
             $content = file_get_contents($temp_path);
             if ($content) {
-                // 移除二進制數據，只保留可讀文字
-                $text_content = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}]/u', ' ', $content);
+                $text_content = '';
+                
+                // 方法1: 提取 PDF 文字流 (BT...ET) - 改進版本
+                if (preg_match_all('/BT\s+.*?ET/s', $content, $matches)) {
+                    foreach ($matches[0] as $match) {
+                        // 提取 (text) Tj 格式的文字 - 支援中文
+                        if (preg_match_all('/\((.*?)\)\s*Tj/', $match, $text_matches)) {
+                            foreach ($text_matches[1] as $text) {
+                                // 解碼 PDF 文字編碼
+                                $decoded_text = $text;
+                                // 處理 PDF 轉義字符
+                                $decoded_text = str_replace(['\\n', '\\r', '\\t'], [' ', ' ', ' '], $decoded_text);
+                                // 處理 PDF 括號轉義
+                                $decoded_text = str_replace(['\\(', '\\)'], ['(', ')'], $decoded_text);
+                                $text_content .= $decoded_text . ' ';
+                            }
+                        }
+                        // 提取 <hex> Tj 格式的文字 - 支援 Unicode
+                        if (preg_match_all('/<([0-9A-Fa-f]+)>\s*Tj/', $match, $hex_matches)) {
+                            foreach ($hex_matches[1] as $hex) {
+                                if (strlen($hex) % 2 == 0) {
+                                    $decoded = '';
+                                    for ($i = 0; $i < strlen($hex); $i += 2) {
+                                        $byte = hexdec(substr($hex, $i, 2));
+                                        if ($byte >= 32 && $byte <= 126) {
+                                            $decoded .= chr($byte);
+                                        } elseif ($byte >= 128) {
+                                            // 處理 UTF-8 編碼
+                                            $decoded .= chr($byte);
+                                        }
+                                    }
+                                    $text_content .= $decoded . ' ';
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 方法2: 提取 PDF 內容流中的文字
+                if (empty($text_content)) {
+                    // 查找所有文字內容
+                    if (preg_match_all('/stream\s*(.*?)\s*endstream/s', $content, $stream_matches)) {
+                        foreach ($stream_matches[1] as $stream) {
+                            // 解碼流內容
+                            $decoded_stream = '';
+                            if (preg_match('/FlateDecode/', $stream)) {
+                                // 嘗試解碼 FlateDecode 流
+                                $stream_data = preg_replace('/.*?stream\s*/s', '', $stream);
+                                $stream_data = preg_replace('/\s*endstream.*/s', '', $stream_data);
+                                $stream_data = trim($stream_data);
+                                
+                                // 提取可讀文字
+                                $decoded_stream = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}]/u', ' ', $stream_data);
+                            } else {
+                                // 直接提取文字
+                                $decoded_stream = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}]/u', ' ', $stream);
+                            }
+                            $text_content .= $decoded_stream . ' ';
+                        }
+                    }
+                }
+                
+                // 方法3: 暴力提取所有可讀字符
+                if (empty($text_content)) {
+                    // 提取所有可讀字符，包括完整的中文 Unicode 範圍
+                    $text_content = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}\x{20000}-\x{2a6df}\x{2a700}-\x{2b73f}\x{2b740}-\x{2b81f}\x{2b820}-\x{2ceaf}\x{2ceb0}-\x{2ebef}\x{2f800}-\x{2fa1f}\x{30000}-\x{3134f}]/u', ' ', $content);
+                    $text_content = preg_replace('/\s+/', ' ', $text_content);
+                }
+                
+                // 方法4: 提取 PDF 物件中的文字
+                if (empty($text_content)) {
+                    // 查找 PDF 物件中的文字內容
+                    if (preg_match_all('/obj\s*(.*?)\s*endobj/s', $content, $obj_matches)) {
+                        foreach ($obj_matches[1] as $obj) {
+                            // 提取物件中的文字
+                            $obj_text = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}]/u', ' ', $obj);
+                            $obj_text = preg_replace('/\s+/', ' ', $obj_text);
+                            if (strlen(trim($obj_text)) > 10) {
+                                $text_content .= $obj_text . ' ';
+                            }
+                        }
+                    }
+                }
+                
+                // 清理和格式化文字
+                $text_content = trim($text_content);
                 $text_content = preg_replace('/\s+/', ' ', $text_content);
-                return "PDF 檔案內容（已處理）：" . $file['name'] . "\n\n" . substr($text_content, 0, 2000);
+                
+                // 移除 PDF 特有的控制字符和垃圾字符
+                $text_content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text_content);
+                
+                // 移除常見的 PDF 垃圾字符
+                $text_content = preg_replace('/[^\x20-\x7E\x{4e00}-\x{9fff}\x{3400}-\x{4dbf}]/u', ' ', $text_content);
+                $text_content = preg_replace('/\s+/', ' ', $text_content);
+                
+                // 檢查是否提取到有效文字
+                if (!empty($text_content) && strlen($text_content) > 10) {
+                    // 進一步清理：移除重複的空白和無意義字符
+                    $text_content = preg_replace('/\s+/', ' ', $text_content);
+                    $text_content = trim($text_content);
+                    
+                    return "PDF 檔案內容（" . $file['name'] . "）：\n\n" . substr($text_content, 0, 8000);
+                }
             }
-            return "PDF 檔案內容提取功能需要額外的 PDF 解析庫。檔案名稱：" . $file['name'];
+            return "PDF 檔案內容提取失敗。檔案名稱：" . $file['name'] . "。請確認 PDF 包含可提取的文字內容，或嘗試使用其他格式（如 TXT 或 MD）。";
             
         case 'doc':
         case 'docx':

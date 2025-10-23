@@ -888,7 +888,6 @@ function getActiveClass($targetFile) {
 
   <div class="navbar-links">
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>

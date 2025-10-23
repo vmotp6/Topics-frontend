@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 時崎狂三語音測試</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            min-height: 100vh;
+            font-family: 'Microsoft JhengHei', sans-serif;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .kurumi-card {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border: none;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .kurumi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .status-success {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+        
+        .status-error {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+        }
+        
+        .status-info {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+        }
+        
+        .btn-kurumi {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-kurumi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.4);
+            color: white;
+        }
+        
+        .text-input {
+            border-radius: 15px;
+            border: 2px solid #ff9a9e;
+            padding: 15px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .text-input:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 107, 0.25);
+        }
+        
+        .voice-select {
+            border-radius: 15px;
+            border: 2px solid #ff9a9e;
+            padding: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .voice-select:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 107, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="main-container p-4">
+                    <div class="text-center mb-4">
+                        <h1 class="display-4 mb-3">🎭 時崎狂三語音測試</h1>
+                        <p class="lead text-muted">使用 RVC 技術生成時崎狂三風格的聲音</p>
+                    </div>
+                    
+                    <div class="kurumi-card p-4 mb-4">
+                        <h3 class="mb-3">🎤 語音生成設定</h3>
+                        
+                        <div class="mb-3">
+                            <label for="text-input" class="form-label">要轉換的文字：</label>
+                            <textarea id="text-input" class="form-control text-input" rows="3" 
+                                placeholder="請輸入要轉換為時崎狂三聲音的文字...">こんにちは、私は時崎狂三です。よろしくお願いします。</textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="voice-select" class="form-label">基礎語音選擇：</label>
+                            <select id="voice-select" class="form-select voice-select">
+                                <option value="ja-JP-NanamiNeural">ja-JP-NanamiNeural (溫柔女性)</option>
+                                <option value="ja-JP-AoiNeural">ja-JP-AoiNeural (年輕女性)</option>
+                                <option value="ja-JP-MayuNeural">ja-JP-MayuNeural (成熟女性)</option>
+                                <option value="ja-JP-KeitaNeural">ja-JP-KeitaNeural (男性)</option>
+                                <option value="en-US-JennyNeural">en-US-JennyNeural (英文女性)</option>
+                                <option value="en-US-EmmaNeural">en-US-EmmaNeural (英文年輕女性)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="style-select" class="form-label">時崎狂三風格：</label>
+                            <select id="style-select" class="form-select voice-select">
+                                <option value="mysterious">神秘風格 (溫柔中帶危險)</option>
+                                <option value="cute">可愛風格 (活潑俏皮)</option>
+                                <option value="mature">成熟風格 (穩重優雅)</option>
+                                <option value="dangerous">危險風格 (冷酷無情)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button id="generate-btn" class="btn btn-kurumi btn-lg" onclick="generateKurumiVoice()">
+                                <i class="fas fa-magic me-2"></i>生成時崎狂三語音
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="kurumi-card p-4 mb-4">
+                        <h3 class="mb-3">📊 生成狀態</h3>
+                        <div id="status" class="status-badge status-info">
+                            <i class="fas fa-info-circle me-2"></i>準備就緒
+                        </div>
+                    </div>
+                    
+                    <div class="kurumi-card p-4">
+                        <h3 class="mb-3">🎵 音頻播放</h3>
+                        <div id="audio-container" class="text-center">
+                            <p class="text-muted">尚未生成語音</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 時崎狂三語音生成功能
+        async function generateKurumiVoice() {
+            const text = document.getElementById('text-input').value;
+            const voice = document.getElementById('voice-select').value;
+            const style = document.getElementById('style-select').value;
+            const generateBtn = document.getElementById('generate-btn');
+            const status = document.getElementById('status');
+            const audioContainer = document.getElementById('audio-container');
+            
+            if (!text.trim()) {
+                alert('請輸入要轉換的文字');
+                return;
+            }
+            
+            // 更新狀態
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>正在生成...';
+            setStatus(`正在生成時崎狂三${getStyleName(style)}語音...`, 'info');
+            
+            try {
+                const response = await fetch('http://localhost/Topics-frontend/backend/api/voice/advanced_kurumi_voice_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: voice,
+                        style: style
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    setStatus(`時崎狂三${getStyleName(style)}語音生成成功！`, 'success');
+                    playAudio(result.filename, result.style);
+                } else {
+                    setStatus(`語音生成失敗: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                setStatus(`語音生成失敗: ${error.message}`, 'error');
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>生成時崎狂三語音';
+            }
+        }
+        
+        function getStyleName(style) {
+            const styleNames = {
+                'mysterious': '神秘',
+                'cute': '可愛',
+                'mature': '成熟',
+                'dangerous': '危險'
+            };
+            return styleNames[style] || '神秘';
+        }
+        
+        function setStatus(message, type) {
+            const status = document.getElementById('status');
+            status.className = `status-badge status-${type}`;
+            status.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>${message}`;
+        }
+        
+        function playAudio(filename, style) {
+            const audioContainer = document.getElementById('audio-container');
+            const audioUrl = `http://localhost/Topics-frontend/frontend/assets/voice/${filename}`;
+            const styleName = getStyleName(style);
+            
+            audioContainer.innerHTML = `
+                <div class="mb-3">
+                    <h5>🎵 生成的時崎狂三${styleName}風格語音</h5>
+                    <p class="text-muted">檔案名: ${filename}</p>
+                    <p class="text-muted">風格: ${styleName}</p>
+                </div>
+                <audio controls class="w-100">
+                    <source src="${audioUrl}" type="audio/wav">
+                    您的瀏覽器不支援音頻播放
+                </audio>
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary" onclick="downloadAudio('${filename}')">
+                        <i class="fas fa-download me-2"></i>下載音頻
+                    </button>
+                    <button class="btn btn-outline-success ms-2" onclick="testDifferentStyles()">
+                        <i class="fas fa-magic me-2"></i>測試其他風格
+                    </button>
+                </div>
+            `;
+        }
+        
+        function testDifferentStyles() {
+            const styles = ['mysterious', 'cute', 'mature', 'dangerous'];
+            const currentStyle = document.getElementById('style-select').value;
+            const currentIndex = styles.indexOf(currentStyle);
+            const nextIndex = (currentIndex + 1) % styles.length;
+            document.getElementById('style-select').value = styles[nextIndex];
+        }
+        
+        function downloadAudio(filename) {
+            const audioUrl = `http://localhost/Topics-frontend/frontend/assets/voice/${filename}`;
+            const link = document.createElement('a');
+            link.href = audioUrl;
+            link.download = filename;
+            link.click();
+        }
+    </script>
+</body>
+</html>

@@ -56,36 +56,40 @@ function getFAQFromDatabase() {
         <!-- 智能問答留言區 -->
         <section class="qa-chat-section">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3>🎓 康寧大學智能問答助手</h3>
+                <h3>🌟 康寧大學可愛小助手 ✨</h3>
                 <div>
-                    <span class="badge bg-success me-2" id="ai-status">AI驅動</span>
-                    <span class="badge bg-info">Ollama增強</span>
+                    <span class="badge bg-success me-2" id="ai-status">🤖 AI驅動</span>
+                    <span class="badge bg-info">⚡ Ollama增強</span>
                 </div>
             </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chat-messages">
                     <div class="chat-message bot-message">
                         <div class="message-content">
-                            🎓 您好！我是康寧大學智能問答助手，基於Ollama AI技術為您提供準確的招生資訊。歡迎詢問招生、學費、科系、申請流程等相關問題！
+                            🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
+                            🤖 我擁有超強的 AI 大腦，專門為您解答所有招生疑問！<br>
+                            💡 想知道科系資訊？學費多少？申請流程？通通問我就對了！<br>
+                            🎯 我會用最準確的資料庫資訊為您服務，讓您的升學之路更順利～<br>
+                            💝 快來和我聊天吧！我已經準備好為您解答囉～ 😊
                         </div>
                         <div class="message-time"></div>
                     </div>
                 </div>
                 <div class="chat-input-container">
                     <div class="input-group mb-2">
-                        <input type="text" id="user-question" class="form-control" placeholder="請輸入您的問題..." maxlength="500">
+                        <input type="text" id="user-question" class="form-control" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" maxlength="500">
                         <button id="send-question" class="btn btn-primary">
-                            <i class="fas fa-paper-plane"></i> 發送
+                            <i class="fas fa-paper-plane"></i> 🚀 發送
                         </button>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">
-                            <i class="fas fa-lightbulb"></i> 提示：您可以問關於招生、學費、科系、校園生活等問題
+                            <i class="fas fa-lightbulb"></i> 💡 小提示：可以問我科系、學費、招生、校園生活等任何問題喔～
                         </small>
                         <div class="form-check form-check-inline">
                             <input class="form-check-input" type="checkbox" id="use-ai" checked>
                             <label class="form-check-label" for="use-ai">
-                                使用AI回答
+                                🤖 使用AI回答
                             </label>
                         </div>
                     </div>
