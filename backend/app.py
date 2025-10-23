@@ -280,12 +280,16 @@ def login():
     
     try:
         with conn.cursor() as cursor:
-            # 查詢使用者帳號、角色是否正確
-            sql = "SELECT username, role FROM user WHERE username=%s AND password=%s"
+            # 查詢使用者帳號、角色、狀態是否正確
+            sql = "SELECT username, role, status FROM user WHERE username=%s AND password=%s"
             cursor.execute(sql, (username, password))
             user = cursor.fetchone()
             
             if user:
+                # 檢查帳號是否被停用
+                if user[2] == 0:  # status = 0 表示停用
+                    return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
+                
                 return jsonify({
                     "message": "登入成功",
                     "username": user[0],
@@ -487,6 +491,136 @@ def submit_enrollment():
             'success': False,
             'message': f'提交失敗: {str(e)}'
         }), 500
+
+# ✅ 獲取老師個人資料
+@app.route('/teacher/profile/<username>', methods=['GET'])
+def get_teacher_profile(username):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+            
+        with conn.cursor() as cursor:
+            # 先獲取user的id
+            sql_get_user_id = "SELECT id FROM user WHERE username = %s"
+            cursor.execute(sql_get_user_id, (username,))
+            user_result = cursor.fetchone()
+            
+            if not user_result:
+                return jsonify({"message": "使用者不存在"}), 404
+            
+            user_id = user_result[0]
+            
+            # 查詢老師個人資料
+            sql_get_profile = "SELECT department, phone FROM teacher WHERE user_id = %s"
+            cursor.execute(sql_get_profile, (user_id,))
+            profile = cursor.fetchone()
+            
+            if profile:
+                return jsonify({
+                    "department": profile[0],
+                    "phone": profile[1]
+                }), 200
+            else:
+                return jsonify({"message": "尚未填寫個人資料"}), 404
+
+    except pymysql.Error as e:
+        print(f"資料庫查詢錯誤：{e}")
+        return jsonify({"message": "獲取個人資料失敗，請稍後再試。"}), 500
+    except Exception as e:
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "獲取個人資料失敗，發生未知錯誤。"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ✅ 保存老師個人資料
+@app.route('/teacher/profile', methods=['POST'])
+def save_teacher_profile():
+    username = request.form.get('username')
+    department = request.form.get('department')
+    name = request.form.get('name')  # 新增：獲取 name 欄位
+    phone = request.form.get('phone')
+
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+            
+        with conn.cursor() as cursor:
+            # 先獲取user的id
+            sql_get_user_id = "SELECT id FROM user WHERE username = %s"
+            cursor.execute(sql_get_user_id, (username,))
+            user_result = cursor.fetchone()
+            
+            if not user_result:
+                return jsonify({"message": "使用者不存在"}), 404
+            
+            user_id = user_result[0]
+            
+            # 檢查是否已有個人資料
+            sql_check = "SELECT COUNT(*) FROM teacher WHERE user_id = %s"
+            cursor.execute(sql_check, (user_id,))
+            exists = cursor.fetchone()[0] > 0
+            
+            if exists:
+                # 更新現有資料
+                sql_update = "UPDATE teacher SET name = %s, department = %s, phone = %s WHERE user_id = %s"
+                cursor.execute(sql_update, (name, department, phone, user_id))
+            else:
+                # 新增資料
+                sql_insert = "INSERT INTO teacher (user_id, name, department, phone) VALUES (%s, %s, %s, %s)"
+                cursor.execute(sql_insert, (user_id, name, department, phone))
+            
+            conn.commit()
+            return jsonify({"message": "個人資料保存成功"}), 200
+
+    except pymysql.Error as e:
+        conn.rollback()
+        print(f"資料庫寫入錯誤：{e}")
+        return jsonify({"message": "保存失敗，請稍後再試。原因：資料庫錯誤"}), 500
+    except Exception as e:
+        conn.rollback()
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "保存失敗，發生未知錯誤。"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ✅ QA 列表 API
+@app.route('/qa', methods=['GET'])
+def get_faq():
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+            
+        with conn.cursor() as cursor:
+            # 根據你的資料表結構：id, question, answer, is_active, created_at, updated_at
+            sql = "SELECT id, question, answer FROM qa WHERE is_active = 1 ORDER BY id ASC"
+            cursor.execute(sql)
+            faqs = cursor.fetchall()
+
+            # 把查詢結果轉換成 JSON 格式
+            result = []
+            for row in faqs:
+                result.append({
+                    "id": row[0],
+                    "question": row[1],
+                    "answer": row[2]
+                })
+
+        return jsonify(result), 200
+
+    except pymysql.Error as e:
+        print(f"資料庫查詢錯誤：{e}")
+        return jsonify({"message": "無法獲取 QA列表"}), 500
+    except Exception as e:
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "發生未知錯誤"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     print("🚀 啟動康寧大學聊天系統後端...")

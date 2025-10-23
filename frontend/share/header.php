@@ -1168,6 +1168,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     console.log("登入API回應狀態:", res.status);
     const data = await res.json();
     console.log("登入API回應數據:", data);
+    
     if (res.ok) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
@@ -1209,8 +1210,17 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
         document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";
       });
     } else {
+      // 處理錯誤訊息
       document.getElementById("loginMessage").style.color = "red";
-      document.getElementById("loginMessage").innerText = data.message;
+      
+      // 特別處理停用帳號的錯誤訊息
+      if (res.status === 403) {
+        document.getElementById("loginMessage").innerText = data.message;
+        document.getElementById("loginMessage").style.color = "#e74c3c"; // 更明顯的紅色
+        document.getElementById("loginMessage").style.fontWeight = "bold";
+      } else {
+        document.getElementById("loginMessage").innerText = data.message;
+      }
     }
   })
   .catch(err => {
