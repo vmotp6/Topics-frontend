@@ -103,9 +103,12 @@ try {
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="../assets/csp/chat.css">
-  <link rel="stylesheet" href="color_schemes.css">
-  <link rel="stylesheet" href="voice_styles.css">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="css_cache_buster.php?file=chat&v=<?php echo time(); ?>">
+  <link rel="stylesheet" href="css_cache_buster.php?file=color_schemes&v=<?php echo time(); ?>">
+  <link rel="stylesheet" href="css_cache_buster.php?file=voice_styles&v=<?php echo time(); ?>">
   <title>聊天室</title>
   <script src="fcm_client.js"></script>
   <script src="voice_recorder.js"></script>
@@ -136,7 +139,12 @@ try {
               <?php foreach ($contacts as $contact): ?>
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private">
                 <div class="user-avatar">
-                  <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                  <?php 
+                  // 顯示中文姓名的第一個字符
+                  $name = $contact['name'];
+                  $firstChar = mb_substr($name, 0, 1, 'UTF-8');
+                  echo $firstChar;
+                  ?>
                 </div>
                 <div class="user-info">
                   <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
@@ -213,7 +221,12 @@ try {
               <?php foreach ($contacts as $contact): ?>
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-contact-type="<?php echo $contact['contact_type']; ?>" data-department="<?php echo htmlspecialchars($contact['department'] ?? ''); ?>" data-grade="<?php echo htmlspecialchars($contact['grade'] ?? ''); ?>" data-class="<?php echo htmlspecialchars($contact['class_name'] ?? ''); ?>">
                 <div class="user-avatar">
-                  <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                  <?php 
+                  // 顯示中文姓名的第一個字符
+                  $name = $contact['name'];
+                  $firstChar = mb_substr($name, 0, 1, 'UTF-8');
+                  echo $firstChar;
+                  ?>
                 </div>
                 <div class="user-info">
                   <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>

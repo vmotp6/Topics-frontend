@@ -18,7 +18,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         } elseif ($_GET['role'] === '老師') {
             $redirect_url = 'teacher.php';
         } elseif ($_GET['role'] === '學生') {
-            $redirect_url = 'student.php';
+            $redirect_url = 'senior_messages.php';
         }
         
         header("Location: $redirect_url");

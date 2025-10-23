@@ -18,7 +18,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         } elseif ($_GET['role'] === '老師') {
             $redirect_url = 'teacher.php';
         } elseif ($_GET['role'] === '學生') {
-            $redirect_url = 'student.php';
+            $redirect_url = 'senior_messages.php';
         }
         
         header("Location: $redirect_url");
@@ -647,6 +647,13 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
 				<h3 class="feature-title">招生QA問答</h3>
 				<p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
 				<a href="QA.php" class="feature-link">招生QA問答</a>
+			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">🎓</div>
+				<h3 class="feature-title">學長姐留言板</h3>
+				<p class="feature-description">查看學長姐的經驗分享與建議。</p>
+				<a href="senior_messages.php" class="feature-link">學長姐留言板</a>
 			</div>
 			
 			<div class="feature-card">

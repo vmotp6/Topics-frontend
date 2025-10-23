@@ -2,44 +2,79 @@
  * 語音錄製功能樣式
  */
 
-/* 語音按鈕樣式 - LINE風格 */
+/* 語音按鈕樣式 - 與網頁色系一致 */
 #voiceRecordBtn {
-    background: linear-gradient(135deg, #00C851 0%, #00A041 100%);
-    color: white;
-    border: none;
-    border-radius: 20px;
-    padding: 10px 16px;
-    margin: 0 5px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0, 200, 81, 0.3);
-    min-width: 80px;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 20px !important;
+    padding: 10px 16px !important;
+    margin: 0 6px !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 
+        0 2px 6px rgba(40, 167, 69, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    position: relative !important;
+    overflow: hidden !important;
+    width: auto !important;
+    min-width: 80px !important;
+    height: 50px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+    line-height: 1 !important;
+}
+
+#voiceRecordBtn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
 }
 
 #voiceRecordBtn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 200, 81, 0.4);
+    transform: translateY(-1px) !important;
+    box-shadow: 
+        0 4px 12px rgba(40, 167, 69, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%) !important;
+}
+
+#voiceRecordBtn:hover::before {
+    left: 100%;
 }
 
 #voiceRecordBtn:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(0, 200, 81, 0.3);
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
 }
 
 #voiceRecordBtn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    opacity: 0.6;
-    box-shadow: none;
+    background: #6c757d !important;
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    transform: none !important;
 }
 
-/* 錄製中狀態 - LINE風格 */
+/* 錄製中狀態 - 與網頁色系一致 */
 #voiceRecordBtn.recording {
-    background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
-    animation: pulse 1.5s infinite;
-    box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4);
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+    animation: pulse 1.5s infinite !important;
+    box-shadow: 
+        0 2px 8px rgba(220, 53, 69, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-1px) !important;
 }
 
 @keyframes pulse {
@@ -54,14 +89,14 @@
     }
 }
 
-/* 錄製指示器 - LINE風格 */
+/* 錄製指示器 - 與網頁色系一致 */
 #recordingIndicator {
-    background: linear-gradient(135deg, rgba(255, 68, 68, 0.95) 0%, rgba(204, 0, 0, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.95) 0%, rgba(200, 35, 51, 0.95) 100%);
     border: 2px solid rgba(255, 255, 255, 0.3);
     backdrop-filter: blur(15px);
-    box-shadow: 0 8px 32px rgba(255, 68, 68, 0.4);
+    box-shadow: 0 8px 32px rgba(220, 53, 69, 0.4);
     animation: recordingPulse 2s infinite;
-    border-radius: 15px;
+    border-radius: 20px;
 }
 
 @keyframes recordingPulse {
@@ -73,12 +108,13 @@
     }
 }
 
-/* 處理中指示器 */
+/* 處理中指示器 - 與網頁色系一致 */
 #processingIndicator {
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(52, 73, 94, 0.9) 100%);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.95) 0%, rgba(0, 86, 179, 0.95) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px rgba(0, 123, 255, 0.4);
+    border-radius: 20px;
 }
 
 /* 通知樣式 */
@@ -110,55 +146,118 @@
     }
 }
 
-/* 聊天輸入區域調整 */
+/* 聊天輸入區域調整 - 與網頁色系一致 */
 .chat-input {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 15px 20px !important;
+    background: #ffffff !important;
+    border-top: 1px solid #e9ecef !important;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05) !important;
+    position: relative !important;
+    z-index: 10 !important;
+    flex-shrink: 0 !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
 }
 
-.chat-input input {
-    flex: 1;
-    padding: 10px 15px;
-    border: 1px solid #ddd;
-    border-radius: 20px;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.3s ease;
+.chat-input::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #e9ecef;
+}
+
+.chat-input input,
+#messageInput {
+    width: 670px !important;
+    height: 50px !important;
+    padding: 10px 16px !important;
+    border: 1px solid #e1e5e9 !important;
+    border-radius: 20px !important;
+    margin-right: 8px !important;
+    font-size: 14px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 
+        0 1px 3px rgba(0,0,0,0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    outline: none !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
 }
 
 .chat-input input:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #007bff !important;
+    box-shadow: 
+        0 2px 8px rgba(0, 123, 255, 0.2),
+        0 0 0 2px rgba(0, 123, 255, 0.1) !important;
+    transform: translateY(-1px) !important;
+    background: #ffffff !important;
+    color: #000000 !important;
 }
 
 .chat-input button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    padding: 10px 16px !important;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 20px !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 
+        0 2px 6px rgba(0, 123, 255, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    position: relative !important;
+    overflow: hidden !important;
+    width: auto !important;
+    min-width: 80px !important;
+    height: 50px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+    line-height: 1 !important;
 }
 
-.chat-input button:not(#voiceRecordBtn) {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+.chat-input button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
 }
 
-.chat-input button:not(#voiceRecordBtn):hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+.chat-input button:hover:not(:disabled) {
+    transform: translateY(-1px) !important;
+    box-shadow: 
+        0 4px 12px rgba(0, 123, 255, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+}
+
+.chat-input button:hover::before {
+    left: 100%;
 }
 
 .chat-input button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    opacity: 0.6;
+    background: #6c757d !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    opacity: 0.6 !important;
 }
 
 /* 響應式設計 */
@@ -196,12 +295,13 @@
     .chat-input input {
         background: #4a5568;
         border-color: #718096;
-        color: white;
+        color: #000000 !important;
     }
     
     .chat-input input:focus {
         border-color: #667eea;
         background: #4a5568;
+        color: #000000 !important;
     }
     
     .chat-input input::placeholder {
@@ -217,6 +317,55 @@
 
 #voiceRecordBtn:focus:not(:focus-visible) {
     outline: none;
+}
+
+/* 頭像樣式調試和優化 */
+.user-avatar {
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    color: white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 15px !important;
+    font-weight: 700 !important;
+    font-size: 20px !important;
+    box-shadow: 
+        0 2px 8px rgba(0, 123, 255, 0.3),
+        0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+    transition: all 0.3s ease !important;
+    position: relative !important;
+    overflow: hidden !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    flex-shrink: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1 !important;
+    min-width: 50px !important;
+    min-height: 50px !important;
+    line-height: 1 !important;
+    text-align: center !important;
+}
+
+/* 中文字符顯示優化 */
+.user-avatar {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', 'Hiragino Sans GB', sans-serif !important;
+}
+
+.user-item:hover .user-avatar {
+    transform: scale(1.05) !important;
+    box-shadow: 
+        0 4px 12px rgba(0, 123, 255, 0.4),
+        0 0 0 3px rgba(255, 255, 255, 0.4) !important;
+}
+
+.user-item.active .user-avatar {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    box-shadow: 
+        0 4px 12px rgba(40, 167, 69, 0.4),
+        0 0 0 3px rgba(255, 255, 255, 0.4) !important;
 }
 
 /* 錄製狀態指示器動畫 */
