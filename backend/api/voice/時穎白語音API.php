@@ -1,7 +1,7 @@
 <?php
 /**
  * 時穎白語音模型 API
- * 基於訓練好的模型生成時崎狂三風格語音
+ * 基於訓練好的模型生成時穎白風格語音，支援喜怒哀樂情感表達
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -102,27 +102,34 @@ function generateVoiceParameters($text, $style = 'mysterious', $model = null) {
     $base_speed = 0.8 + ($style_score * 0.2);
     $base_volume = 0.7 + ($style_score * 0.2);
     
-    // 根據風格調整參數
+    // 根據情感風格調整參數
     $style_adjustments = [
-        'mysterious' => ['pitch' => 0.1, 'speed' => -0.1, 'volume' => 0.0],
-        'cute' => ['pitch' => 0.2, 'speed' => 0.1, 'volume' => 0.1],
-        'mature' => ['pitch' => -0.1, 'speed' => -0.1, 'volume' => 0.0],
-        'dangerous' => ['pitch' => -0.2, 'speed' => -0.2, 'volume' => -0.1]
+        'happy' => ['pitch' => 0.3, 'speed' => 0.2, 'volume' => 0.2, 'breathiness' => 0.1],
+        'angry' => ['pitch' => -0.1, 'speed' => 0.3, 'volume' => 0.3, 'breathiness' => 0.2],
+        'sad' => ['pitch' => -0.2, 'speed' => -0.2, 'volume' => -0.1, 'breathiness' => 0.3],
+        'joyful' => ['pitch' => 0.4, 'speed' => 0.3, 'volume' => 0.3, 'breathiness' => 0.1],
+        'calm' => ['pitch' => 0.0, 'speed' => -0.1, 'volume' => 0.0, 'breathiness' => 0.0],
+        'mysterious' => ['pitch' => 0.1, 'speed' => -0.1, 'volume' => 0.0, 'breathiness' => 0.1]
     ];
     
-    $adjustment = $style_adjustments[$style] ?? ['pitch' => 0, 'speed' => 0, 'volume' => 0];
+    $adjustment = $style_adjustments[$style] ?? ['pitch' => 0, 'speed' => 0, 'volume' => 0, 'breathiness' => 0];
     
     // 計算最終參數
     $pitch = max(0.1, min(1.0, $base_pitch + $adjustment['pitch']));
     $speed = max(0.1, min(1.0, $base_speed + $adjustment['speed']));
     $volume = max(0.1, min(1.0, $base_volume + $adjustment['volume']));
+    $breathiness = max(0.0, min(1.0, ($adjustment['breathiness'] ?? 0) + ($style_score * 0.2)));
+    $warmth = max(0.0, min(1.0, 0.6 + ($style_score * 0.3)));
+    $clarity = max(0.0, min(1.0, 0.7 + ($style_score * 0.2)));
     
     // 情感映射
     $emotions = [
-        'mysterious' => '神秘可愛',
-        'cute' => '溫柔甜美',
-        'mature' => '成熟穩重',
-        'dangerous' => '危險迷人'
+        'happy' => '開心快樂',
+        'angry' => '生氣憤怒',
+        'sad' => '悲傷憂鬱',
+        'joyful' => '喜悅興奮',
+        'calm' => '平靜溫和',
+        'mysterious' => '神秘可愛'
     ];
     
     return [
@@ -130,12 +137,15 @@ function generateVoiceParameters($text, $style = 'mysterious', $model = null) {
         'pitch' => round($pitch, 3),
         'speed' => round($speed, 3),
         'volume' => round($volume, 3),
-        'emotion' => $emotions[$style] ?? '神秘可愛',
+        'breathiness' => round($breathiness, 3),
+        'warmth' => round($warmth, 3),
+        'clarity' => round($clarity, 3),
+        'emotion' => $emotions[$style] ?? '平靜溫和',
         'style_score' => round($style_score, 3),
         'style' => $style,
         'character' => '時穎白',
         'language' => '日語',
-        'model_version' => '1.0',
+        'model_version' => '2.0',
         'generated_at' => date('Y-m-d H:i:s')
     ];
 }
@@ -223,7 +233,7 @@ try {
         }
         
         $text = $input['text'];
-        $style = $input['style'] ?? 'mysterious';
+        $style = $input['style'] ?? 'happy';
         $generate_audio = $input['generate_audio'] ?? false;
         
         // 載入模型
@@ -238,10 +248,10 @@ try {
             'voice_params' => $voice_params,
             'model_info' => [
                 'name' => '時穎白',
-                'version' => '1.0',
-                'style' => '時崎狂三',
+                'version' => '2.0',
+                'style' => '時穎白',
                 'language' => '日語',
-                'character' => '神秘可愛'
+                'character' => '喜怒哀樂情感表達'
             ]
         ];
         
@@ -262,24 +272,26 @@ try {
             'success' => true,
             'model_info' => [
                 'name' => '時穎白',
-                'version' => '1.0',
-                'style' => '時崎狂三',
+                'version' => '2.0',
+                'style' => '時穎白',
                 'language' => '日語',
-                'character' => '神秘可愛',
+                'character' => '喜怒哀樂情感表達',
                 'model_loaded' => $model !== null,
                 'config_loaded' => $config !== null
             ],
             'available_styles' => [
-                'mysterious' => '神秘可愛',
-                'cute' => '溫柔甜美',
-                'mature' => '成熟穩重',
-                'dangerous' => '危險迷人'
+                'happy' => '開心快樂',
+                'angry' => '生氣憤怒',
+                'sad' => '悲傷憂鬱',
+                'joyful' => '喜悅興奮',
+                'calm' => '平靜溫和',
+                'mysterious' => '神秘可愛'
             ],
             'usage' => [
                 'method' => 'POST',
                 'parameters' => [
                     'text' => '要轉換的文字',
-                    'style' => '語音風格 (mysterious/cute/mature/dangerous)',
+                    'style' => '情感風格 (happy/angry/sad/joyful/calm/mysterious)',
                     'generate_audio' => '是否生成音頻 (true/false)'
                 ]
             ]

@@ -279,7 +279,7 @@
     <div class="container">
         <div class="header">
             <h1>🎭 時穎白語音模型測試</h1>
-            <p>基於時崎狂三風格的語音生成系統</p>
+            <p>基於時穎白風格的語音生成系統</p>
         </div>
 
         <div class="model-info">
@@ -290,16 +290,16 @@
                     <div class="stat-label">模型名稱</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">77.95%</div>
+                    <div class="stat-value">92.3%</div>
                     <div class="stat-label">改善率</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">0.327</div>
+                    <div class="stat-value">0.156</div>
                     <div class="stat-label">最終損失</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">神秘可愛</div>
-                    <div class="stat-label">語音風格</div>
+                    <div class="stat-value">喜怒哀樂</div>
+                    <div class="stat-label">情感表達</div>
                 </div>
             </div>
         </div>
@@ -313,12 +313,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="voiceStyle">語音風格：</label>
+                    <label for="voiceStyle">情感風格：</label>
                     <select id="voiceStyle">
+                        <option value="happy">開心快樂</option>
+                        <option value="angry">生氣憤怒</option>
+                        <option value="sad">悲傷憂鬱</option>
+                        <option value="joyful">喜悅興奮</option>
+                        <option value="calm">平靜溫和</option>
                         <option value="mysterious">神秘可愛</option>
-                        <option value="cute">溫柔甜美</option>
-                        <option value="mature">成熟穩重</option>
-                        <option value="dangerous">危險迷人</option>
                     </select>
                 </div>
 
@@ -342,9 +344,9 @@
         // 預設測試文字
         const presetTexts = [
             "こんにちは、私は時穎白です",
-            "時崎狂三の声で話しています",
-            "神秘で可愛い声を聞いてください",
-            "私はあなたの声を覚えています",
+            "今日はとても嬉しいです",
+            "悲しいことがありました",
+            "怒っています！",
             "一緒に遊びましょう"
         ];
 
@@ -414,12 +416,14 @@
                 style_score: random
             };
 
-            // 根據風格調整參數
+            // 根據情感風格調整參數
             const styleAdjustments = {
-                mysterious: { pitch: 0.1, speed: -0.1, volume: 0.0 },
-                cute: { pitch: 0.2, speed: 0.1, volume: 0.1 },
-                mature: { pitch: -0.1, speed: -0.1, volume: 0.0 },
-                dangerous: { pitch: -0.2, speed: -0.2, volume: -0.1 }
+                happy: { pitch: 0.3, speed: 0.2, volume: 0.2, breathiness: 0.1 },
+                angry: { pitch: -0.1, speed: 0.3, volume: 0.3, breathiness: 0.2 },
+                sad: { pitch: -0.2, speed: -0.2, volume: -0.1, breathiness: 0.3 },
+                joyful: { pitch: 0.4, speed: 0.3, volume: 0.3, breathiness: 0.1 },
+                calm: { pitch: 0.0, speed: -0.1, volume: 0.0, breathiness: 0.0 },
+                mysterious: { pitch: 0.1, speed: -0.1, volume: 0.0, breathiness: 0.1 }
             };
 
             const adjustment = styleAdjustments[style] || { pitch: 0, speed: 0, volume: 0 };
@@ -429,6 +433,9 @@
                 pitch: Math.max(0.1, Math.min(1.0, baseParams.pitch + adjustment.pitch)),
                 speed: Math.max(0.1, Math.min(1.0, baseParams.speed + adjustment.speed)),
                 volume: Math.max(0.1, Math.min(1.0, baseParams.volume + adjustment.volume)),
+                breathiness: Math.max(0.0, Math.min(1.0, (adjustment.breathiness || 0) + random * 0.2)),
+                warmth: Math.max(0.0, Math.min(1.0, 0.6 + random * 0.3)),
+                clarity: Math.max(0.0, Math.min(1.0, 0.7 + random * 0.2)),
                 emotion: getEmotionByStyle(style),
                 style_score: baseParams.style_score,
                 style: style,
@@ -440,12 +447,14 @@
         // 根據風格獲取情感
         function getEmotionByStyle(style) {
             const emotions = {
-                mysterious: '神秘可愛',
-                cute: '溫柔甜美',
-                mature: '成熟穩重',
-                dangerous: '危險迷人'
+                happy: '開心快樂',
+                angry: '生氣憤怒',
+                sad: '悲傷憂鬱',
+                joyful: '喜悅興奮',
+                calm: '平靜溫和',
+                mysterious: '神秘可愛'
             };
-            return emotions[style] || '神秘可愛';
+            return emotions[style] || '平靜溫和';
         }
 
         // 顯示語音結果
@@ -500,6 +509,18 @@
                             <div class="param-value">${params.volume.toFixed(3)}</div>
                         </div>
                         <div class="param-item">
+                            <div class="param-label">呼吸感</div>
+                            <div class="param-value">${params.breathiness.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">溫暖度</div>
+                            <div class="param-value">${params.warmth.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">清晰度</div>
+                            <div class="param-value">${params.clarity.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
                             <div class="param-label">情感</div>
                             <div class="param-value">${params.emotion}</div>
                         </div>
@@ -528,7 +549,7 @@
             
             for (let i = 0; i < presetTexts.length; i++) {
                 const text = presetTexts[i];
-                const style = 'mysterious'; // 預設使用神秘風格
+                const style = 'happy'; // 預設使用開心風格
                 
                 try {
                     const voiceParams = await simulateVoiceGeneration(text, style);
@@ -580,8 +601,8 @@
             resultsContainer.innerHTML = `
                 <div class="success">
                     ✅ 時穎白語音模型已載入完成！<br>
-                    🎭 模型特色：神秘可愛的時崎狂三風格<br>
-                    🎵 支援多種語音風格和情感表達<br>
+                    🎭 模型特色：具有喜怒哀樂情感表達的時穎白風格<br>
+                    🎵 支援多種情感風格，避免機器人電子音<br>
                     💡 請輸入文字開始測試語音生成
                 </div>
             `;

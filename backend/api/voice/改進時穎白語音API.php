@@ -1,7 +1,7 @@
 <?php
 /**
  * 改進的時穎白語音模型 API
- * 減少電子音，增加人聲自然度
+ * 減少電子音，增加人聲自然度，支援喜怒哀樂情感表達
  */
 
 header('Content-Type: application/json; charset=utf-8');

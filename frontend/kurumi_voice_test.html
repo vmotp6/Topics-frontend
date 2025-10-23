@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎭 時崎狂三語音測試</title>
+    <title>🎭 時穎白語音測試</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -20,14 +20,14 @@
             backdrop-filter: blur(10px);
         }
         
-        .kurumi-card {
+        .shiyinbai-card {
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
             border: none;
             border-radius: 15px;
             transition: all 0.3s ease;
         }
         
-        .kurumi-card:hover {
+        .shiyinbai-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
@@ -103,8 +103,8 @@
             <div class="col-lg-8">
                 <div class="main-container p-4">
                     <div class="text-center mb-4">
-                        <h1 class="display-4 mb-3">🎭 時崎狂三語音測試</h1>
-                        <p class="lead text-muted">使用 RVC 技術生成時崎狂三風格的聲音</p>
+                        <h1 class="display-4 mb-3">🎭 時穎白語音測試</h1>
+                        <p class="lead text-muted">使用 RVC 技術生成時穎白風格的聲音</p>
                     </div>
                     
                     <div class="kurumi-card p-4 mb-4">
@@ -113,7 +113,7 @@
                         <div class="mb-3">
                             <label for="text-input" class="form-label">要轉換的文字：</label>
                             <textarea id="text-input" class="form-control text-input" rows="3" 
-                                placeholder="請輸入要轉換為時崎狂三聲音的文字...">こんにちは、私は時崎狂三です。よろしくお願いします。</textarea>
+                                placeholder="請輸入要轉換為時穎白聲音的文字...">こんにちは、私は時穎白です。よろしくお願いします。</textarea>
                         </div>
                         
                         <div class="mb-3">
@@ -129,7 +129,7 @@
                         </div>
                         
                         <div class="mb-3">
-                            <label for="style-select" class="form-label">時崎狂三風格：</label>
+                            <label for="style-select" class="form-label">時穎白風格：</label>
                             <select id="style-select" class="form-select voice-select">
                                 <option value="mysterious">神秘風格 (溫柔中帶危險)</option>
                                 <option value="cute">可愛風格 (活潑俏皮)</option>
@@ -140,7 +140,7 @@
                         
                         <div class="d-grid">
                             <button id="generate-btn" class="btn btn-kurumi btn-lg" onclick="generateKurumiVoice()">
-                                <i class="fas fa-magic me-2"></i>生成時崎狂三語音
+                                <i class="fas fa-magic me-2"></i>生成時穎白語音
                             </button>
                         </div>
                     </div>
@@ -164,7 +164,7 @@
     </div>
 
     <script>
-        // 時崎狂三語音生成功能
+        // 時穎白語音生成功能
         async function generateKurumiVoice() {
             const text = document.getElementById('text-input').value;
             const voice = document.getElementById('voice-select').value;
@@ -181,7 +181,7 @@
             // 更新狀態
             generateBtn.disabled = true;
             generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>正在生成...';
-            setStatus(`正在生成時崎狂三${getStyleName(style)}語音...`, 'info');
+            setStatus(`正在生成時穎白${getStyleName(style)}語音...`, 'info');
             
             try {
                 const response = await fetch('http://localhost/Topics-frontend/backend/api/voice/advanced_kurumi_voice_api.php', {
@@ -199,7 +199,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    setStatus(`時崎狂三${getStyleName(style)}語音生成成功！`, 'success');
+                    setStatus(`時穎白${getStyleName(style)}語音生成成功！`, 'success');
                     playAudio(result.filename, result.style);
                 } else {
                     setStatus(`語音生成失敗: ${result.error}`, 'error');
@@ -208,7 +208,7 @@
                 setStatus(`語音生成失敗: ${error.message}`, 'error');
             } finally {
                 generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>生成時崎狂三語音';
+                generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>生成時穎白語音';
             }
         }
         
@@ -235,7 +235,7 @@
             
             audioContainer.innerHTML = `
                 <div class="mb-3">
-                    <h5>🎵 生成的時崎狂三${styleName}風格語音</h5>
+                    <h5>🎵 生成的時穎白${styleName}風格語音</h5>
                     <p class="text-muted">檔案名: ${filename}</p>
                     <p class="text-muted">風格: ${styleName}</p>
                 </div>
