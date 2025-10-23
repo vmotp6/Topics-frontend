@@ -213,7 +213,8 @@ def google_callback():
                 elif role == '學生':
                     redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role={role}"
                 else:
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
+                    # 預設重定向到聊天系統登入頁面
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/chat/google_chat_integration.php?google_login=success&username={username}&role={role}"
                 
                 print(f"重定向到: {redirect_url}")
                 return redirect(redirect_url)

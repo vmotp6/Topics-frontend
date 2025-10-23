@@ -40,47 +40,48 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $action = $_GET['action'] ?? 'overview';
+    $department_filter = $_GET['department'] ?? '';
 
     switch ($action) {
         case 'overview':
             // 總體統計
-            $stats = getOverviewStats($pdo);
+            $stats = getOverviewStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'department':
             // 科系統計
-            $stats = getDepartmentStats($pdo);
+            $stats = getDepartmentStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'system':
             // 學制統計
-            $stats = getSystemStats($pdo);
+            $stats = getSystemStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'grade':
             // 年級統計
-            $stats = getGradeStats($pdo);
+            $stats = getGradeStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'gender':
             // 性別統計
-            $stats = getGenderStats($pdo);
+            $stats = getGenderStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'identity':
             // 身分別統計
-            $stats = getIdentityStats($pdo);
+            $stats = getIdentityStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
         case 'monthly':
             // 月度統計
-            $stats = getMonthlyStats($pdo);
+            $stats = getMonthlyStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
             
@@ -95,39 +96,51 @@ try {
     echo json_encode(['error' => '資料庫連接失敗']);
 }
 
-function getOverviewStats($pdo) {
+// 輔助函數：建立科系篩選的 WHERE 條件
+function buildDepartmentFilter($department) {
+    if (empty($department)) {
+        return '1=1'; // 不篩選
+    }
+    // 篩選三個志願中任一個包含指定科系的記錄
+    return "(intention1 LIKE '%{$department}%' OR intention2 LIKE '%{$department}%' OR intention3 LIKE '%{$department}%')";
+}
+
+function getOverviewStats($pdo, $department_filter = '') {
     $stats = [];
+    $filter = buildDepartmentFilter($department_filter);
     
     // 總報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention");
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention WHERE $filter");
     $stats['total'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
     
     // 本月報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
+    $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE $filter AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
     $stats['monthly'] = $stmt->fetch(PDO::FETCH_ASSOC)['monthly'];
     
     // 本週報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE YEARWEEK(created_at) = YEARWEEK(NOW())");
+    $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE $filter AND YEARWEEK(created_at) = YEARWEEK(NOW())");
     $stats['weekly'] = $stmt->fetch(PDO::FETCH_ASSOC)['weekly'];
     
     // 今日報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE DATE(created_at) = CURDATE()");
+    $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE $filter AND DATE(created_at) = CURDATE()");
     $stats['daily'] = $stmt->fetch(PDO::FETCH_ASSOC)['daily'];
     
     return $stats;
 }
 
-function getDepartmentStats($pdo) {
+function getDepartmentStats($pdo, $department_filter = '') {
     $stats = [];
+    $filter = buildDepartmentFilter($department_filter);
     
     // 科系統計（三個意願合併，但保留志願順序資訊）
+    // 如果有科系篩選，只統計包含該科系的學生的所有選擇
     $stmt = $pdo->query("
         SELECT 
             '第一志願' as priority,
             COALESCE(intention1, '無特定') as department,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE intention1 IS NOT NULL AND intention1 != ''
+        WHERE intention1 IS NOT NULL AND intention1 != '' AND $filter
         GROUP BY intention1
         
         UNION ALL
@@ -137,7 +150,7 @@ function getDepartmentStats($pdo) {
             COALESCE(intention2, '無特定') as department,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定'
+        WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定' AND $filter
         GROUP BY intention2
         
         UNION ALL
@@ -147,7 +160,7 @@ function getDepartmentStats($pdo) {
             COALESCE(intention3, '無特定') as department,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定'
+        WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定' AND $filter
         GROUP BY intention3
     ");
     
@@ -199,8 +212,9 @@ function getDepartmentStats($pdo) {
     return $stats;
 }
 
-function getSystemStats($pdo) {
+function getSystemStats($pdo, $department_filter = '') {
     $stats = [];
+    $filter = buildDepartmentFilter($department_filter);
     
     // 學制統計
     $stmt = $pdo->query("
@@ -208,7 +222,7 @@ function getSystemStats($pdo) {
             COALESCE(system1, '未選擇') as system_type,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE system1 IS NOT NULL AND system1 != ''
+        WHERE system1 IS NOT NULL AND system1 != '' AND $filter
         GROUP BY system1
         
         UNION ALL
@@ -217,7 +231,7 @@ function getSystemStats($pdo) {
             COALESCE(system2, '未選擇') as system_type,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇'
+        WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' AND $filter
         GROUP BY system2
         
         UNION ALL
@@ -226,7 +240,7 @@ function getSystemStats($pdo) {
             COALESCE(system3, '未選擇') as system_type,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇'
+        WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' AND $filter
         GROUP BY system3
     ");
     
@@ -254,12 +268,15 @@ function getSystemStats($pdo) {
     return $stats;
 }
 
-function getGradeStats($pdo) {
+function getGradeStats($pdo, $department_filter = '') {
+    $filter = buildDepartmentFilter($department_filter);
+    
     $stmt = $pdo->query("
         SELECT 
             COALESCE(current_grade, '未填寫') as grade,
             COUNT(*) as count
         FROM enrollment_intention 
+        WHERE $filter
         GROUP BY current_grade
         ORDER BY 
             CASE current_grade
@@ -282,12 +299,15 @@ function getGradeStats($pdo) {
     return $stats;
 }
 
-function getGenderStats($pdo) {
+function getGenderStats($pdo, $department_filter = '') {
+    $filter = buildDepartmentFilter($department_filter);
+    
     $stmt = $pdo->query("
         SELECT 
             COALESCE(gender, '未填寫') as gender,
             COUNT(*) as count
         FROM enrollment_intention 
+        WHERE $filter
         GROUP BY gender
         ORDER BY 
             CASE gender
@@ -308,12 +328,15 @@ function getGenderStats($pdo) {
     return $stats;
 }
 
-function getIdentityStats($pdo) {
+function getIdentityStats($pdo, $department_filter = '') {
+    $filter = buildDepartmentFilter($department_filter);
+    
     $stmt = $pdo->query("
         SELECT 
             COALESCE(identity, '未填寫') as identity,
             COUNT(*) as count
         FROM enrollment_intention 
+        WHERE $filter
         GROUP BY identity
         ORDER BY 
             CASE identity
@@ -334,13 +357,15 @@ function getIdentityStats($pdo) {
     return $stats;
 }
 
-function getMonthlyStats($pdo) {
+function getMonthlyStats($pdo, $department_filter = '') {
+    $filter = buildDepartmentFilter($department_filter);
+    
     $stmt = $pdo->query("
         SELECT 
             DATE_FORMAT(created_at, '%Y-%m') as month,
             COUNT(*) as count
         FROM enrollment_intention 
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+        WHERE $filter AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
         GROUP BY DATE_FORMAT(created_at, '%Y-%m')
         ORDER BY month
     ");

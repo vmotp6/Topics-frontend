@@ -39,30 +39,31 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $action = $_GET['action'] ?? 'overview';
+    $department_filter = $_GET['department'] ?? '';
 
     switch ($action) {
         case 'overview':
-            $stats = getOverviewStats($pdo);
+            $stats = getOverviewStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'gender':
-            $stats = getGenderStats($pdo);
+            $stats = getGenderStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'school_city':
-            $stats = getSchoolCityStats($pdo);
+            $stats = getSchoolCityStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'choices':
-            $stats = getChoicesStats($pdo);
+            $stats = getChoicesStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'monthly':
-            $stats = getMonthlyStats($pdo);
+            $stats = getMonthlyStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'status':
-            $stats = getStatusStats($pdo);
+            $stats = getStatusStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         default:
@@ -76,14 +77,24 @@ try {
     echo json_encode(['error' => '資料庫連接失敗']);
 }
 
+// 輔助函數：建立科系篩選的 WHERE 條件（針對續招報名的 choices JSON 欄位）
+function buildDepartmentFilter($department) {
+    if (empty($department)) {
+        return '1=1'; // 不篩選
+    }
+    // 篩選 choices JSON 中包含指定科系的記錄
+    return "JSON_CONTAINS(choices, '\"$department\"')";
+}
+
 // 總覽統計
-function getOverviewStats($pdo) {
+function getOverviewStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     COUNT(*) as total_applications,
                     COUNT(DISTINCT school_city) as total_cities,
                     COUNT(DISTINCT school_name) as total_schools
-                FROM continued_admission";
+                FROM continued_admission WHERE $filter";
         $stmt = $pdo->query($sql);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -99,8 +110,9 @@ function getOverviewStats($pdo) {
 }
 
 // 性別分布統計
-function getGenderStats($pdo) {
+function getGenderStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     CASE 
                         WHEN gender = 'male' THEN '男'
@@ -109,6 +121,7 @@ function getGenderStats($pdo) {
                     END as gender_name,
                     COUNT(*) as count
                 FROM continued_admission 
+                WHERE $filter
                 GROUP BY gender
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);
@@ -127,12 +140,14 @@ function getGenderStats($pdo) {
 }
 
 // 就讀縣市分布統計
-function getSchoolCityStats($pdo) {
+function getSchoolCityStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     COALESCE(school_city, '未填寫') as city_name,
                     COUNT(*) as count
                 FROM continued_admission 
+                WHERE $filter
                 GROUP BY school_city
                 ORDER BY count DESC
                 LIMIT 10";
@@ -152,9 +167,10 @@ function getSchoolCityStats($pdo) {
 }
 
 // 志願選擇統計
-function getChoicesStats($pdo) {
+function getChoicesStats($pdo, $department_filter = '') {
     try {
-        $sql = "SELECT choices FROM continued_admission WHERE choices IS NOT NULL AND choices != ''";
+        $filter = buildDepartmentFilter($department_filter);
+        $sql = "SELECT choices FROM continued_admission WHERE $filter AND choices IS NOT NULL AND choices != ''";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_COLUMN);
         
@@ -195,13 +211,14 @@ function getChoicesStats($pdo) {
 }
 
 // 月度趨勢統計
-function getMonthlyStats($pdo) {
+function getMonthlyStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     DATE_FORMAT(created_at, '%Y-%m') as month,
                     COUNT(*) as count
                 FROM continued_admission 
-                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+                WHERE $filter AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
                 GROUP BY DATE_FORMAT(created_at, '%Y-%m')
                 ORDER BY month ASC";
         $stmt = $pdo->query($sql);
@@ -220,8 +237,9 @@ function getMonthlyStats($pdo) {
 }
 
 // 審核狀態統計
-function getStatusStats($pdo) {
+function getStatusStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     CASE 
                         WHEN status = 'pending' THEN '待審核'
@@ -231,6 +249,7 @@ function getStatusStats($pdo) {
                     END as status_name,
                     COUNT(*) as count
                 FROM continued_admission 
+                WHERE $filter
                 GROUP BY status
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);

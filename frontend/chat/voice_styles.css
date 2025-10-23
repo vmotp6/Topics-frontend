@@ -1,0 +1,238 @@
+/**
+ * 語音錄製功能樣式
+ */
+
+/* 語音按鈕樣式 - LINE風格 */
+#voiceRecordBtn {
+    background: linear-gradient(135deg, #00C851 0%, #00A041 100%);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 16px;
+    margin: 0 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 200, 81, 0.3);
+    min-width: 80px;
+}
+
+#voiceRecordBtn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 200, 81, 0.4);
+}
+
+#voiceRecordBtn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 200, 81, 0.3);
+}
+
+#voiceRecordBtn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+}
+
+/* 錄製中狀態 - LINE風格 */
+#voiceRecordBtn.recording {
+    background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
+    }
+}
+
+/* 錄製指示器 - LINE風格 */
+#recordingIndicator {
+    background: linear-gradient(135deg, rgba(255, 68, 68, 0.95) 0%, rgba(204, 0, 0, 0.95) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px rgba(255, 68, 68, 0.4);
+    animation: recordingPulse 2s infinite;
+    border-radius: 15px;
+}
+
+@keyframes recordingPulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+    }
+}
+
+/* 處理中指示器 */
+#processingIndicator {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.9) 0%, rgba(52, 73, 94, 0.9) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* 通知樣式 */
+.voice-notification {
+    animation: slideIn 0.3s ease-out;
+    border-left: 4px solid;
+}
+
+.voice-notification.success {
+    border-left-color: #4CAF50;
+}
+
+.voice-notification.error {
+    border-left-color: #f44336;
+}
+
+.voice-notification.info {
+    border-left-color: #2196F3;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 聊天輸入區域調整 */
+.chat-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.chat-input input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.chat-input button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.chat-input button:not(#voiceRecordBtn) {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.chat-input button:not(#voiceRecordBtn):hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.chat-input button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .chat-input {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .chat-input input {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    
+    .chat-input button {
+        width: 100%;
+        margin: 2px 0;
+    }
+    
+    #recordingIndicator,
+    #processingIndicator {
+        width: 90%;
+        max-width: 300px;
+        padding: 15px;
+    }
+}
+
+/* 深色主題支援 */
+@media (prefers-color-scheme: dark) {
+    .chat-input {
+        background: #2d3748;
+        border-top-color: #4a5568;
+    }
+    
+    .chat-input input {
+        background: #4a5568;
+        border-color: #718096;
+        color: white;
+    }
+    
+    .chat-input input:focus {
+        border-color: #667eea;
+        background: #4a5568;
+    }
+    
+    .chat-input input::placeholder {
+        color: #a0aec0;
+    }
+}
+
+/* 無障礙設計 */
+#voiceRecordBtn:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+#voiceRecordBtn:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* 錄製狀態指示器動畫 */
+#recordingIndicator .recording-icon {
+    animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+

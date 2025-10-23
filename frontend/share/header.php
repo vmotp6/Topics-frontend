@@ -1024,16 +1024,8 @@ function getActiveClass($targetFile) {
       <div class="input-field"><input type="text" name="username" required><label>帳號</label></div>
       <div class="input-field"><input type="text" name="name" required><label>姓名</label></div>
       <div class="input-field"><input type="email" name="email" required><label>電子郵件</label></div>
-      <div class="input-field">
-        <select name="role" required>
-          <option value="" disabled selected hidden></option>
-          <option value="老師">老師</option>
-          <option value="學生">學生</option>
-          <option value="廠商">廠商</option>
-          <option value="學校行政人員">學校行政人員</option>
-        </select>
-        <label>身分</label>
-      </div>
+      <!-- 移除身分選擇，預設為學生 -->
+      <input type="hidden" name="role" value="學生">
       <div class="input-field"><input type="password" name="password" required><label>密碼</label></div>
       <div class="input-field"><input type="password" name="confirm_password" required><label>確認密碼</label></div>
       <button type="submit">註冊</button>
@@ -1200,8 +1192,6 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
             window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
           } else if (data.role === "學生") {
             window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-          } else if (data.role === "廠商") {
-            window.location.href = "<?php echo getCorrectPath('company.php'); ?>";
           } else if (data.role === "學校行政人員") {
             window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
           } else {
