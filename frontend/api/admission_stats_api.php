@@ -39,34 +39,35 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $action = $_GET['action'] ?? 'overview';
+    $department_filter = $_GET['department'] ?? '';
 
     switch ($action) {
         case 'overview':
-            $stats = getOverviewStats($pdo);
+            $stats = getOverviewStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'grade':
-            $stats = getGradeStats($pdo);
+            $stats = getGradeStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'school':
-            $stats = getSchoolStats($pdo);
+            $stats = getSchoolStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'session':
-            $stats = getSessionStats($pdo);
+            $stats = getSessionStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'course':
-            $stats = getCourseStats($pdo);
+            $stats = getCourseStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'monthly':
-            $stats = getMonthlyStats($pdo);
+            $stats = getMonthlyStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         case 'receive_info':
-            $stats = getReceiveInfoStats($pdo);
+            $stats = getReceiveInfoStats($pdo, $department_filter);
             echo json_encode($stats);
             break;
         default:
@@ -80,14 +81,25 @@ try {
     echo json_encode(['error' => '資料庫連接失敗']);
 }
 
+// 輔助函數：建立科系篩選的 WHERE 條件
+function buildDepartmentFilter($department) {
+    if (empty($department)) {
+        return '1=1'; // 不篩選
+    }
+    // 篩選五專入學說明會中與指定科系相關的記錄
+    // 這裡假設有department欄位或相關的科系資訊
+    return "department = '{$department}' OR department LIKE '%{$department}%'";
+}
+
 // 總覽統計
-function getOverviewStats($pdo) {
+function getOverviewStats($pdo, $department_filter = '') {
     try {
+        $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     COUNT(*) as total_applications,
                     COUNT(DISTINCT school_name) as total_schools,
                     COUNT(DISTINCT session_id) as total_sessions
-                FROM admission_applications";
+                FROM admission_applications WHERE $filter";
         $stmt = $pdo->query($sql);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
