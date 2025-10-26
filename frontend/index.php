@@ -385,8 +385,8 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			<div class="feature-card">
 				<div class="feature-icon">📚</div>
 				<h3 class="feature-title">私訊聊天室</h3>
-				<p class="feature-description">學生或其他學生進行聊天。</p>
-				<a href="chat/chat.php" class="feature-link">私訊聊天室</a>
+				<p class="feature-description">使用 Google 帳號登入，與老師和同學進行即時聊天。</p>
+				<a href="chat/google_chat_integration.php" class="feature-link">私訊聊天室</a>
 			</div>
 			
 			<div class="feature-card">

@@ -5,7 +5,7 @@
 
 // Ollama 專用資料庫配置
 function getOllamaDatabaseConnection() {
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'ollama';  // 使用新的 ollama 資料庫
     $username = 'root';
     $password = '';
@@ -30,7 +30,7 @@ function getOllamaDatabaseConnection() {
 
 // 檢查 Ollama 資料庫是否存在，如果不存在則創建
 function ensureOllamaDatabase() {
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $username = 'root';
     $password = '';
     
@@ -60,7 +60,7 @@ function ensureOllamaDatabase() {
 
 // 獲取 FAQ 資料（從 topics_good 資料庫）
 function getFAQFromTopicsGood() {
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'topics_good';
     $username = 'root';
     $password = '';

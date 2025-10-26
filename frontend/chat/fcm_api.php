@@ -14,12 +14,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // 引入FCM服務
-require_once 'fcm_service.php';
+try {
+    require_once 'fcm_service.php';
+    $fcmService = new FCMService();
+} catch (Exception $e) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'FCM服務初始化失敗: ' . $e->getMessage()
+    ]);
+    exit;
+}
 
 try {
-    $fcmService = new FCMService();
-    
     $action = $_GET['action'] ?? $_POST['action'] ?? '';
+    
+    if (empty($action)) {
+        echo json_encode(['success' => false, 'error' => '無效的動作']);
+        exit;
+    }
     
     switch ($action) {
         case 'register_token':
@@ -44,7 +56,7 @@ try {
             updateNotificationSettings();
             break;
         default:
-            echo json_encode(['success' => false, 'error' => '無效的動作']);
+            echo json_encode(['success' => false, 'error' => '無效的動作: ' . $action]);
     }
     
 } catch (Exception $e) {

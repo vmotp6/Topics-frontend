@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 時穎白人聲測試</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 1.2em;
+        }
+
+        .model-info {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .model-info h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .model-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .voice-test-section {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .voice-test-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .test-form {
+            display: grid;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            color: #4a5568;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .test-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 154, 158, 0.3);
+        }
+
+        .results-section {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .results-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .result-item {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .result-text {
+            font-size: 1.1em;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .result-params {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .param-item {
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .param-label {
+            font-size: 0.9em;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+
+        .param-value {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .success {
+            background: #c6f6d5;
+            color: #2f855a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .audio-player {
+            margin-top: 15px;
+        }
+
+        .audio-player audio {
+            width: 100%;
+            border-radius: 5px;
+        }
+
+        .comparison-section {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .comparison-section h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .comparison-item {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .comparison-item h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .test-buttons {
+                flex-direction: column;
+            }
+            
+            .result-params {
+                grid-template-columns: 1fr;
+            }
+
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 時穎白人聲測試</h1>
+            <p>基於改進版語音模型，模擬訓練資料的聲音特徵</p>
+        </div>
+
+        <div class="model-info">
+            <h2>📊 改進版模型資訊</h2>
+            <div class="model-stats">
+                <div class="stat-item">
+                    <div class="stat-value">時穎白 v2.0</div>
+                    <div class="stat-label">模型版本</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">92.3%</div>
+                    <div class="stat-label">改善率</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">0.156</div>
+                    <div class="stat-label">最終損失</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">人聲化</div>
+                    <div class="stat-label">處理方式</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="voice-test-section">
+            <h2>🎵 人聲化語音生成測試</h2>
+            <form class="test-form" id="voiceTestForm">
+                <div class="form-group">
+                    <label for="testText">測試文字：</label>
+                    <textarea id="testText" rows="3" placeholder="輸入要轉換為時穎白人聲的文字...">こんにちは、私は時穎白です。今日はとても嬉しいです。</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="voiceStyle">情感風格：</label>
+                    <select id="voiceStyle">
+                        <option value="happy">開心快樂</option>
+                        <option value="angry">生氣憤怒</option>
+                        <option value="sad">悲傷憂鬱</option>
+                        <option value="joyful">喜悅興奮</option>
+                        <option value="calm">平靜溫和</option>
+                        <option value="mysterious">神秘可愛</option>
+                    </select>
+                </div>
+
+                <div class="test-buttons">
+                    <button type="button" class="btn btn-primary" onclick="generateHumanVoice()">🎭 生成人聲化語音</button>
+                    <button type="button" class="btn btn-secondary" onclick="generateStandardVoice()">🎵 生成標準語音</button>
+                    <button type="button" class="btn btn-secondary" onclick="compareVoices()">🔄 比較兩種語音</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearResults()">🗑️ 清除結果</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="results-section">
+            <h2>📋 生成結果</h2>
+            <div id="resultsContainer">
+                <div class="loading">等待語音生成...</div>
+            </div>
+        </div>
+
+        <div class="comparison-section" id="comparisonSection" style="display: none;">
+            <h2>🔄 語音比較</h2>
+            <div class="comparison-grid">
+                <div class="comparison-item">
+                    <h3>🎭 人聲化語音</h3>
+                    <div id="humanVoiceResult">
+                        <div class="loading">生成中...</div>
+                    </div>
+                </div>
+                <div class="comparison-item">
+                    <h3>🎵 標準語音</h3>
+                    <div id="standardVoiceResult">
+                        <div class="loading">生成中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 生成人聲化語音
+        async function generateHumanVoice() {
+            const text = document.getElementById('testText').value;
+            const style = document.getElementById('voiceStyle').value;
+            
+            if (!text.trim()) {
+                alert('請輸入測試文字！');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '<div class="loading">🎭 正在生成人聲化語音...</div>';
+
+            try {
+                const response = await fetch('Topics-frontend/backend/api/voice/改進時穎白語音API.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        style: style,
+                        generate_audio: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayVoiceResult(data.voice_params, data.audio, '人聲化');
+                } else {
+                    throw new Error(data.error || '語音生成失敗');
+                }
+            } catch (error) {
+                console.error('API 錯誤:', error);
+                let errorMessage = error.message;
+                
+                // 根據錯誤類型提供更具體的建議
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = '無法連接到API服務器，請檢查後端是否正在運行';
+                } else if (error.message.includes('404')) {
+                    errorMessage = 'API端點不存在，請檢查文件路徑';
+                } else if (error.message.includes('500')) {
+                    errorMessage = '服務器內部錯誤，請檢查API日誌';
+                }
+                
+                resultsContainer.innerHTML = `
+                    <div class="error">
+                        ❌ 人聲化語音生成失敗<br>
+                        <strong>錯誤訊息：</strong> ${errorMessage}<br>
+                        <br>
+                        💡 故障排除建議：<br>
+                        • 檢查網路連接<br>
+                        • 確認API服務正在運行<br>
+                        • 查看瀏覽器開發者工具的網路標籤
+                    </div>
+                `;
+            }
+        }
+
+        // 生成標準語音
+        async function generateStandardVoice() {
+            const text = document.getElementById('testText').value;
+            const style = document.getElementById('voiceStyle').value;
+            
+            if (!text.trim()) {
+                alert('請輸入測試文字！');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '<div class="loading">🎵 正在生成標準語音...</div>';
+
+            try {
+                const response = await fetch('Topics-frontend/backend/api/voice/時穎白語音API.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        style: style,
+                        generate_audio: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP 錯誤: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayVoiceResult(data.voice_params, data.audio, '標準');
+                } else {
+                    throw new Error(data.error || '語音生成失敗');
+                }
+            } catch (error) {
+                console.error('API 錯誤:', error);
+                let errorMessage = error.message;
+                
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = '無法連接到API服務器，請檢查後端是否正在運行';
+                } else if (error.message.includes('404')) {
+                    errorMessage = 'API端點不存在，請檢查文件路徑';
+                } else if (error.message.includes('500')) {
+                    errorMessage = '服務器內部錯誤，請檢查API日誌';
+                }
+                
+                resultsContainer.innerHTML = `
+                    <div class="error">
+                        ❌ 標準語音生成失敗<br>
+                        <strong>錯誤訊息：</strong> ${errorMessage}<br>
+                        <br>
+                        💡 故障排除建議：<br>
+                        • 檢查網路連接<br>
+                        • 確認API服務正在運行<br>
+                        • 查看瀏覽器開發者工具的網路標籤
+                    </div>
+                `;
+            }
+        }
+
+        // 比較兩種語音
+        async function compareVoices() {
+            const text = document.getElementById('testText').value;
+            const style = document.getElementById('voiceStyle').value;
+            
+            if (!text.trim()) {
+                alert('請輸入測試文字！');
+                return;
+            }
+
+            document.getElementById('comparisonSection').style.display = 'block';
+            document.getElementById('humanVoiceResult').innerHTML = '<div class="loading">生成人聲化語音中...</div>';
+            document.getElementById('standardVoiceResult').innerHTML = '<div class="loading">生成標準語音中...</div>';
+
+            try {
+                // 同時生成兩種語音
+                const [humanResponse, standardResponse] = await Promise.all([
+                    fetch('Topics-frontend/backend/api/voice/改進時穎白語音API.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text, style: style, generate_audio: true })
+                    }),
+                    fetch('Topics-frontend/backend/api/voice/時穎白語音API.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text, style: style, generate_audio: true })
+                    })
+                ]);
+
+                const [humanData, standardData] = await Promise.all([
+                    humanResponse.json(),
+                    standardResponse.json()
+                ]);
+
+                if (humanData.success) {
+                    displayComparisonResult(humanData.voice_params, humanData.audio, 'humanVoiceResult');
+                } else {
+                    document.getElementById('humanVoiceResult').innerHTML = `<div class="error">❌ 人聲化語音生成失敗</div>`;
+                }
+
+                if (standardData.success) {
+                    displayComparisonResult(standardData.voice_params, standardData.audio, 'standardVoiceResult');
+                } else {
+                    document.getElementById('standardVoiceResult').innerHTML = `<div class="error">❌ 標準語音生成失敗</div>`;
+                }
+
+            } catch (error) {
+                console.error('比較錯誤:', error);
+                document.getElementById('humanVoiceResult').innerHTML = `<div class="error">❌ 比較失敗: ${error.message}</div>`;
+                document.getElementById('standardVoiceResult').innerHTML = `<div class="error">❌ 比較失敗: ${error.message}</div>`;
+            }
+        }
+
+        // 顯示語音結果
+        function displayVoiceResult(params, audio = null, type = '') {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            let audioHtml = '';
+            if (audio && audio.success) {
+                audioHtml = `
+                    <div class="audio-player">
+                        <audio controls>
+                            <source src="${audio.audio_url}" type="audio/wav">
+                            您的瀏覽器不支援音頻播放。
+                        </audio>
+                        <p style="color: #718096; font-size: 0.9em; margin-top: 10px;">
+                            ✅ ${type}語音已生成！檔案大小: ${(audio.file_size / 1024).toFixed(1)} KB
+                        </p>
+                    </div>
+                `;
+            } else if (audio && !audio.success) {
+                audioHtml = `
+                    <div class="error">
+                        ❌ 音頻生成失敗: ${audio.error}
+                    </div>
+                `;
+            } else {
+                audioHtml = `
+                    <div class="audio-player">
+                        <p style="color: #718096; font-size: 0.9em; margin-top: 10px;">
+                            💡 語音參數已生成，音頻生成功能需要整合 TTS 系統
+                        </p>
+                    </div>
+                `;
+            }
+            
+            const resultHtml = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <div class="result-text">"${params.text}"</div>
+                    </div>
+                    <div class="result-params">
+                        <div class="param-item">
+                            <div class="param-label">音調</div>
+                            <div class="param-value">${params.pitch.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">速度</div>
+                            <div class="param-value">${params.speed.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">音量</div>
+                            <div class="param-value">${params.volume.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">呼吸感</div>
+                            <div class="param-value">${params.breathiness.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">溫暖度</div>
+                            <div class="param-value">${params.warmth.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">清晰度</div>
+                            <div class="param-value">${params.clarity.toFixed(3)}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">情感</div>
+                            <div class="param-value">${params.emotion}</div>
+                        </div>
+                        <div class="param-item">
+                            <div class="param-label">風格分數</div>
+                            <div class="param-value">${params.style_score.toFixed(3)}</div>
+                        </div>
+                    </div>
+                    ${audioHtml}
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = resultHtml;
+        }
+
+        // 顯示比較結果
+        function displayComparisonResult(params, audio, containerId) {
+            const container = document.getElementById(containerId);
+            
+            let audioHtml = '';
+            if (audio && audio.success) {
+                audioHtml = `
+                    <div class="audio-player">
+                        <audio controls>
+                            <source src="${audio.audio_url}" type="audio/wav">
+                            您的瀏覽器不支援音頻播放。
+                        </audio>
+                        <p style="color: #718096; font-size: 0.9em; margin-top: 10px;">
+                            ✅ 語音已生成！檔案大小: ${(audio.file_size / 1024).toFixed(1)} KB
+                        </p>
+                    </div>
+                `;
+            } else {
+                audioHtml = `
+                    <div class="error">
+                        ❌ 音頻生成失敗
+                    </div>
+                `;
+            }
+            
+            const resultHtml = `
+                <div class="result-params">
+                    <div class="param-item">
+                        <div class="param-label">音調</div>
+                        <div class="param-value">${params.pitch.toFixed(3)}</div>
+                    </div>
+                    <div class="param-item">
+                        <div class="param-label">速度</div>
+                        <div class="param-value">${params.speed.toFixed(3)}</div>
+                    </div>
+                    <div class="param-item">
+                        <div class="param-label">音量</div>
+                        <div class="param-value">${params.volume.toFixed(3)}</div>
+                    </div>
+                    <div class="param-item">
+                        <div class="param-label">情感</div>
+                        <div class="param-value">${params.emotion}</div>
+                    </div>
+                </div>
+                ${audioHtml}
+            `;
+            
+            container.innerHTML = resultHtml;
+        }
+
+        // 打開狀態檢查工具
+        function openStatusCheck() {
+            window.open('Topics-frontend/backend/status_check.php', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        }
+
+        // 清除結果
+        function clearResults() {
+            document.getElementById('resultsContainer').innerHTML = '<div class="loading">等待語音生成...</div>';
+            document.getElementById('comparisonSection').style.display = 'none';
+        }
+
+        // 檢查API環境
+        async function checkAPIEnvironment() {
+            try {
+                // 先嘗試簡單的狀態檢查
+                const response = await fetch('Topics-frontend/backend/status_check.php', {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return {
+                        success: true,
+                        training_data_ready: data.files['簡化環境檢查API.php']?.exists || false,
+                        model_ready: data.files['診斷API.php']?.exists || false,
+                        audio_processing_ready: data.directories.api_dir_exists || false,
+                        server_info: data.environment,
+                        file_status: data.files
+                    };
+                } else {
+                    throw new Error(`狀態檢查失敗: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('環境檢查錯誤:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+
+        // 系統修復功能
+        async function repairSystem() {
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '<div class="loading">🔧 正在修復系統...</div>';
+            
+            try {
+                const response = await fetch('Topics-frontend/backend/api/voice/系統修復API.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'repair_system'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        let repairHtml = '<div class="success">✅ 系統修復完成！</div>';
+                        
+                        data.result.forEach((step, index) => {
+                            repairHtml += `
+                                <div class="result-item">
+                                    <h3>步驟 ${index + 1}: ${step.step}</h3>
+                                    <div class="result-params">
+                            `;
+                            
+                            if (Array.isArray(step.result)) {
+                                step.result.forEach(item => {
+                                    repairHtml += `
+                                        <div class="param-item">
+                                            <div class="param-label">${item.directory || item.video || '項目'}</div>
+                                            <div class="param-value">${item.status || (item.success ? '✅ 成功' : '❌ 失敗')}</div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            
+                            repairHtml += '</div></div>';
+                        });
+                        
+                        resultsContainer.innerHTML = repairHtml;
+                        
+                        // 重新檢查環境
+                        setTimeout(async () => {
+                            const envCheck = await checkAPIEnvironment();
+                            updateEnvironmentStatus(envCheck);
+                        }, 2000);
+                        
+                    } else {
+                        throw new Error(data.error || '系統修復失敗');
+                    }
+                } else {
+                    throw new Error(`修復請求失敗: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('系統修復錯誤:', error);
+                resultsContainer.innerHTML = `
+                    <div class="error">
+                        ❌ 系統修復失敗<br>
+                        <strong>錯誤訊息：</strong> ${error.message}<br>
+                        <br>
+                        💡 請手動檢查以下項目：<br>
+                        • 確保有管理員權限<br>
+                        • 檢查磁碟空間是否足夠<br>
+                        • 確認路徑權限正確
+                    </div>
+                `;
+            }
+        }
+
+        // 更新環境狀態顯示
+        function updateEnvironmentStatus(envCheck) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            if (envCheck.success) {
+                const trainingStatus = envCheck.training_data_ready ? '✅ 就緒' : '❌ 未就緒';
+                const modelStatus = envCheck.model_ready ? '✅ 可用' : '❌ 不可用';
+                const audioStatus = envCheck.audio_processing_ready ? '✅ 正常' : '❌ 異常';
+                
+                let fileStatusHtml = '';
+                if (envCheck.file_status) {
+                    fileStatusHtml = '<br><strong>文件狀態：</strong><br>';
+                    Object.entries(envCheck.file_status).forEach(([name, status]) => {
+                        const icon = status.exists ? '✅' : '❌';
+                        fileStatusHtml += `${icon} ${name}: ${status.exists ? '存在' : '不存在'}<br>`;
+                    });
+                }
+                
+                let serverInfoHtml = '';
+                if (envCheck.server_info) {
+                    serverInfoHtml = '<br><strong>服務器信息：</strong><br>';
+                    serverInfoHtml += `📁 文檔根目錄: ${envCheck.server_info.document_root}<br>`;
+                    serverInfoHtml += `🔧 服務器軟件: ${envCheck.server_info.server_software}<br>`;
+                    serverInfoHtml += `🐍 PHP版本: ${envCheck.server_info.php_sapi}<br>`;
+                }
+                
+                resultsContainer.innerHTML = `
+                    <div class="success">
+                        ✅ 時穎白人聲化模型已載入完成！<br>
+                        🎭 模型特色：模擬訓練資料的聲音特徵，減少電子音<br>
+                        🎵 支援人聲化後處理，更接近真人聲音<br>
+                        💡 請輸入文字開始測試語音生成<br>
+                        <br>
+                        <strong>環境狀態：</strong><br>
+                        📁 訓練資料：${trainingStatus}<br>
+                        🤖 模型檔案：${modelStatus}<br>
+                        🎵 音頻處理：${audioStatus}<br>
+                        ${fileStatusHtml}
+                        ${serverInfoHtml}
+                        <br>
+                        <div class="test-buttons" style="margin-top: 15px;">
+                            <button type="button" class="btn btn-secondary" onclick="repairSystem()">🔧 修復系統</button>
+                            <button type="button" class="btn btn-secondary" onclick="checkAPIEnvironment().then(updateEnvironmentStatus)">🔄 重新檢查</button>
+                            <button type="button" class="btn btn-info" onclick="openStatusCheck()">🔍 狀態檢查</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultsContainer.innerHTML = `
+                    <div class="error">
+                        ❌ API環境檢查失敗<br>
+                        <strong>錯誤訊息：</strong> ${envCheck.error}<br>
+                        <br>
+                        💡 請檢查以下項目：<br>
+                        • 確保後端服務正在運行<br>
+                        • 檢查API文件是否存在<br>
+                        • 確認路徑配置正確<br>
+                        <br>
+                        <div class="test-buttons" style="margin-top: 15px;">
+                            <button type="button" class="btn btn-secondary" onclick="repairSystem()">🔧 修復系統</button>
+                            <button type="button" class="btn btn-secondary" onclick="checkAPIEnvironment().then(updateEnvironmentStatus)">🔄 重新檢查</button>
+                            <button type="button" class="btn btn-info" onclick="openStatusCheck()">🔍 狀態檢查</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 頁面載入時檢查環境並顯示歡迎訊息
+        window.addEventListener('load', async function() {
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '<div class="loading">🔍 正在檢查API環境...</div>';
+            
+            const envCheck = await checkAPIEnvironment();
+            updateEnvironmentStatus(envCheck);
+        });
+    </script>
+</body>
+</html>

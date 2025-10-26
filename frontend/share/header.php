@@ -888,7 +888,6 @@ function getActiveClass($targetFile) {
 
   <div class="navbar-links">
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
@@ -1169,6 +1168,7 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     console.log("登入API回應狀態:", res.status);
     const data = await res.json();
     console.log("登入API回應數據:", data);
+    
     if (res.ok) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
@@ -1210,8 +1210,16 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
         document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";
       });
     } else {
+      // 處理錯誤訊息
       document.getElementById("loginMessage").style.color = "red";
-      document.getElementById("loginMessage").innerText = data.message;
+      
+      // 特別處理停用帳號的錯誤訊息
+      if (res.status === 403) {
+        document.getElementById("loginMessage").innerText = data.message;
+        document.getElementById("loginMessage").style.color = "#e74c3c";
+      } else {
+        document.getElementById("loginMessage").innerText = data.message;
+      }
     }
   })
   .catch(err => {
