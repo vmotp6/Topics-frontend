@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>語音識別調試工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .start-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        .stop-btn {
+            background: #f44336;
+            color: white;
+        }
+        .test-btn {
+            background: #2196F3;
+            color: white;
+        }
+        .clear-btn {
+            background: #ff9800;
+            color: white;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        #result {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            min-height: 100px;
+            border: 1px solid #dee2e6;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 語音識別調試工具</h1>
+        
+        <div class="test-section">
+            <h3>📋 檢查清單</h3>
+            <div class="step">
+                <strong>步驟 1:</strong> 確保使用 Chrome 或 Edge 瀏覽器
+            </div>
+            <div class="step">
+                <strong>步驟 2:</strong> 🔴 <strong>重要！</strong> 允許麥克風權限
+                <br><small>• 點擊瀏覽器地址欄左側的鎖頭圖示 🔒</small>
+                <br><small>• 找到「麥克風」選項</small>
+                <br><small>• 選擇「允許」</small>
+                <br><small>• 重新整理頁面</small>
+            </div>
+            <div class="step">
+                <strong>步驟 3:</strong> 在安靜環境中測試
+            </div>
+            <div class="step">
+                <strong>步驟 4:</strong> 說話時聲音要清楚大聲
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 語音識別測試</h3>
+            <button id="checkMicBtn" class="test-btn">🎤 檢查麥克風權限</button>
+            <button id="startBtn" class="start-btn">🎤 開始語音識別</button>
+            <button id="stopBtn" class="stop-btn" disabled>⏹️ 停止語音識別</button>
+            <button id="simpleBtn" class="test-btn">🔧 簡單語音識別</button>
+            <button id="testBtn" class="test-btn">🧪 測試模擬結果</button>
+            <button id="clearBtn" class="clear-btn">🗑️ 清除結果</button>
+            
+            <div id="status">準備就緒</div>
+            <div id="result">識別結果將顯示在這裡...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 調試日誌</h3>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let recognition = null;
+        let isListening = false;
+        let logCount = 0;
+        
+        // 日誌函數
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('log');
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${message}`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+            logCount++;
+            
+            if (logCount > 50) {
+                logElement.removeChild(logElement.firstChild);
+                logCount--;
+            }
+        }
+        
+        // 更新狀態
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = type;
+        }
+        
+        // 檢查瀏覽器支援
+        function checkBrowserSupport() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                updateStatus('✅ 瀏覽器支援語音識別', 'success');
+                log('✅ 瀏覽器支援語音識別');
+                return true;
+            } else {
+                updateStatus('❌ 瀏覽器不支援語音識別', 'error');
+                log('❌ 瀏覽器不支援語音識別');
+                return false;
+            }
+        }
+        
+        // 檢查麥克風權限
+        async function checkMicrophonePermission() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+                updateStatus('✅ 麥克風權限已允許', 'success');
+                log('✅ 麥克風權限已允許');
+                return true;
+            } catch (error) {
+                updateStatus('❌ 麥克風權限被拒絕', 'error');
+                log('❌ 麥克風權限被拒絕: ' + error.message);
+                
+                if (error.name === 'NotAllowedError') {
+                    log('🚫 用戶拒絕了麥克風權限');
+                    updateStatus('❌ 麥克風權限被拒絕，請允許麥克風存取', 'error');
+                } else if (error.name === 'NotFoundError') {
+                    log('🔍 找不到麥克風設備');
+                    updateStatus('❌ 找不到麥克風設備，請檢查麥克風連接', 'error');
+                } else if (error.name === 'NotReadableError') {
+                    log('🔒 麥克風被其他應用程式佔用');
+                    updateStatus('❌ 麥克風被其他應用程式佔用，請關閉其他使用麥克風的程式', 'error');
+                }
+                
+                return false;
+            }
+        }
+        
+        // 檢查麥克風權限按鈕
+        document.getElementById('checkMicBtn').onclick = async function() {
+            log('🎤 檢查麥克風權限...');
+            updateStatus('🔍 檢查麥克風權限中...', 'info');
+            
+            const hasPermission = await checkMicrophonePermission();
+            
+            if (hasPermission) {
+                log('✅ 麥克風權限檢查通過');
+                updateStatus('✅ 麥克風權限正常，可以開始語音識別', 'success');
+            } else {
+                log('❌ 麥克風權限檢查失敗');
+                updateStatus('❌ 麥克風權限檢查失敗，請允許麥克風存取', 'error');
+            }
+        };
+        
+        // 開始語音識別
+        document.getElementById('startBtn').onclick = async function() {
+            log('🚀 開始語音識別測試');
+            
+            // 檢查瀏覽器支援
+            if (!checkBrowserSupport()) {
+                return;
+            }
+            
+            // 檢查麥克風權限
+            const hasPermission = await checkMicrophonePermission();
+            if (!hasPermission) {
+                return;
+            }
+            
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                updateStatus('❌ 瀏覽器不支援語音識別', 'error');
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            // 配置語音識別
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'zh-TW';
+            recognition.maxAlternatives = 5;
+            
+            // 嘗試不同的語言設置
+            const languages = ['zh-TW', 'zh-CN', 'en-US', 'cmn-Hans-CN', 'cmn-Hant-TW'];
+            recognition.lang = languages[0];
+            
+            log('🔧 語音識別配置: ' + JSON.stringify({
+                continuous: recognition.continuous,
+                interimResults: recognition.interimResults,
+                lang: recognition.lang,
+                maxAlternatives: recognition.maxAlternatives
+            }));
+            
+            let finalTranscript = '';
+            let interimTranscript = '';
+            
+            recognition.onstart = function() {
+                isListening = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                updateStatus('🎤 正在聆聽...', 'info');
+                log('🎤 語音識別已開始');
+            };
+            
+            recognition.onresult = function(event) {
+                log('🔍 收到語音識別結果: ' + event.results.length + ' 個結果');
+                
+                interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    const transcript = result[0].transcript;
+                    const confidence = result[0].confidence;
+                    
+                    log('📝 識別結果: "' + transcript + '" (信心度: ' + Math.round(confidence * 100) + '%, 最終: ' + result.isFinal + ')');
+                    
+                    if (result.isFinal) {
+                        finalTranscript += transcript;
+                        log('✅ 最終識別結果: "' + finalTranscript + '"');
+                        
+                        // 立即顯示識別結果
+                        if (finalTranscript.trim()) {
+                            document.getElementById('result').innerHTML = 
+                                '<strong>最終結果:</strong> ' + finalTranscript + '<br>' +
+                                '<em>信心度:</em> ' + Math.round(confidence * 100) + '%';
+                            updateStatus('✅ 語音識別成功！', 'success');
+                        }
+                    } else {
+                        interimTranscript += transcript;
+                        log('🔄 臨時識別結果: "' + interimTranscript + '"');
+                        
+                        document.getElementById('result').innerHTML = 
+                            '<strong>最終結果:</strong> ' + finalTranscript + '<br>' +
+                            '<em>臨時結果:</em> ' + interimTranscript;
+                    }
+                }
+            };
+            
+            recognition.onerror = function(event) {
+                log('❌ 語音識別錯誤: ' + event.error);
+                updateStatus('❌ 語音識別錯誤: ' + event.error, 'error');
+                
+                if (event.error === 'not-allowed') {
+                    log('🚫 麥克風權限被拒絕');
+                } else if (event.error === 'no-speech') {
+                    log('🔇 未檢測到語音');
+                } else if (event.error === 'audio-capture') {
+                    log('🎤 音頻捕獲失敗');
+                } else if (event.error === 'network') {
+                    log('🌐 網路錯誤');
+                }
+            };
+            
+            recognition.onend = function() {
+                isListening = false;
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                log('🏁 語音識別結束');
+                
+                if (finalTranscript.trim()) {
+                    updateStatus('✅ 語音識別完成', 'success');
+                } else {
+                    updateStatus('⚠️ 未識別到語音內容', 'warning');
+                }
+            };
+            
+            try {
+                recognition.start();
+                log('🚀 語音識別已啟動');
+            } catch (error) {
+                log('❌ 啟動語音識別失敗: ' + error.message);
+                updateStatus('❌ 啟動失敗: ' + error.message, 'error');
+            }
+        };
+        
+        // 停止語音識別
+        document.getElementById('stopBtn').onclick = function() {
+            if (recognition && isListening) {
+                recognition.stop();
+                log('⏹️ 停止語音識別');
+            }
+        };
+        
+        // 簡單語音識別
+        document.getElementById('simpleBtn').onclick = function() {
+            log('🔧 開始簡單語音識別測試');
+            
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                updateStatus('❌ 瀏覽器不支援語音識別', 'error');
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const simpleRecognition = new SpeechRecognition();
+            
+            // 最簡單的配置
+            simpleRecognition.continuous = false;
+            simpleRecognition.interimResults = false;
+            simpleRecognition.lang = 'zh-TW';
+            simpleRecognition.maxAlternatives = 1;
+            
+            log('🔧 簡單語音識別配置: ' + JSON.stringify({
+                continuous: simpleRecognition.continuous,
+                interimResults: simpleRecognition.interimResults,
+                lang: simpleRecognition.lang,
+                maxAlternatives: simpleRecognition.maxAlternatives
+            }));
+            
+            simpleRecognition.onstart = function() {
+                updateStatus('🎤 簡單語音識別開始...', 'info');
+                log('🎤 簡單語音識別開始');
+            };
+            
+            simpleRecognition.onresult = function(event) {
+                log('🔍 簡單語音識別收到結果: ' + event.results.length + ' 個結果');
+                
+                for (let i = 0; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    const transcript = result[0].transcript;
+                    const confidence = result[0].confidence;
+                    
+                    log('📝 簡單識別結果: "' + transcript + '" (信心度: ' + Math.round(confidence * 100) + '%)');
+                    
+                    if (result.isFinal) {
+                        document.getElementById('result').innerHTML = 
+                            '<strong>簡單識別結果:</strong> ' + transcript + '<br>' +
+                            '<em>信心度:</em> ' + Math.round(confidence * 100) + '%';
+                        updateStatus('✅ 簡單語音識別成功！', 'success');
+                        log('✅ 簡單語音識別成功: "' + transcript + '"');
+                    }
+                }
+            };
+            
+            simpleRecognition.onerror = function(event) {
+                log('❌ 簡單語音識別錯誤: ' + event.error);
+                updateStatus('❌ 簡單語音識別錯誤: ' + event.error, 'error');
+            };
+            
+            simpleRecognition.onend = function() {
+                log('🏁 簡單語音識別結束');
+                updateStatus('🏁 簡單語音識別結束', 'info');
+            };
+            
+            try {
+                simpleRecognition.start();
+                log('🚀 簡單語音識別已啟動');
+            } catch (error) {
+                log('❌ 啟動簡單語音識別失敗: ' + error.message);
+                updateStatus('❌ 啟動失敗: ' + error.message, 'error');
+            }
+        };
+        
+        // 測試模擬結果
+        document.getElementById('testBtn').onclick = function() {
+            const mockResults = [
+                '你好，這是一個測試訊息',
+                '今天天氣很好',
+                '我正在測試語音功能',
+                '請確認收到此訊息',
+                '語音轉文字功能正常運作'
+            ];
+            
+            const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
+            document.getElementById('result').innerHTML = 
+                '<strong>模擬結果:</strong> ' + randomResult;
+            updateStatus('✅ 模擬結果已生成', 'success');
+            log('🧪 模擬結果: "' + randomResult + '"');
+        };
+        
+        // 清除結果
+        document.getElementById('clearBtn').onclick = function() {
+            document.getElementById('result').innerHTML = '識別結果將顯示在這裡...';
+            document.getElementById('log').innerHTML = '';
+            updateStatus('準備就緒', 'info');
+            logCount = 0;
+            log('🗑️ 清除所有結果');
+        };
+        
+        // 頁面載入時檢查
+        window.onload = function() {
+            log('📱 頁面載入完成');
+            checkBrowserSupport();
+        };
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 <?php
 /**
  * 學長姐留言權限控制系統
- * 只有 @stu.ukn.edu.tw 且年級小於110的學生可以留言
+ * 所有 @stu.ukn.edu.tw 的在校生（1-5年級）都可以留言
  */
 
 class SeniorMessageAuth {
@@ -47,21 +47,28 @@ class SeniorMessageAuth {
             ];
         }
         
-        // 檢查年級是否符合條件（小於110）
-        if ($grade_year >= 110) {
+        // 計算學生當前年級
+        $current_year = (int)date('Y');
+        $current_roc_year = $current_year - 1911; // 民國年
+        $current_grade = $current_roc_year - $grade_year + 1;
+        
+        // 檢查是否為在校生（1-5年級）
+        if ($current_grade >= 1 && $current_grade <= 5) {
+            return [
+                'has_permission' => true,
+                'grade_year' => $grade_year,
+                'current_grade' => $current_grade,
+                'message' => "您有留言權限（目前為{$current_grade}年級）"
+            ];
+        } else {
             return [
                 'has_permission' => false,
-                'error' => '只有110年級以下的學生可以留言（目前五年級是110）',
-                'error_code' => 'GRADE_TOO_HIGH',
-                'grade_year' => $grade_year
+                'error' => "只有在校生可以留言（您目前為{$current_grade}年級，需要1-5年級）",
+                'error_code' => 'NOT_CURRENT_STUDENT',
+                'grade_year' => $grade_year,
+                'current_grade' => $current_grade
             ];
         }
-        
-        return [
-            'has_permission' => true,
-            'grade_year' => $grade_year,
-            'message' => '您有留言權限'
-        ];
     }
     
     /**
@@ -70,21 +77,46 @@ class SeniorMessageAuth {
      * @return bool
      */
     private function isValidStudentEmail($email) {
-        return filter_var($email, FILTER_VALIDATE_EMAIL) && 
-               strpos($email, '@stu.ukn.edu.tw') !== false;
+        // 檢查是否為標準email格式
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) && 
+            strpos($email, '@stu.ukn.edu.tw') !== false) {
+            return true;
+        }
+        
+        // 檢查是否為純學號格式（如：110534225）
+        if (preg_match('/^\d{7,9}$/', $email)) {
+            return true;
+        }
+        
+        // 檢查是否為姓名+學號格式（如：尤世全110534225）
+        if (preg_match('/^[\x{4e00}-\x{9fff}]+\d{7,9}$/u', $email)) {
+            return true;
+        }
+        
+        return false;
     }
     
     /**
      * 從email中提取年級年份
-     * 假設email格式為：學號@stu.ukn.edu.tw，學號前3位為年級
+     * 支援格式：學號@stu.ukn.edu.tw、純學號、姓名+學號
      * @param string $email
      * @return int|null
      */
     private function extractGradeYear($email) {
-        // 提取@前的部分
-        $username = explode('@', $email)[0];
+        // 如果是標準email格式，提取@前的部分
+        if (strpos($email, '@') !== false) {
+            $username = explode('@', $email)[0];
+        } else {
+            // 如果是純學號格式，直接使用
+            $username = $email;
+        }
         
-        // 假設學號格式為：110xxxxx（前3位為年級）
+        // 如果是姓名+學號格式，提取學號部分
+        if (preg_match('/^[\x{4e00}-\x{9fff}]+(\d{7,9})$/u', $username, $matches)) {
+            $username = $matches[1]; // 提取學號部分
+        }
+        
+        // 提取學號前3位作為年級
         if (preg_match('/^(\d{3})/', $username, $matches)) {
             return (int)$matches[1];
         }

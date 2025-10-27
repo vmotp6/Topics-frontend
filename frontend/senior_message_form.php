@@ -85,44 +85,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     <title>發布學長姐留言</title>
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
+        :root {
+            --bg-color: #000;
+            --text-color: #fff;
+            --secondary-text: #71767b;
+            --border-color: #333;
+            --hover-bg: #16181c;
+            --accent-color: #1d9bf0;
+            --card-bg: transparent;
+        }
+        
+        [data-theme="light"] {
+            --bg-color: #fff;
+            --text-color: #000;
+            --secondary-text: #536471;
+            --border-color: #e1e8ed;
+            --hover-bg: #f7f9fa;
+            --accent-color: #1d9bf0;
+            --card-bg: transparent;
+        }
+        
         body { 
             padding-top: 100px; 
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: var(--bg-color);
             min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.4;
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         
         .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 20px 40px;
+            min-height: calc(100vh - 120px);
+            position: relative;
+            z-index: 1;
+            display: flex;
+            gap: 40px;
+            box-sizing: border-box;
+        }
+        
+        .left-panel {
+            flex: 0 0 400px;
+            background: var(--hover-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            height: fit-content;
+        }
+        
+        .right-panel {
+            flex: 1;
+            min-width: 0;
+            max-width: none;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            padding: 0;
         }
         
         .header h1 {
-            color: #2c3e50;
-            font-size: 2.5rem;
+            color: var(--text-color);
+            font-size: 2rem;
             margin-bottom: 10px;
             font-weight: 700;
         }
         
         .header p {
-            color: #7f8c8d;
-            font-size: 1.2rem;
+            color: var(--secondary-text);
+            font-size: 1.1rem;
+            font-weight: 400;
+            margin-bottom: 20px;
+        }
+        
+        .user-info {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+            margin-bottom: 0;
+            text-align: left;
+            position: relative;
+            z-index: 2;
+            clear: both;
+        }
+        
+        .user-info h3 {
+            color: var(--text-color);
+            font-size: 1.3rem;
+            margin: 0 0 20px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .user-detail {
+            text-align: left;
+            padding: 15px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+        }
+        
+        .user-detail .label {
+            color: var(--secondary-text);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .user-detail .value {
+            color: var(--text-color);
+            font-size: 1.1rem;
+            font-weight: 600;
         }
         
         .form-container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 35px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 1;
+            clear: both;
+        }
+        
+        .form-container:hover {
+            border-color: var(--accent-color);
         }
         
         .form-group {
@@ -131,9 +233,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         
         .form-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--text-color);
             font-size: 1.1rem;
         }
         
@@ -141,11 +243,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         .form-group select,
         .form-group textarea {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
+            padding: 15px 20px;
+            background: var(--hover-bg);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
+            font-size: 1.1rem;
+            color: var(--text-color);
+            transition: all 0.2s ease;
             box-sizing: border-box;
         }
         
@@ -153,13 +257,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.1);
         }
         
         .form-group textarea {
             min-height: 150px;
             resize: vertical;
+            font-family: inherit;
         }
         
         .required {
@@ -167,16 +272,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         }
         
         .submit-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent-color);
             color: white;
             border: none;
-            padding: 15px 40px;
-            border-radius: 25px;
-            font-size: 1.1rem;
+            padding: 18px 40px;
+            border-radius: 10px;
+            font-size: 1.2rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             width: 100%;
+            margin-top: 20px;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
+        }
+        
+        .back-btn {
+            display: inline-block;
+            background: transparent;
+            color: var(--secondary-text);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .back-btn:hover {
+            background: var(--hover-bg);
+            color: var(--text-color);
+            border-color: var(--accent-color);
+        }
+        
+        .theme-toggle {
+            position: fixed;
+            top: 110px;
+            right: 20px;
+            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.3rem;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .theme-toggle:hover {
+            transform: scale(1.1) rotate(15deg);
+            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
         }
         
         .submit-btn:hover {
@@ -271,13 +427,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             margin-bottom: 30px;
         }
         
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
             .container {
-                padding: 15px;
+                flex-direction: column;
+                padding: 20px;
+            }
+            
+            .left-panel {
+                flex: none;
+                margin-bottom: 30px;
+            }
+            
+            .right-panel {
+                flex: none;
             }
             
             .header h1 {
-                font-size: 2rem;
+                font-size: 1.8rem;
             }
             
             .form-container {
@@ -289,13 +455,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
 <body>
     <?php include("share/header.php"); ?>
     
+    <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
+        <span id="theme-icon">🌙</span>
+    </button>
+    
     <div class="container">
         <a href="senior_messages.php" class="back-btn">← 返回留言板</a>
         
-        <div class="header">
-            <h1>📝 發布學長姐留言</h1>
-            <p>分享您的經驗與建議，幫助學弟妹更好地適應大學生活</p>
+        <div class="left-panel">
+            <div class="user-info">
+                <h3>✅ 您有留言權限</h3>
+                <div class="user-details">
+                    <div class="user-detail">
+                        <div class="label">帳號</div>
+                        <div class="value"><?php echo htmlspecialchars($user_email); ?></div>
+                    </div>
+                    <div class="user-detail">
+                        <div class="label">年級</div>
+                        <div class="value"><?php echo $permission_result['current_grade'] ?? '未知'; ?>年級</div>
+                    </div>
+                    <div class="user-detail">
+                        <div class="label">入學年</div>
+                        <div class="value"><?php echo $permission_result['grade_year'] ?? '未知'; ?>年</div>
+                    </div>
+                </div>
+            </div>
         </div>
+        
+        <div class="right-panel">
+            <div class="header">
+                <h1>✍️ 發布留言</h1>
+                <p>分享您的經驗與建議，幫助學弟妹更好地適應大學生活</p>
+            </div>
         
         <?php if ($error_message): ?>
             <div class="no-permission">
@@ -310,12 +501,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 <a href="senior_messages.php" class="back-btn">返回留言板</a>
             </div>
         <?php else: ?>
-            <div class="permission-info">
-                <h3>✅ 您有留言權限</h3>
-                <p><strong>您的帳號：</strong><?php echo htmlspecialchars($user_email); ?></p>
-                <p><strong>您的年級：</strong><?php echo $auth->getGradeDisplay($grade_year); ?></p>
-                <p><strong>入學年份：</strong><?php echo $grade_year; ?>年</p>
-            </div>
             
             <?php if ($success_message): ?>
                 <div class="alert alert-success">
@@ -371,9 +556,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 </form>
             </div>
         <?php endif; ?>
+        </div>
     </div>
     
     <script>
+        // 主題切換功能
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (body.getAttribute('data-theme') === 'light') {
+                body.setAttribute('data-theme', 'dark');
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        // 載入保存的主題
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            
+            body.setAttribute('data-theme', savedTheme);
+            themeIcon.textContent = savedTheme === 'light' ? '☀️' : '🌙';
+        }
+        
+        // 頁面載入時應用主題
+        document.addEventListener('DOMContentLoaded', loadTheme);
+        
         // 表單驗證
         document.querySelector('form').addEventListener('submit', function(e) {
             const title = document.getElementById('title').value.trim();
