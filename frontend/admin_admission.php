@@ -43,12 +43,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '管理員') {
 
 require_once 'config.php';
 
-// 檢查管理員權限
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '管理員') {
-    header('Location: index.php');
-    exit();
-}
-
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
