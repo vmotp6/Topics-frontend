@@ -1,7 +1,7 @@
 <?php
 /**
  * 改進的時穎白語音模型 API
- * 減少電子音，增加人聲自然度
+ * 減少電子音，增加人聲自然度，支援喜怒哀樂情感表達
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -221,24 +221,16 @@ function generateHumanLikeTTSAudio($text, $voice_params) {
         // 使用更自然的日語語音
         $voice = 'ja-JP-NanamiNeural'; // 更自然的日語語音
         
-        // 根據人聲參數調整語音
-        $rate = round(($voice_params['speed'] - 0.5) * 50); // 減少速度變化範圍
-        $pitch = round(($voice_params['pitch'] - 0.5) * 100); // 減少音調變化範圍
-        $volume = round(($voice_params['volume'] - 0.5) * 50); // 減少音量變化範圍
-        
         // 創建臨時文字檔案
         $temp_file = tempnam(sys_get_temp_dir(), 'shiyinbai_human_');
         file_put_contents($temp_file, $text, LOCK_EX);
         
-        // Edge-TTS 命令 - 使用更自然的參數
+        // Edge-TTS 命令 - 不使用參數，避免格式錯誤
         $cmd = sprintf(
-            'python -m edge_tts --voice "%s" --file "%s" --write-media "%s" --rate %+d%% --pitch %+dHz --volume %+d%% 2>&1',
+            'python -m edge_tts --voice "%s" --file "%s" --write-media "%s" 2>&1',
             $voice,
             $temp_file,
-            $output_path,
-            $rate,
-            $pitch,
-            $volume
+            $output_path
         );
         
         // 執行命令
@@ -278,18 +270,60 @@ function generateHumanLikeTTSAudio($text, $voice_params) {
 
 function applyHumanVoiceProcessing($input_path, $voice_params) {
     /**
-     * 應用人聲後處理，減少電子音
+     * 應用人聲後處理，減少電子音，模擬訓練資料聲音
      */
     
     try {
         $output_path = str_replace('.wav', '_human.wav', $input_path);
         
+        $style = $voice_params['style'] ?? 'happy';
+        $pitch = $voice_params['pitch'] ?? 0.6;
+        $speed = $voice_params['speed'] ?? 0.8;
+        $volume = $voice_params['volume'] ?? 0.7;
+        $breathiness = $voice_params['breathiness'] ?? 0.1;
+        $warmth = $voice_params['warmth'] ?? 0.6;
+        $clarity = $voice_params['clarity'] ?? 0.7;
+        
+        // 根據情感調整參數
+        $style_adjustments = [
+            'happy' => ['tempo' => 1.05, 'rate' => 1.02, 'echo' => 0.2],
+            'angry' => ['tempo' => 1.1, 'rate' => 0.98, 'echo' => 0.3],
+            'sad' => ['tempo' => 0.95, 'rate' => 0.95, 'echo' => 0.3],
+            'joyful' => ['tempo' => 1.08, 'rate' => 1.05, 'echo' => 0.15],
+            'calm' => ['tempo' => 0.98, 'rate' => 1.0, 'echo' => 0.1],
+            'mysterious' => ['tempo' => 0.95, 'rate' => 1.02, 'echo' => 0.25]
+        ];
+        
+        $adjustment = $style_adjustments[$style] ?? $style_adjustments['calm'];
+        
+        // 計算最終參數
+        $final_tempo = $adjustment['tempo'] * (0.9 + ($speed - 0.5) * 0.2);
+        $final_rate = $adjustment['rate'] * (0.95 + ($pitch - 0.5) * 0.1);
+        $final_volume = 0.9 + ($volume - 0.5) * 0.2;
+        $final_echo = $adjustment['echo'] + ($warmth - 0.5) * 0.1;
+        
+        // 呼吸感效果
+        $breath_filter = $breathiness > 0.3 ? ',highpass=f=100,lowpass=f=7000' : '';
+        
+        // 清晰度效果
+        $clarity_filter = $clarity > 0.8 ? ',highpass=f=120,lowpass=f=7500' : '';
+        
+        // 組合濾波器
+        $filter = sprintf(
+            'highpass=f=80,lowpass=f=8000,volume=%.2f,atempo=%.2f,asetrate=44100*%.2f,aresample=44100,aecho=0.8:0.88:60:%.2f,afftdn=nf=-20%s%s',
+            $final_volume,
+            $final_tempo,
+            $final_rate,
+            $final_echo,
+            $breath_filter,
+            $clarity_filter
+        );
+        
         // 使用 FFmpeg 進行人聲處理
         $ffmpeg_cmd = sprintf(
-            'ffmpeg -i "%s" -af "highpass=f=80,lowpass=f=8000,volume=%.2f,atempo=%.2f,aecho=0.8:0.88:60:0.3,afftdn=nf=-20" "%s" -y 2>&1',
+            'ffmpeg -i "%s" -af "%s" "%s" -y 2>&1',
             $input_path,
-            $voice_params['volume'],
-            $voice_params['speed'],
+            $filter,
             $output_path
         );
         
