@@ -142,7 +142,7 @@ try {
     $pdo->beginTransaction();
     
     // 清空現有資料
-    $pdo->exec("DELETE FROM school_data WHERE type = "國民中學"");
+    $pdo->exec("DELETE FROM school_data WHERE type = '國民中學'");
     
     // 準備插入語句
     $stmt = $pdo->prepare("

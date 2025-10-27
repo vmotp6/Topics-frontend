@@ -5,32 +5,46 @@
 
 // Ollama 專用資料庫配置
 function getOllamaDatabaseConnection() {
-    $host = 'localhost';
-    $dbname = 'ollama';  // 使用新的 ollama 資料庫
-    $username = 'root';
-    $password = '';
+    // 使用與Topics系統相同的遠程MySQL服務器配置
+    $host = '100.79.58.120';  // 遠程MySQL服務器IP
+    $dbname = 'ollama';        // ollama資料庫
+    $username = 'root';        // MySQL用戶名
+    $password = '';             // MySQL密碼
+    $port = 3306;              // MySQL端口
     
-    try {
-        $conn = new mysqli($host, $username, $password, $dbname);
-        
-        // 檢查連接
-        if ($conn->connect_error) {
-            throw new Exception("連接失敗: " . $conn->connect_error);
+    // 增加連接重試機制
+    $max_retries = 3;
+    $retry_delay = 1; // 秒
+    
+    for ($i = 0; $i < $max_retries; $i++) {
+        try {
+            $conn = new mysqli($host, $username, $password, $dbname, $port);
+            
+            // 檢查連接
+            if ($conn->connect_error) {
+                throw new Exception("連接失敗: " . $conn->connect_error);
+            }
+            
+            // 設置字符集
+            $conn->set_charset("utf8mb4");
+            
+            return $conn;
+        } catch (Exception $e) {
+            error_log("Ollama 資料庫連接錯誤 (嘗試 " . ($i + 1) . "/$max_retries): " . $e->getMessage());
+            
+            if ($i < $max_retries - 1) {
+                sleep($retry_delay);
+                $retry_delay *= 2; // 指數退避
+            } else {
+                throw $e;
+            }
         }
-        
-        // 設置字符集
-        $conn->set_charset("utf8mb4");
-        
-        return $conn;
-    } catch (Exception $e) {
-        error_log("Ollama 資料庫連接錯誤: " . $e->getMessage());
-        throw $e;
     }
 }
 
 // 檢查 Ollama 資料庫是否存在，如果不存在則創建
 function ensureOllamaDatabase() {
-    $host = 'localhost';
+    $host = '100.79.58.120';  // 使用遠程服務器
     $username = 'root';
     $password = '';
     
@@ -60,7 +74,7 @@ function ensureOllamaDatabase() {
 
 // 獲取 FAQ 資料（從 topics_good 資料庫）
 function getFAQFromTopicsGood() {
-    $host = 'localhost';
+    $host = '100.79.58.120';  // 使用遠程服務器
     $dbname = 'topics_good';
     $username = 'root';
     $password = '';

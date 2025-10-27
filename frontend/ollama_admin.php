@@ -2,12 +2,59 @@
 // 載入 session 配置
 require_once 'session_config.php';
 
-// 檢查管理員權限
-$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
-              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
-              isset($_SESSION['role']) && !empty($_SESSION['role']);
+// 檢查管理員權限 - 連接到 topics_good 資料庫檢查用戶角色
+function checkAdminPermission() {
+    // 檢查基本登入狀態
+    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || 
+        !isset($_SESSION['username']) || empty($_SESSION['username'])) {
+        return false;
+    }
+    
+    // 連接到 topics_good 資料庫檢查用戶角色
+    $host = '100.79.58.120';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    try {
+        $conn = new mysqli($host, $username, $password, $dbname);
+        
+        if ($conn->connect_error) {
+            error_log("資料庫連接失敗: " . $conn->connect_error);
+            return false;
+        }
+        
+        $conn->set_charset("utf8mb4");
+        
+        // 查詢用戶角色
+        $sql = "SELECT role FROM user WHERE username = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("s", $_SESSION['username']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $role = $row['role'];
+            $stmt->close();
+            $conn->close();
+            
+            // 檢查是否為管理員
+            return $role === 'admin';
+        }
+        
+        $stmt->close();
+        $conn->close();
+        return false;
+        
+    } catch (Exception $e) {
+        error_log("權限檢查錯誤: " . $e->getMessage());
+        return false;
+    }
+}
 
-if (!$isLoggedIn || $_SESSION['role'] !== 'admin') {
+// 檢查管理員權限
+if (!checkAdminPermission()) {
     header('Location: login.php');
     exit;
 }

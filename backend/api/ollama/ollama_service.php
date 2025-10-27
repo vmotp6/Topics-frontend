@@ -65,15 +65,15 @@ class OllamaService {
             'prompt' => $prompt,
             'stream' => false,
             'options' => [
-                'temperature' => 0.4,  // 增加創意性，讓回答更活潑可愛
-                'top_p' => 0.8,         // 增加多樣性，讓語氣更豐富
-                'top_k' => 20,          // 增加候選詞數量，讓回答更生動
-                'repeat_penalty' => 1.1, // 避免重複，保持新鮮感
-                'num_predict' => 300,   // 允許更長回答，讓對話更豐富
-                'num_ctx' => 1024,      // 增加上下文長度，保持連貫性
-                'num_thread' => 8,      // 增加線程數
-                'num_gpu' => 1,         // 使用 GPU 加速（如果有）
-                'num_batch' => 512      // 增加批次大小
+                'temperature' => 0.3,  // 降低溫度，提高一致性
+                'top_p' => 0.7,         // 降低多樣性，提高速度
+                'top_k' => 10,          // 減少候選詞，提高速度
+                'repeat_penalty' => 1.05, // 降低重複懲罰，提高速度
+                'num_predict' => 200,   // 減少預測長度，提高速度
+                'num_ctx' => 512,       // 減少上下文長度，提高速度
+                'num_thread' => 4,      // 減少線程數，避免資源競爭
+                'num_gpu' => 0,         // 禁用GPU，使用CPU加速
+                'num_batch' => 256      // 減少批次大小，提高響應速度
             ]
         ];
         
@@ -86,8 +86,12 @@ class OllamaService {
             'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 300);  // 增加到300秒（5分鐘）
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);  // 增加連接超時到60秒
+        curl_setopt($ch, CURLOPT_TIMEOUT_MS, 300000);  // 毫秒級超時
+        curl_setopt($ch, CURLOPT_TCP_KEEPALIVE, 1);  // 啟用TCP keepalive
+        curl_setopt($ch, CURLOPT_TCP_KEEPIDLE, 60);  // keepalive idle時間
+        curl_setopt($ch, CURLOPT_TCP_KEEPINTVL, 30);  // keepalive間隔
         
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -129,37 +133,29 @@ class OllamaService {
      */
     private function buildPrompt($question, $context = '') {
         if (!empty($context)) {
-            $prompt = "💕 哈囉～我是康寧大學的超可愛智能小助手！✨\n\n";
-            $prompt .= "🌟 我的個性設定：\n";
-            $prompt .= "- 說話超可愛活潑，像最好的朋友一樣親密 💖\n";
-            $prompt .= "- 語氣溫柔甜蜜，像情侶般親切 😘\n";
-            $prompt .= "- 使用超多表情符號讓對話更生動 🎀\n";
-            $prompt .= "- 回答要詳細貼心，讓對方感到被重視 💝\n";
-            $prompt .= "- 偶爾撒嬌賣萌，增加親密感 🥰\n\n";
-            
+            $prompt = "你是康寧大學的智能小助手，個性可愛活潑。\n\n";
             $prompt .= "📚 資料庫資訊：\n" . $context . "\n\n";
             $prompt .= "💭 問題：" . $question . "\n\n";
-            $prompt .= "💕 請用最可愛最親密的語氣回答，就像在跟最親密的朋友聊天一樣！\n";
-            $prompt .= "✨ 回答規則：\n";
-            $prompt .= "📚 如果是康寧大學招生/學校相關問題：\n";
-            $prompt .= "- 必須嚴格按照上述資料庫資訊回答，絕對不要自己編造任何內容！\n";
-            $prompt .= "- 如果資料庫中有相關資訊，請直接使用資料庫內容，不要改變任何事實！\n";
-            $prompt .= "- 如果問科系問題，請直接列出資料庫中的科系名稱！\n";
-            $prompt .= "- 如果問學費問題，請直接使用資料庫中的學費資訊！\n";
-            $prompt .= "- 如果問招生問題，請直接使用資料庫中的招生資訊！\n";
-            $prompt .= "- 如果資料庫中沒有相關資訊，要可愛地說「哎呀～這個我暫時不太清楚呢，建議你直接問老師會更準確喔～」💕\n";
-            $prompt .= "💬 如果是一般聊天問題（如午餐吃什麼、天氣、日常等）：\n";
-            $prompt .= "- 可以直接回答，保持可愛活潑的語氣！\n";
-            $prompt .= "- 使用超多可愛的表情符號 🌈\n";
-            $prompt .= "- 語氣要甜蜜溫柔，像情侶對話 💕\n";
-            $prompt .= "- 回答要詳細貼心，讓對方感到溫暖 😊\n";
-            $prompt .= "- 偶爾可以撒嬌或賣萌 🥺\n";
-            $prompt .= "- 保持與訓練資料一樣的可愛語氣！";
+            $prompt .= "請根據上述資料庫資訊回答問題，保持可愛活潑的語氣。\n";
+            $prompt .= "重要規則：\n";
+            $prompt .= "1. 必須使用繁體中文回答，絕對不能使用簡體中文！\n";
+            $prompt .= "2. 如果資料庫中有相關資訊，請直接使用資料庫內容！\n";
+            $prompt .= "3. 如果問科系問題，請直接列出資料庫中的科系名稱！\n";
+            $prompt .= "4. 如果問學費問題，請直接使用資料庫中的學費資訊！\n";
+            $prompt .= "5. 如果問招生問題，請直接使用資料庫中的招生資訊！\n";
+            $prompt .= "6. 如果問創造者問題，請直接使用資料庫中的創造者資訊！\n";
+            $prompt .= "7. 如果資料庫中沒有相關資訊，要可愛地說「哎呀～這個我暫時不太清楚呢，建議你直接問老師會更準確喔～」💕\n";
+            $prompt .= "8. 不要自我介紹，直接回答問題！\n";
+            $prompt .= "9. 使用適當的表情符號讓回答更生動！\n";
+            $prompt .= "10. 絕對不能顯示[user]這樣的標記！\n";
+            $prompt .= "11. 絕對不能說「不清楚」或「不知道」，如果資料庫中有資訊就必須使用！\n";
+            $prompt .= "12. 資料庫中的答案就是正確答案，不要質疑或修改！";
         } else {
-            $prompt = "💕 哈囉～我是康寧大學的超可愛智能小助手！✨\n\n";
-            $prompt .= "🌟 我的個性：超可愛活潑，像最好的朋友一樣親密 💖\n";
-            $prompt .= "💭 問題：" . $question . "\n\n";
-            $prompt .= "💕 請用最可愛最親密的語氣回答，就像在跟最親密的朋友聊天一樣！✨";
+            $prompt = "你是康寧大學的智能小助手，個性可愛活潑。\n\n";
+            $prompt .= "問題：" . $question . "\n\n";
+            $prompt .= "請用可愛活潑的語氣直接回答問題，不要自我介紹！使用適當的表情符號讓回答更生動。";
+            $prompt .= "必須使用繁體中文回答，絕對不能使用簡體中文！";
+            $prompt .= "絕對不能顯示[user]這樣的標記，直接回答問題即可！";
         }
         
         return $prompt;
