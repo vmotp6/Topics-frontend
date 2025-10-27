@@ -246,3 +246,4 @@ $speech_config['model'] = 'latest_short';
 如有問題或建議，請聯繫系統管理員或提交 Issue。
 
 
+
