@@ -91,6 +91,9 @@ function getFAQFromDatabase() {
                             <label class="form-check-label" for="use-ai">
                                 🤖 使用AI回答
                             </label>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="testAIConnection()">
+                                🔧 測試AI連接
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -201,16 +204,27 @@ $(document).ready(function() {
     
     // 檢查Ollama健康狀態
     function checkOllamaHealth() {
+        console.log('🔍 開始檢查Ollama健康狀態...');
         $.get('../backend/api/ollama/ollama_api.php?action=check_health')
             .done(function(response) {
+                console.log('✅ Ollama健康檢查響應:', response);
                 if (response.success) {
-                    $('#ai-status').removeClass('bg-warning').addClass('bg-success').text('AI驅動');
+                    $('#ai-status').removeClass('bg-warning').addClass('bg-success').text('🤖 AI驅動');
+                    console.log('🎉 Ollama服務正常，AI可用');
                 } else {
-                    $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('AI離線');
+                    $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI離線');
+                    console.warn('⚠️ Ollama服務異常:', response.message);
                 }
             })
-            .fail(function() {
-                $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('AI離線');
+            .fail(function(xhr, status, error) {
+                console.error('❌ Ollama健康檢查失敗:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    responseText: xhr.responseText,
+                    error: error
+                });
+                $('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+                console.error('❌ 無法連接到Ollama API，請檢查服務器是否運行');
             });
     }
 
@@ -218,20 +232,21 @@ $(document).ready(function() {
     function findAnswer(question) {
         return new Promise((resolve, reject) => {
             const useAI = $('#use-ai').is(':checked');
+            console.log('🔍 開始尋找答案，使用AI:', useAI);
             
             if (useAI) {
+                console.log('🤖 嘗試使用Ollama AI回答...');
                 // 使用Ollama AI回答
                 $.ajax({
                     url: '../backend/api/ollama/ollama_api.php',
                     type: 'POST',
-                    data: {
-                        action: 'ask_question',
-                        question: question,
-                        use_context: true
-                    },
+                    data: 'action=ask_question&question=' + encodeURIComponent(question) + '&use_context=true',
                     dataType: 'json',
+                    timeout: 120000, // 120秒超時
                     success: function(response) {
+                        console.log('✅ AI回答響應:', response);
                         if (response.success) {
+                            console.log('🎉 AI回答成功，使用AI回答');
                             resolve({
                                 answer: response.answer,
                                 source_type: 'ollama_ai',
@@ -240,6 +255,7 @@ $(document).ready(function() {
                                 model: response.model
                             });
                         } else {
+                            console.warn('⚠️ AI回答失敗，使用回退機制:', response.error);
                             // AI失敗時回退到關鍵詞匹配
                             const fallbackAnswer = findFallbackAnswer(question);
                             resolve({
@@ -250,7 +266,13 @@ $(document).ready(function() {
                             });
                         }
                     },
-                    error: function() {
+                    error: function(xhr, status, error) {
+                        console.error('❌ AI請求失敗:', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            responseText: xhr.responseText,
+                            error: error
+                        });
                         // 網路錯誤時回退到關鍵詞匹配
                         const fallbackAnswer = findFallbackAnswer(question);
                         resolve({
@@ -262,6 +284,7 @@ $(document).ready(function() {
                     }
                 });
             } else {
+                console.log('📝 使用關鍵詞匹配回答');
                 // 直接使用關鍵詞匹配
                 const answer = findFallbackAnswer(question);
                 resolve({
@@ -391,6 +414,7 @@ $(document).ready(function() {
         }
     });
 
+
     // 初始化時間戳
     setTimeout(function() {
         const time = new Date().toLocaleTimeString('zh-TW', { 
@@ -400,6 +424,61 @@ $(document).ready(function() {
         $('.chat-message:first .message-time').text(time);
     }, 100);
 });
+	</script>
+
+	<!-- 全局函數 -->
+	<script>
+	// 測試AI連接函數（全局作用域）
+	function testAIConnection() {
+		console.log('🔧 開始測試AI連接...');
+		const testButton = event.target;
+		const originalText = testButton.textContent;
+		testButton.textContent = '🔄 測試中...';
+		testButton.disabled = true;
+		
+		// 測試健康檢查
+		$.get('../backend/api/ollama/ollama_api.php?action=check_health')
+			.done(function(response) {
+				console.log('✅ 健康檢查響應:', response);
+				if (response.success) {
+					// 測試實際AI回答
+					$.ajax({
+						url: '../backend/api/ollama/ollama_api.php',
+						type: 'POST',
+						data: 'action=ask_question&question=你好&use_context=false',
+						dataType: 'json',
+						timeout: 15000,
+						success: function(aiResponse) {
+							console.log('✅ AI回答測試響應:', aiResponse);
+							if (aiResponse.success) {
+								alert('🎉 AI連接測試成功！\n\n問題：你好\n回答：' + aiResponse.answer.substring(0, 100) + '...\n響應時間：' + aiResponse.response_time_ms + 'ms');
+								$('#ai-status').removeClass('bg-warning').addClass('bg-success').text('🤖 AI驅動');
+							} else {
+								alert('⚠️ AI回答失敗：' + aiResponse.error);
+								$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI異常');
+							}
+						},
+						error: function(xhr, status, error) {
+							console.error('❌ AI回答測試失敗:', xhr, status, error);
+							alert('❌ AI回答測試失敗：\n狀態：' + xhr.status + '\n錯誤：' + error + '\n\n請檢查：\n1. PHP服務器是否運行\n2. Ollama服務是否運行\n3. API路徑是否正確');
+							$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+						}
+					});
+				} else {
+					alert('⚠️ Ollama健康檢查失敗：' + response.message);
+					$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI離線');
+				}
+			})
+			.fail(function(xhr, status, error) {
+				console.error('❌ 健康檢查失敗:', xhr, status, error);
+				alert('❌ 無法連接到Ollama API：\n狀態：' + xhr.status + '\n錯誤：' + error + '\n\n請檢查：\n1. PHP服務器是否運行在localhost:8000\n2. API文件是否存在\n3. 路徑是否正確');
+				$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+			})
+			.always(function() {
+				testButton.textContent = originalText;
+				testButton.disabled = false;
+			});
+	}
 	</script>
 
 	<?php include("share/footer.php"); ?>

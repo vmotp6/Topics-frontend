@@ -272,7 +272,7 @@ class EmailNotificationService {
             substr($message_content, 0, 200) . '...' : $message_content;
         
         return "
-親愛的 $to_name，
+親愛的 $to_name,
 
 您收到了一條新的私訊：
 
