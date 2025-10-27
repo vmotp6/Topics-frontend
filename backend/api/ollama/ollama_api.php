@@ -564,8 +564,19 @@ function getRelevantTrainingData($question) {
             $stmt->bind_param($param_types, ...$params);
         }
         
+        // 執行查詢
         $stmt->execute();
         $result = $stmt->get_result();
+        
+        // 如果沒有找到相關資料，至少返回一些通用資料讓AI能夠回答
+        if ($result->num_rows === 0) {
+            // 沒有找到相關資料，返回一些通用資料
+            $stmt->close();
+            $sql = "SELECT content_data FROM ollama_training_data ORDER BY created_at DESC LIMIT 3";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute();
+            $result = $stmt->get_result();
+        }
         
         $training_data = [];
         while ($row = $result->fetch_assoc()) {
