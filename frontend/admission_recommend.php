@@ -284,7 +284,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
       <h3><i class="fas fa-search"></i> 查詢推薦記錄</h3>
       <form method="POST" action="" class="search-form">
         <div class="search-row">
-          <input type="text" name="search_student_id" placeholder="請輸入推薦人學號" 
+          <input type="text" name="search_student_id" placeholder="請輸入推薦人學號或教師編號" 
                  value="<?php echo htmlspecialchars($search_student_id); ?>" required>
           <button type="submit" name="search_action" value="search" class="search-btn">
             <i class="fas fa-search"></i> 查詢
@@ -297,8 +297,31 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
     <?php if (!empty($search_results)): ?>
     <div class="search-results">
       <h4>查詢結果</h4>
+      
+      <!-- 結果篩選功能 -->
+      <div class="result-filter">
+        <div class="filter-header">
+          <h5><i class="fas fa-filter"></i> 進一步篩選結果</h5>
+          <span class="result-count">共 <?php echo count($search_results); ?> 筆記錄</span>
+        </div>
+        <div class="filter-inputs">
+          <div class="filter-group">
+            <label for="filter_student_name">被推薦學生姓名</label>
+            <input type="text" id="filter_student_name" placeholder="輸入學生姓名進行篩選">
+          </div>
+          <div class="filter-group">
+            <label for="filter_school">國中學校</label>
+            <input type="text" id="filter_school" placeholder="輸入學校名稱進行篩選">
+          </div>
+          
+        </div>
+        <div class="filter-note">
+          <i class="fas fa-info-circle"></i> 輸入姓名或學校名稱可即時篩選結果
+        </div>
+      </div>
+      
       <div class="results-table">
-        <table>
+        <table id="resultsTable">
           <thead>
             <tr>
               <th>ID</th>
@@ -313,7 +336,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </thead>
           <tbody>
             <?php foreach ($search_results as $result): ?>
-            <tr>
+            <tr class="result-row" 
+                data-student-name="<?php echo htmlspecialchars($result['student_name']); ?>"
+                data-school="<?php echo htmlspecialchars($result['student_school']); ?>">
               <td><?php echo $result['id']; ?></td>
               <td>
                 <?php echo htmlspecialchars($result['recommender_name']); ?><br>
@@ -543,6 +568,144 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+/* 結果篩選樣式 */
+.result-filter {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.filter-header h5 {
+  margin: 0;
+  color: #495057;
+  font-size: 16px;
+}
+
+.result-count {
+  background: #007bff;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filter-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 15px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #333;
+  font-size: 14px;
+}
+
+.filter-group input {
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.filter-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-btn, .clear-filter-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.filter-btn {
+  background: #28a745;
+  color: white;
+}
+
+.filter-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.clear-filter-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.clear-filter-btn:hover {
+  background: #545b62;
+  transform: translateY(-1px);
+}
+
+.filter-note {
+  background: #e7f3ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #0066cc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-note i {
+  color: #007bff;
+}
+
+/* 隱藏的行 */
+.result-row.hidden {
+  display: none;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .filter-inputs {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .filter-group:last-child {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+  }
+  
+  .filter-btn, .clear-filter-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
 
 .notification-toast {
   position: fixed;
@@ -591,6 +754,80 @@ function showNotification(message, type = 'success') {
   }, 3000);
 }
 
+// 篩選結果功能
+function applyFilter() {
+  const studentNameFilter = document.getElementById('filter_student_name').value.toLowerCase().trim();
+  const schoolFilter = document.getElementById('filter_school').value.toLowerCase().trim();
+  const rows = document.querySelectorAll('.result-row');
+  let visibleCount = 0;
+  
+  rows.forEach(row => {
+    const studentName = row.getAttribute('data-student-name').toLowerCase();
+    const school = row.getAttribute('data-school').toLowerCase();
+    
+    let showRow = true;
+    
+    // 檢查學生姓名篩選
+    if (studentNameFilter && !studentName.includes(studentNameFilter)) {
+      showRow = false;
+    }
+    
+    // 檢查學校篩選
+    if (schoolFilter && !school.includes(schoolFilter)) {
+      showRow = false;
+    }
+    
+    if (showRow) {
+      row.classList.remove('hidden');
+      visibleCount++;
+    } else {
+      row.classList.add('hidden');
+    }
+  });
+  
+  // 更新結果計數
+  updateResultCount(visibleCount);
+  
+
+}
+
+// 清除篩選
+function clearFilter() {
+  document.getElementById('filter_student_name').value = '';
+  document.getElementById('filter_school').value = '';
+  
+  const rows = document.querySelectorAll('.result-row');
+  rows.forEach(row => {
+    row.classList.remove('hidden');
+  });
+  
+  // 恢復原始計數
+  updateResultCount(rows.length);
+  showNotification('篩選已清除', 'success');
+}
+
+// 更新結果計數
+function updateResultCount(count) {
+  const resultCountElement = document.querySelector('.result-count');
+  if (resultCountElement) {
+    resultCountElement.textContent = `共 ${count} 筆記錄`;
+  }
+}
+
+// 即時篩選功能
+function setupRealTimeFilter() {
+  const studentNameInput = document.getElementById('filter_student_name');
+  const schoolInput = document.getElementById('filter_school');
+  
+  if (studentNameInput) {
+    studentNameInput.addEventListener('input', applyFilter);
+  }
+  
+  if (schoolInput) {
+    schoolInput.addEventListener('input', applyFilter);
+  }
+}
+
 // 為表格行添加data-id屬性
 document.addEventListener('DOMContentLoaded', function() {
   const rows = document.querySelectorAll('.results-table tbody tr');
@@ -600,6 +837,9 @@ document.addEventListener('DOMContentLoaded', function() {
       row.setAttribute('data-id', idCell.textContent.trim());
     }
   });
+  
+  // 設置即時篩選
+  setupRealTimeFilter();
 });
 </script>
 

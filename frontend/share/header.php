@@ -887,19 +887,27 @@ function getActiveClass($targetFile) {
   </a>
 
   <div class="navbar-links">
+    <!-- 共同可見的連結 -->
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    <?php if ($isLoggedIn): ?>
+    
+    
+    
+    <?php if (!$isLoggedIn): ?>
+      <!-- 僅訪客可見的連結 -->
+      <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
+      <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
+      <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
+    <?php else: ?>
+      <!-- 僅登入用戶可見的連結 -->
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
-    <?php endif; ?>
-    <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
-    <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
-    <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
-    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
-      <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
-    <?php endif; ?>
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
-      <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
+      <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+        <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
+      <?php endif; ?>
+      
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
+        <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
+      <?php endif; ?>
     <?php endif; ?>
   </div>
 
@@ -984,20 +992,28 @@ function getActiveClass($targetFile) {
 <!-- 手機版選單 -->
 <div class="mobile-menu" id="mobileMenu">
   <div class="mobile-nav-links">
+    <!-- 共同可見的連結 -->
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
-    <?php if ($isLoggedIn): ?>
+    
+    
+    <?php if (!$isLoggedIn): ?>
+      <!-- 僅訪客可見的連結 -->
+      <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
+      <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
+      <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
+    <?php else: ?>
+      <!-- 僅登入用戶可見的連結 -->
+      <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
-    <?php endif; ?>
-    <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
-    <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
-    <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
-    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
-      <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
-    <?php endif; ?>
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
-      <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
+      <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+      
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+        <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
+      <?php endif; ?>
+      
+      <?php if (isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
+        <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
+      <?php endif; ?>
     <?php endif; ?>
   </div>
   
