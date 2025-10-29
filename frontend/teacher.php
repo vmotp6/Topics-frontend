@@ -364,6 +364,284 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 				font-size: 0.9rem;
 			}
 		}
+
+		/* 學生管理模態視窗樣式（僅限本頁的學生管理 modal，避免影響全站登入/註冊 modal） */
+		#studentManagementModal.modal {
+			position: fixed;
+			z-index: 1000;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0,0,0,0.5);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		#studentManagementModal .modal-content {
+			background-color: white;
+			border-radius: 12px;
+			box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+			width: 90%;
+			max-width: 1000px;
+			max-height: 80vh;
+			overflow-y: auto;
+		}
+
+		#studentManagementModal .modal-header {
+			padding: 20px 30px;
+			border-bottom: 1px solid #e0e0e0;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			background: #f8f9fa;
+			border-radius: 12px 12px 0 0;
+		}
+
+		#studentManagementModal .modal-header h3 {
+			margin: 0;
+			color: #003366;
+			font-size: 24px;
+			font-weight: 600;
+		}
+
+		#studentManagementModal .close {
+			font-size: 28px;
+			font-weight: bold;
+			cursor: pointer;
+			color: #666;
+			transition: color 0.3s;
+		}
+
+		#studentManagementModal .close:hover {
+			color: #000;
+		}
+
+		#studentManagementModal .modal-body {
+			padding: 30px;
+		}
+
+		.student-stats {
+			display: flex;
+			gap: 20px;
+			margin-bottom: 30px;
+		}
+
+		.stat-card {
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 20px;
+			border-radius: 10px;
+			text-align: center;
+			flex: 1;
+			box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+		}
+
+		.stat-number {
+			font-size: 32px;
+			font-weight: bold;
+			margin-bottom: 5px;
+		}
+
+		.stat-label {
+			font-size: 14px;
+			opacity: 0.9;
+		}
+
+		.student-list-container {
+			background: #f8f9fa;
+			border-radius: 10px;
+			padding: 20px;
+		}
+
+		.search-container {
+			margin-bottom: 20px;
+		}
+
+		.search-input {
+			width: 100%;
+			padding: 12px 16px;
+			border: 1px solid #ddd;
+			border-radius: 8px;
+			font-size: 16px;
+			transition: border-color 0.3s;
+		}
+
+		.search-input:focus {
+			outline: none;
+			border-color: #667eea;
+			box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+		}
+
+		.student-list {
+			max-height: 400px;
+			overflow-y: auto;
+		}
+
+		.student-item {
+			background: white;
+			border: 1px solid #e0e0e0;
+			border-radius: 8px;
+			padding: 20px;
+			margin-bottom: 15px;
+			transition: all 0.3s;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+		}
+
+		.student-item:hover {
+			box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+			transform: translateY(-2px);
+		}
+
+		.student-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 15px;
+		}
+
+		.student-name {
+			font-size: 18px;
+			font-weight: 600;
+			color: #003366;
+			margin: 0;
+		}
+
+		.student-identity {
+			background: #e3f2fd;
+			color: #1976d2;
+			padding: 4px 12px;
+			border-radius: 20px;
+			font-size: 12px;
+			font-weight: 500;
+		}
+
+		.student-info {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 15px;
+			margin-bottom: 15px;
+		}
+
+		.info-item {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.info-label {
+			font-size: 12px;
+			color: #666;
+			margin-bottom: 4px;
+			font-weight: 500;
+		}
+
+		.info-value {
+			font-size: 14px;
+			color: #333;
+		}
+
+		.student-intentions {
+			background: #f5f5f5;
+			padding: 15px;
+			border-radius: 6px;
+			margin-bottom: 15px;
+		}
+
+		.intentions-title {
+			font-size: 14px;
+			font-weight: 600;
+			color: #333;
+			margin-bottom: 10px;
+		}
+
+		.intention-item {
+			background: white;
+			padding: 8px 12px;
+			border-radius: 4px;
+			margin-bottom: 5px;
+			font-size: 13px;
+			color: #555;
+		}
+
+		.student-actions {
+			display: flex;
+			gap: 10px;
+			justify-content: flex-end;
+		}
+
+		.action-btn {
+			padding: 8px 16px;
+			border: none;
+			border-radius: 6px;
+			cursor: pointer;
+			font-size: 14px;
+			font-weight: 500;
+			transition: all 0.3s;
+		}
+
+		.btn-contact {
+			background: #28a745;
+			color: white;
+		}
+
+		.btn-contact:hover {
+			background: #218838;
+		}
+
+		.btn-notes {
+			background: #17a2b8;
+			color: white;
+		}
+
+		.btn-notes:hover {
+			background: #138496;
+		}
+
+		.loading {
+			text-align: center;
+			padding: 40px;
+			color: #666;
+			font-size: 16px;
+		}
+
+		.empty-state {
+			text-align: center;
+			padding: 40px;
+			color: #666;
+		}
+
+		.empty-state i {
+			font-size: 48px;
+			margin-bottom: 16px;
+			color: #ccc;
+		}
+
+		/* 響應式設計 */
+		@media (max-width: 768px) {
+			.modal-content {
+				width: 95%;
+				margin: 20px;
+			}
+
+			.student-stats {
+				flex-direction: column;
+			}
+
+			.student-info {
+				grid-template-columns: 1fr;
+			}
+
+			.student-header {
+				flex-direction: column;
+				align-items: flex-start;
+				gap: 10px;
+			}
+
+			.student-actions {
+				justify-content: center;
+			}
+		}
 	</style>
 </head>
 
@@ -690,9 +968,48 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 				<p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
 				<a href="records.php" class="feature-link">活動紀錄填寫</a>
 			</div>
+			
+			<div class="feature-card">
+				<div class="feature-icon">👨‍🎓</div>
+				<h3 class="feature-title">學生管理</h3>
+				<p class="feature-description">查看和管理分配給您的學生，進行聯絡和追蹤。</p>
+				<button onclick="openStudentManagement()" class="feature-link" style="border: none; cursor: pointer;">學生管理</button>
+			</div>
 		</div>
 	</div>
 	</main>
+
+	<!-- 學生管理模態視窗 -->
+	<div id="studentManagementModal" class="modal" style="display: none;">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h3>學生管理</h3>
+				<span class="close" onclick="closeStudentManagement()">&times;</span>
+			</div>
+			<div class="modal-body">
+				<div class="student-stats">
+					<div class="stat-card">
+						<div class="stat-number" id="totalStudents">0</div>
+						<div class="stat-label">總學生數</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-number" id="recentAssignments">0</div>
+						<div class="stat-label">近7天分配</div>
+					</div>
+				</div>
+				
+				<div class="student-list-container">
+					<div class="search-container">
+						<input type="text" id="studentSearch" placeholder="搜尋學生姓名或電話..." class="search-input">
+					</div>
+					
+					<div class="student-list" id="studentList">
+						<div class="loading">載入中...</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
 
 	<script>
 		// 檢查是否需要顯示個人資料提醒
@@ -738,6 +1055,179 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 
 		// 頁面載入時檢查（暫時禁用）
 		// window.addEventListener('load', checkProfileReminder);
+
+		// 學生管理相關變數
+		let studentsData = [];
+		let filteredStudents = [];
+
+		// 開啟學生管理模態視窗
+		function openStudentManagement() {
+			document.getElementById('studentManagementModal').style.display = 'flex';
+			loadStudentsData();
+		}
+
+		// 關閉學生管理模態視窗
+		function closeStudentManagement() {
+			document.getElementById('studentManagementModal').style.display = 'none';
+		}
+
+		// 載入學生資料
+		async function loadStudentsData() {
+			const studentList = document.getElementById('studentList');
+			studentList.innerHTML = '<div class="loading">載入中...</div>';
+
+			try {
+				// 先測試基本 API 功能
+				console.log('測試基本 API 功能...');
+				const testResponse = await fetch('api/test_api.php');
+				const testData = await testResponse.json();
+				console.log('測試 API 結果:', testData);
+				
+				if (!testData.success) {
+					throw new Error('基本 API 測試失敗：' + testData.message);
+				}
+				
+				// 如果基本測試通過，再載入學生資料
+				const response = await fetch('api/teacher_students_api.php');
+				const data = await response.json();
+
+				if (data.success) {
+					studentsData = data.students;
+					filteredStudents = [...studentsData];
+					
+					// 更新統計資訊
+					document.getElementById('totalStudents').textContent = data.statistics.total_students;
+					document.getElementById('recentAssignments').textContent = data.statistics.recent_assignments;
+					
+					// 顯示學生列表
+					displayStudents(filteredStudents);
+				} else {
+					console.error('API 錯誤:', data);
+					studentList.innerHTML = `
+						<div class="empty-state">
+							<i class="fas fa-exclamation-triangle"></i>
+							<p>載入失敗：${data.message}</p>
+							${data.debug ? `<p style="font-size: 12px; color: #999;">調試信息：${JSON.stringify(data.debug)}</p>` : ''}
+						</div>
+					`;
+				}
+			} catch (error) {
+				console.error('載入學生資料錯誤:', error);
+				studentList.innerHTML = `
+					<div class="empty-state">
+						<i class="fas fa-exclamation-triangle"></i>
+						<p>載入失敗，請稍後再試</p>
+						<p style="font-size: 12px; color: #999;">錯誤詳情：${error.message}</p>
+					</div>
+				`;
+			}
+		}
+
+		// 顯示學生列表
+		function displayStudents(students) {
+			const studentList = document.getElementById('studentList');
+			
+			if (students.length === 0) {
+				studentList.innerHTML = `
+					<div class="empty-state">
+						<i class="fas fa-user-graduate"></i>
+						<p>目前沒有分配給您的學生</p>
+					</div>
+				`;
+				return;
+			}
+
+			studentList.innerHTML = students.map(student => `
+				<div class="student-item">
+					<div class="student-header">
+						<h4 class="student-name">${student.name}</h4>
+						<span class="student-identity">${student.identity}</span>
+					</div>
+					
+					<div class="student-info">
+						<div class="info-item">
+							<div class="info-label">性別</div>
+							<div class="info-value">${student.gender || '未提供'}</div>
+						</div>
+						<div class="info-item">
+							<div class="info-label">聯絡電話一</div>
+							<div class="info-value">${student.phone1}</div>
+						</div>
+						<div class="info-item">
+							<div class="info-label">聯絡電話二</div>
+							<div class="info-value">${student.phone2 || '無'}</div>
+						</div>
+						<div class="info-item">
+							<div class="info-label">Email</div>
+							<div class="info-value">${student.email || '無'}</div>
+						</div>
+						<div class="info-item">
+							<div class="info-label">就讀學校</div>
+							<div class="info-value">${student.junior_high || '無'}</div>
+						</div>
+						<div class="info-item">
+							<div class="info-label">年級</div>
+							<div class="info-value">${student.current_grade || '無'}</div>
+						</div>
+					</div>
+
+					<div class="student-intentions">
+						<div class="intentions-title">就讀意願</div>
+						${student.intention1 ? `<div class="intention-item">意願一：${student.intention1} (${student.system1 || 'N/A'})</div>` : ''}
+						${student.intention2 ? `<div class="intention-item">意願二：${student.intention2} (${student.system2 || 'N/A'})</div>` : ''}
+						${student.intention3 ? `<div class="intention-item">意願三：${student.intention3} (${student.system3 || 'N/A'})</div>` : ''}
+					</div>
+
+					<div class="student-actions">
+						<button class="action-btn btn-contact" onclick="contactStudent('${student.phone1}', '${student.name}')">
+							<i class="fas fa-phone"></i> 聯絡
+						</button>
+						<button class="action-btn btn-notes" onclick="addStudentNotes(${student.id}, '${student.name}')">
+							<i class="fas fa-sticky-note"></i> 備註
+						</button>
+					</div>
+				</div>
+			`).join('');
+		}
+
+		// 搜尋學生
+		function searchStudents() {
+			const searchTerm = document.getElementById('studentSearch').value.toLowerCase();
+			filteredStudents = studentsData.filter(student => 
+				student.name.toLowerCase().includes(searchTerm) ||
+				student.phone1.includes(searchTerm) ||
+				(student.phone2 && student.phone2.includes(searchTerm)) ||
+				(student.email && student.email.toLowerCase().includes(searchTerm))
+			);
+			displayStudents(filteredStudents);
+		}
+
+		// 聯絡學生
+		function contactStudent(phone, name) {
+			if (confirm(`是否要聯絡 ${name}？\n電話：${phone}`)) {
+				// 這裡可以添加實際的聯絡功能，比如打開電話應用或發送簡訊
+				window.open(`tel:${phone}`);
+			}
+		}
+
+		// 添加學生備註
+		function addStudentNotes(studentId, studentName) {
+			const notes = prompt(`為 ${studentName} 添加備註：`);
+			if (notes !== null) {
+				// 這裡可以添加保存備註的功能
+				alert('備註功能開發中...');
+			}
+		}
+
+		// 點擊模態視窗外部關閉
+		document.getElementById('studentManagementModal').addEventListener('click', function(e) {
+			if (e.target === this) {
+				closeStudentManagement();
+			}
+		});
+
+		// 搜尋功能
+		document.getElementById('studentSearch').addEventListener('input', searchStudents);
 	</script>
 	
     <?php include("share/footer.php"); ?>
