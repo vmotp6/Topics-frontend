@@ -507,7 +507,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         }
     </style>
 </head>
-<body class="custom-spacing">
+<body>
     <?php include("share/header.php"); ?>
     
     <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
