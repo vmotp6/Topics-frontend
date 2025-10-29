@@ -390,6 +390,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			</div>
 			
 			<div class="feature-card">
+				<div class="feature-icon">💬</div>
+				<h3 class="feature-title">在校生留言板</h3>
+				<p class="feature-description">查看學長姐的經驗分享與建議，獲得寶貴的學習指導。</p>
+				<a href="senior_messages.php" class="feature-link">在校生留言板</a>
+			</div>
+			
+			<div class="feature-card">
 				<div class="feature-icon">👥</div>
 				<h3 class="feature-title">續招報名</h3>
 				<p class="feature-description">查看續招報名情況和進度。</p>

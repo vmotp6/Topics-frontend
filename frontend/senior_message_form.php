@@ -24,6 +24,28 @@ $auth = new SeniorMessageAuth();
 $user_email = $_SESSION['username']; // 假設username就是email
 $permission_result = $auth->checkPermission($user_email);
 
+// 從資料庫獲取用戶姓名
+$user_name = '';
+try {
+    $configPath = dirname(__DIR__) . '/config.php';
+    if (file_exists($configPath)) {
+        require_once $configPath;
+        $conn = getDatabaseConnection();
+        if ($conn) {
+            $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
+            $stmt->bind_param("s", $user_email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($row = $result->fetch_assoc()) {
+                $user_name = $row['name'] ?? '';
+            }
+            $conn->close();
+        }
+    }
+} catch (Exception $e) {
+    error_log("獲取用戶姓名錯誤: " . $e->getMessage());
+}
+
 // 如果沒有權限，顯示錯誤頁面
 if (!$permission_result['has_permission']) {
     $error_message = $permission_result['error'];
@@ -42,7 +64,7 @@ $form_error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission']) {
     $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
-    $author_name = trim($_POST['author_name'] ?? '');
+    $author_name = $user_name; // 使用從資料庫獲取的姓名
     $author_department = trim($_POST['author_department'] ?? '');
     $author_contact = trim($_POST['author_contact'] ?? '');
     $message_type = $_POST['message_type'] ?? '經驗分享';
@@ -106,13 +128,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         }
         
         body { 
-            padding-top: 100px; 
+            padding-top: 100px !important; /* 適當間距避免被固定 header 遮擋 */
             background: var(--bg-color);
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             line-height: 1.4;
             color: var(--text-color);
             transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding-top: 120px !important; /* 手機版間距 */
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding-top: 130px !important; /* 更小螢幕間距 */
+            }
+        }
+        
+        /* 響應式間距調整 */
+        @media (max-width: 768px) {
+            .theme-toggle {
+                top: 140px; /* 手機版適當間距 */
+                right: 15px;
+                width: 45px;
+                height: 45px;
+                font-size: 1.2rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .theme-toggle {
+                top: 150px; /* 更小螢幕適當間距 */
+                right: 10px;
+                width: 40px;
+                height: 40px;
+                font-size: 1.1rem;
+            }
         }
         
         .container {
@@ -311,7 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         
         .theme-toggle {
             position: fixed;
-            top: 110px;
+            top: 120px; /* 適當位置避免與 header 重疊 */
             right: 20px;
             background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
             color: white;
@@ -452,7 +507,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         }
     </style>
 </head>
-<body>
+<body class="custom-spacing">
     <?php include("share/header.php"); ?>
     
     <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
@@ -539,7 +594,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     
                     <div class="form-group">
                         <label for="author_name">您的姓名 <span class="required">*</span></label>
-                        <input type="text" id="author_name" name="author_name" value="<?php echo htmlspecialchars($_POST['author_name'] ?? ''); ?>" required>
+                        <input type="text" id="author_name" name="author_name" value="<?php echo htmlspecialchars($user_name); ?>" readonly style="background-color: var(--border-color); cursor: not-allowed;">
+                        <small style="color: var(--secondary-text); font-size: 0.9rem;">姓名已從您的帳號資料中自動填入</small>
                     </div>
                     
                     <div class="form-group">
@@ -593,11 +649,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         document.querySelector('form').addEventListener('submit', function(e) {
             const title = document.getElementById('title').value.trim();
             const content = document.getElementById('content').value.trim();
-            const authorName = document.getElementById('author_name').value.trim();
             
-            if (!title || !content || !authorName) {
+            if (!title || !content) {
                 e.preventDefault();
-                alert('請填寫所有必填欄位');
+                alert('請填寫標題和留言內容');
                 return false;
             }
             

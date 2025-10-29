@@ -19,7 +19,7 @@ main {
   min-height: 0;
   overflow: hidden;
   padding: 20px;
-  padding-top: 100px;
+  padding-top: 120px; /* 增加頂部間距以適應 header */
   padding-bottom: 120px;
 }
 
@@ -627,3 +627,55 @@ body::before {
 .teacher { color: blue; }
 .vendor { color: green; }
 .me { font-weight: bold; }
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  main {
+    padding-top: 100px; /* 手機版減少頂部間距 */
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  
+  .chat-container {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 10px;
+  }
+  
+  .sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .chat-input input,
+  #messageInput {
+    width: calc(100% - 200px) !important; /* 調整輸入框寬度 */
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding-top: 90px; /* 更小的螢幕進一步減少間距 */
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  
+  .chat-container {
+    border-radius: 5px;
+  }
+  
+  .chat-input {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .chat-input input,
+  #messageInput {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+  
+  .chat-input button {
+    width: 100%;
+  }
+}

@@ -197,3 +197,6 @@ function updateActivity($pdo) {
 
 
 
+
+
+

@@ -45,20 +45,73 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM senior_messages WHERE is_published = 1 ORDER BY created_at DESC");
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 為每個留言檢查用戶是否已點讚
+    $user_email = $_SESSION['username'];
+    foreach ($messages as &$message) {
+        try {
+            $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
+            $stmt->execute([$message['id'], $user_email]);
+            $message['user_liked'] = $stmt->fetch() ? true : false;
+        } catch(PDOException $e) {
+            // 如果 message_likes 表不存在，設為 false
+            $message['user_liked'] = false;
+        }
+    }
 } catch(PDOException $e) {
     $error_message = "載入留言失敗: " . $e->getMessage();
 }
 
-// 處理點讚功能
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'like') {
+// 處理愛心切換功能
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_like') {
     $message_id = (int)$_POST['message_id'];
+    $is_liked = $_POST['is_liked'] === '1';
+    $user_email = $_SESSION['username'];
+    
     try {
-        $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count + 1 WHERE id = ?");
-        $stmt->execute([$message_id]);
-        header("Location: senior_messages.php");
+        // 檢查 message_likes 表是否存在
+        $stmt = $pdo->query("SHOW TABLES LIKE 'message_likes'");
+        $table_exists = $stmt->rowCount() > 0;
+        
+        if (!$table_exists) {
+            echo json_encode(['success' => false, 'error' => 'message_likes 表不存在，請先執行 setup_message_likes_table.php']);
+            exit;
+        }
+        
+        // 檢查是否已經點讚過
+        $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
+        $stmt->execute([$message_id, $user_email]);
+        $existing_like = $stmt->fetch();
+        
+        if ($is_liked) {
+            // 取消愛心
+            if ($existing_like) {
+                // 刪除點讚記錄
+                $stmt = $pdo->prepare("DELETE FROM message_likes WHERE message_id = ? AND user_email = ?");
+                $stmt->execute([$message_id, $user_email]);
+                
+                // 減少點讚數
+                $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count - 1 WHERE id = ?");
+                $stmt->execute([$message_id]);
+            }
+        } else {
+            // 添加愛心
+            if (!$existing_like) {
+                // 添加點讚記錄
+                $stmt = $pdo->prepare("INSERT INTO message_likes (message_id, user_email, created_at) VALUES (?, ?, NOW())");
+                $stmt->execute([$message_id, $user_email]);
+                
+                // 增加點讚數
+                $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count + 1 WHERE id = ?");
+                $stmt->execute([$message_id]);
+            }
+        }
+        
+        echo json_encode(['success' => true]);
         exit;
     } catch(PDOException $e) {
-        $error_message = "點讚失敗: " . $e->getMessage();
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
     }
 }
 
@@ -81,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>學長姐留言板</title>
+    <title>在校生留言板</title>
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
         * {
@@ -111,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         body { 
-            padding-top: 100px; 
+            padding-top: 100px !important; /* 恢復間距避免被固定 header 遮擋 */
             background: var(--bg-color);
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -120,22 +173,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             transition: background-color 0.3s ease, color 0.3s ease;
         }
         
+        /* 強制覆蓋 QA.css 的樣式 */
+        main h2 {
+            padding: 0 0 30px 0 !important; /* 移除頂部 padding */
+            margin-top: 0 !important;
+        }
+        
         .container {
             max-width: 700px;
             margin: 0 auto;
-            padding: 30px 20px;
+            padding: 20px 20px; /* 減少頂部 padding */
             min-height: calc(100vh - 120px);
         }
         
         .header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 30px 20px;
+            margin-bottom: 30px; /* 減少底部間距 */
+            padding: 20px 20px; /* 減少內部 padding */
             background: linear-gradient(135deg, rgba(29, 155, 240, 0.1) 0%, rgba(29, 155, 240, 0.05) 100%);
             border-radius: 20px;
             border: 1px solid var(--border-color);
             position: relative;
             overflow: hidden;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 100%;
+        }
+        
+        .header-text {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .post-button-container {
+            margin-top: 0;
+            position: relative;
+            z-index: 10;
+            flex-shrink: 0;
         }
         
         .header::before {
@@ -229,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         .theme-toggle {
             position: fixed;
-            top: 110px;
+            top: 120px; /* 恢復到 header 下方位置 */
             right: 20px;
             background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
             color: white;
@@ -251,6 +328,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .theme-toggle:hover {
             transform: scale(1.1) rotate(15deg);
             box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
+        }
+
+        /* 移除不必要的間距設定 */
+        .page-top-spacer {
+            height: 0; /* 不再需要額外間距 */
         }
         
         .filter-tabs {
@@ -429,6 +511,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             transform: scale(1.05);
         }
         
+        .like-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .like-btn.liked {
+            color: #f91880;
+        }
+        
+        .like-btn.liked:hover {
+            background: rgba(249, 24, 128, 0.15);
+        }
+        
+        .like-icon {
+            transition: all 0.3s ease;
+        }
+        
+        .like-count {
+            font-weight: 600;
+        }
+        
         .view-count {
             color: var(--secondary-text);
             font-size: 0.8rem;
@@ -541,7 +644,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         @media (max-width: 768px) {
             body {
-                padding-top: 70px;
+                padding-top: 120px !important; /* 手機版恢復間距 */
             }
             
             .container {
@@ -549,8 +652,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
             
             .header {
-                padding: 30px 20px;
+                padding: 20px 15px;
                 margin-bottom: 30px;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 20px;
+            }
+            
+            .header-text {
+                text-align: center;
             }
             
             .header h1 {
@@ -558,6 +671,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
             
             .header p {
+                font-size: 1.1rem;
+            }
+            
+            .post-button-container {
+                display: flex;
+                justify-content: center;
+            }
+            
+            .theme-toggle {
+                top: 140px; /* 手機版恢復位置 */
+                right: 15px;
+                width: 45px;
+                height: 45px;
+                font-size: 1.2rem;
+            }
+            
+            .filter-tabs {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .filter-tab {
+                padding: 8px 12px;
+                font-size: 0.9rem;
+            }
+            
+            .messages-feed {
+                gap: 15px;
+            }
+            
+            .message-card {
+                padding: 15px;
+            }
+            
+            .message-title {
+                font-size: 1.1rem;
+            }
+            
+            .message-content {
+                font-size: 0.95rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding-top: 130px !important; /* 更小螢幕恢復間距 */
+            }
+            
+            .theme-toggle {
+                top: 150px; /* 更小螢幕恢復位置 */
+                right: 10px;
+                width: 40px;
+                height: 40px;
                 font-size: 1.1rem;
             }
             
@@ -594,33 +760,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 font-size: 0.8rem;
             }
         }
-        
-        @media (max-width: 480px) {
-            .header h1 {
-                font-size: 1.8rem;
-            }
-            
-            .message-card {
-                padding: 12px;
-            }
-            
-            .message-stats {
-                flex-direction: column;
-                gap: 10px;
-                align-items: stretch;
-            }
-            
-            .like-btn {
-                width: 100%;
-                justify-content: center;
-                padding: 6px 12px;
-                font-size: 0.8rem;
-            }
-        }
     </style>
 </head>
-<body>
+<body class="custom-spacing">
     <?php include("share/header.php"); ?>
+    <div class="page-top-spacer"></div>
     
     <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
         <span id="theme-icon">🌙</span>
@@ -628,24 +772,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     <div class="container">
         <div class="header">
-            <h1>學長姐留言板</h1>
-            <p>來自學長姐的經驗分享與建議</p>
-            
-            <?php if ($can_post_message): ?>
-                <div class="post-button-container">
-                    <a href="senior_message_form.php" class="post-btn">
-                        <span>✍️</span>
-                        <span>發布留言</span>
-                    </a>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>在校生留言板</h1>
+                    <p>來自學長姐的經驗分享與建議</p>
                 </div>
-            <?php else: ?>
-                <div class="permission-notice">
-                    權限提示：只有 @stu.ukn.edu.tw 的學生帳號可以留言
-                    <?php if (isset($permission_result['error'])): ?>
-                        <br><small><?php echo htmlspecialchars($permission_result['error']); ?></small>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
+                
+                <?php if ($can_post_message): ?>
+                    <div class="post-button-container">
+                        <a href="senior_message_form.php" class="post-btn">
+                            <span>✍️</span>
+                            <span>發布留言</span>
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="permission-notice">
+                        權限提示：只有 @stu.ukn.edu.tw 的學生帳號可以留言
+                        <?php if (isset($permission_result['error'])): ?>
+                            <br><small><?php echo htmlspecialchars($permission_result['error']); ?></small>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
         
         <div class="filter-tabs">
@@ -667,7 +815,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <div class="no-messages">
                 <h3>📝 暫無留言</h3>
                 <p>目前還沒有學長姐的留言，請稍後再來查看。</p>
-                <a href="student.php" class="back-btn">返回學生頁面</a>
             </div>
         <?php else: ?>
             <div class="messages-feed" id="messagesFeed">
@@ -696,23 +843,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <?php endif; ?>
                         
                         <div class="message-stats">
-                            <form method="POST" style="display: inline;">
-                                <input type="hidden" name="action" value="like">
-                                <input type="hidden" name="message_id" value="<?php echo $message['id']; ?>">
-                                <button type="submit" class="like-btn">
-                                    ❤️ <?php echo $message['like_count']; ?>
-                                </button>
-                            </form>
+                            <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" onclick="toggleLike(<?php echo $message['id']; ?>)">
+                                <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '❤️'; ?></span>
+                                <span class="like-count"><?php echo $message['like_count']; ?></span>
+                            </button>
                             <div class="view-count">
                                 👁️ <?php echo $message['view_count']; ?>
                             </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
-            </div>
-            
-            <div class="back-btn-container">
-                <a href="student.php" class="back-btn">返回學生頁面</a>
             </div>
         <?php endif; ?>
     </div>
@@ -782,9 +922,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         }
         
+        // 愛心按鈕功能 - 切換模式
+        function toggleLike(messageId) {
+            const likeBtn = document.querySelector(`button[onclick="toggleLike(${messageId})"]`);
+            const likeIcon = likeBtn.querySelector('.like-icon');
+            const likeCount = likeBtn.querySelector('.like-count');
+            
+            // 檢查當前狀態
+            const isLiked = likeIcon.textContent === '💖';
+            const currentCount = parseInt(likeCount.textContent);
+            
+            // 立即更新視覺效果
+            if (isLiked) {
+                // 取消愛心
+                likeCount.textContent = currentCount - 1;
+                likeIcon.textContent = '❤️';
+                likeBtn.classList.remove('liked');
+            } else {
+                // 添加愛心
+                likeCount.textContent = currentCount + 1;
+                likeIcon.textContent = '💖';
+                likeBtn.classList.add('liked');
+            }
+            
+            // 暫時禁用按鈕防止重複點擊
+            likeBtn.disabled = true;
+            likeBtn.style.opacity = '0.7';
+            
+            // 發送 AJAX 請求
+            fetch('senior_messages.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=toggle_like&message_id=${messageId}&is_liked=${isLiked ? '1' : '0'}`
+            }).then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(isLiked ? '取消愛心成功' : '點讚成功');
+                } else {
+                    // 如果失敗，恢復原狀
+                    if (isLiked) {
+                        likeCount.textContent = currentCount;
+                        likeIcon.textContent = '💖';
+                        likeBtn.classList.add('liked');
+                    } else {
+                        likeCount.textContent = currentCount;
+                        likeIcon.textContent = '❤️';
+                        likeBtn.classList.remove('liked');
+                    }
+                }
+            }).catch(error => {
+                console.log('操作失敗:', error);
+                // 如果失敗，恢復原狀
+                if (isLiked) {
+                    likeCount.textContent = currentCount;
+                    likeIcon.textContent = '💖';
+                    likeBtn.classList.add('liked');
+                } else {
+                    likeCount.textContent = currentCount;
+                    likeIcon.textContent = '❤️';
+                    likeBtn.classList.remove('liked');
+                }
+            }).finally(() => {
+                // 重新啟用按鈕
+                likeBtn.disabled = false;
+                likeBtn.style.opacity = '1';
+            });
+        }
+        
         // 增加瀏覽次數
         document.querySelectorAll('.message-card').forEach(card => {
-            const messageId = card.querySelector('input[name="message_id"]').value;
+            const likeBtn = card.querySelector('button[onclick*="toggleLike"]');
+            if (!likeBtn) return; // 如果找不到按鈕就跳過
+            
+            const messageId = likeBtn.onclick.toString().match(/\d+/);
+            if (!messageId) return; // 如果找不到 messageId 就跳過
             
             // 使用 fetch 增加瀏覽次數（不重新載入頁面）
             fetch('senior_messages.php', {
@@ -792,14 +1005,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: 'action=view&message_id=' + messageId
+                body: 'action=view&message_id=' + messageId[0]
             }).then(response => response.json())
             .then(data => {
                 if (data.success) {
                     // 更新顯示的瀏覽次數
                     const viewCount = card.querySelector('.view-count');
-                    const currentCount = parseInt(viewCount.textContent.match(/\d+/)[0]);
-                    viewCount.innerHTML = `👁️ ${currentCount + 1} 次瀏覽`;
+                    if (viewCount) {
+                        const currentCount = parseInt(viewCount.textContent.match(/\d+/)[0]);
+                        viewCount.innerHTML = `👁️ ${currentCount + 1}`;
+                    }
                 }
             }).catch(error => console.log('瀏覽次數更新失敗:', error));
         });

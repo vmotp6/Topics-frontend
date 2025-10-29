@@ -54,8 +54,31 @@ function getActiveClass($targetFile) {
 
 <!-- CSS -->
 <style>
+  /* 通用樣式重置 - 確保所有頁面都有正確的間距 */
+  body {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* 為使用 header.php 的頁面提供標準間距 */
+  body:not(.custom-spacing) {
+    padding-top: 100px;
+  }
+  
+  @media (max-width: 768px) {
+    body:not(.custom-spacing) {
+      padding-top: 120px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    body:not(.custom-spacing) {
+      padding-top: 130px;
+    }
+  }
   .navbar {
-    position: fixed;
+    position: fixed; /* 固定在頁面頂部 */
     top: 0;
     left: 0;
     width: 100%;
@@ -67,6 +90,7 @@ function getActiveClass($targetFile) {
     padding: 10px 0;
     color: #2c3e50;
     font-family: 'Microsoft JhengHei', sans-serif;
+    box-sizing: border-box;
   }
 
   .container {
@@ -79,6 +103,7 @@ function getActiveClass($targetFile) {
     justify-content: space-between;
     min-width: 0;
     flex-wrap: wrap;
+    box-sizing: border-box;
   }
 
   .logo {
@@ -87,7 +112,7 @@ function getActiveClass($targetFile) {
     gap: 15px;
     flex-shrink: 0;
     margin-right: 20px;
-    margin-left: -25px;
+    margin-left: 0;
     transition: all 0.3s ease;
     border-radius: 8px;
     padding: 5px;
@@ -114,7 +139,7 @@ function getActiveClass($targetFile) {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    margin-left: 55px;
+    margin-left: 20px;
   }
 
   /* 漢堡選單樣式 */
@@ -573,11 +598,11 @@ function getActiveClass($targetFile) {
   @media (max-width: 1200px) {
     .logo {
       margin-right: 15px;
-      margin-left: -20px;
+      margin-left: 0;
     }
 
     .navbar-user {
-      margin-left: 40px;
+      margin-left: 15px;
     }
 
     .navbar-links {
@@ -596,11 +621,11 @@ function getActiveClass($targetFile) {
   @media (max-width: 1024px) {
     .logo {
       margin-right: 10px;
-      margin-left: -20px;
+      margin-left: 0;
     }
 
     .navbar-user {
-      margin-left: 35px;
+      margin-left: 15px;
     }
 
     .navbar-links {
@@ -636,7 +661,7 @@ function getActiveClass($targetFile) {
 
     .logo {
       margin-right: 10px;
-      margin-left: -20px;
+      margin-left: 0;
       flex-shrink: 0;
     }
 
@@ -670,7 +695,7 @@ function getActiveClass($targetFile) {
     }
 
     .navbar-user {
-      margin-left: 15px;
+      margin-left: 10px;
       flex-shrink: 0;
     }
 
@@ -771,7 +796,7 @@ function getActiveClass($targetFile) {
     }
 
     .logo {
-      margin-left: -15px;
+      margin-left: 0;
     }
 
     .logo-icon {
@@ -781,7 +806,7 @@ function getActiveClass($targetFile) {
     }
 
     .navbar-user {
-      margin-left: 10px;
+      margin-left: 5px;
     }
 
     .auth-buttons {
@@ -891,6 +916,9 @@ function getActiveClass($targetFile) {
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
+    <?php endif; ?>
     <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
     <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
     <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
@@ -988,6 +1016,9 @@ function getActiveClass($targetFile) {
     <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
     <?php if ($isLoggedIn): ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
+    <?php endif; ?>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
     <?php endif; ?>
     <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
     <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
