@@ -742,9 +742,8 @@ $conn->close();
             }
         });
         
-        // 頁面載入完成後聚焦到第一個輸入框
+        // 頁面載入完成後初始化
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelector('input[name="activity_date"]').focus();
             updateRemoveButtons(); // 初始化刪除按鈕狀態
         });
     </script>
