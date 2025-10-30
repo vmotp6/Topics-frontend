@@ -264,16 +264,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .post-btn {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
             background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
             color: white;
             text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-weight: 700;
-            font-size: 1rem;
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-weight: 600;
+            font-size: 0.85rem;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
             border: none;
             position: relative;
             overflow: hidden;
@@ -677,6 +677,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             .post-button-container {
                 display: flex;
                 justify-content: center;
+            }
+            
+            .post-btn {
+                padding: 6px 12px;
+                font-size: 0.8rem;
+                border-radius: 12px;
             }
             
             .theme-toggle {

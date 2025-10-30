@@ -39,4 +39,7 @@ define('SMTP_PASSWORD', 'sulvmlfyysjdhrcp');                     // 您的 Gmail
 define('SMTP_FROM_EMAIL', 'vichuang2005@gmail.com');                   // 發送者郵件地址 (請填入)
 define('SMTP_FROM_NAME', '康寧大學五專入學說明會');  // 發送者名稱
 define('SMTP_SECURE', 'tls');                    // 加密類型 (tls 或 ssl)
+
+// Google Maps API 設定
+define('GOOGLE_MAPS_API_KEY', 'AIzaSyCvjwdPOQe2OgPiGxTmSkzzGP2cb_fLJ3I');
 ?>
