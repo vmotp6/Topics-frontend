@@ -381,21 +381,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 				<p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
 				<a href="QA.php" class="feature-link">招生QA問答</a>
 			</div>
-			
 			<div class="feature-card">
-				<div class="feature-icon">📚</div>
-				<h3 class="feature-title">私訊聊天室</h3>
-				<p class="feature-description">使用 Google 帳號登入，與老師和同學進行即時聊天。</p>
-				<a href="chat/google_chat_integration.php" class="feature-link">私訊聊天室</a>
+				<div class="feature-icon">🏫</div>
+				<h3 class="feature-title">就讀意願登錄</h3>
+				<p class="feature-description">登錄就讀意願，查看申請狀態並進行聯絡。</p>
+				<a href="cooperation_upload.php" class="feature-link">就讀意願登錄</a>
 			</div>
-			
-			<div class="feature-card">
-				<div class="feature-icon">💬</div>
-				<h3 class="feature-title">在校生留言板</h3>
-				<p class="feature-description">查看學長姐的經驗分享與建議，獲得寶貴的學習指導。</p>
-				<a href="senior_messages.php" class="feature-link">在校生留言板</a>
-			</div>
-			
+
 			<div class="feature-card">
 				<div class="feature-icon">👥</div>
 				<h3 class="feature-title">續招報名</h3>
@@ -417,12 +409,6 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
 			</div>
 			
-			<div class="feature-card">
-				<div class="feature-icon">🎓</div>
-				<h3 class="feature-title">就讀意願管理</h3>
-				<p class="feature-description">管理學生和家長的就讀意願登錄，查看申請狀態並進行聯絡。</p>
-				<a href="admin_enrollment_review_fixed.php" class="feature-link">管理就讀意願</a>
-			</div>
 		</div>
 	</div>
   <!-- 輪播圖片JavaScript -->

@@ -307,13 +307,20 @@ def login():
 @app.route('/sign', methods=['POST'])
 def register():
     """註冊功能"""
-    username = request.form.get('username')
-    password = request.form.get('password')
-    email = request.form.get('email')
-    name = request.form.get('name')
+    # 同時支援 form 與 JSON
+    data = request.form if request.form else (request.get_json(silent=True) or {})
+    username = data.get('username')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    email = data.get('email')
+    name = data.get('name')
     
     if not all([username, password, email, name]):
         return jsonify({"message": "請填寫所有必填欄位"}), 400
+    if confirm_password is not None and password != confirm_password:
+        return jsonify({"message": "兩次密碼輸入不一致"}), 400
+    if len(password) < 6:
+        return jsonify({"message": "密碼長度至少需 6 碼"}), 400
     
     conn = get_db_connection()
     if not conn:
@@ -325,19 +332,28 @@ def register():
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
                 return jsonify({"message": "用戶名已存在"}), 400
-            
-            # 插入新用戶
+
+            # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
+            cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({"message": "Email 已被使用"}), 400
+
+            # 插入新用戶（角色預設為學生）
             cursor.execute(
                 "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
                 (username, password, email, name)
             )
             conn.commit()
-            
+
             return jsonify({"message": "註冊成功"}), 200
             
+    except pymysql.err.IntegrityError as e:
+        # 可能的唯一鍵衝突（如 username/email）
+        print(f"註冊唯一鍵衝突: {e}")
+        return jsonify({"message": "帳號或 Email 已被使用"}), 400
     except Exception as e:
         print(f"註冊錯誤: {e}")
-        return jsonify({"message": "註冊失敗，請稍後再試。"}), 500
+        return jsonify({"message": f"註冊失敗，請稍後再試。"}), 500
     finally:
         conn.close()
 
