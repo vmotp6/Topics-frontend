@@ -934,6 +934,9 @@ function getActiveClass($targetFile) {
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
+    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+      <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
+    <?php endif; ?>
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
       <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
     <?php endif; ?>

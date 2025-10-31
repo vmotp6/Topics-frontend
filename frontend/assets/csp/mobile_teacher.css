@@ -1,0 +1,71 @@
+
+/* 日期和連結輸入框樣式優化 */
+.event-date-wrapper,
+.event-link-wrapper {
+    position: relative;
+}
+
+.event-date-wrapper input[type="date"],
+.event-link-wrapper input[type="url"] {
+    transition: all 0.3s ease;
+}
+
+.event-date-wrapper input[type="date"]:focus,
+.event-link-wrapper input[type="url"]:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.event-date-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    position: absolute;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.event-date-wrapper .date-icon,
+.event-link-wrapper .link-icon {
+    position: absolute;
+    left: 150px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #667eea;
+    pointer-events: none;
+    font-size: 16px;
+    z-index: 1;
+}
+
+.event-link-wrapper .link-icon {
+    left: 12px;
+    right: auto;
+    color: #999;
+}
+
+.event-link-wrapper input[type="url"] {
+    padding:5px;
+    padding-left:30px;
+}
+
+.field-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.field-group label i {
+    transition: transform 0.3s ease;
+}
+
+.field-group:hover label i {
+    transform: scale(1.1);
+}
+
+/* 響應式優化 */
+@media (max-width: 768px) {
+    .event-date-wrapper input[type="date"],
+    .event-link-wrapper input[type="url"] {
+        font-size: 16px; /* 防止 iOS 自動縮放 */
+    }
+}
