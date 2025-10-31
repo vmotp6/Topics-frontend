@@ -28,8 +28,8 @@ try {
         // 學生：獲取所有教師列表
         $contacts = [];
         
-        // 獲取所有老師
-        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+        // 獲取所有老師（包含頭像）
+        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, u.profile_picture, '老師' as contact_type
                               FROM teacher t 
                               JOIN user u ON t.user_id = u.id 
                               WHERE u.role = '老師'
@@ -56,8 +56,8 @@ try {
         if ($currentTeacher) {
             $department = $currentTeacher['department'];
             
-            // 獲取同科系的老師
-            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, '老師' as contact_type
+            // 獲取同科系的老師（包含頭像）
+            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, u.profile_picture, '老師' as contact_type
                                   FROM teacher t 
                                   JOIN user u ON t.user_id = u.id 
                                   WHERE u.role = '老師' AND t.department = ? AND u.username != ?
@@ -66,9 +66,9 @@ try {
             $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $contacts = array_merge($contacts, $sameDeptTeachers);
             
-            // 獲取所有學生
+            // 獲取所有學生（包含頭像）
             try {
-                $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, '學生' as contact_type, s.grade, s.class_name
+                $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, u.profile_picture, '學生' as contact_type, s.grade, s.class_name
                                       FROM student s 
                                       JOIN user u ON s.user_id = u.id 
                                       WHERE u.role = '學生'
@@ -77,8 +77,8 @@ try {
                 $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $contacts = array_merge($contacts, $allStudents);
             } catch (PDOException $e) {
-                // 如果學生表不存在或結構不同，使用用戶表
-                $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
+                // 如果學生表不存在或結構不同，使用用戶表（包含頭像）
+                $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, u.profile_picture, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
                                       FROM user u 
                                       WHERE u.role = '學生'
                                       ORDER BY u.username");
@@ -140,10 +140,25 @@ try {
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private">
                 <div class="user-avatar">
                   <?php 
-                  // 顯示中文姓名的第一個字符
-                  $name = $contact['name'];
-                  $firstChar = mb_substr($name, 0, 1, 'UTF-8');
-                  echo $firstChar;
+                  // 從資料庫獲取頭像
+                  $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
+                  if (!empty($contact['profile_picture'])) {
+                      // 檢查是否為完整URL或相對路徑
+                      if (filter_var($contact['profile_picture'], FILTER_VALIDATE_URL)) {
+                          $avatar_src = $contact['profile_picture'];
+                      } else {
+                          $avatar_src = './share/' . $contact['profile_picture'];
+                      }
+                      // 顯示頭像圖片
+                      echo '<img src="' . htmlspecialchars($avatar_src) . '" alt="' . htmlspecialchars($contact['name']) . '" class="avatar-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'inline-block\';">';
+                      // 如果圖片載入失敗，顯示文字備用
+                      echo '<span class="avatar-text" style="display:none;">' . mb_substr($contact['name'], 0, 1, 'UTF-8') . '</span>';
+                  } else {
+                      // 沒有頭像時顯示中文姓名的第一個字符
+                      $name = $contact['name'];
+                      $firstChar = mb_substr($name, 0, 1, 'UTF-8');
+                      echo '<span class="avatar-text">' . $firstChar . '</span>';
+                  }
                   ?>
                 </div>
                 <div class="user-info">
@@ -222,10 +237,25 @@ try {
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-contact-type="<?php echo $contact['contact_type']; ?>" data-department="<?php echo htmlspecialchars($contact['department'] ?? ''); ?>" data-grade="<?php echo htmlspecialchars($contact['grade'] ?? ''); ?>" data-class="<?php echo htmlspecialchars($contact['class_name'] ?? ''); ?>">
                 <div class="user-avatar">
                   <?php 
-                  // 顯示中文姓名的第一個字符
-                  $name = $contact['name'];
-                  $firstChar = mb_substr($name, 0, 1, 'UTF-8');
-                  echo $firstChar;
+                  // 從資料庫獲取頭像
+                  $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
+                  if (!empty($contact['profile_picture'])) {
+                      // 檢查是否為完整URL或相對路徑
+                      if (filter_var($contact['profile_picture'], FILTER_VALIDATE_URL)) {
+                          $avatar_src = $contact['profile_picture'];
+                      } else {
+                          $avatar_src = './share/' . $contact['profile_picture'];
+                      }
+                      // 顯示頭像圖片
+                      echo '<img src="' . htmlspecialchars($avatar_src) . '" alt="' . htmlspecialchars($contact['name']) . '" class="avatar-img" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'inline-block\';">';
+                      // 如果圖片載入失敗，顯示文字備用
+                      echo '<span class="avatar-text" style="display:none;">' . mb_substr($contact['name'], 0, 1, 'UTF-8') . '</span>';
+                  } else {
+                      // 沒有頭像時顯示中文姓名的第一個字符
+                      $name = $contact['name'];
+                      $firstChar = mb_substr($name, 0, 1, 'UTF-8');
+                      echo '<span class="avatar-text">' . $firstChar . '</span>';
+                  }
                   ?>
                 </div>
                 <div class="user-info">
