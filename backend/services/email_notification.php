@@ -23,7 +23,7 @@ class EmailNotificationService {
         $this->sender_name = getenv('GMAIL_SENDER_NAME') ?: '康寧大學聊天系統';
         
         // 網站基礎URL
-        $this->base_url = getenv('BASE_URL') ?: 'http://100.79.58.120';
+        $this->base_url = getenv('BASE_URL') ?: 'http://localhost';
     }
     
     /**

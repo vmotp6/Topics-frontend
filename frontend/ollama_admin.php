@@ -11,7 +11,7 @@ function checkAdminPermission() {
     }
     
     // 連接到 topics_good 資料庫檢查用戶角色
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'topics_good';
     $username = 'root';
     $password = '';

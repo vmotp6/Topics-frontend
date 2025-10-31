@@ -14,8 +14,8 @@ $email_config = [
     'sender_name' => '康寧大學聊天系統',
     
     // 網站設定
-    'base_url' => 'http://100.79.58.120',
-    'chat_url' => 'http://100.79.58.120/frontend/chat/chat.php',
+    'base_url' => 'http://localhost',
+    'chat_url' => 'http://localhost/frontend/chat/chat.php',
     
     // 郵件設定
     'enable_notifications' => true,

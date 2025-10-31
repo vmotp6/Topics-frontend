@@ -4,7 +4,7 @@ echo "<h1>康寧大學產學合作系統診斷報告</h1>\n";
 
 // 1. 檢查資料庫連線
 echo "<h2>1. 資料庫連線檢查</h2>\n";
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

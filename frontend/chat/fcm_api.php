@@ -157,7 +157,7 @@ function testNotification($fcmService) {
     $customData = $data['data'] ?? [];
     
     // 獲取用戶的FCM tokens
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'topics_good';
     $db_username = 'root';
     $db_password = '';
@@ -194,7 +194,7 @@ function getNotificationSettings() {
         return;
     }
     
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'topics_good';
     $db_username = 'root';
     $db_password = '';
@@ -241,7 +241,7 @@ function updateNotificationSettings() {
     $username = $data['username'];
     $settings = $data['settings'];
     
-    $host = '100.79.58.120';
+    $host = 'localhost';
     $dbname = 'topics_good';
     $db_username = 'root';
     $db_password = '';

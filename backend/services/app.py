@@ -30,16 +30,25 @@ except ImportError:
     print("⚠️  配置檔案不存在，使用預設配置")
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=['http://localhost', 'http://localhost:80', 'http://127.0.0.1'])
+# CORS 配置 - 允許所有來源（開發環境），生產環境請限制特定域名
+CORS(app, 
+     supports_credentials=True, 
+     origins=['http://localhost', 'http://localhost:80', 'http://127.0.0.1', 'http://localhost:5000'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization', 'X-Requested-With'])
 app.secret_key = 'your-secret-key-here'  # 請更改為安全的密鑰
 
-# 資料庫連接配置
+# 資料庫連接配置 - 優先使用環境變數，否則使用預設值
 DB_CONFIG = {
-    'host': '100.79.58.120',
-    'user': 'root',
-    'password': '',
-    'database': 'topics_good',
-    'charset': 'utf8mb4'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '3306')),  # MySQL 默認端口
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'topics_good'),
+    'charset': 'utf8mb4',
+    'connect_timeout': 10,  # 連接超時時間（秒）
+    'read_timeout': 10,     # 讀取超時時間（秒）
+    'write_timeout': 10     # 寫入超時時間（秒）
 }
 
 # Google OAuth 配置 - 優先使用環境變數，否則使用config.py
@@ -50,18 +59,80 @@ GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI') or globals().get('GOOGLE_
 # 存儲 state 參數（生產環境應使用 Redis 或資料庫）
 google_states = {}
 
-def get_db_connection():
-    """獲取資料庫連接"""
-    try:
-        return pymysql.connect(**DB_CONFIG)
-    except Exception as e:
-        print(f"資料庫連接失敗: {e}")
-        return None
+def get_db_connection(retries=3, retry_delay=1):
+    """
+    獲取資料庫連接，帶重試機制
+    
+    Args:
+        retries: 重試次數，預設3次
+        retry_delay: 重試延遲時間（秒），預設1秒，每次重試會翻倍
+    
+    Returns:
+        pymysql.connections.Connection 或 None
+    """
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            conn = pymysql.connect(**DB_CONFIG)
+            print(f"✅ 資料庫連接成功 (嘗試 {attempt + 1}/{retries})")
+            return conn
+        except pymysql.Error as e:
+            last_error = e
+            error_msg = str(e)
+            
+            if attempt < retries - 1:
+                print(f"⚠️  資料庫連接失敗 (嘗試 {attempt + 1}/{retries}): {error_msg}")
+                print(f"   將在 {retry_delay} 秒後重試...")
+                import time
+                time.sleep(retry_delay)
+                retry_delay *= 2  # 指數退避
+            else:
+                print(f"❌ 資料庫連接最終失敗 (已嘗試 {retries} 次): {error_msg}")
+                print(f"   請檢查：")
+                print(f"   1. 資料庫伺服器 {DB_CONFIG['host']} 是否可訪問")
+                print(f"   2. 網路連線是否正常")
+                print(f"   3. 防火牆設定是否允許連接")
+                print(f"   4. 資料庫服務是否正在運行")
+        
+        except Exception as e:
+            last_error = e
+            print(f"❌ 資料庫連接發生未知錯誤: {e}")
+            break
+    
+    return None
+
+# 全局錯誤處理器
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """處理所有未捕獲的異常"""
+    print(f"❌ 未捕獲的異常: {e}")
+    import traceback
+    traceback.print_exc()
+    
+    error_response = {
+        "message": "伺服器發生錯誤，請稍後再試",
+        "error": "server_error",
+        "details": str(e) if app.debug else None
+    }
+    
+    if app.debug:
+        error_response["traceback"] = traceback.format_exc()
+    
+    return jsonify(error_response), 500
 
 @app.route('/')
 def home():
     """首頁"""
-    return jsonify({"message": "康寧大學聊天系統後端API", "status": "running"})
+    return jsonify({
+        "message": "康寧大學聊天系統後端API", 
+        "status": "running",
+        "database": {
+            "host": DB_CONFIG['host'],
+            "port": DB_CONFIG['port'],
+            "database": DB_CONFIG['database']
+        }
+    })
 
 @app.route('/auth/google', methods=['GET'])
 def google_auth():
@@ -263,46 +334,134 @@ def get_user_profile():
         print(f"查詢用戶資料錯誤: {e}")
         return jsonify({"error": "查詢失敗"}), 500
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/login', methods=['POST'])
 def login():
-    """一般登入功能"""
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    if not username or not password:
-        return jsonify({"message": "請填寫帳號和密碼"}), 400
-    
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"message": "資料庫連接失敗"}), 500
-    
+    """一般登入功能 - 支持 JSON 和 FormData"""
+    conn = None
     try:
-        with conn.cursor() as cursor:
-            # 查詢使用者帳號、角色、狀態是否正確
-            sql = "SELECT username, role, status FROM user WHERE username=%s AND password=%s"
-            cursor.execute(sql, (username, password))
-            user = cursor.fetchone()
-            
-            if user:
-                # 檢查帳號是否被停用
-                if user[2] == 0:  # status = 0 表示停用
-                    return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
+        # 支持 JSON 和 FormData 兩種格式
+        if request.is_json:
+            data = request.get_json()
+            username = data.get('username') if data else None
+            password = data.get('password') if data else None
+        else:
+            username = request.form.get('username')
+            password = request.form.get('password')
+        
+        print(f"🔐 登入嘗試 - 用戶名: {username}, Content-Type: {request.content_type}")
+        print(f"   請求方法: {request.method}, URL: {request.url}")
+        
+        if not username or not password:
+            print("❌ 缺少用戶名或密碼")
+            return jsonify({
+                "message": "請填寫帳號和密碼",
+                "error": "missing_credentials"
+            }), 400
+        
+        # 清理輸入（移除前後空格）
+        username = username.strip()
+        password = password.strip()
+        
+        print(f"📡 嘗試連接資料庫: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
+        conn = get_db_connection()
+        if not conn:
+            print("❌ 資料庫連接失敗")
+            error_response = {
+                "message": "資料庫連接失敗，請稍後再試或聯繫管理員",
+                "error": "database_connection_failed",
+                "host": DB_CONFIG['host'],
+                "port": DB_CONFIG['port'],
+                "database": DB_CONFIG['database']
+            }
+            if app.debug:
+                error_response["debug"] = "請檢查資料庫伺服器是否運行，網路是否正常"
+            return jsonify(error_response), 500
+        
+        print("✅ 資料庫連接成功，開始查詢用戶")
+        
+        try:
+            with conn.cursor() as cursor:
+                # 先查詢用戶是否存在（不檢查密碼）
+                print(f"   查詢用戶: {username}")
+                cursor.execute(
+                    "SELECT username, role, status, password FROM user WHERE username = %s",
+                    (username,)
+                )
+                user = cursor.fetchone()
                 
+                if not user:
+                    print(f"❌ 用戶不存在: {username}")
+                    return jsonify({
+                        "message": "帳號或密碼錯誤",
+                        "error": "invalid_credentials"
+                    }), 401
+                
+                print(f"   找到用戶: {user[0]}, 角色: {user[1]}, 狀態: {user[2]}")
+                
+                # 檢查密碼（支持明文和未來可能的哈希）
+                db_password = user[3] if user[3] else ''
+                if password != db_password:
+                    print(f"❌ 密碼錯誤: {username} (輸入: {password[:3]}..., DB: {db_password[:3] if db_password else 'None'}...)")
+                    return jsonify({
+                        "message": "帳號或密碼錯誤",
+                        "error": "invalid_credentials"
+                    }), 401
+                
+                # 檢查帳號是否被停用
+                # status 欄位：None/1 表示啟用，0 表示停用
+                status = user[2]
+                if status is None:
+                    # 如果 status 為 NULL，預設為啟用
+                    print(f"   狀態為 NULL，預設為啟用")
+                    status = 1
+                
+                if status == 0:  # status = 0 表示停用
+                    print(f"❌ 帳號被停用: {username}")
+                    return jsonify({
+                        "message": "您的帳號已被停用，請聯繫管理員。",
+                        "error": "account_disabled"
+                    }), 403
+                
+                print(f"✅ 登入成功: {username}, 角色: {user[1]}")
                 return jsonify({
                     "message": "登入成功",
                     "username": user[0],
-                    "role": user[1]
+                    "role": user[1],
+                    "success": True
                 }), 200
-            else:
-                return jsonify({"message": "帳號或密碼錯誤"}), 401
+                
+        except pymysql.Error as e:
+            print(f"❌ 登入資料庫錯誤: {e}")
+            import traceback
+            traceback.print_exc()
+            error_response = {
+                "message": "資料庫操作失敗，請稍後再試",
+                "error": "database_error",
+                "details": str(e)
+            }
+            if app.debug:
+                error_response["traceback"] = traceback.format_exc()
+            return jsonify(error_response), 500
+        finally:
+            if conn:
+                conn.close()
+                print("   資料庫連接已關閉")
                 
     except Exception as e:
-        print(f"登入錯誤: {e}")
-        return jsonify({"message": "登入失敗，請稍後再試。"}), 500
-    finally:
-        conn.close()
+        print(f"❌ 登入發生未知錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        error_response = {
+            "message": "登入失敗，請稍後再試",
+            "error": "unknown_error",
+            "details": str(e)
+        }
+        if app.debug:
+            error_response["traceback"] = traceback.format_exc()
+        return jsonify(error_response), 500
 
 @app.route('/sign', methods=['POST'])
 def register():
@@ -339,12 +498,16 @@ def register():
         print(f"註冊錯誤: {e}")
         return jsonify({"message": "註冊失敗，請稍後再試。"}), 500
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/user/select-role', methods=['POST'])
 def select_role():
     """Gmail用戶選擇角色"""
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "缺少必要參數"}), 400
+    
     username = data.get('username')
     role = data.get('role')
     
@@ -374,12 +537,44 @@ def select_role():
         print(f"更新角色錯誤: {e}")
         return jsonify({"error": "更新失敗"}), 500
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康檢查端點"""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()}), 200
+
+@app.route('/test/db', methods=['GET'])
+def test_db_connection():
+    """測試資料庫連接"""
+    try:
+        conn = get_db_connection()
+        if conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            conn.close()
+            return jsonify({
+                "status": "success",
+                "message": "資料庫連接正常",
+                "host": DB_CONFIG['host'],
+                "database": DB_CONFIG['database']
+            }), 200
+        else:
+            return jsonify({
+                "status": "failed",
+                "message": "資料庫連接失敗",
+                "host": DB_CONFIG['host'],
+                "database": DB_CONFIG['database']
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"資料庫測試失敗: {str(e)}",
+            "host": DB_CONFIG['host'],
+            "database": DB_CONFIG['database']
+        }), 500
 
 @app.route('/enrollment/submit', methods=['POST'])
 def submit_enrollment():
@@ -389,13 +584,12 @@ def submit_enrollment():
         data = request.form.to_dict()
         
         # 連接資料庫
-        connection = pymysql.connect(
-            host='100.79.58.120',
-            user='root',
-            password='',
-            database='topics_good',
-            charset='utf8mb4'
-        )
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({
+                'success': False,
+                'message': '資料庫連接失敗，請稍後再試'
+            }), 500
         
         with connection.cursor() as cursor:
             # 檢查資料表是否存在，如果不存在則創建
@@ -487,10 +681,14 @@ def submit_enrollment():
         })
         
     except Exception as e:
+        print(f"提交就讀意願表單錯誤: {e}")
         return jsonify({
             'success': False,
             'message': f'提交失敗: {str(e)}'
         }), 500
+    finally:
+        if 'connection' in locals() and connection:
+            connection.close()
 
 # ✅ 獲取老師個人資料
 @app.route('/teacher/profile/<username>', methods=['GET'])
@@ -576,11 +774,13 @@ def save_teacher_profile():
             return jsonify({"message": "個人資料保存成功"}), 200
 
     except pymysql.Error as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         print(f"資料庫寫入錯誤：{e}")
         return jsonify({"message": "保存失敗，請稍後再試。原因：資料庫錯誤"}), 500
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         print(f"未知錯誤：{e}")
         return jsonify({"message": "保存失敗，發生未知錯誤。"}), 500
     finally:

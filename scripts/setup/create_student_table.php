@@ -3,7 +3,7 @@
  * 創建學生表腳本
  */
 
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

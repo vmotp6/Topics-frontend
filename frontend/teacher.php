@@ -1003,7 +1003,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
 			
-			fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+			fetch(`http://localhost:5000/teacher/profile/${username}`, {
 				signal: controller.signal,
 				method: 'GET',
 				headers: {

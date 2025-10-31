@@ -27,7 +27,7 @@ $permission_result = $auth->checkPermission($user_email);
 $can_post_message = $permission_result['has_permission'];
 
 // 資料庫連接 - 使用與現有系統相同的配置
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

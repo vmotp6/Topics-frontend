@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 # 數據庫連接配置
 DB_CONFIG = {
-    'host': '100.79.58.120',
+    'host': 'localhost',
     'user': 'root',
     'password': '',
     'database': 'topics_good',

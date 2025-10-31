@@ -5,8 +5,8 @@
 
 // Ollama 專用資料庫配置
 function getOllamaDatabaseConnection() {
-    // 使用與Topics系統相同的遠程MySQL服務器配置
-    $host = '100.79.58.120';  // 遠程MySQL服務器IP
+    // 使用本地MySQL資料庫配置
+    $host = 'localhost';  // 本地資料庫
     $dbname = 'ollama';        // ollama資料庫
     $username = 'root';        // MySQL用戶名
     $password = '';             // MySQL密碼
@@ -44,7 +44,7 @@ function getOllamaDatabaseConnection() {
 
 // 檢查 Ollama 資料庫是否存在，如果不存在則創建
 function ensureOllamaDatabase() {
-    $host = '100.79.58.120';  // 使用遠程服務器
+    $host = 'localhost';  // 本地資料庫
     $username = 'root';
     $password = '';
     
@@ -74,7 +74,7 @@ function ensureOllamaDatabase() {
 
 // 獲取 FAQ 資料（從 topics_good 資料庫）
 function getFAQFromTopicsGood() {
-    $host = '100.79.58.120';  // 使用遠程服務器
+    $host = 'localhost';  // 本地資料庫
     $dbname = 'topics_good';
     $username = 'root';
     $password = '';

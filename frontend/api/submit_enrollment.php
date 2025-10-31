@@ -152,7 +152,7 @@ function sendEnrollmentNotification($data) {
 }
 
 // 資料庫連接
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';
