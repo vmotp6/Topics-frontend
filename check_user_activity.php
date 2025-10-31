@@ -4,7 +4,7 @@
  */
 
 // 數據庫連接配置
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

@@ -9,7 +9,7 @@ def check_database_structure():
     """檢查資料庫結構"""
     try:
         conn = pymysql.connect(
-            host='100.79.58.120',
+            host='localhost',
             user='root',
             password='',
             database='topics_good'

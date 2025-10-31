@@ -13,7 +13,7 @@ class FCMService {
         $this->serverKey = getenv('FIREBASE_SERVER_KEY') ?: 'your-firebase-server-key';
         
         // 資料庫連接
-        $host = '100.79.58.120';
+        $host = 'localhost';
         $dbname = 'topics_good';
         $db_username = 'root';
         $db_password = '';
@@ -112,7 +112,7 @@ class FCMService {
             'to_user' => $toUser,
             'message' => $message,
             'message_id' => $messageId,
-            'chat_url' => 'http://100.79.58.120/frontend/chat/chat.php',
+            'chat_url' => 'http://localhost/frontend/chat/chat.php',
             'action' => 'open_chat'
         ];
         
@@ -145,7 +145,7 @@ class FCMService {
             'group_name' => $groupName,
             'group_id' => $groupId,
             'message' => $message,
-            'chat_url' => 'http://100.79.58.120/frontend/chat/chat.php',
+            'chat_url' => 'http://localhost/frontend/chat/chat.php',
             'action' => 'open_group_chat'
         ];
         

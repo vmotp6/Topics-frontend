@@ -20,14 +20,14 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
     exit;
 }
 
-// 先以 session 內的使用者識別，稍後從資料庫取 email 後再決定權限
+// 檢查留言權限
 $auth = new SeniorMessageAuth();
-$session_username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
-$permission_result = ['has_permission' => false];
-$can_post_message = false;
+$user_email = $_SESSION['username'];
+$permission_result = $auth->checkPermission($user_email);
+$can_post_message = $permission_result['has_permission'];
 
 // 資料庫連接 - 使用與現有系統相同的配置
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';
@@ -39,46 +39,6 @@ try {
     die("資料庫連接失敗: " . $e->getMessage());
 }
 
-// 以 user 資料表中的 email 判斷是否為學生帳號 (@stu.ukn.edu.tw)
-try {
-    $user_email = '';
-    // 若 session 已經是 email，直接使用
-    if (strpos($session_username, '@') !== false) {
-        $user_email = $session_username;
-    } else {
-        // 以 username 或 email 任一匹配取得 email
-        $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ? OR email = ? LIMIT 1");
-        $stmt->execute([$session_username, $session_username]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row && !empty($row['email'])) {
-            $user_email = $row['email'];
-        } else {
-            // 再嘗試用 email 欄位直接比對（如果 username 其實就存 email）
-            $stmt = $pdo->prepare("SELECT email FROM user WHERE email = ? LIMIT 1");
-            $stmt->execute([$session_username]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row && !empty($row['email'])) {
-                $user_email = $row['email'];
-            }
-        }
-    }
-
-    // 檢查 email 是否為學生成員 (@stu.ukn.edu.tw)
-    $endsWithStudentDomain = $user_email !== '' && substr_compare($user_email, '@stu.ukn.edu.tw', -strlen('@stu.ukn.edu.tw')) === 0;
-    $can_post_message = $endsWithStudentDomain;
-    $permission_result = [
-        'has_permission' => $can_post_message,
-        'error' => $can_post_message ? null : '僅限 @stu.ukn.edu.tw 學生帳號可發布留言'
-    ];
-} catch(PDOException $e) {
-    // 若查詢失敗，保持不可發布並顯示錯誤
-    $user_email = '';
-    $permission_result = [
-        'has_permission' => false,
-        'error' => '無法讀取使用者信箱：' . $e->getMessage()
-    ];
-}
-
 // 獲取留言資料
 $messages = [];
 try {
@@ -87,7 +47,7 @@ try {
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // 為每個留言檢查用戶是否已點讚
-    // 使用資料庫中的 email 作為唯一識別
+    $user_email = $_SESSION['username'];
     foreach ($messages as &$message) {
         try {
             $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
@@ -104,27 +64,9 @@ try {
 
 // 處理愛心切換功能
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_like') {
-    header('Content-Type: application/json');
     $message_id = (int)$_POST['message_id'];
     $is_liked = $_POST['is_liked'] === '1';
-    // 重新以資料庫 email 作為識別，避免使用 username
-    try {
-        $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ? OR email = ? LIMIT 1");
-        $u = $_SESSION['username'] ?? '';
-        $stmt->execute([$u, $u]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $user_email = $row && !empty($row['email']) ? $row['email'] : '';
-        if ($user_email === '' && isset($_SESSION['username']) && strpos($_SESSION['username'], '@') !== false) {
-            // 若 session 原本就是 email，直接使用
-            $user_email = $_SESSION['username'];
-        }
-    } catch (Exception $e) {
-        $user_email = '';
-    }
-    if ($user_email === '') {
-        echo json_encode(['success' => false, 'error' => '找不到使用者信箱']);
-        exit;
-    }
+    $user_email = $_SESSION['username'];
     
     try {
         // 檢查 message_likes 表是否存在
@@ -175,7 +117,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // 處理瀏覽次數更新
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'view') {
-    header('Content-Type: application/json');
     $message_id = (int)$_POST['message_id'];
     try {
         $stmt = $pdo->prepare("UPDATE senior_messages SET view_count = view_count + 1 WHERE id = ?");

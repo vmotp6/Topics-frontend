@@ -11,7 +11,7 @@ templates = Jinja2Templates(directory="templates")
 # 設定 MySQL 連線
 def get_db():
     return pymysql.connect(
-        host="100.79.58.120",  # 使用本機資料庫
+        host="localhost",  # 使用本機資料庫
         user="root",          # 你的 MySQL 帳號
         password="",          # 你的 MySQL 密碼
         database="topics_good",  # 你的資料庫名稱

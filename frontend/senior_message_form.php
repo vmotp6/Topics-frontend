@@ -21,31 +21,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
 }
 
 $auth = new SeniorMessageAuth();
-// 僅以 user 資料表中的 email 判斷（不讀取 username 作為信箱）
-$user_email = '';
-$sessionUser = $_SESSION['username'] ?? '';
-if (strpos($sessionUser, '@') !== false) {
-    $user_email = $sessionUser;
-} else {
-    // 使用 PDO 讀取，避免不同驅動相容性問題
-    try {
-        $host = '100.79.58.120';
-        $dbname = 'topics_good';
-        $dbu = 'root';
-        $dbp = '';
-        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $dbu, $dbp);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ? OR email = ? LIMIT 1");
-        $stmt->execute([$sessionUser, $sessionUser]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row && !empty($row['email'])) {
-            $user_email = $row['email'];
-        }
-    } catch (Exception $e) {
-        error_log('PDO 讀取 email 失敗: ' . $e->getMessage());
-    }
-}
-
+$user_email = $_SESSION['username']; // 假設username就是email
 $permission_result = $auth->checkPermission($user_email);
 
 // 從資料庫獲取用戶姓名
@@ -55,8 +31,8 @@ try {
     if (file_exists($configPath)) {
         require_once $configPath;
         $conn = getDatabaseConnection();
-            if ($conn) {
-            $stmt = $conn->prepare("SELECT name FROM user WHERE email = ?");
+        if ($conn) {
+            $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
             $stmt->bind_param("s", $user_email);
             $stmt->execute();
             $result = $stmt->get_result();

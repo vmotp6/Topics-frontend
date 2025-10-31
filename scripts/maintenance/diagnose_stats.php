@@ -2,7 +2,7 @@
 header('Content-Type: text/html; charset=utf-8');
 echo "<h1>🔍 統計數據診斷工具</h1>\n";
 
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

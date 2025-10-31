@@ -189,7 +189,7 @@ try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
                 
-                fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+                fetch(`http://localhost:5000/teacher/profile/${username}`, {
                     signal: controller.signal,
                     method: 'GET',
                     headers: {
@@ -241,7 +241,7 @@ try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
             
-            fetch('http://100.79.58.120:5000/teacher/profile', {
+            fetch('http://localhost:5000/teacher/profile', {
                 method: 'POST',
                 body: formData,
                 signal: controller.signal
