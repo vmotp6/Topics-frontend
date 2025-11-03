@@ -14,41 +14,39 @@ $isLoggedIn = isset($_SESSION['username']);
 	<div class="resize-handle-r"></div>
 	
 	<div id="ai-header">
-		康寧大學新生科系推薦助手 
-		<span id="ai-clear" title="清除對話記錄">🗑️</span>
-		<span id="ai-close">✖</span>
-		<span id="ai-hide-permanently" title="永久關閉AI按鈕">🚫</span>
+		<div id="ai-header-left">
+			<span id="ai-title">🌟 康寧大學可愛小助手 ✨</span>
+			<div id="ai-badges">
+				<span class="badge bg-success" id="ai-status">🤖 AI驅動</span>
+				<span class="badge bg-info">⚡ Ollama增強</span>
+			</div>
+		</div>
+		<div id="ai-header-right">
+			<span id="ai-close">✖</span>
+		</div>
 		<div id="ai-resize-hint" title="拖拽AI框邊緣可調整大小">⤡</div>
 	</div>
 	<div id="ai-messages">
 		<?php if ($isLoggedIn): ?>
-			<p>👋 歡迎來到康寧大學！我是您的新生科系推薦助手！</p>
-			<div class="ai-feature-intro">
-				<h4>🎓 康寧大學科系介紹</h4>
-				<ul>
-					<li><strong>資訊管理科：</strong>培養資訊科技與管理整合人才，符合數位時代需求</li>
-					<li><strong>企業管理科：</strong>培養企業經營管理專業人才，適合對商業管理有興趣的學生</li>
-					<li><strong>護理科：</strong>培養專業護理人才，提供臨床實習機會，就業前景佳</li>
-					<li><strong>幼保科：</strong>培養嬰幼兒教育與保育專業人才，適合對幼兒教育有熱忱的學生</li>
-					<li><strong>應用外語科：</strong>培養外語應用與國際商務專業人才，提升語言能力與國際視野</li>
-					<li><strong>視光科：</strong>專精視力保健與眼鏡配製，結合理論與實務</li>
-					<li><strong>動畫科：</strong>培養動畫製作與多媒體設計專業人才，適合對創意設計有興趣的學生</li>
-				</ul>
+			<div class="chat-message bot-message">
+				<div class="message-content">
+					🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
+					🤖 我擁有超強的 AI 大腦，專門為您解答所有招生疑問！<br>
+					💡 想知道科系資訊？學費多少？申請流程？通通問我就對了！<br>
+					🎯 我會用最準確的資料庫資訊為您服務，讓您的升學之路更順利～<br>
+					💝 快來和我聊天吧！我已經準備好為您解答囉～ 😊
+				</div>
+				<div class="message-time"></div>
 			</div>
-			<p>💡 <strong>我可以幫助您：</strong></p>
-			<p>• 根據您的興趣和特質推薦適合的科系</p>
-			<p>• 介紹各科系的課程特色與就業前景</p>
-			<p>• 解答關於入學管道、學費、住宿等問題</p>
-			<p>• 提供新生入學準備建議</p>
 		<?php else: ?>
 			<div class="ai-login-prompt">
-				<p>🔒 請先登入才能使用康寧大學新生科系推薦功能</p>
+				<p>🔒 請先登入才能使用康寧大學可愛小助手</p>
 				<p>登入後您可以：</p>
 				<ul style="text-align: left; display: inline-block;">
-					<li>獲得個人化的科系推薦建議</li>
-					<li>了解各科系的詳細資訊與特色</li>
-					<li>獲得新生入學準備指導</li>
-					<li>解答關於康寧大學的各種問題</li>
+					<li>使用 AI 智能問答功能</li>
+					<li>獲得招生相關問題的專業解答</li>
+					<li>了解科系、學費、申請流程等資訊</li>
+					<li>獲得個人化的升學建議</li>
 				</ul>
 				<p><a href="#" onclick="openLoginModal()">點擊這裡登入</a></p>
 			</div>
@@ -56,8 +54,18 @@ $isLoggedIn = isset($_SESSION['username']);
 	</div>
 	<?php if ($isLoggedIn): ?>
 		<div id="ai-input">
-			<input type="text" placeholder="請告訴我您的興趣、特質或想了解的科系..." id="ai-input-field">
-			<button id="ai-send-msg">送出</button>
+			<input type="text" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" id="ai-input-field" maxlength="500">
+			<button id="ai-send-msg">🚀 發送</button>
+		</div>
+		<div id="ai-controls">
+			<div id="ai-controls-tip">
+				<small class="text-muted">💡 小提示：可以問我科系、學費、招生、校園生活等任何問題喔～</small>
+			</div>
+			<div id="ai-controls-buttons">
+				<button type="button" id="ai-test-btn" onclick="testAIConnection()">
+					🔧 測試AI
+				</button>
+			</div>
 		</div>
 	<?php endif; ?>
 </div>
@@ -90,13 +98,14 @@ $isLoggedIn = isset($_SESSION['username']);
   box-shadow: 0 6px 16px rgba(255, 107, 53, 0.6);
 }
 
+
 /* AI功能視窗 */
 #ai-box {
   position: fixed;
-  top: calc(100vh - 650px); /* 改用top定位，從下邊算起 */
-  left: calc(100vw - 430px); /* 改用left定位，從右邊算起 */
-  width: 400px;
-  height: 550px;
+  bottom: 30px;
+  right: 30px;
+  width: 480px;
+  height: 600px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
@@ -106,8 +115,8 @@ $isLoggedIn = isset($_SESSION['username']);
   border: 2px solid #e0e0e0;
   resize: both;
   overflow: hidden;
-  min-width: 350px;
-  min-height: 450px;
+  min-width: 420px;
+  min-height: 500px;
   max-width: 700px;
   max-height: 800px;
   cursor: default;
@@ -246,63 +255,90 @@ $isLoggedIn = isset($_SESSION['username']);
 #ai-header {
   background: linear-gradient(135deg, #ff6b35, #f7931e);
   color: white;
-  padding: 15px 20px;
+  padding: 12px 18px;
   border-radius: 12px 12px 0 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: bold;
+  position: relative;
+  min-height: 58px;
+  gap: 12px;
+  overflow: visible;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+#ai-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+}
+
+#ai-title {
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+#ai-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+#ai-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
+  z-index: 101;
+  position: relative;
+  overflow: visible;
 }
 
 #ai-close {
   cursor: pointer;
-  font-size: 18px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-#ai-clear {
-  cursor: pointer;
   font-size: 16px;
-  padding: 2px 6px;
+  padding: 6px 10px;
   border-radius: 4px;
   transition: background-color 0.2s;
-  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
 }
 
-#ai-clear:hover {
-  background-color: rgba(255, 193, 7, 0.2);
-}
 
 #ai-close:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
-#ai-hide-permanently {
-  cursor: pointer;
-  font-size: 16px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  margin-left: 8px;
-}
-
-#ai-hide-permanently:hover {
-  background-color: rgba(255, 0, 0, 0.2);
-}
 
 #ai-resize-hint {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
-  font-size: 16px;
-  opacity: 0.8;
+  bottom: 8px;
+  right: 8px;
+  font-size: 12px;
+  opacity: 0.6;
   pointer-events: none;
   animation: ai-pulse 2s infinite;
-  background: rgba(255, 107, 53, 0.1);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
-  padding: 2px 4px;
+  padding: 2px 5px;
+  z-index: 5;
 }
 
 @keyframes ai-pulse {
@@ -334,6 +370,149 @@ $isLoggedIn = isset($_SESSION['username']);
   border-left: 4px solid #ff6b35;
 }
 
+/* 聊天消息樣式 */
+.chat-message {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: flex-start;
+  animation: fadeInUp 0.3s ease;
+}
+
+.chat-message.user-message {
+  justify-content: flex-end;
+}
+
+.chat-message.user-message .message-content {
+  background: #ff6b35;
+  color: white;
+  border-radius: 18px 18px 5px 18px;
+  max-width: 70%;
+}
+
+.chat-message.bot-message .message-content {
+  background: white;
+  color: #333;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px 18px 18px 18px;
+  max-width: 70%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.message-content {
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-line;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #999;
+  margin-top: 5px;
+  text-align: right;
+}
+
+.message-metadata {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+/* 打字動畫 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px 18px 18px 18px;
+  max-width: 70px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  background: #ff6b35;
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.bg-success {
+  background-color: #28a745 !important;
+  color: white;
+}
+
+.bg-info {
+  background-color: #17a2b8 !important;
+  color: white;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
+  color: #212529;
+}
+
+.me-1 {
+  margin-right: 0.25rem !important;
+}
+
+.me-2 {
+  margin-right: 0.5rem !important;
+}
+
+.ms-2 {
+  margin-left: 0.5rem !important;
+}
+
+.text-muted {
+  color: #6c757d !important;
+}
+
 /* AI助手回覆樣式 */
 #ai-messages p:has(b:contains("AI助手")) {
   background: #fff8e1;
@@ -353,12 +532,74 @@ $isLoggedIn = isset($_SESSION['username']);
   gap: 10px;
 }
 
+#ai-controls {
+  padding: 10px 15px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+#ai-controls-tip {
+  flex: 1;
+  min-width: 200px;
+}
+
+#ai-controls-tip small {
+  color: #6c757d;
+  line-height: 1.4;
+}
+
+#ai-controls-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#ai-test-btn {
+  background-color: #007bff;
+  color: white;
+  border: 1px solid #007bff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+#ai-test-btn:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+#ai-test-btn:active {
+  transform: translateY(0);
+}
+
+#ai-test-btn:disabled {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 #ai-input input {
   flex: 1;
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
+  min-width: 220px;
 }
 
 #ai-input input:focus {
@@ -427,9 +668,11 @@ $isLoggedIn = isset($_SESSION['username']);
 /* 響應式設計 */
 @media screen and (max-width: 768px) {
   #ai-box {
-    width: 90%;
-    right: 5%;
+    width: 95%;
+    max-width: 480px;
+    right: 2.5%;
     bottom: 80px;
+    min-width: 380px;
   }
   
   #ai-float-btn {
@@ -439,21 +682,134 @@ $isLoggedIn = isset($_SESSION['username']);
     height: 50px;
     font-size: 20px;
   }
+  
+  #ai-header {
+    padding: 10px 12px;
+    min-height: 65px;
+    gap: 8px;
+  }
+  
+  #ai-title {
+    font-size: 13px;
+  }
+  
+  .badge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  
+  #ai-header-right {
+    gap: 6px;
+    margin-left: 8px;
+  }
+  
+  #ai-close {
+    font-size: 14px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 4px 6px;
+  }
+  
+  #ai-controls {
+    padding: 8px 12px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  #ai-controls-tip {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  #ai-controls-buttons {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  
+  #ai-controls-tip small {
+    font-size: 11px;
+  }
+  
+  #ai-controls-buttons {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  
+  #ai-test-btn {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
 }
 </style>
 
 <!-- AI功能 JavaScript -->
 <script>
 $(document).ready(function() {
+	let qaKeywords = null; // 儲存關鍵詞資料
+	
+	// 1. 載入關鍵詞資料
+	$.getJSON("../assets/qa_keywords.json", function(data) {
+		qaKeywords = data;
+		console.log("關鍵詞資料載入成功", qaKeywords);
+	}).fail(function() {
+		console.error("關鍵詞資料載入失敗");
+	});
+	
+	// 2. 檢查Ollama服務狀態
+	checkOllamaHealth();
+	
+	// 檢查Ollama健康狀態
+	function checkOllamaHealth() {
+		console.log('🔍 開始檢查Ollama健康狀態...');
+		$.get('../backend/api/ollama/ollama_api.php?action=check_health')
+			.done(function(response) {
+				console.log('✅ Ollama健康檢查響應:', response);
+				if (response.success) {
+					$('#ai-status').removeClass('bg-warning').addClass('bg-success').text('🤖 AI驅動');
+					console.log('🎉 Ollama服務正常，AI可用');
+				} else {
+					$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI離線');
+					console.warn('⚠️ Ollama服務異常:', response.message);
+				}
+			})
+			.fail(function(xhr, status, error) {
+				console.error('❌ Ollama健康檢查失敗:', {
+					status: xhr.status,
+					statusText: xhr.statusText,
+					responseText: xhr.responseText,
+					error: error
+				});
+				$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+				console.error('❌ 無法連接到Ollama API，請檢查服務器是否運行');
+			});
+	}
+	
+	// 初始化時間戳
+	setTimeout(function() {
+		const time = new Date().toLocaleTimeString('zh-TW', { 
+			hour: '2-digit', 
+			minute: '2-digit' 
+		});
+		$('.chat-message:first .message-time').text(time);
+	}, 100);
+	
 	// 載入AI對話記錄
 	loadAIHistory();
 	
 	// 點擊AI浮動按鈕，顯示/隱藏AI視窗
 	$('#ai-float-btn').click(function() {
-		$('#ai-box').toggle();
-		
-		// 如果AI框顯示了，給用戶一個提示
 		if ($('#ai-box').is(':visible')) {
+			// 如果已經顯示，則隱藏
+			$('#ai-box').hide();
+			$('#ai-float-btn').show();
+		} else {
+			// 如果隱藏，則顯示並隱藏開啟按鈕
+			$('#ai-box').show();
+			$('#ai-float-btn').hide();
+			
 			// 顯示調整大小提示
 			setTimeout(function() {
 				$('#ai-resize-hint').css('opacity', '1');
@@ -466,70 +822,120 @@ $(document).ready(function() {
 		}
 	});
 
-	// 點擊清除AI對話記錄按鈕
-	$('#ai-clear').click(function() {
-		if (confirm('確定要清除所有AI對話記錄嗎？此操作無法復原。')) {
-			<?php if ($isLoggedIn): ?>
-			// 從資料庫清除記錄
-			$.ajax({
-				url: '../backend/api/chat/ai_chat_api.php',
-				type: 'POST',
-				data: { action: 'clear_history' },
-				dataType: 'json',
-				success: function(response) {
-					if (response.success) {
-						$('#ai-messages').html('');
-						// 重新載入歡迎訊息
-						loadAIWelcomeMessage();
-					} else {
-						alert('清除記錄失敗: ' + response.error);
-					}
-				},
-				error: function() {
-					alert('清除記錄失敗');
-				}
-			});
-			<?php else: ?>
-			$('#ai-messages').html('');
-			// 重新載入歡迎訊息
-			loadAIWelcomeMessage();
-			<?php endif; ?>
-		}
-	});
-
 	// 點擊關閉按鈕
 	$('#ai-close').click(function() {
 		$('#ai-box').hide();
+		// 顯示開啟按鈕
+		$('#ai-float-btn').show();
 	});
 
-	// 點擊永久關閉AI按鈕
-	$('#ai-hide-permanently').click(function() {
-		if (confirm('確定要永久關閉AI按鈕嗎？您可以在瀏覽器設定中重新啟用。')) {
-			$.post('hide_ai.php', {hide_ai: true}, function(data) {
-				if (data.success) {
-					$('#ai-float-btn').hide();
-					$('#ai-box').hide();
-				}
-			}, 'json');
-		}
-	});
 
 	// 發送AI訊息（只有登入用戶才能使用）
-	$('#ai-send-msg').click(function() {
-		let msg = $('#ai-input-field').val().trim();
-		if (msg) {
-			addAIMessage('你', msg);
-			$('#ai-input-field').val('');
+	function sendQuestion() {
+		const question = $('#ai-input-field').val().trim();
+		
+		if (!question) {
+			alert('請輸入您的問題');
+			return;
+		}
+
+		// 顯示使用者問題
+		addMessage(question, true);
+		$('#ai-input-field').val('');
+		$('#ai-send-msg').prop('disabled', true);
+
+		// 顯示打字動畫
+		showTypingIndicator();
+
+		// 使用AI回答
+		findAnswer(question).then(function(result) {
+			removeTypingIndicator();
+			addMessage(result.answer, false, result);
+			$('#ai-send-msg').prop('disabled', false);
 			
-			// AI科系推薦回覆
-			setTimeout(function() {
-				let aiResponse = getAIResponse(msg);
-				addAIMessage('AI助手', aiResponse);
-			}, 1000);
+			// 保存到資料庫
+			saveAIMessageToDatabase('ai', result.answer);
+		}).catch(function(error) {
+			removeTypingIndicator();
+			addMessage('抱歉，系統暫時無法回應，請稍後再試。', false, {source_type: 'error'});
+			$('#ai-send-msg').prop('disabled', false);
+			console.error('問答錯誤:', error);
+		});
+	}
+	
+	$('#ai-send-msg').click(sendQuestion);
+	
+	$('#ai-input-field').keypress(function(e) {
+		if (e.which === 13 && !e.shiftKey) { // Enter 鍵且沒按 Shift
+			e.preventDefault();
+			sendQuestion();
 		}
 	});
 	
-	// 添加AI訊息到對話記錄
+	// 添加消息到對話記錄（新版本，支持元數據）
+	function addMessage(content, isUser = false, metadata = null) {
+		const messageClass = isUser ? 'user-message' : 'bot-message';
+		const time = new Date().toLocaleTimeString('zh-TW', { 
+			hour: '2-digit', 
+			minute: '2-digit' 
+		});
+		
+		let metadataHtml = '';
+		if (metadata && !isUser) {
+			let sourceBadge = '';
+			if (metadata.source_type === 'ollama_ai') {
+				sourceBadge = '<span class="badge bg-success me-1">AI</span>';
+			} else if (metadata.source_type === 'keyword_match') {
+				sourceBadge = '<span class="badge bg-info me-1">關鍵詞</span>';
+			} else {
+				sourceBadge = '<span class="badge bg-warning me-1">回退</span>';
+			}
+			
+			metadataHtml = `
+				<div class="message-metadata mt-1">
+					${sourceBadge}
+					${metadata.model ? `<small class="text-muted">模型: ${metadata.model}</small>` : ''}
+					${metadata.response_time ? `<small class="text-muted ms-2">回應時間: ${metadata.response_time}ms</small>` : ''}
+				</div>
+			`;
+		}
+		
+		const messageHtml = `
+			<div class="chat-message ${messageClass}">
+				<div class="message-content">${content}</div>
+				${metadataHtml}
+				<div class="message-time">${time}</div>
+			</div>
+		`;
+		
+		$('#ai-messages').append(messageHtml);
+		$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
+		
+		// 如果是用戶消息，保存到資料庫
+		if (isUser) {
+			saveAIMessageToDatabase('user', content);
+		}
+	}
+
+	function showTypingIndicator() {
+		const typingHtml = `
+			<div class="chat-message bot-message typing-message">
+				<div class="typing-indicator">
+					<div class="typing-dot"></div>
+					<div class="typing-dot"></div>
+					<div class="typing-dot"></div>
+				</div>
+			</div>
+		`;
+		$('#ai-messages').append(typingHtml);
+		$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
+	}
+
+	function removeTypingIndicator() {
+		$('.typing-message').remove();
+	}
+	
+	// 舊版本添加AI訊息到對話記錄（保留用於歷史記錄載入）
 	function addAIMessage(sender, message) {
 		let messageHtml = '<p><b>' + sender + ':</b> ' + message + '</p>';
 		$('#ai-messages').append(messageHtml);
@@ -542,7 +948,7 @@ $(document).ready(function() {
 	// 保存AI對話記錄到資料庫
 	function saveAIMessageToDatabase(sender, message) {
 		<?php if ($isLoggedIn): ?>
-		let messageType = sender === '你' ? 'user' : 'ai';
+		let messageType = (sender === '你' || sender === 'user') ? 'user' : 'ai';
 		console.log('正在保存AI訊息:', {sender, message, messageType});
 		
 		$.ajax({
@@ -585,11 +991,16 @@ $(document).ready(function() {
 				console.log('AI載入響應:', response);
 				if (response.success && response.history.length > 0) {
 					console.log('✅ 載入到', response.history.length, '條聊天記錄');
-					// 顯示歷史記錄
+					// 顯示歷史記錄（使用新格式）
 					let historyHtml = '';
 					response.history.forEach(function(msg) {
-						let sender = msg.message_type === 'user' ? '你' : 'AI助手';
-						historyHtml += '<p><b>' + sender + ':</b> ' + msg.message_content + '</p>';
+						const isUser = msg.message_type === 'user';
+						historyHtml += `
+							<div class="chat-message ${isUser ? 'user-message' : 'bot-message'}">
+								<div class="message-content">${msg.message_content}</div>
+								<div class="message-time"></div>
+							</div>
+						`;
 					});
 					$('#ai-messages').html(historyHtml);
 					$('#ai-messages').scrollTop($('#ai-messages')[0].scrollHeight);
@@ -617,32 +1028,27 @@ $(document).ready(function() {
 		let aiWelcomeMessage;
 		<?php if ($isLoggedIn): ?>
 		aiWelcomeMessage = `
-			<p>👋 歡迎使用AI科系推薦助手！</p>
-			<div class="ai-feature-intro">
-				<h4>🎯 AI助手功能介紹</h4>
-				<ul>
-					<li><strong>科系推薦：</strong>根據您的需求推薦最適合的合作科系</li>
-					<li><strong>專業分析：</strong>分析您的專案需求與科系優勢</li>
-					<li><strong>合作建議：</strong>提供具體的合作方向與建議</li>
-					<li><strong>三大科系：</strong>資訊管理科、護理科、視光科</li>
-					<li><strong>即時回覆：</strong>AI智能分析，快速推薦</li>
-					<li><strong>專業諮詢：</strong>提供產學合作的專業建議</li>
-				</ul>
+			<div class="chat-message bot-message">
+				<div class="message-content">
+					🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
+					🤖 我擁有超強的 AI 大腦，專門為您解答所有招生疑問！<br>
+					💡 想知道科系資訊？學費多少？申請流程？通通問我就對了！<br>
+					🎯 我會用最準確的資料庫資訊為您服務，讓您的升學之路更順利～<br>
+					💝 快來和我聊天吧！我已經準備好為您解答囉～ 😊
+				</div>
+				<div class="message-time"></div>
 			</div>
-			<p>💡 <strong>使用提示：</strong></p>
-			<p>• 請描述您的專案需求或合作目標</p>
-			<p>• AI會分析並推薦最適合的科系</p>
-			<p>• 可詢問具體的合作方式與優勢</p>
 		`;
 		<?php else: ?>
 		aiWelcomeMessage = `
 			<div class="ai-login-prompt">
-				<p>🔒 請先登入才能使用AI科系推薦功能</p>
+				<p>🔒 請先登入才能使用康寧大學可愛小助手</p>
 				<p>登入後您可以：</p>
 				<ul style="text-align: left; display: inline-block;">
-					<li>使用AI助手推薦最適合的科系</li>
-					<li>獲得專業的合作建議與分析</li>
-					<li>了解三大科系的專業優勢</li>
+					<li>使用 AI 智能問答功能</li>
+					<li>獲得招生相關問題的專業解答</li>
+					<li>了解科系、學費、申請流程等資訊</li>
+					<li>獲得個人化的升學建議</li>
 				</ul>
 				<p><a href="#" onclick="openLoginModal()">點擊這裡登入</a></p>
 			</div>
@@ -653,7 +1059,98 @@ $(document).ready(function() {
 		// 不保存歡迎訊息到localStorage
 	}
 	
-	// AI科系推薦功能
+	// 3. 智能問答功能 - 整合Ollama AI
+	function findAnswer(question) {
+		return new Promise((resolve, reject) => {
+			// 預設使用AI回答
+			const useAI = true;
+			console.log('🔍 開始尋找答案，使用AI:', useAI);
+			
+			if (useAI) {
+				console.log('🤖 嘗試使用Ollama AI回答...');
+				// 使用Ollama AI回答
+				$.ajax({
+					url: '../backend/api/ollama/ollama_api.php',
+					type: 'POST',
+					data: 'action=ask_question&question=' + encodeURIComponent(question) + '&use_context=true',
+					dataType: 'json',
+					timeout: 120000, // 120秒超時
+					success: function(response) {
+						console.log('✅ AI回答響應:', response);
+						if (response.success) {
+							console.log('🎉 AI回答成功，使用AI回答');
+							resolve({
+								answer: response.answer,
+								source_type: 'ollama_ai',
+								confidence_score: 0.9,
+								response_time: response.response_time_ms,
+								model: response.model
+							});
+						} else {
+							console.warn('⚠️ AI回答失敗，使用回退機制:', response.error);
+							// AI失敗時回退到關鍵詞匹配
+							const fallbackAnswer = findFallbackAnswer(question);
+							resolve({
+								answer: fallbackAnswer,
+								source_type: 'fallback',
+								confidence_score: 0.3,
+								response_time: 0
+							});
+						}
+					},
+					error: function(xhr, status, error) {
+						console.error('❌ AI請求失敗:', {
+							status: xhr.status,
+							statusText: xhr.statusText,
+							responseText: xhr.responseText,
+							error: error
+						});
+						// 網路錯誤時回退到關鍵詞匹配
+						const fallbackAnswer = findFallbackAnswer(question);
+						resolve({
+							answer: fallbackAnswer,
+							source_type: 'fallback',
+							confidence_score: 0.3,
+							response_time: 0
+						});
+					}
+				});
+			} else {
+				console.log('📝 使用關鍵詞匹配回答');
+				// 直接使用關鍵詞匹配
+				const answer = findFallbackAnswer(question);
+				resolve({
+					answer: answer,
+					source_type: 'keyword_match',
+					confidence_score: 0.7,
+					response_time: 0
+				});
+			}
+		});
+	}
+	
+	// 回退的關鍵詞匹配功能
+	function findFallbackAnswer(question) {
+		if (!qaKeywords || !qaKeywords.responses) {
+			return qaKeywords ? qaKeywords.default_response : "系統暫時無法回應，請稍後再試。";
+		}
+
+		const userQuestion = question.toLowerCase().trim();
+		
+		// 尋找匹配的關鍵詞
+		for (let response of qaKeywords.responses) {
+			for (let keyword of response.keywords) {
+				if (userQuestion.includes(keyword.toLowerCase())) {
+					return response.answer;
+				}
+			}
+		}
+		
+		// 沒有找到匹配的關鍵詞
+		return qaKeywords.default_response;
+	}
+	
+	// 舊的AI科系推薦功能（已棄用，保留作為備份）
 	function getAIResponse(message) {
 		message = message.toLowerCase();
 		
@@ -834,5 +1331,57 @@ function openLoginModal() {
 	if (loginModal) {
 		loginModal.style.display = "flex";
 	}
+}
+
+// 測試AI連接函數（全局作用域）
+function testAIConnection() {
+	console.log('🔧 開始測試AI連接...');
+	const testButton = event.target;
+	const originalText = testButton.textContent;
+	testButton.textContent = '🔄 測試中...';
+	testButton.disabled = true;
+	
+	// 測試健康檢查
+	$.get('../backend/api/ollama/ollama_api.php?action=check_health')
+		.done(function(response) {
+			console.log('✅ 健康檢查響應:', response);
+			if (response.success) {
+				// 測試實際AI回答
+				$.ajax({
+					url: '../backend/api/ollama/ollama_api.php',
+					type: 'POST',
+					data: 'action=ask_question&question=你好&use_context=false',
+					dataType: 'json',
+					timeout: 15000,
+					success: function(aiResponse) {
+						console.log('✅ AI回答測試響應:', aiResponse);
+						if (aiResponse.success) {
+							alert('🎉 AI連接測試成功！\n\n問題：你好\n回答：' + aiResponse.answer.substring(0, 100) + '...\n響應時間：' + aiResponse.response_time_ms + 'ms');
+							$('#ai-status').removeClass('bg-warning').addClass('bg-success').text('🤖 AI驅動');
+						} else {
+							alert('⚠️ AI回答失敗：' + aiResponse.error);
+							$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI異常');
+						}
+					},
+					error: function(xhr, status, error) {
+						console.error('❌ AI回答測試失敗:', xhr, status, error);
+						alert('❌ AI回答測試失敗：\n狀態：' + xhr.status + '\n錯誤：' + error + '\n\n請檢查：\n1. PHP服務器是否運行\n2. Ollama服務是否運行\n3. API路徑是否正確');
+						$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+					}
+				});
+			} else {
+				alert('⚠️ Ollama健康檢查失敗：' + response.message);
+				$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('⚠️ AI離線');
+			}
+		})
+		.fail(function(xhr, status, error) {
+			console.error('❌ 健康檢查失敗:', xhr, status, error);
+			alert('❌ 無法連接到Ollama API：\n狀態：' + xhr.status + '\n錯誤：' + error + '\n\n請檢查：\n1. PHP服務器是否運行在localhost:8000\n2. API文件是否存在\n3. 路徑是否正確');
+			$('#ai-status').removeClass('bg-success').addClass('bg-warning').text('❌ AI離線');
+		})
+		.always(function() {
+			testButton.textContent = originalText;
+			testButton.disabled = false;
+		});
 }
 </script> 
