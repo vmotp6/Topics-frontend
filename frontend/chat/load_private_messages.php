@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // 資料庫連接
-$host = 'localhost';  // 使用本機資料庫
+$host = 'localhost';
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';
@@ -18,6 +18,16 @@ $db_password = '';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 檢查表結構，自動適配正規化或非正規化版本
+    $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                        WHERE TABLE_SCHEMA = 'topics_good' 
+                        AND TABLE_NAME = 'private_chat_history' 
+                        AND COLUMN_NAME IN ('from_user', 'to_user', 'from_user_id', 'to_user_id')");
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
+    $useUsername = in_array('from_user', $columns) && in_array('to_user', $columns);
     
     // 獲取GET參數
     $from = $_GET['from'] ?? '';
@@ -28,14 +38,61 @@ try {
         exit;
     }
     
-    // 獲取兩個用戶之間的私聊訊息
-    $sql = "SELECT * FROM private_chat_history 
-            WHERE (from_user = ? AND to_user = ?) 
-            OR (from_user = ? AND to_user = ?) 
-            ORDER BY timestamp ASC";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$from, $to, $to, $from]);
-    $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if ($useUserId) {
+        // 使用正規化版本：先將 username 轉換為 user_id
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$from]);
+        $fromUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        $fromUserId = $fromUser ? $fromUser['id'] : null;
+        
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$to]);
+        $toUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        $toUserId = $toUser ? $toUser['id'] : null;
+        
+        if (!$fromUserId || !$toUserId) {
+            echo json_encode([
+                'success' => false,
+                'error' => '找不到指定的用戶'
+            ]);
+            exit;
+        }
+        
+        // 使用 user_id 查詢
+        $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                FROM private_chat_history pch
+                LEFT JOIN user u1 ON pch.from_user_id = u1.id
+                LEFT JOIN user u2 ON pch.to_user_id = u2.id
+                WHERE (pch.from_user_id = ? AND pch.to_user_id = ?) 
+                OR (pch.from_user_id = ? AND pch.to_user_id = ?) 
+                ORDER BY pch.timestamp ASC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // 轉換為兼容格式
+        foreach ($messages as &$msg) {
+            $msg['from_user'] = $msg['from_username'];
+            $msg['to_user'] = $msg['to_username'];
+            unset($msg['from_username'], $msg['to_username']);
+        }
+        
+    } elseif ($useUsername) {
+        // 使用舊版本：直接使用 username
+        $sql = "SELECT * FROM private_chat_history 
+                WHERE (from_user = ? AND to_user = ?) 
+                OR (from_user = ? AND to_user = ?) 
+                ORDER BY timestamp ASC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$from, $to, $to, $from]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'error' => 'private_chat_history 表結構異常，找不到用戶欄位'
+        ]);
+        exit;
+    }
     
     echo json_encode([
         'success' => true,

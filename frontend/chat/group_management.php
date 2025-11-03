@@ -165,11 +165,28 @@ function getGroupMessages($pdo) {
     }
     
     try {
-        $sql = "SELECT gm.id, gm.group_id, gm.from_user, gm.message, gm.role, gm.timestamp, u.role as user_role 
-                FROM group_chat_messages gm 
-                LEFT JOIN user u ON gm.from_user = u.username 
-                WHERE gm.group_id = ? 
-                ORDER BY gm.timestamp ASC";
+        // 檢查表結構，自動適配
+        $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                            WHERE TABLE_SCHEMA = 'topics_good' 
+                            AND TABLE_NAME = 'group_chat_messages' 
+                            AND COLUMN_NAME IN ('from_user', 'user_id')");
+        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (in_array('user_id', $columns)) {
+            // 使用正規化版本
+            $sql = "SELECT gm.id, gm.group_id, u.username as from_user, gm.message, gm.role, gm.timestamp, u.role as user_role 
+                    FROM group_chat_messages gm 
+                    LEFT JOIN user u ON gm.user_id = u.id 
+                    WHERE gm.group_id = ? 
+                    ORDER BY gm.timestamp ASC";
+        } else {
+            // 使用舊版本
+            $sql = "SELECT gm.id, gm.group_id, gm.from_user, gm.message, gm.role, gm.timestamp, u.role as user_role 
+                    FROM group_chat_messages gm 
+                    LEFT JOIN user u ON gm.from_user = u.username 
+                    WHERE gm.group_id = ? 
+                    ORDER BY gm.timestamp ASC";
+        }
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$groupId]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -211,10 +228,34 @@ function sendGroupMessage($pdo) {
             return;
         }
         
-        // 儲存群組訊息
-        $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, role, timestamp) VALUES (?, ?, ?, ?, NOW())";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $fromUser, $message, $role]);
+        // 檢查表結構，自動適配
+        $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                            WHERE TABLE_SCHEMA = 'topics_good' 
+                            AND TABLE_NAME = 'group_chat_messages' 
+                            AND COLUMN_NAME IN ('from_user', 'user_id')");
+        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (in_array('user_id', $columns)) {
+            // 使用正規化版本：先將 username 轉換為 user_id
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+            $stmt->execute([$fromUser]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $userId = $user ? $user['id'] : null;
+            
+            if (!$userId) {
+                echo json_encode(['success' => false, 'error' => '找不到指定的用戶']);
+                return;
+            }
+            
+            $sql = "INSERT INTO group_chat_messages (group_id, user_id, message, role, timestamp) VALUES (?, ?, ?, ?, NOW())";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$groupId, $userId, $message, $role]);
+        } else {
+            // 使用舊版本
+            $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, role, timestamp) VALUES (?, ?, ?, ?, NOW())";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$groupId, $fromUser, $message, $role]);
+        }
         
         echo json_encode([
             'success' => true,

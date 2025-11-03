@@ -413,7 +413,7 @@ if ($schoolsTableExists) {
 					<div class="form-row">
 						<div class="field-group">
 							<label>老師姓名（可選）</label>
-							<input type="text" name="teacher_name" id="teacher_name" placeholder="王小明" value="<?php echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
+							<input type="text" name="teacher_name" id="teacher_name" placeholder="周建宇" value="<?php echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
 							<small style="color: #666; font-size: 0.9em;">將作為回覆名稱顯示於郵件中</small>
 						</div>
 						<div class="field-group">
@@ -895,8 +895,14 @@ if ($schoolsTableExists) {
 		?>
 		<div class="form-container" style="margin-top:20px;">
 			<div class="form-section">
-				<h3><i class="fas fa-history"></i> 最近的發送記錄</h3>
-				<div style="overflow-x:auto;">
+				<button type="button" id="toggleHistoryBtn" onclick="toggleHistory()" style="background:#6c757d; color:#fff; border:0; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; display:flex; text-align:center; gap:6px;">
+						<i class="fas fa-eye-slash" style="margin-top:5px;"></i> <span id="toggleHistoryText">隱藏記錄</span>
+				</button>
+				<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+					<h3 style="margin:0;"><i class="fas fa-history"></i> 最近的發送記錄</h3>
+
+				</div>
+				<div id="historyTableContainer" style="overflow-x:auto;">
 					<table style="width:100%; border-collapse:collapse; font-size:14px;">
 						<thead>
 							<tr style="background:#f8f9fa; border-bottom:2px solid #dee2e6;">
@@ -925,6 +931,45 @@ if ($schoolsTableExists) {
 				</div>
 			</div>
 		</div>
+		<script>
+		// 控制歷史記錄顯示/隱藏
+		function toggleHistory() {
+			var container = document.getElementById('historyTableContainer');
+			var btn = document.getElementById('toggleHistoryBtn');
+			var text = document.getElementById('toggleHistoryText');
+			var icon = btn.querySelector('i');
+			
+			if (container.style.display === 'none') {
+				container.style.display = 'block';
+				text.textContent = '隱藏記錄';
+				icon.className = 'fas fa-eye-slash';
+				btn.style.background = '#6c757d';
+				localStorage.setItem('historyTableVisible', 'true');
+			} else {
+				container.style.display = 'none';
+				text.textContent = '顯示記錄';
+				icon.className = 'fas fa-eye';
+				btn.style.background = '#28a745';
+				localStorage.setItem('historyTableVisible', 'false');
+			}
+		}
+		
+		// 頁面載入時恢復隱藏狀態
+		document.addEventListener('DOMContentLoaded', function() {
+			var savedState = localStorage.getItem('historyTableVisible');
+			var container = document.getElementById('historyTableContainer');
+			var btn = document.getElementById('toggleHistoryBtn');
+			var text = document.getElementById('toggleHistoryText');
+			var icon = btn.querySelector('i');
+			
+			if (savedState === 'false') {
+				container.style.display = 'none';
+				text.textContent = '顯示記錄';
+				icon.className = 'fas fa-eye';
+				btn.style.background = '#28a745';
+			}
+		});
+		</script>
 		<?php
 			endif;
 		} catch (PDOException $e) {

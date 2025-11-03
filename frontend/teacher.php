@@ -943,6 +943,13 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 				<p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
 				<a href="records.php" class="feature-link">活動紀錄填寫</a>
 			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon">📱</div>
+				<h3 class="feature-title">學校活動通知系統</h3>
+				<p class="feature-description">發送學校活動通知給學生。</p>
+				<a href="mobile_teacher.php" class="feature-link">學校活動通知系統</a>
+			</div>
 			
 			<div class="feature-card">
 				<div class="feature-icon">👨‍🎓</div>
