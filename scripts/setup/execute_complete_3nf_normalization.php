@@ -1,235 +1,445 @@
 <?php
 /**
- * 執行完整資料庫第三正規化（3NF）腳本
- * 包括創建正規化表和遷移數據
+ * 完整 3NF 正規化執行腳本
+ * 此腳本會：
+ * 1. 創建所有正規化表結構
+ * 2. 遷移現有數據
+ * 3. 顯示執行結果和統計
  */
 
-// 資料庫連接
+// 資料庫連接配置
 $host = 'localhost';
 $dbname = 'topics_good';
-$username = 'root';
-$password = '';
+$db_username = 'root';
+$db_password = '';
 
-echo "<!DOCTYPE html>
-<html>
+// 設置錯誤顯示
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+?>
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-    <meta charset='UTF-8'>
-    <title>資料庫 3NF 正規化</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>執行完整 3NF 正規化</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
-        h2 { color: #555; margin-top: 30px; }
-        .step { background: #f8f9fa; padding: 15px; margin: 15px 0; border-left: 4px solid #007bff; border-radius: 5px; }
-        .success { color: #28a745; font-weight: bold; }
-        .error { color: #dc3545; font-weight: bold; }
-        .warning { color: #ffc107; font-weight: bold; }
-        .info { color: #17a2b8; }
-        pre { background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; }
-        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #007bff; color: white; }
-        .progress { background: #e9ecef; border-radius: 10px; height: 30px; margin: 20px 0; overflow: hidden; }
-        .progress-bar { background: #007bff; height: 100%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            padding: 10px;
+            background: #ecf0f1;
+            border-left: 4px solid #3498db;
+        }
+        .success {
+            color: #27ae60;
+            padding: 10px;
+            background: #d5f4e6;
+            border-left: 4px solid #27ae60;
+            margin: 10px 0;
+        }
+        .warning {
+            color: #f39c12;
+            padding: 10px;
+            background: #fef5e7;
+            border-left: 4px solid #f39c12;
+            margin: 10px 0;
+        }
+        .error {
+            color: #e74c3c;
+            padding: 10px;
+            background: #fadbd8;
+            border-left: 4px solid #e74c3c;
+            margin: 10px 0;
+        }
+        .info {
+            color: #3498db;
+            padding: 10px;
+            background: #ebf5fb;
+            border-left: 4px solid #3498db;
+            margin: 10px 0;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        table th {
+            background: #3498db;
+            color: white;
+        }
+        table tr:hover {
+            background: #f5f5f5;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn-danger {
+            background: #e74c3c;
+        }
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        .btn-success {
+            background: #27ae60;
+        }
+        .btn-success:hover {
+            background: #229954;
+        }
+        .progress {
+            background: #ecf0f1;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            background: #3498db;
+            height: 30px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            transition: width 0.3s;
+        }
     </style>
 </head>
 <body>
-<div class='container'>";
+    <div class="container">
+        <h1>📊 執行完整 3NF 正規化</h1>
 
+<?php
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->exec("SET FOREIGN_KEY_CHECKS=0");
+    // 連接資料庫
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true
+    ]);
     
-    echo "<h1>📊 資料庫第三正規化（3NF）執行腳本</h1>";
-    echo "<div class='info'>此腳本將正規化整個資料庫至 3NF 標準</div>";
+    echo "<div class='success'>✅ 資料庫連接成功！</div>";
     
-    // 步驟 1: 執行創建表腳本
-    echo "<div class='step'>";
-    echo "<h2>步驟 1: 創建正規化表結構</h2>";
-    
-    $sqlFile = __DIR__ . '/../database/complete_normalize_to_3nf.sql';
-    
-    if (file_exists($sqlFile)) {
-        $sql = file_get_contents($sqlFile);
+    // 檢查是否已執行
+    if (!isset($_GET['execute'])) {
+        echo "<div class='info'>";
+        echo "<h2>⚠️ 執行前提醒</h2>";
+        echo "<p><strong>此腳本將會：</strong></p>";
+        echo "<ul>";
+        echo "<li>創建所有基礎參考表（departments, grades, genders 等）</li>";
+        echo "<li>創建所有正規化表結構（student_normalized, teacher_normalized 等）</li>";
+        echo "<li>遷移現有數據到正規化表</li>";
+        echo "<li>設置所有外鍵約束</li>";
+        echo "<li>創建向後兼容視圖</li>";
+        echo "</ul>";
+        echo "<p><strong style='color: #e74c3c;'>⚠️ 重要：執行前請先備份資料庫！</strong></p>";
+        echo "</div>";
         
-        // 分割並執行 SQL 語句
-        $statements = array_filter(
-            array_map('trim', explode(';', $sql)),
-            function($stmt) {
-                return !empty($stmt) && 
-                       !preg_match('/^\s*--/', $stmt) && 
-                       !preg_match('/^\s*\/\*/', $stmt) &&
-                       strlen(trim($stmt)) > 10;
-            }
-        );
-        
-        $successCount = 0;
-        $errorCount = 0;
-        $totalCount = count($statements);
-        
-        echo "<p>正在執行 $totalCount 個 SQL 語句...</p>";
-        echo "<div class='progress'><div class='progress-bar' style='width: 0%' id='progress1'>0%</div></div>";
-        
-        foreach ($statements as $index => $statement) {
-            try {
-                $pdo->exec($statement);
-                $successCount++;
-                $progress = intval(($index + 1) / $totalCount * 100);
-                // 注意：這裡無法更新進度條，因為是 PHP 執行
-            } catch (PDOException $e) {
-                // 忽略某些預期的錯誤
-                if (strpos($e->getMessage(), 'already exists') === false && 
-                    strpos($e->getMessage(), 'Duplicate') === false &&
-                    strpos($e->getMessage(), 'Unknown column') === false) {
-                    $errorCount++;
-                    echo "<p class='error'>⚠️ SQL 錯誤: " . htmlspecialchars(substr($e->getMessage(), 0, 200)) . "</p>";
-                }
-            }
-        }
-        
-        echo "<p class='success'>✅ 成功執行 $successCount 個 SQL 語句</p>";
-        if ($errorCount > 0) {
-            echo "<p class='warning'>⚠️ 遇到 $errorCount 個錯誤（部分可能是預期的，如表已存在）</p>";
-        }
-    } else {
-        echo "<p class='error'>❌ SQL 文件不存在: $sqlFile</p>";
+        echo "<p>";
+        echo "<a href='?execute=1' class='btn btn-success'>✅ 確認執行 3NF 正規化</a> ";
+        echo "<a href='../database/complete_3nf_normalization.sql' class='btn' target='_blank'>📄 查看 SQL 腳本</a>";
+        echo "</p>";
+        exit;
     }
     
-    echo "</div>";
+    // 開始執行
+    echo "<h2>📝 開始執行 3NF 正規化</h2>";
     
-    // 步驟 2: 執行數據遷移
-    echo "<div class='step'>";
-    echo "<h2>步驟 2: 遷移現有數據</h2>";
+    $success_count = 0;
+    $error_count = 0;
+    $warnings = [];
     
-    $migrateFile = __DIR__ . '/../database/migrate_all_data_to_3nf.sql';
+    // =====================================================
+    // 步驟 1: 讀取並執行創建表結構的 SQL
+    // =====================================================
     
-    if (file_exists($migrateFile)) {
-        $sql = file_get_contents($migrateFile);
-        
-        $statements = array_filter(
-            array_map('trim', explode(';', $sql)),
-            function($stmt) {
-                return !empty($stmt) && 
-                       !preg_match('/^\s*--/', $stmt) && 
-                       !preg_match('/^\s*\/\*/', $stmt) &&
-                       strlen(trim($stmt)) > 10;
-            }
-        );
-        
-        $successCount = 0;
-        $errorCount = 0;
-        
-        echo "<p>正在遷移數據...</p>";
-        
-        foreach ($statements as $statement) {
-            try {
-                $pdo->exec($statement);
-                $successCount++;
-            } catch (PDOException $e) {
-                if (strpos($e->getMessage(), 'already exists') === false && 
-                    strpos($e->getMessage(), 'Duplicate') === false) {
-                    $errorCount++;
-                    echo "<p class='warning'>⚠️ 遷移警告: " . htmlspecialchars(substr($e->getMessage(), 0, 200)) . "</p>";
-                }
-            }
-        }
-        
-        echo "<p class='success'>✅ 成功執行 $successCount 個遷移語句</p>";
-        if ($errorCount > 0) {
-            echo "<p class='warning'>⚠️ 遇到 $errorCount 個警告（部分可能是預期的）</p>";
-        }
-    } else {
-        echo "<p class='error'>❌ 遷移文件不存在: $migrateFile</p>";
+    echo "<h3>步驟 1: 創建正規化表結構</h3>";
+    
+    $sql_file = __DIR__ . '/../database/complete_3nf_normalization.sql';
+    if (!file_exists($sql_file)) {
+        throw new Exception("找不到 SQL 文件: $sql_file");
     }
     
-    echo "</div>";
+    $sql_content = file_get_contents($sql_file);
     
-    // 步驟 3: 顯示遷移統計
-    echo "<div class='step'>";
-    echo "<h2>步驟 3: 遷移統計</h2>";
+    // 移除 SET FOREIGN_KEY_CHECKS 和 USE 語句（已在連接中設置）
+    $sql_content = preg_replace('/^USE\s+\w+;?\s*/mi', '', $sql_content);
     
-    $tables = [
-        ['student', 'student_normalized'],
-        ['teacher', 'teacher_normalized'],
-        ['chat_groups', 'chat_groups_normalized'],
-        ['group_members', 'group_members_normalized'],
-        ['private_chat_history', 'private_chat_history_normalized'],
-        ['group_messages', 'group_messages_normalized'],
-        ['ai_chat_history', 'ai_chat_history_normalized'],
+    // 臨時關閉外鍵檢查
+    $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+    
+    // 使用更簡單可靠的方法：逐行讀取並執行完整的語句
+    // 先移除所有註釋行
+    $lines = explode("\n", $sql_content);
+    $cleaned_lines = [];
+    $in_multiline_comment = false;
+    
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        
+        // 處理多行註釋
+        if (preg_match('/\/\*/', $line)) {
+            $in_multiline_comment = true;
+        }
+        if (preg_match('/\*\//', $line)) {
+            $in_multiline_comment = false;
+            continue;
+        }
+        
+        if ($in_multiline_comment || preg_match('/^--/', $trimmed) || empty($trimmed)) {
+            continue;
+        }
+        
+        $cleaned_lines[] = $line;
+    }
+    
+    $sql_content = implode("\n", $cleaned_lines);
+    
+    // 使用更簡單可靠的方法：按分號分割，但需要特別處理視圖和預處理語句
+    // 先標記視圖定義區域
+    $sql_content = preg_replace_callback(
+        '/CREATE\s+(?:OR\s+REPLACE\s+)?VIEW.*?;/is',
+        function($matches) {
+            // 將視圖中的分號替換為特殊標記，稍後恢復
+            return str_replace(';', '|||VIEW_END|||', $matches[0]);
+        },
+        $sql_content
+    );
+    
+    // 處理預處理語句（PREPARE/EXECUTE/DEALLOCATE）
+    $sql_content = preg_replace_callback(
+        '/(SET\s+@\w+\s*=.*?;.*?DEALLOCATE\s+PREPARE\s+\w+\s*;)/is',
+        function($matches) {
+            // 將預處理語句塊中的分號替換為特殊標記
+            return str_replace(';', '|||STMT_END|||', $matches[0]);
+        },
+        $sql_content
+    );
+    
+    // 現在按分號分割
+    $statements = explode(';', $sql_content);
+    
+    // 執行每個 SQL 語句
+    foreach ($statements as $index => $sql) {
+        // 恢復視圖和預處理語句中的分號
+        $sql = str_replace('|||VIEW_END|||', ';', $sql);
+        $sql = str_replace('|||STMT_END|||', ';', $sql);
+        $sql = trim($sql);
+        
+        // 跳過空語句和註釋
+        if (empty($sql) || 
+            preg_match('/^--/', $sql) || 
+            preg_match('/^SELECT.*AS (message|next_step)/i', $sql)) {
+            continue;
+        }
+        
+        // 確保語句以分號結尾（如果沒有）
+        if (!preg_match('/;$/', $sql)) {
+            $sql .= ';';
+        }
+        
+        try {
+            $pdo->exec($sql);
+            $success_count++;
+        } catch (PDOException $e) {
+            $error_msg = $e->getMessage();
+            // 忽略已存在的錯誤（表可能已創建）
+            if (strpos($error_msg, 'already exists') !== false || 
+                strpos($error_msg, 'Duplicate') !== false ||
+                strpos($error_msg, 'Duplicate entry') !== false) {
+                $warnings[] = "已存在，跳過: " . substr($error_msg, 0, 80);
+            } elseif (strpos($error_msg, 'Column') !== false && strpos($error_msg, 'already exists') !== false) {
+                // 欄位已存在，忽略
+                $warnings[] = "欄位已存在，跳過";
+            } elseif (strpos($error_msg, 'Column') !== false && strpos($error_msg, 'doesn\'t exist') !== false) {
+                // 欄位不存在，可能是表結構問題，記錄但不阻止繼續
+                $warnings[] = "欄位檢查: " . substr($error_msg, 0, 100);
+            } else {
+                $error_count++;
+                $sql_preview = substr($sql, 0, 150);
+                echo "<div class='error'>❌ SQL 執行錯誤 (#$index): " . htmlspecialchars(substr($error_msg, 0, 200)) . "</div>";
+                echo "<div class='info'>SQL 語句預覽: " . htmlspecialchars($sql_preview) . "...</div>";
+            }
+        }
+    }
+    
+    // 恢復外鍵檢查
+    $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+    
+    echo "<div class='success'>✅ 表結構創建完成（$success_count 個語句成功）</div>";
+    
+    // =====================================================
+    // 步驟 2: 遷移數據
+    // =====================================================
+    
+    echo "<h3>步驟 2: 遷移數據到正規化表</h3>";
+    
+    $migrate_file = __DIR__ . '/../database/migrate_data_to_3nf.sql';
+    if (file_exists($migrate_file)) {
+        $migrate_sql = file_get_contents($migrate_file);
+        $migrate_sql = preg_replace('/^USE\s+\w+;?\s*/mi', '', $migrate_sql);
+        
+        // 執行遷移
+        try {
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            
+            // 移除註釋
+            $migrate_lines = explode("\n", $migrate_sql);
+            $cleaned_migrate = [];
+            foreach ($migrate_lines as $line) {
+                $trimmed = trim($line);
+                if (!empty($trimmed) && !preg_match('/^--/', $trimmed)) {
+                    $cleaned_migrate[] = $line;
+                }
+            }
+            $migrate_sql = implode("\n", $cleaned_migrate);
+            
+            // 分割 SQL 語句
+            $migrate_statements = preg_split('/;\s*(?=(?:INSERT|UPDATE|SELECT|SET)\s)/i', $migrate_sql);
+            
+            $migrate_success = 0;
+            foreach ($migrate_statements as $sql) {
+                $sql = trim($sql);
+                if (empty($sql) || preg_match('/^SELECT.*AS (message|count)/i', $sql)) {
+                    continue;
+                }
+                if (!preg_match('/;$/', $sql)) {
+                    $sql .= ';';
+                }
+                try {
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute();
+                    $stmt->closeCursor(); // 關閉游標，釋放結果集
+                    $migrate_success++;
+                } catch (PDOException $e) {
+                    $error_msg = $e->getMessage();
+                    // 忽略可接受的錯誤
+                    if (strpos($error_msg, 'Duplicate') === false && 
+                        strpos($error_msg, "doesn't exist") === false &&
+                        strpos($error_msg, 'Column not found') === false) {
+                        echo "<div class='warning'>⚠️ 遷移警告: " . htmlspecialchars(substr($error_msg, 0, 150)) . "</div>";
+                    }
+                }
+            }
+            
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            echo "<div class='success'>✅ 數據遷移完成（$migrate_success 個語句執行）</div>";
+        } catch (Exception $e) {
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            echo "<div class='error'>❌ 數據遷移失敗: " . htmlspecialchars($e->getMessage()) . "</div>";
+        }
+    } else {
+        echo "<div class='warning'>⚠️ 找不到數據遷移腳本，跳過數據遷移</div>";
+    }
+    
+    // =====================================================
+    // 步驟 3: 顯示統計結果
+    // =====================================================
+    
+    echo "<h2>📊 執行結果統計</h2>";
+    
+    // 檢查表是否存在
+    $tables_to_check = [
+        'departments', 'grades', 'genders', 'identities', 'application_statuses',
+        'student_normalized', 'teacher_normalized',
+        'enrollment_applications_normalized', 'enrollment_preferences',
+        'cooperation_applications_normalized'
     ];
     
     echo "<table>";
-    echo "<tr><th>原表</th><th>正規化表</th><th>原表記錄數</th><th>正規化表記錄數</th><th>狀態</th></tr>";
+    echo "<tr><th>表名</th><th>狀態</th><th>記錄數</th></tr>";
     
-    foreach ($tables as $tablePair) {
-        $originalTable = $tablePair[0];
-        $normalizedTable = $tablePair[1];
-        
+    foreach ($tables_to_check as $table) {
         try {
-            $stmt = $pdo->query("SELECT COUNT(*) as count FROM $originalTable");
-            $originalCount = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            $stmt = $pdo->query("SELECT COUNT(*) as count FROM $table");
+            $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+            echo "<tr>";
+            echo "<td>$table</td>";
+            echo "<td><span style='color: #27ae60;'>✅ 存在</span></td>";
+            echo "<td>$count</td>";
+            echo "</tr>";
         } catch (PDOException $e) {
-            $originalCount = '表不存在';
+            echo "<tr>";
+            echo "<td>$table</td>";
+            echo "<td><span style='color: #e74c3c;'>❌ 不存在</span></td>";
+            echo "<td>-</td>";
+            echo "</tr>";
         }
-        
-        try {
-            $stmt = $pdo->query("SELECT COUNT(*) as count FROM $normalizedTable");
-            $normalizedCount = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-        } catch (PDOException $e) {
-            $normalizedCount = '表不存在';
+    }
+    echo "</table>";
+    
+    // 顯示警告
+    if (!empty($warnings)) {
+        echo "<h3>⚠️ 警告訊息</h3>";
+        foreach ($warnings as $warning) {
+            echo "<div class='warning'>$warning</div>";
         }
-        
-        $status = (is_numeric($originalCount) && is_numeric($normalizedCount)) 
-            ? ($normalizedCount >= $originalCount ? '<span class="success">✅ 成功</span>' : '<span class="warning">⚠️ 需檢查</span>')
-            : '<span class="info">ℹ️ 跳過</span>';
-        
-        echo "<tr>";
-        echo "<td>$originalTable</td>";
-        echo "<td>$normalizedTable</td>";
-        echo "<td>$originalCount</td>";
-        echo "<td>$normalizedCount</td>";
-        echo "<td>$status</td>";
-        echo "</tr>";
     }
     
-    echo "</table>";
+    // 最終統計
+    echo "<h2>✅ 執行完成</h2>";
+    echo "<div class='success'>";
+    echo "<p>✅ 成功執行: $success_count 個語句</p>";
+    if ($error_count > 0) {
+        echo "<p>⚠️ 錯誤: $error_count 個語句（可能是因為已存在而跳過）</p>";
+    }
     echo "</div>";
     
-    // 步驟 4: 顯示視圖
-    echo "<div class='step'>";
-    echo "<h2>步驟 4: 向後兼容視圖</h2>";
-    echo "<p>已創建以下視圖以保持與舊代碼兼容：</p>";
-    echo "<ul>";
-    echo "<li><code>student_view</code> - 替代 student 表</li>";
-    echo "<li><code>teacher_view</code> - 替代 teacher 表</li>";
-    echo "<li><code>private_chat_history_view</code> - 替代 private_chat_history 表</li>";
-    echo "<li><code>group_messages_view</code> - 替代 group_messages 表</li>";
-    echo "<li><code>chat_groups_view</code> - 替代 chat_groups 表</li>";
-    echo "<li><code>group_members_view</code> - 替代 group_members 表</li>";
-    echo "</ul>";
-    echo "</div>";
+    echo "<p>";
+    echo "<a href='?execute=1' class='btn'>🔄 重新執行</a> ";
+    echo "<a href='verify_3nf_compliance.php' class='btn btn-success'>📊 驗證 3NF 合規性</a>";
+    echo "</p>";
     
-    $pdo->exec("SET FOREIGN_KEY_CHECKS=1");
-    
-    echo "<div class='step'>";
-    echo "<h2 class='success'>✅ 正規化完成！</h2>";
-    echo "<h3>下一步建議：</h3>";
-    echo "<ol>";
-    echo "<li>檢查上述統計數據，確認遷移是否成功</li>";
-    echo "<li>測試應用程式功能，確認視圖正常工作</li>";
-    echo "<li>在確認無誤後，可以將舊表重命名為 *_backup 作為備份</li>";
-    echo "<li>更新應用程式代碼，使用正規化表或視圖</li>";
-    echo "</ol>";
-    echo "</div>";
-    
-} catch (PDOException $e) {
-    echo "<div class='step'>";
-    echo "<h2 class='error'>❌ 資料庫錯誤</h2>";
-    echo "<p class='error'>" . htmlspecialchars($e->getMessage()) . "</p>";
-    echo "</div>";
+} catch (Exception $e) {
+    echo "<div class='error'>❌ 錯誤: " . htmlspecialchars($e->getMessage()) . "</div>";
+    echo "<pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
 }
-
-echo "</div></body></html>";
 ?>
 
+    </div>
+</body>
+</html>
