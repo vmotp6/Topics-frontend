@@ -71,17 +71,31 @@ function markAsRead($pdo) {
         $messageIds = [$messageIds];
     }
     
+    // 檢查表結構，自動適配
+    $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                        WHERE TABLE_SCHEMA = 'topics_good' 
+                        AND TABLE_NAME = 'private_chat_history' 
+                        AND COLUMN_NAME = 'is_read'");
+    $hasIsRead = $stmt->rowCount() > 0;
+    
+    $stmt = $pdo->query("SHOW TABLES LIKE 'message_read_status'");
+    $hasMessageReadStatus = $stmt->rowCount() > 0;
+    
     $pdo->beginTransaction();
     
     try {
         foreach ($messageIds as $messageId) {
-            // 更新 private_chat_history 表
-            $stmt = $pdo->prepare("UPDATE private_chat_history SET is_read = TRUE, read_at = NOW() WHERE id = ?");
-            $stmt->execute([$messageId]);
+            // 更新 private_chat_history 表（如果欄位存在）
+            if ($hasIsRead) {
+                $stmt = $pdo->prepare("UPDATE private_chat_history SET is_read = TRUE, read_at = NOW() WHERE id = ?");
+                $stmt->execute([$messageId]);
+            }
             
-            // 插入到 message_read_status 表
-            $stmt = $pdo->prepare("INSERT IGNORE INTO message_read_status (message_id, reader_username) VALUES (?, ?)");
-            $stmt->execute([$messageId, $reader]);
+            // 插入到 message_read_status 表（如果表存在）
+            if ($hasMessageReadStatus) {
+                $stmt = $pdo->prepare("INSERT IGNORE INTO message_read_status (message_id, reader_username) VALUES (?, ?)");
+                $stmt->execute([$messageId, $reader]);
+            }
         }
         
         $pdo->commit();

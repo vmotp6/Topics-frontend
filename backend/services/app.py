@@ -241,16 +241,9 @@ def google_callback():
                     # 創建新用戶
                     username = name or email.split('@')[0]
                     
-                    # 基於email domain自動判斷身分
-                    if email.endswith('@stu.ukn.edu.tw'):
-                        role = '學生'
-                        print(f"根據email domain判斷為學生: {email}")
-                    elif email.endswith('@ukn.edu.tw'):
-                        role = '老師'
-                        print(f"根據email domain判斷為老師: {email}")
-                    else:
-                        role = '學生'  # 非學校帳號都視為學生
-                        print(f"非學校帳號，判斷為學生: {email}")
+                    # 所有新註冊用戶都設為學生（老師身分由後端管理員手動設定）
+                    role = '學生'
+                    print(f"新用戶預設設為學生: {email}")
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -269,6 +262,18 @@ def google_callback():
                     )
                     user_id = cursor.lastrowid
                     print(f"創建新用戶: {username}, ID: {user_id}")
+                    
+                    # 同步插入 student 表
+                    try:
+                        cursor.execute(
+                            """INSERT INTO student (user_id, name, email) 
+                               VALUES (%s, %s, %s)""",
+                            (user_id, name, email)
+                        )
+                        print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+                    except Exception as student_error:
+                        # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
+                        print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
                 
                 conn.commit()
                 print(f"用戶資料保存成功: {username}")
@@ -485,11 +490,25 @@ def register():
             if cursor.fetchone()[0] > 0:
                 return jsonify({"message": "用戶名已存在"}), 400
             
-            # 插入新用戶
+            # 插入新用戶（角色預設為學生）
             cursor.execute(
                 "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
                 (username, password, email, name)
             )
+            user_id = cursor.lastrowid
+            
+            # 同步插入 student 表
+            try:
+                cursor.execute(
+                    """INSERT INTO student (user_id, name, email) 
+                       VALUES (%s, %s, %s)""",
+                    (user_id, name, email)
+                )
+                print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+            except Exception as student_error:
+                # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
+                print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
+            
             conn.commit()
             
             return jsonify({"message": "註冊成功"}), 200
