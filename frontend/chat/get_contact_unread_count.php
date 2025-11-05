@@ -65,7 +65,7 @@ try {
                     FROM private_chat_history pch
                     JOIN user u ON pch.from_user_id = u.id
                     WHERE pch.to_user_id = ? 
-                      AND (pch.is_read = FALSE OR pch.is_read IS NULL)
+                      AND (pch.is_read = 0 OR pch.is_read IS NULL)
                     GROUP BY u.id, u.username";
         } else {
             // 如果沒有 is_read 欄位，假設所有訊息都是未讀（或使用其他邏輯）
@@ -90,7 +90,7 @@ try {
         if ($hasIsRead) {
             $sql = "SELECT from_user as username, COUNT(*) as unread_count
                     FROM private_chat_history
-                    WHERE to_user = ? AND (is_read = FALSE OR is_read IS NULL)
+                    WHERE to_user = ? AND (is_read = 0 OR is_read IS NULL)
                     GROUP BY from_user";
         } else {
             // 如果沒有 is_read 欄位，假設所有訊息都是未讀（或需要其他邏輯）

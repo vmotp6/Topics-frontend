@@ -78,25 +78,42 @@ try {
         }
         
         // 獲取所有學生（無論老師是否有科系資料，都應該能看到所有學生）
+        $allStudents = [];
         try {
+            // 優先使用 student 表（如果有完整的學生資料）
             $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, '學生' as contact_type, s.grade, s.class_name
                                   FROM student s 
                                   JOIN user u ON s.user_id = u.id 
                                   WHERE u.role = '學生'
                                   ORDER BY s.department, s.grade, s.name");
             $stmt->execute();
-            $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $allStudents);
+            $studentsFromTable = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $allStudents = array_merge($allStudents, $studentsFromTable);
         } catch (PDOException $e) {
-            // 如果學生表不存在或結構不同，使用用戶表
-            $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
+            error_log("從 student 表載入學生失敗: " . $e->getMessage());
+        }
+        
+        // 無論如何，也從 user 表載入所有學生（確保不遺漏任何學生，特別是如果 student 表缺少某些學生）
+        try {
+            $stmt = $pdo->prepare("SELECT u.id as user_id, COALESCE(u.name, u.username) as name, '未設定' as department, u.username, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
                                   FROM user u 
                                   WHERE u.role = '學生'
                                   ORDER BY u.username");
             $stmt->execute();
-            $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $allStudents);
+            $studentsFromUser = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 合併結果，避免重複（根據 username 去重）
+            $existingUsernames = array_column($allStudents, 'username');
+            foreach ($studentsFromUser as $student) {
+                if (!in_array($student['username'], $existingUsernames)) {
+                    $allStudents[] = $student;
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("從 user 表載入學生失敗: " . $e->getMessage());
         }
+        
+        $contacts = array_merge($contacts, $allStudents);
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
@@ -402,18 +419,21 @@ try {
       return new Set();
     }
     
-    // 保存已讀列表到 localStorage
+    // 保存已讀列表到 localStorage（僅用於當前會話期間的臨時狀態）
     function saveReadContactsToStorage() {
       try {
         const readList = Array.from(readContacts);
-        localStorage.setItem(`readContacts_${username}`, JSON.stringify(readList));
-        console.log('已保存已讀列表到 localStorage:', readList);
+        // 不再持久化到 localStorage，因為資料庫的實際狀態才是權威來源
+        // localStorage.setItem(`readContacts_${username}`, JSON.stringify(readList));
+        console.log('已讀列表（僅當前會話）:', readList);
       } catch (e) {
         console.warn('保存已讀列表失敗:', e);
       }
     }
     
-    let readContacts = loadReadContactsFromStorage(); // 從 localStorage 恢復已讀列表
+    // 不再從 localStorage 載入已讀列表，因為資料庫的實際狀態才是權威來源
+    // readContacts 只用於當前會話期間的臨時狀態（例如用戶點擊了頭像但資料庫還沒更新完成）
+    let readContacts = new Set(); // 從空 Set 開始，不再從 localStorage 恢復
     
     // 清除所有快取
     function clearMessageCache() {
@@ -963,14 +983,36 @@ try {
         console.log('切換聯絡人:', {
           from: currentUserId,
           to: newUserId,
-          chatType: currentChatType
+          newUserName: newUserName,
+          chatType: currentChatType,
+          username: username,
+          role: role,
+          elementData: {
+            userId: this.dataset.userId,
+            userName: this.dataset.userName,
+            chatType: this.dataset.chatType
+          }
         });
+        
+        // 驗證必要資料
+        if (!newUserId || !newUserName) {
+          console.error('無法切換聯絡人: 缺少必要資料', {
+            newUserId,
+            newUserName,
+            dataset: this.dataset
+          });
+          alert('無法選擇此聯絡人，資料不完整');
+          return;
+        }
         
         // 檢查是否切換到不同的用戶
         if (currentUserId !== newUserId || currentChatType !== 'private') {
           // 重置訊息ID並清空聊天區域
           lastMessageId = 0;
-          getChatMessagesElement().innerHTML = '';
+          const chatMessages = getChatMessagesElement();
+          if (chatMessages) {
+            chatMessages.innerHTML = '';
+          }
           // 清除快取，強制重新載入
           const oldCacheKey = `${username}-${currentUserId}`;
           messageCache.delete(oldCacheKey);
@@ -982,14 +1024,40 @@ try {
         currentUserName = newUserName;
         currentChatType = 'private';
         currentGroupId = null;
-        const userRole = this.querySelector('.user-role').textContent;
+        const userRole = this.querySelector('.user-role')?.textContent || '';
+        
+        console.log('已更新當前用戶資訊:', {
+          currentUserId,
+          currentUserName,
+          currentChatType,
+          userRole,
+          username,
+          role
+        });
         
         // 更新聊天標題
-        document.querySelector('.current-chat-name').textContent = currentUserName;
-        document.querySelector('.current-chat-role').textContent = userRole;
+        const chatNameElement = document.querySelector('.current-chat-name');
+        const chatRoleElement = document.querySelector('.current-chat-role');
+        if (chatNameElement) {
+          chatNameElement.textContent = currentUserName;
+        } else {
+          console.warn('找不到 .current-chat-name 元素');
+        }
+        if (chatRoleElement) {
+          chatRoleElement.textContent = userRole;
+        } else {
+          console.warn('找不到 .current-chat-role 元素');
+        }
         
         // 啟用輸入框
-        getMessageInputElement().disabled = false;
+        const messageInput = getMessageInputElement();
+        if (messageInput) {
+          messageInput.disabled = false;
+          console.log('已啟用輸入框:', messageInput.id);
+        } else {
+          console.error('找不到訊息輸入框元素');
+        }
+        
         // 更新按鈕狀態（此時輸入框為空，按鈕應為禁用狀態）
         updateSendButtonState();
         updateVoiceButtonState();
@@ -1002,21 +1070,23 @@ try {
         
         // 立即清除該聯絡人的未讀徽章（即時回饋，不等待API響應）
         const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${newUserId}"]`);
-        if (contactBadge && contactBadge.classList.contains('show')) {
+        if (contactBadge) {
           // 添加消失動畫
-          contactBadge.classList.add('hiding');
-          contactBadge.classList.remove('pulse');
-          
-          setTimeout(() => {
-            contactBadge.classList.remove('show', 'hiding');
-            contactBadge.textContent = '0';
-            contactBadge.setAttribute('data-count', '0');
-          }, 250);
-        } else if (contactBadge) {
-          // 如果徽章沒有顯示，也確保它被隱藏
-          contactBadge.classList.remove('show', 'pulse', 'hiding');
-          contactBadge.textContent = '0';
-          contactBadge.setAttribute('data-count', '0');
+          if (contactBadge.classList.contains('show')) {
+            contactBadge.classList.add('hiding');
+            contactBadge.classList.remove('pulse');
+            
+            setTimeout(() => {
+              contactBadge.classList.remove('show', 'hiding');
+              contactBadge.style.display = 'none'; // 完全隱藏
+              contactBadge.style.visibility = 'hidden'; // 完全隱藏
+            }, 250);
+          } else {
+            // 如果徽章沒有顯示，也確保它被完全隱藏
+            contactBadge.classList.remove('show', 'pulse', 'hiding');
+            contactBadge.style.display = 'none'; // 完全隱藏
+            contactBadge.style.visibility = 'hidden'; // 完全隱藏
+          }
         }
         
         // 載入聊天記錄（清除快取後重新載入）
@@ -1041,21 +1111,17 @@ try {
             readContacts.add(newUserId);
             saveReadContactsToStorage(); // 保存到 localStorage
           }
-          
-          // 延遲更新所有聯絡人的未讀計數（確保資料庫已更新）
-          setTimeout(() => {
-            updateContactUnreadCounts();
-          }, 800);
         }).catch((error) => {
-          console.error('標記已讀時發生錯誤:', error);
-          // 即使出錯，也保持已讀狀態
+          console.error('標記聯絡人訊息為已讀時發生錯誤:', error);
+          // 即使出錯也繼續，不影響用戶體驗
           readContacts.add(newUserId);
-          saveReadContactsToStorage(); // 保存到 localStorage
-          // 即使出錯，也更新未讀計數
-          setTimeout(() => {
-            updateContactUnreadCounts();
-          }, 500);
+          saveReadContactsToStorage();
         });
+        
+        // 延遲更新所有聯絡人的未讀計數（確保資料庫已更新）
+        setTimeout(() => {
+          updateContactUnreadCounts();
+        }, 800);
       });
     });
 
@@ -1085,6 +1151,12 @@ try {
         displayMessages(cachedData.messages);
         lastMessageId = cachedData.lastMessageId;
         console.log('使用快取聊天記錄:', cacheKey);
+        return;
+      }
+      
+      // 檢查元素是否存在
+      if (!chatMessages) {
+        console.error('找不到聊天訊息容器元素，無法載入聊天記錄');
         return;
       }
       
@@ -1124,17 +1196,27 @@ try {
           console.log(`聊天記錄載入完成，耗時: ${loadTime.toFixed(2)}ms`);
         } else {
           console.error('載入聊天記錄失敗:', result.error || result);
-          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
+          if (chatMessages) {
+            chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
+          }
         }
       } catch (error) {
         console.error('載入聊天記錄失敗:', error);
-        chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
+        if (chatMessages) {
+          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
+        }
       }
     }
     
     // 顯示訊息
     function displayMessages(messages) {
-      const chatMessages = document.getElementById('chatMessages');
+      const chatMessages = getChatMessagesElement();
+      
+      // 檢查元素是否存在
+      if (!chatMessages) {
+        console.error('找不到聊天訊息容器元素 (chatMessages 或 chatMessages_student)');
+        return;
+      }
       
       // 清空聊天區域
       chatMessages.innerHTML = '';
@@ -1181,45 +1263,50 @@ try {
           let imageUrl = messageText.trim();
           
           // 處理各種圖片路徑格式
-          if (imageUrl.startsWith('share/')) {
-            // 處理 "share/filename.jpg" 格式 -> "../share/filename.jpg"
-            imageUrl = '../share/' + imageUrl.substring(6);
-          } else if (imageUrl.includes('/share/')) {
-            // 處理包含 "/share/" 的路徑（如 "frontend/chat/share/filename.jpg"）
-            const shareIndex = imageUrl.indexOf('/share/');
-            imageUrl = '../share/' + imageUrl.substring(shareIndex + 7);
-          } else if (imageUrl.includes('chat/share/')) {
-            // 處理 "chat/share/filename.jpg" 或 "Topics-frontend/frontend/chat/share/filename.jpg" 格式
-            // 錯誤路徑: "frontend/chat/share/EIdROxGXsAE_LSs.jpg" 
-            // 正確路徑: "../share/EIdROxGXsAE_LSs.jpg"
-            const fileName = imageUrl.split('/').pop();
-            imageUrl = '../share/' + fileName;
-          } else if (imageUrl.includes('Topics-frontend/')) {
-            // 處理 "Topics-frontend/frontend/chat/share/filename.jpg" 格式
+          // 優先處理：如果已經是完整 URL，直接使用
+          if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            // 已經是完整 URL，不需要處理
+          } 
+          // 處理絕對路徑（以 / 開頭）
+          else if (imageUrl.startsWith('/')) {
+            // 如果是 /Topics-frontend/frontend/chat/share/ 格式，改為 /Topics-frontend/frontend/share/
             if (imageUrl.includes('/chat/share/')) {
-              const fileName = imageUrl.split('/').pop();
-              imageUrl = '../share/' + fileName;
-            } else {
-              imageUrl = imageUrl.replace(/^.*Topics-frontend\/[^\/]*\/share\//, '../share/');
+              imageUrl = imageUrl.replace('/chat/share/', '/share/');
+            } 
+            // 如果是 /Topics-frontend/frontend/chat/share/filename.jpg 格式
+            else if (imageUrl.includes('Topics-frontend/frontend/chat/share/')) {
+              imageUrl = imageUrl.replace('Topics-frontend/frontend/chat/share/', 'Topics-frontend/frontend/share/');
             }
-          } else if (imageUrl.includes('/frontend/chat/share/') || imageUrl.includes('Topics-frontend/frontend/chat/share/')) {
-            // 處理 "frontend/chat/share/filename.jpg" 或 "Topics-frontend/frontend/chat/share/filename.jpg" 格式
-            // 錯誤路徑: "Topics-frontend/frontend/chat/share/EIdROxGXsAE_LSs.jpg"
-            // 正確路徑: "../share/EIdROxGXsAE_LSs.jpg"
+            // 如果是 /frontend/chat/share/ 格式
+            else if (imageUrl.includes('/frontend/chat/share/')) {
+              imageUrl = imageUrl.replace('/frontend/chat/share/', '/frontend/share/');
+            }
+          }
+          // 處理相對路徑
+          else {
+            // 提取文件名（無論路徑格式如何）
             const fileName = imageUrl.split('/').pop();
-            if (fileName && fileName.includes('.')) {
+            
+            // 處理各種可能的錯誤路徑格式
+            if (imageUrl.includes('chat/share/') || 
+                imageUrl.includes('/frontend/chat/share/') || 
+                imageUrl.includes('Topics-frontend/') ||
+                imageUrl.includes('frontend/chat/share/')) {
+              // 從任何包含 chat/share 的路徑中提取文件名
               imageUrl = '../share/' + fileName;
-            }
-          } else if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://') && !imageUrl.startsWith('/') && !imageUrl.startsWith('../')) {
-            // 如果是不完整的路徑（如 "EIdROxGXsAE_LSs.jpg"），嘗試加上 share 路徑
-            if (!imageUrl.includes('/')) {
+            } else if (imageUrl.includes('/share/')) {
+              // 處理包含 "/share/" 但不是 chat/share 的路徑
+              const shareIndex = imageUrl.indexOf('/share/');
+              imageUrl = '../share/' + imageUrl.substring(shareIndex + 7);
+            } else if (imageUrl.startsWith('share/')) {
+              // 處理 "share/filename.jpg" 格式
+              imageUrl = '../share/' + imageUrl.substring(6);
+            } else if (!imageUrl.includes('/')) {
+              // 如果只是文件名（如 "EIdROxGXsAE_LSs.jpg"），直接加上 share 路徑
               imageUrl = '../share/' + imageUrl;
             } else {
-              // 如果包含斜線但不是完整路徑，嘗試提取文件名
-              const fileName = imageUrl.split('/').pop();
-              if (fileName && fileName.includes('.')) {
-                imageUrl = '../share/' + fileName;
-              }
+              // 其他情況，嘗試提取文件名
+              imageUrl = '../share/' + fileName;
             }
           }
           
@@ -1230,11 +1317,14 @@ try {
           img.style.cssText = 'max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; object-fit: contain;';
           img.onerror = function() {
             // 如果圖片載入失敗，嘗試其他可能的路徑
-            const originalUrl = message.message;
+            const originalUrl = message.message || messageText;
+            const fileName = originalUrl.split('/').pop();
             const alternativePaths = [
-              '../share/' + originalUrl.split('/').pop(),
-              '/share/' + originalUrl.split('/').pop(),
-              '../../share/' + originalUrl.split('/').pop()
+              '../share/' + fileName,
+              '/Topics-frontend/frontend/share/' + fileName,
+              '/frontend/share/' + fileName,
+              '/share/' + fileName,
+              '../../share/' + fileName
             ];
             
             let tried = 0;
@@ -1375,7 +1465,24 @@ try {
           }
         } else {
           // 發送私聊訊息
-          if (!currentUserId) return;
+          if (!currentUserId) {
+            console.error('無法發送訊息: currentUserId 為空', {
+              currentUserId,
+              currentUserName,
+              currentChatType,
+              username,
+              role
+            });
+            alert('請先選擇一個聯絡人');
+            return;
+          }
+          
+          console.log('發送私聊訊息:', {
+            from: username,
+            to: currentUserId,
+            message: message.substring(0, 50) + '...',
+            role: role
+          });
           
           const response = await fetch('save_private_message.php', {
             method: 'POST',
@@ -1400,6 +1507,15 @@ try {
             if (result.saved_message) {
               const chatMessages = getChatMessagesElement();
               
+              // 檢查元素是否存在
+              if (!chatMessages) {
+                console.error('找不到聊天訊息容器元素，無法顯示新訊息，但訊息已成功發送');
+                // 即使找不到元素，也清除快取以便下次載入時顯示
+                const cacheKey = `${username}-${currentUserId}`;
+                messageCache.delete(cacheKey);
+                return;
+              }
+              
               // 將新訊息添加到顯示中
               const messageDiv = document.createElement('div');
               messageDiv.className = 'message sent';
@@ -1422,10 +1538,13 @@ try {
               contentDiv.appendChild(readStatusDiv);
               contentDiv.appendChild(timeDiv);
               messageDiv.appendChild(contentDiv);
-              chatMessages.appendChild(messageDiv);
               
-              // 滾動到底部
-              chatMessages.scrollTop = chatMessages.scrollHeight;
+              if (chatMessages) {
+                chatMessages.appendChild(messageDiv);
+                
+                // 滾動到底部
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+              }
               
               // 更新 lastMessageId
               lastMessageId = Math.max(lastMessageId, result.saved_message.id);
@@ -1448,10 +1567,16 @@ try {
         }
       } catch (error) {
         console.error('發送訊息失敗:', error);
-        alert('發送失敗: ' + error.message);
+        alert('發送失敗: ' + (error.message || '未知錯誤'));
       } finally {
-        // 發送完成後，清空輸入框並更新按鈕狀態
-        input.value = '';
+        // 發送完成後，恢復按鈕狀態
+        const sendButton = document.querySelector('.chat-input button[onclick="sendMessage()"]');
+        if (sendButton) {
+          sendButton.disabled = false;
+          sendButton.style.opacity = '1';
+          sendButton.style.cursor = 'pointer';
+        }
+        // 更新按鈕狀態（根據輸入框內容）
         updateSendButtonState();
       }
     }
@@ -1483,32 +1608,50 @@ try {
     // 標記聯絡人的所有未讀訊息為已讀
     async function markContactMessagesAsRead(contactUsername) {
       try {
-        console.log(`🔍 開始標記 ${contactUsername} 的未讀訊息為已讀...`);
+        if (!contactUsername || !username) {
+          console.error('標記已讀失敗: 缺少必要的用戶名');
+          return false;
+        }
         
-        // 直接從資料庫查詢該聯絡人的所有未讀訊息ID（更可靠）
-        const queryResponse = await fetch(`update_read_status.php?action=get_unread_messages&from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
-        const queryResult = await queryResponse.json();
+        console.log(`🔍 開始標記 ${contactUsername} 的未讀訊息為已讀...`);
         
         let unreadMessageIds = [];
         
-        if (queryResult.success && queryResult.message_ids && queryResult.message_ids.length > 0) {
-          unreadMessageIds = queryResult.message_ids;
-          console.log(`📬 從資料庫查詢到 ${unreadMessageIds.length} 條來自 ${contactUsername} 的未讀訊息`);
-        } else {
-          // 如果沒有專門的API，則從聊天記錄中獲取
-          const response = await fetch(`load_private_messages.php?from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
-          const result = await response.json();
-          
-          if (result.success && result.messages) {
-            // 找出所有未讀的訊息ID（發送者是聯絡人，接收者是當前用戶）
-            unreadMessageIds = result.messages
-              .filter(msg => {
-                const isFromContact = msg.from_user === contactUsername;
-                const isToCurrentUser = msg.to_user === username;
-                const isUnread = !msg.is_read || msg.is_read === false || msg.is_read === 0 || msg.is_read === null;
-                return isFromContact && isToCurrentUser && isUnread;
-              })
-              .map(msg => parseInt(msg.id));
+        // 直接從資料庫查詢該聯絡人的所有未讀訊息ID（更可靠）
+        try {
+          const queryResponse = await fetch(`update_read_status.php?action=get_unread_messages&from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
+          if (queryResponse && queryResponse.ok) {
+            const queryResult = await queryResponse.json();
+            if (queryResult.success && queryResult.message_ids && queryResult.message_ids.length > 0) {
+              unreadMessageIds = queryResult.message_ids;
+              console.log(`📬 從資料庫查詢到 ${unreadMessageIds.length} 條來自 ${contactUsername} 的未讀訊息`);
+            }
+          }
+        } catch (queryError) {
+          console.warn('查詢未讀訊息失敗，將從聊天記錄中獲取:', queryError);
+        }
+        
+        // 如果沒有從專門API獲取到，則從聊天記錄中獲取
+        if (unreadMessageIds.length === 0) {
+          try {
+            const response = await fetch(`load_private_messages.php?from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
+            if (response && response.ok) {
+              const result = await response.json();
+              
+              if (result.success && result.messages) {
+                // 找出所有未讀的訊息ID（發送者是聯絡人，接收者是當前用戶）
+                unreadMessageIds = result.messages
+                  .filter(msg => {
+                    const isFromContact = msg.from_user === contactUsername;
+                    const isToCurrentUser = msg.to_user === username;
+                    const isUnread = !msg.is_read || msg.is_read === false || msg.is_read === 0 || msg.is_read === null;
+                    return isFromContact && isToCurrentUser && isUnread;
+                  })
+                  .map(msg => parseInt(msg.id));
+              }
+            }
+          } catch (loadError) {
+            console.warn('從聊天記錄中獲取未讀訊息失敗:', loadError);
           }
         }
         
@@ -1516,32 +1659,43 @@ try {
           console.log(`📬 準備標記 ${unreadMessageIds.length} 條來自 ${contactUsername} 的未讀訊息為已讀...`);
           
           // 批次標記為已讀
-          const markResponse = await fetch('update_read_status.php', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'mark_as_read',
-              message_ids: unreadMessageIds,
-              reader: username
-            })
-          });
+          let markResponse;
+          let markResult = { success: false };
           
-          const markResult = await markResponse.json();
-            if (markResult.success) {
+          try {
+            markResponse = await fetch('update_read_status.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                action: 'mark_as_read',
+                message_ids: unreadMessageIds,
+                reader: username
+              })
+            });
+            
+            if (markResponse && markResponse.ok) {
+              markResult = await markResponse.json();
+            }
+          } catch (markError) {
+            console.error('標記已讀請求失敗:', markError);
+            return false;
+          }
+          
+          if (markResult.success) {
             console.log(`✅ 已成功標記 ${unreadMessageIds.length} 條訊息為已讀`);
             
             // 將該聯絡人添加到已讀列表
             readContacts.add(contactUsername);
             saveReadContactsToStorage(); // 保存到 localStorage
             
-            // 立即更新該聯絡人的徽章狀態（設為0）
+            // 立即更新該聯絡人的徽章狀態（完全隱藏）
             const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
             if (contactBadge) {
-              contactBadge.textContent = '0';
-              contactBadge.setAttribute('data-count', '0');
               contactBadge.classList.remove('show', 'pulse', 'hiding');
+              contactBadge.style.display = 'none'; // 完全隱藏
+              contactBadge.style.visibility = 'hidden'; // 完全隱藏
             }
             
             // 清除該聯絡人的聊天記錄快取
@@ -1571,12 +1725,12 @@ try {
           readContacts.add(contactUsername);
           saveReadContactsToStorage(); // 保存到 localStorage
           
-          // 即使沒有未讀訊息，也確保徽章被隱藏
+          // 即使沒有未讀訊息，也確保徽章被完全隱藏
           const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
           if (contactBadge) {
             contactBadge.classList.remove('show', 'pulse', 'hiding');
-            contactBadge.textContent = '0';
-            contactBadge.setAttribute('data-count', '0');
+            contactBadge.style.display = 'none'; // 完全隱藏
+            contactBadge.style.visibility = 'hidden'; // 完全隱藏
           }
           return true;
         }
@@ -1621,9 +1775,22 @@ try {
           console.log('未讀計數數據:', result.unread_counts);
           console.log('調試信息:', result.debug);
           
+          // 詳細檢查未讀計數數據
+          const unreadEntries = Object.entries(result.unread_counts);
+          console.log(`📊 未讀計數詳情: ${unreadEntries.length} 個聯絡人有未讀訊息`);
+          unreadEntries.forEach(([username, count]) => {
+            console.log(`  - ${username}: ${count} 條未讀訊息`);
+          });
+          
           // 檢查是否有任何徽章元素
           const allBadges = document.querySelectorAll('.unread-badge');
           console.log(`找到 ${allBadges.length} 個未讀徽章元素`);
+          
+          // 檢查每個徽章的元素詳情
+          allBadges.forEach((badge, index) => {
+            const contactId = badge.getAttribute('data-contact-id');
+            console.log(`徽章 ${index + 1}: data-contact-id="${contactId}", classes="${badge.className}", display="${window.getComputedStyle(badge).display}"`);
+          });
           
           // 更新每個聯絡人的未讀徽章
           // 先隱藏所有徽章
@@ -1636,31 +1803,22 @@ try {
           Object.keys(result.unread_counts).forEach(contactUsername => {
             const unreadCount = result.unread_counts[contactUsername];
             
-            // 如果該聯絡人已經被標記為已讀（已點擊過），不顯示未讀徽章
-            if (readContacts.has(contactUsername)) {
-              const badge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
-              if (badge) {
-                badge.classList.remove('show', 'pulse', 'hiding');
-                badge.textContent = '0';
-                badge.setAttribute('data-count', '0');
-              }
-              console.log(`ℹ️ 聯絡人 "${contactUsername}" 已讀，跳過顯示徽章`);
-              return;
-            }
-            
-            // 如果當前正在查看該聯絡人的聊天，強制隱藏徽章（因為應該已經被標記為已讀）
+            // 如果當前正在查看該聯絡人的聊天，強制隱藏徽章（因為正在查看，應該已經被標記為已讀）
             if (currentUserId === contactUsername && currentChatType === 'private') {
               const badge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
               if (badge) {
                 badge.classList.remove('show', 'pulse', 'hiding');
-                badge.textContent = '0';
-                badge.setAttribute('data-count', '0');
+                badge.style.display = 'none'; // 完全隱藏
+                badge.style.visibility = 'hidden'; // 完全隱藏
               }
-              // 添加到已讀列表
+              // 添加到已讀列表（僅在當前會話期間）
               readContacts.add(contactUsername);
-              saveReadContactsToStorage(); // 保存到 localStorage
               return;
             }
+            
+            // 注意：不再根據 readContacts 來跳過顯示徽章
+            // 因為資料庫的實際狀態才是權威來源，localStorage 中的 readContacts 
+            // 只用於當前會話期間的臨時狀態（例如用戶點擊了頭像但資料庫還沒更新完成）
             
             const badge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
             console.log(`檢查聯絡人 "${contactUsername}": 未讀=${unreadCount}, 徽章=${badge ? '找到' : '未找到'}`);
@@ -1676,16 +1834,36 @@ try {
                 // 如果之前沒有顯示，添加顯示效果
                 if (!badge.classList.contains('show')) {
                   badge.classList.add('show', 'pulse');
+                  console.log(`🔵 添加 show 類到徽章: ${contactUsername}`);
                 } else if (!badge.classList.contains('pulse')) {
                   badge.classList.add('pulse');
                 }
+                
+                // 強制顯示徽章（調試用）
+                badge.style.display = 'flex';
+                badge.style.visibility = 'visible';
+                badge.style.opacity = '1';
+                
+                // 檢查計算後的樣式
+                const computedStyle = window.getComputedStyle(badge);
+                console.log(`🔍 徽章樣式檢查 (${contactUsername}):`, {
+                  display: computedStyle.display,
+                  visibility: computedStyle.visibility,
+                  opacity: computedStyle.opacity,
+                  classes: badge.className,
+                  textContent: badge.textContent
+                });
+                
                 updatedCount++;
                 console.log(`✅ 顯示未讀徽章: ${contactUsername} = ${unreadCount}`);
               } else {
-                // 未讀數量為0，隱藏徽章
+                // 未讀數量為0，完全隱藏徽章
                 badge.classList.remove('show', 'pulse', 'hiding');
+                badge.style.display = 'none'; // 強制隱藏
+                badge.style.visibility = 'hidden'; // 強制隱藏
                 badge.textContent = '0';
                 badge.setAttribute('data-count', '0');
+                console.log(`🔴 隱藏徽章（未讀為0）: ${contactUsername}`);
               }
             } else {
               // 如果找不到徽章，嘗試為該聯絡人創建徽章
@@ -1710,15 +1888,14 @@ try {
                   // 檢查是否已有徽章（可能因為某些原因選擇器沒找到）
                   let existingBadge = avatar.querySelector('.unread-badge');
                   
-                  // 檢查該聯絡人是否已被標記為已讀
-                  if (readContacts.has(contactUsername)) {
-                    // 即使找到了聯絡人項目，如果已標記為已讀，也不顯示徽章
+                  // 如果當前正在查看該聯絡人的聊天，不顯示徽章
+                  if (currentUserId === contactUsername && currentChatType === 'private') {
                     if (existingBadge) {
                       existingBadge.classList.remove('show', 'pulse', 'hiding');
-                      existingBadge.textContent = '0';
-                      existingBadge.setAttribute('data-count', '0');
+                      existingBadge.style.display = 'none'; // 完全隱藏
+                      existingBadge.style.visibility = 'hidden'; // 完全隱藏
                     }
-                    console.log(`ℹ️ 聯絡人 "${contactUsername}" 已標記為已讀，不顯示徽章`);
+                    console.log(`ℹ️ 正在查看 "${contactUsername}" 的聊天，不顯示徽章`);
                   } else if (!existingBadge) {
                     // 創建新徽章
                     const newBadge = document.createElement('span');
@@ -1754,9 +1931,9 @@ try {
                 }
               } else {
                 // 如果完全找不到聯絡人項目，可能是因為該用戶不在當前角色的聯絡人列表中
-                // 但如果該聯絡人已經被標記為已讀，不需要創建徽章
-                if (readContacts.has(contactUsername)) {
-                  console.debug(`ℹ️ 聯絡人 "${contactUsername}" 已標記為已讀，但不在當前頁面的聯絡人列表中`);
+                // 如果當前正在查看該聯絡人的聊天，不需要創建徽章
+                if (currentUserId === contactUsername && currentChatType === 'private') {
+                  console.debug(`ℹ️ 正在查看 "${contactUsername}" 的聊天，但不在當前頁面的聯絡人列表中`);
                 } else if (unreadCount > 0) {
                   // 有未讀訊息但聯絡人不在列表中，嘗試在所有聯絡人列表中查找（包括被搜尋隱藏的）
                   // 這可能是因為該聯絡人被搜尋功能隱藏了，或者根本不在當前頁面
@@ -1793,11 +1970,30 @@ try {
                       console.log(`✅ 為隱藏的聯絡人 "${contactUsername}" 創建並顯示未讀徽章 = ${unreadCount}`);
                     }
                   } else {
-                    console.warn(`⚠️ 未找到聯絡人 "${contactUsername}" 的列表項（可能有未讀訊息但該用戶不在可見列表中）`);
+                    // 這種情況是正常的：未讀計數 API 會返回所有有未讀訊息的用戶（包括不在當前角色聯絡人列表中的）
+                    // 例如：不同角色之間可能有未讀訊息，但他們不在彼此的聯絡人列表中
+                    console.debug(`ℹ️ 聯絡人 "${contactUsername}" 有未讀訊息，但不在當前頁面的聯絡人列表中（這是正常情況，可能因為角色限制或資料問題）`);
                   }
                 } else {
                   console.debug(`ℹ️ 聯絡人 "${contactUsername}" 不在當前頁面的聯絡人列表中（可能有未讀訊息但該用戶不在可見列表中）`);
                 }
+              }
+            }
+          });
+          
+          // 確保所有沒有未讀訊息的聯絡人徽章都被隱藏
+          // 對於那些不在 unread_counts 中的聯絡人，他們的徽章應該被隱藏
+          allBadges.forEach(badge => {
+            const contactId = badge.getAttribute('data-contact-id');
+            // 如果這個聯絡人不在未讀計數列表中，隱藏其徽章
+            if (!result.unread_counts.hasOwnProperty(contactId)) {
+              // 如果當前正在查看該聯絡人的聊天，不隱藏（因為已經處理過了）
+              if (currentUserId !== contactId || currentChatType !== 'private') {
+                badge.classList.remove('show', 'pulse', 'hiding');
+                badge.style.display = 'none'; // 強制隱藏
+                badge.style.visibility = 'hidden'; // 強制隱藏
+                badge.textContent = '0';
+                badge.setAttribute('data-count', '0');
               }
             }
           });
@@ -1976,10 +2172,16 @@ try {
     
     // 更新發送按鈕狀態
     function updateSendButtonState() {
-      const messageInput = document.getElementById('messageInput');
+      const messageInput = getMessageInputElement(); // 使用統一的函數獲取輸入框
       const sendButton = document.querySelector('.chat-input button[onclick="sendMessage()"]');
       
-      if (!messageInput || !sendButton) return;
+      if (!messageInput || !sendButton) {
+        console.warn('updateSendButtonState: 找不到輸入框或發送按鈕', {
+          messageInput: !!messageInput,
+          sendButton: !!sendButton
+        });
+        return;
+      }
       
       const hasText = messageInput.value.trim().length > 0;
       const isInputEnabled = !messageInput.disabled;
@@ -1995,6 +2197,13 @@ try {
         sendButton.style.opacity = '1';
         sendButton.style.cursor = 'pointer';
       }
+      
+      console.log('updateSendButtonState:', {
+        hasText,
+        isInputEnabled,
+        buttonDisabled: sendButton.disabled,
+        inputId: messageInput.id
+      });
     }
     
     // 監聽輸入框變化（支援兩個介面的輸入框）
@@ -2101,25 +2310,26 @@ try {
     }
     
     // 初始化已讀功能
-    console.log('已載入已讀列表:', Array.from(readContacts)); // 調試：顯示載入的已讀列表
+    console.log('已載入已讀列表（僅當前會話）:', Array.from(readContacts)); // 調試：顯示載入的已讀列表
     updateUserActivity(); // 更新活動時間
     getUnreadCount(); // 獲取未讀數量
     
     // 立即更新聯絡人未讀計數（延遲一點確保DOM已載入）
-    // 但先根據已讀列表隱藏已讀聯絡人的徽章
+    // 注意：不再根據 localStorage 中的 readContacts 來隱藏徽章
+    // 因為資料庫的實際狀態才是權威來源
     setTimeout(() => {
-      // 先隱藏所有已在已讀列表中的聯絡人的徽章
-      readContacts.forEach(contactUsername => {
-        const badge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
+      // 如果當前正在查看某個聯絡人的聊天，隱藏其徽章
+      if (currentUserId && currentChatType === 'private') {
+        const badge = document.querySelector(`.unread-badge[data-contact-id="${currentUserId}"]`);
         if (badge) {
           badge.classList.remove('show', 'pulse', 'hiding');
-          badge.textContent = '0';
-          badge.setAttribute('data-count', '0');
-          console.log(`從已讀列表隱藏徽章: ${contactUsername}`);
+          badge.style.display = 'none'; // 完全隱藏
+          badge.style.visibility = 'hidden'; // 完全隱藏
+          console.log(`隱藏當前查看的聯絡人徽章: ${currentUserId}`);
         }
-      });
+      }
       
-      // 然後更新所有聯絡人的未讀計數
+      // 更新所有聯絡人的未讀計數（根據資料庫實際狀態）
       updateContactUnreadCounts();
     }, 500);
     
@@ -2192,9 +2402,13 @@ try {
             const currentMaxId = result.messages.length > 0 ? Math.max(...result.messages.map(m => parseInt(m.id) || 0)) : 0;
             if (currentMaxId > lastMessageId) {
               // 有新訊息，更新顯示
-              displayMessages(result.messages);
-              lastMessageId = currentMaxId;
-              console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+              try {
+                displayMessages(result.messages);
+                lastMessageId = currentMaxId;
+                console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+              } catch (displayError) {
+                console.error('顯示新訊息時發生錯誤:', displayError);
+              }
             }
           } else {
             console.error('輪詢失敗:', result.error || '未知錯誤');
