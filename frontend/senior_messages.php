@@ -64,18 +64,38 @@ try {
 
 // 處理愛心切換功能
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_like') {
+    // 設定 JSON 回應頭
+    header('Content-Type: application/json; charset=utf-8');
+    
     $message_id = (int)$_POST['message_id'];
     $is_liked = $_POST['is_liked'] === '1';
-    $user_email = $_SESSION['username'];
+    $user_email = $_SESSION['username'] ?? '';
+    
+    // 檢查用戶是否登入
+    if (empty($user_email)) {
+        echo json_encode(['success' => false, 'error' => '請先登入']);
+        exit;
+    }
     
     try {
-        // 檢查 message_likes 表是否存在
+        // 檢查 message_likes 表是否存在，如果不存在則創建
         $stmt = $pdo->query("SHOW TABLES LIKE 'message_likes'");
         $table_exists = $stmt->rowCount() > 0;
         
         if (!$table_exists) {
-            echo json_encode(['success' => false, 'error' => 'message_likes 表不存在，請先執行 setup_message_likes_table.php']);
-            exit;
+            // 自動創建表
+            $createTableSQL = "CREATE TABLE IF NOT EXISTS message_likes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                message_id INT NOT NULL,
+                user_email VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_like (message_id, user_email),
+                FOREIGN KEY (message_id) REFERENCES senior_messages(id) ON DELETE CASCADE,
+                INDEX idx_message_id (message_id),
+                INDEX idx_user_email (user_email)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+            
+            $pdo->exec($createTableSQL);
         }
         
         // 檢查是否已經點讚過
@@ -90,9 +110,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $stmt = $pdo->prepare("DELETE FROM message_likes WHERE message_id = ? AND user_email = ?");
                 $stmt->execute([$message_id, $user_email]);
                 
-                // 減少點讚數
-                $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count - 1 WHERE id = ?");
+                // 減少點讚數（確保不會變成負數）
+                $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = GREATEST(0, like_count - 1) WHERE id = ?");
                 $stmt->execute([$message_id]);
+                
+                // 獲取新的點讚數
+                $stmt = $pdo->prepare("SELECT like_count FROM senior_messages WHERE id = ?");
+                $stmt->execute([$message_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $new_count = $result['like_count'] ?? 0;
+                
+                echo json_encode(['success' => true, 'action' => 'unliked', 'new_count' => (int)$new_count]);
+            } else {
+                echo json_encode(['success' => true, 'action' => 'no_change', 'message' => '尚未點讚，無需取消']);
             }
         } else {
             // 添加愛心
@@ -104,13 +134,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 // 增加點讚數
                 $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count + 1 WHERE id = ?");
                 $stmt->execute([$message_id]);
+                
+                // 獲取新的點讚數
+                $stmt = $pdo->prepare("SELECT like_count FROM senior_messages WHERE id = ?");
+                $stmt->execute([$message_id]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $new_count = $result['like_count'] ?? 0;
+                
+                echo json_encode(['success' => true, 'action' => 'liked', 'new_count' => (int)$new_count]);
+            } else {
+                echo json_encode(['success' => true, 'action' => 'no_change', 'message' => '已經點讚過了']);
             }
         }
-        
-        echo json_encode(['success' => true]);
         exit;
     } catch(PDOException $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        error_log("點讚功能錯誤: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => '操作失敗: ' . $e->getMessage()]);
         exit;
     }
 }
@@ -264,14 +303,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .post-btn {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
             color: white;
             text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 25px;
+            padding: 10px 20px;
+            border-radius: 20px;
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.9rem;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
             border: none;
@@ -377,7 +416,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .messages-feed {
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 15px;
+            width: 100%;
+            min-height: 200px;
         }
         
         .message-card {
@@ -385,12 +426,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 20px;
-            margin-bottom: 15px;
+            margin-bottom: 0;
             transition: all 0.3s ease;
             cursor: pointer;
             position: relative;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            width: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message-card[style*="display: none"] {
+            display: none !important;
+            margin-bottom: 0;
+            height: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
         }
         
         .message-card::before {
@@ -549,6 +603,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             border-radius: 20px;
             border: 1px solid var(--border-color);
             margin: 40px 0;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .no-messages h3 {
@@ -843,12 +899,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <?php endif; ?>
                         
                         <div class="message-stats">
-                            <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" onclick="toggleLike(<?php echo $message['id']; ?>)">
+                            <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" 
+                                    data-message-id="<?php echo $message['id']; ?>"
+                                    onclick="toggleLike(<?php echo $message['id']; ?>)">
                                 <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '❤️'; ?></span>
-                                <span class="like-count"><?php echo $message['like_count']; ?></span>
+                                <span class="like-count"><?php echo $message['like_count'] ?? 0; ?></span>
                             </button>
                             <div class="view-count">
-                                👁️ <?php echo $message['view_count']; ?>
+                                👁️ <?php echo $message['view_count'] ?? 0; ?>
                             </div>
                         </div>
                     </div>
@@ -897,14 +955,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 // 篩選留言
                 const type = this.getAttribute('data-type');
                 const cards = document.querySelectorAll('.message-card');
+                let visibleCount = 0;
                 
                 cards.forEach(card => {
                     if (type === 'all' || card.getAttribute('data-type') === type) {
-                        card.style.display = 'block';
+                        // 移除隱藏樣式，恢復正常顯示
+                        card.style.display = '';
+                        card.style.visibility = 'visible';
+                        card.style.height = '';
+                        card.style.padding = '';
+                        card.style.margin = '';
+                        visibleCount++;
                     } else {
+                        // 完全隱藏卡片
                         card.style.display = 'none';
+                        card.style.visibility = 'hidden';
                     }
                 });
+                
+                // 如果沒有可見的留言，顯示提示訊息
+                const feed = document.getElementById('messagesFeed');
+                let noMessagesMsg = document.getElementById('noMessagesMsg');
+                
+                if (visibleCount === 0) {
+                    if (!noMessagesMsg) {
+                        noMessagesMsg = document.createElement('div');
+                        noMessagesMsg.id = 'noMessagesMsg';
+                        noMessagesMsg.className = 'no-messages';
+                        noMessagesMsg.innerHTML = '<h3>📝 暫無留言</h3><p>此分類目前還沒有留言。</p>';
+                        feed.appendChild(noMessagesMsg);
+                    }
+                    noMessagesMsg.style.display = 'block';
+                } else {
+                    if (noMessagesMsg) {
+                        noMessagesMsg.style.display = 'none';
+                    }
+                }
             });
         });
         
@@ -923,19 +1009,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         // 愛心按鈕功能 - 切換模式
-        function toggleLike(messageId) {
-            const likeBtn = document.querySelector(`button[onclick="toggleLike(${messageId})"]`);
+        function toggleLike(messageId, event) {
+            // 使用更可靠的选择器
+            let likeBtn = null;
+            if (event && event.target) {
+                likeBtn = event.target.closest('.like-btn');
+            }
+            if (!likeBtn) {
+                likeBtn = document.querySelector(`.like-btn[data-message-id="${messageId}"]`);
+            }
+            
+            if (!likeBtn) {
+                console.error('找不到愛心按鈕，messageId:', messageId);
+                return;
+            }
+            
             const likeIcon = likeBtn.querySelector('.like-icon');
             const likeCount = likeBtn.querySelector('.like-count');
             
-            // 檢查當前狀態
-            const isLiked = likeIcon.textContent === '💖';
-            const currentCount = parseInt(likeCount.textContent);
+            if (!likeIcon || !likeCount) {
+                console.error('找不到愛心圖標或計數器');
+                return;
+            }
             
-            // 立即更新視覺效果
+            // 檢查當前狀態
+            const isLiked = likeIcon.textContent === '💖' || likeBtn.classList.contains('liked');
+            const currentCount = parseInt(likeCount.textContent) || 0;
+            
+            // 保存原始狀態以便恢復
+            const originalCount = currentCount;
+            const originalIcon = likeIcon.textContent;
+            const originalLiked = likeBtn.classList.contains('liked');
+            
+            // 立即更新視覺效果（樂觀更新）
             if (isLiked) {
                 // 取消愛心
-                likeCount.textContent = currentCount - 1;
+                likeCount.textContent = Math.max(0, currentCount - 1);
                 likeIcon.textContent = '❤️';
                 likeBtn.classList.remove('liked');
             } else {
@@ -948,6 +1057,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             // 暫時禁用按鈕防止重複點擊
             likeBtn.disabled = true;
             likeBtn.style.opacity = '0.7';
+            likeBtn.style.cursor = 'wait';
             
             // 發送 AJAX 請求
             fetch('senior_messages.php', {
@@ -956,38 +1066,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: `action=toggle_like&message_id=${messageId}&is_liked=${isLiked ? '1' : '0'}`
-            }).then(response => response.json())
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
-                    console.log(isLiked ? '取消愛心成功' : '點讚成功');
+                    // 如果後端返回了新的計數，使用它
+                    if (data.new_count !== undefined) {
+                        likeCount.textContent = data.new_count;
+                    }
+                    console.log(data.action === 'liked' ? '點讚成功' : data.action === 'unliked' ? '取消愛心成功' : data.message || '操作成功');
                 } else {
                     // 如果失敗，恢復原狀
-                    if (isLiked) {
-                        likeCount.textContent = currentCount;
-                        likeIcon.textContent = '💖';
+                    likeCount.textContent = originalCount;
+                    likeIcon.textContent = originalIcon;
+                    if (originalLiked) {
                         likeBtn.classList.add('liked');
                     } else {
-                        likeCount.textContent = currentCount;
-                        likeIcon.textContent = '❤️';
                         likeBtn.classList.remove('liked');
                     }
+                    alert('操作失敗: ' + (data.error || '未知錯誤'));
                 }
-            }).catch(error => {
-                console.log('操作失敗:', error);
+            })
+            .catch(error => {
+                console.error('操作失敗:', error);
                 // 如果失敗，恢復原狀
-                if (isLiked) {
-                    likeCount.textContent = currentCount;
-                    likeIcon.textContent = '💖';
+                likeCount.textContent = originalCount;
+                likeIcon.textContent = originalIcon;
+                if (originalLiked) {
                     likeBtn.classList.add('liked');
                 } else {
-                    likeCount.textContent = currentCount;
-                    likeIcon.textContent = '❤️';
                     likeBtn.classList.remove('liked');
                 }
-            }).finally(() => {
+                alert('操作失敗，請檢查網路連線或稍後再試');
+            })
+            .finally(() => {
                 // 重新啟用按鈕
                 likeBtn.disabled = false;
                 likeBtn.style.opacity = '1';
+                likeBtn.style.cursor = 'pointer';
             });
         }
         

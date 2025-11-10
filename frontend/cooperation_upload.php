@@ -5,6 +5,12 @@ require_once 'session_config.php';
 // 載入 reCAPTCHA 設定
 require_once '../backend/config/recaptcha_config.php';
 
+// 初始化驗證碼（如果session中沒有）
+if (!isset($_SESSION['captcha_code'])) {
+    // 生成4位隨機數字驗證碼
+    $_SESSION['captcha_code'] = sprintf("%04d", rand(1000, 9999));
+}
+
 // 資料庫連接
 $host = 'localhost';
 $dbname = 'topics_good';
@@ -276,7 +282,7 @@ $role = $_SESSION['role'] ?? '訪客';
                     <div class="captcha-section">
                         <h4>驗證碼</h4>
                         <div class="captcha-container">
-                            <div class="captcha-display" id="captchaDisplay">1234</div>
+                            <div class="captcha-display" id="captchaDisplay"><?php echo htmlspecialchars($_SESSION['captcha_code'] ?? '0000'); ?></div>
                             <div class="captcha-input">
                                 <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" required>
                             </div>
@@ -298,12 +304,65 @@ $role = $_SESSION['role'] ?? '訪客';
     <script>
         // 驗證碼刷新功能
         function refreshCaptcha() {
-            // 生成新的4位數字驗證碼
-            let newCaptcha = '';
-            for (let i = 0; i < 4; i++) {
-                newCaptcha += Math.floor(Math.random() * 10);
+            const captchaDisplay = document.getElementById('captchaDisplay');
+            const captchaInput = document.getElementById('captchaInput');
+            
+            // 清空輸入框
+            if (captchaInput) {
+                captchaInput.value = '';
             }
-            document.getElementById('captchaDisplay').textContent = newCaptcha;
+            
+            // 從服務器獲取新的驗證碼（確保同步到session）
+            fetch('generate_captcha.php?action=refresh', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.success && data.captcha) {
+                      // 更新顯示
+                      captchaDisplay.textContent = data.captcha;
+                  } else {
+                      // 如果API失敗，使用備用方案：前端生成並更新到session
+                      let newCaptcha = '';
+                      for (let i = 0; i < 4; i++) {
+                          newCaptcha += Math.floor(Math.random() * 10);
+                      }
+                      captchaDisplay.textContent = newCaptcha;
+                      
+                      // 更新到session
+                      fetch('update_captcha.php', {
+                          method: 'POST',
+                          headers: {
+                              'Content-Type': 'application/x-www-form-urlencoded',
+                          },
+                          body: 'captcha=' + encodeURIComponent(newCaptcha)
+                      }).catch(error => {
+                          console.error('更新驗證碼到session失敗:', error);
+                      });
+                  }
+              })
+              .catch(error => {
+                  console.error('獲取驗證碼失敗:', error);
+                  // 備用方案：前端生成
+                  let newCaptcha = '';
+                  for (let i = 0; i < 4; i++) {
+                      newCaptcha += Math.floor(Math.random() * 10);
+                  }
+                  captchaDisplay.textContent = newCaptcha;
+                  
+                  // 嘗試更新到session
+                  fetch('update_captcha.php', {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                      },
+                      body: 'captcha=' + encodeURIComponent(newCaptcha)
+                  }).catch(err => {
+                      console.error('更新驗證碼到session失敗:', err);
+                  });
+              });
         }
 
         // 即時搜尋功能 - 使用教育部API
@@ -410,7 +469,17 @@ $role = $_SESSION['role'] ?? '訪客';
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
+                .then(async response => {
+                    // 檢查響應類型
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        // 如果不是JSON，讀取文本以查看錯誤
+                        const text = await response.text();
+                        console.error('非JSON響應:', text);
+                        throw new Error('服務器返回了非JSON格式的響應');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         messageDiv.className = 'success';
@@ -427,7 +496,7 @@ $role = $_SESSION['role'] ?? '訪客';
                         }, 3000);
                     } else {
                         messageDiv.className = 'error';
-                        messageDiv.textContent = data.message;
+                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
                         messageDiv.style.display = 'block';
                     }
                 })

@@ -1,12 +1,80 @@
 <?php
-// 載入 session 配置
-require_once '../session_config.php';
+// 立即設定錯誤處理和輸出緩衝，確保只輸出JSON
+ob_start(); // 開始輸出緩衝
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // 不顯示錯誤，記錄到日誌
+ini_set('log_errors', 1);
 
-// 載入 Gmail 郵件配置
-require_once '../../backend/config/email_config.php';
-
-// 設定回應為 JSON
+// 設定回應為 JSON（必須在任何輸出之前）
 header('Content-Type: application/json; charset=utf-8');
+
+// 自定義錯誤處理函數，確保錯誤時返回JSON
+function handleError($errno, $errstr, $errfile, $errline) {
+    // 只處理嚴重的錯誤，忽略警告和通知
+    if (!(error_reporting() & $errno)) {
+        return false; // 錯誤被錯誤報告級別忽略
+    }
+    
+    // 忽略警告（如 ob_clean 在空緩衝區時的警告）
+    if ($errno === E_WARNING || $errno === E_NOTICE || $errno === E_DEPRECATED) {
+        // 只記錄到日誌，不中斷執行
+        error_log("PHP Warning/Notice [$errno]: $errstr in $errfile on line $errline");
+        return true; // 告訴PHP我們已經處理了這個錯誤
+    }
+    
+    // 只處理致命錯誤
+    if ($errno === E_ERROR || $errno === E_PARSE || $errno === E_CORE_ERROR || $errno === E_COMPILE_ERROR) {
+        error_log("PHP Fatal Error [$errno]: $errstr in $errfile on line $errline");
+        if (ob_get_level() > 0) {
+            @ob_clean(); // 使用 @ 抑制可能的警告
+        }
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => '系統錯誤，請稍後再試'
+        ]);
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
+    }
+    
+    return false; // 繼續執行標準錯誤處理
+}
+
+// 自定義異常處理函數
+function handleException($exception) {
+    error_log("Uncaught Exception: " . $exception->getMessage());
+    error_log("異常堆疊: " . $exception->getTraceAsString());
+    if (ob_get_level() > 0) {
+        @ob_clean(); // 使用 @ 抑制可能的警告
+    }
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => '系統錯誤，請稍後再試'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+set_error_handler('handleError');
+set_exception_handler('handleException');
+
+try {
+    // 載入 session 配置
+    require_once '../session_config.php';
+    
+    // 載入 Gmail 郵件配置
+    require_once '../../backend/config/email_config.php';
+    
+    // 清除緩衝區中的任何意外輸出（使用 @ 抑制警告）
+    @ob_clean();
+} catch (Exception $e) {
+    handleException($e);
+}
 
 /**
  * 發送 Gmail 通知
@@ -160,20 +228,66 @@ $db_password = '';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 檢查並創建 enrollment_intention 表（如果不存在）
+    $stmt = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+    if ($stmt->rowCount() == 0) {
+        // 表不存在，創建表
+        $createTableSQL = "CREATE TABLE enrollment_intention (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL COMMENT '姓名',
+            identity ENUM('學生', '家長') NOT NULL COMMENT '身分別',
+            gender ENUM('男', '女') DEFAULT NULL COMMENT '性別',
+            phone1 VARCHAR(20) NOT NULL COMMENT '聯絡電話1',
+            phone2 VARCHAR(20) DEFAULT NULL COMMENT '聯絡電話2',
+            email VARCHAR(100) DEFAULT NULL COMMENT '電子郵件',
+            intention1 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願一',
+            intention2 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願二',
+            intention3 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願三',
+            system1 VARCHAR(20) DEFAULT NULL COMMENT '學制一',
+            system2 VARCHAR(20) DEFAULT NULL COMMENT '學制二',
+            system3 VARCHAR(20) DEFAULT NULL COMMENT '學制三',
+            junior_high VARCHAR(200) DEFAULT NULL COMMENT '就讀或畢業國中',
+            current_grade VARCHAR(20) DEFAULT NULL COMMENT '目前年級',
+            line_id VARCHAR(100) DEFAULT NULL COMMENT 'LineID',
+            facebook VARCHAR(200) DEFAULT NULL COMMENT 'Facebook',
+            recommended_teacher VARCHAR(100) DEFAULT NULL COMMENT '推薦老師',
+            remarks TEXT DEFAULT NULL COMMENT '備註',
+            captcha VARCHAR(10) DEFAULT NULL COMMENT '驗證碼',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '建立時間',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新時間'
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='就讀意願登錄表'";
+        
+        $pdo->exec($createTableSQL);
+        error_log("已自動創建 enrollment_intention 資料表");
+    }
 } catch (PDOException $e) {
+    error_log("資料庫連接錯誤: " . $e->getMessage());
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
     echo json_encode([
         'success' => false,
         'message' => '資料庫連接失敗'
     ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
     exit;
 }
 
 // 檢查是否為 POST 請求
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
     echo json_encode([
         'success' => false,
         'message' => '請使用 POST 方法提交'
     ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
     exit;
 }
 
@@ -200,21 +314,69 @@ $captcha = $_POST['captcha'] ?? '';
 
 // 基本驗證
 if (empty($name) || empty($identity) || empty($phone1)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
     echo json_encode([
         'success' => false,
         'message' => '請填寫必填欄位'
     ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
     exit;
 }
 
-// 驗證碼檢查（這裡可以加入更複雜的驗證碼驗證邏輯）
+// 驗證碼檢查 - 必須與session中的驗證碼匹配
 if (empty($captcha)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
     echo json_encode([
         'success' => false,
         'message' => '請輸入驗證碼'
     ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
     exit;
 }
+
+// 檢查session中的驗證碼
+$captcha_session = $_SESSION['captcha_code'] ?? '';
+
+if (empty($captcha_session)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '驗證碼已過期，請刷新驗證碼後再試'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+// 驗證驗證碼是否匹配（不區分大小寫，但通常驗證碼是數字）
+if ($captcha !== $captcha_session) {
+    error_log("驗證碼驗證失敗: 輸入=" . $captcha . ", session=" . $captcha_session);
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '驗證碼錯誤，請重新輸入'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+// 驗證成功後，清除session中的驗證碼（防止重複使用）
+unset($_SESSION['captcha_code']);
 
 try {
     // 插入資料到資料庫
@@ -235,6 +397,12 @@ try {
     )";
 
     $stmt = $pdo->prepare($sql);
+    if ($stmt === false) {
+        $errorInfo = $pdo->errorInfo();
+        error_log("SQL準備失敗: " . print_r($errorInfo, true));
+        throw new Exception("SQL準備失敗: " . ($errorInfo[2] ?? '未知錯誤'));
+    }
+    
     $stmt->bindParam(':name', $name);
     $stmt->bindParam(':identity', $identity);
     $stmt->bindParam(':gender', $gender);
@@ -278,19 +446,31 @@ try {
             'remarks' => $remarks
         ];
         
-        // 發送 Gmail 通知
-        $emailSent = sendEnrollmentNotification($emailData);
+        // 發送 Gmail 通知（失敗不影響提交成功）
+        try {
+            $emailSent = sendEnrollmentNotification($emailData);
+        } catch (Exception $emailError) {
+            // 郵件發送失敗不影響提交成功
+            error_log("郵件發送失敗: " . $emailError->getMessage());
+            $emailSent = false;
+        }
         
         $message = '就讀意願提交成功！我們將儘快與您聯絡。';
         if ($emailSent && !empty($email)) {
             $message .= ' 確認通知已發送至您的電子郵件信箱。';
         }
         
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
         echo json_encode([
             'success' => true,
             'message' => $message
         ]);
     } else {
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
         echo json_encode([
             'success' => false,
             'message' => '提交失敗，請稍後再試'
@@ -298,12 +478,51 @@ try {
     }
 
 } catch (PDOException $e) {
-    // 記錄錯誤
-    error_log("就讀意願提交錯誤: " . $e->getMessage());
+    // 記錄詳細錯誤信息
+    $errorMessage = $e->getMessage();
+    $errorCode = $e->getCode();
+    error_log("就讀意願提交資料庫錯誤 [Code: $errorCode]: " . $errorMessage);
+    error_log("SQL State: " . $e->errorInfo[0] . ", Driver Code: " . ($e->errorInfo[1] ?? 'N/A'));
     
+    // 清除任何意外輸出（使用 @ 抑制警告）
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    
+    // 根據錯誤類型提供更友好的錯誤訊息
+    $userMessage = '系統錯誤，請稍後再試';
+    if (strpos($errorMessage, 'Table') !== false && strpos($errorMessage, "doesn't exist") !== false) {
+        $userMessage = '資料表不存在，請聯繫系統管理員';
+    } elseif (strpos($errorMessage, 'Duplicate entry') !== false) {
+        $userMessage = '資料已存在，請勿重複提交';
+    } elseif (strpos($errorMessage, 'SQLSTATE') !== false) {
+        $userMessage = '資料庫操作失敗，請檢查資料格式';
+    }
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => $userMessage
+    ]);
+} catch (Exception $e) {
+    // 記錄一般錯誤
+    error_log("就讀意願提交一般錯誤: " . $e->getMessage());
+    error_log("錯誤堆疊: " . $e->getTraceAsString());
+    
+    // 清除任何意外輸出（使用 @ 抑制警告）
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    
+    http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => '系統錯誤，請稍後再試'
     ]);
+} finally {
+    // 確保輸出緩衝區被正確處理（使用 @ 抑制警告）
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
 }
 ?>

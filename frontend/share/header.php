@@ -993,7 +993,7 @@ function getActiveClass($targetFile) {
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
          <span class="username"><?php echo $isLoggedIn ? htmlspecialchars($_SESSION['username']) : '未知用戶'; ?></span>
-         <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+         <?php if ($isLoggedIn && isset($_SESSION['role']) && in_array($_SESSION['role'], ['老師', '學生'])): ?>
            <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>

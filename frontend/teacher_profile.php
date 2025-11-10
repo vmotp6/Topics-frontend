@@ -11,30 +11,71 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查是否為老師或學生角色
+$user_role = $_SESSION['role'] ?? '';
+if (!in_array($user_role, ['老師', '學生'])) {
     header("Location: index.php");
     exit;
 }
 
-// 獲取老師姓名
-require_once 'config.php'; // 引入資料庫配置
-$teacher_name = '';
+$is_teacher = ($user_role === '老師');
+$is_student = ($user_role === '學生');
+
+// 獲取用戶姓名（老師或學生）
+$user_name = '';
+$current_department = '';
+$current_phone = '';
+
+// 使用直接 PDO 連接（與其他頁面一致）
 try {
-    $conn = getDatabaseConnection();
-    if ($conn) {
-        $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
-        $stmt->bind_param("s", $_SESSION['username']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            $teacher_name = $row['name'];
-        }
-        $conn->close();
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 先從 user 表獲取基本資訊
+    $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ?");
+    $stmt->execute([$_SESSION['username']]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($result && !empty($result['name'])) {
+        $user_name = $result['name'];
     }
-} catch (Exception $e) {
-    // 如果查詢失敗，teacher_name 會是空字串，但頁面仍可正常運作
-    error_log("無法從資料庫獲取老師姓名: " . $e->getMessage());
+    
+    // 根據角色從不同表獲取詳細資料
+    if ($is_teacher) {
+        // 從 teacher 表獲取
+        $stmt = $pdo->prepare("
+            SELECT t.department, t.phone 
+            FROM teacher t
+            JOIN user u ON t.user_id = u.id
+            WHERE u.username = ?
+        ");
+        $stmt->execute([$_SESSION['username']]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result) {
+            $current_department = $result['department'] ?? '';
+            $current_phone = $result['phone'] ?? '';
+        }
+    } elseif ($is_student) {
+        // 從 student 表獲取
+        $stmt = $pdo->prepare("
+            SELECT s.department, s.phone 
+            FROM student s
+            JOIN user u ON s.user_id = u.id
+            WHERE u.username = ?
+        ");
+        $stmt->execute([$_SESSION['username']]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result) {
+            $current_department = $result['department'] ?? '';
+            $current_phone = $result['phone'] ?? '';
+        }
+    }
+} catch (PDOException $e) {
+    error_log("無法從資料庫獲取用戶資料: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -43,7 +84,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <?php include("share/header.php"); ?>
-    <title>老師個人資料</title>
+    <title><?php echo $is_teacher ? '老師' : '學生'; ?>個人資料</title>
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
         .profile-container {
@@ -152,20 +193,20 @@ try {
             <div class="form-group">
                 <label for="department">科系</label>
                 <select id="department" name="department" required>
-                    <option value="" disabled selected>請選擇科系</option>
-                    <option value="資訊管理科">資訊管理科</option>
-                    <option value="企業管理科">企業管理科</option>
-                    <option value="護理科">護理科</option>
-                    <option value="幼保科">幼保科</option>
-                    <option value="應用外語科">應用外語科</option>
-                    <option value="視光科">視光科</option>
-                    <option value="動畫科">動畫科</option>
+                    <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
+                    <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
+                    <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
+                    <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
+                    <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
+                    <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
+                    <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
+                    <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
                 </select>
             </div>
             
             <div class="form-group">
                 <label for="phone">電話</label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" required>
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
             </div>
             
             <button type="submit" class="submit-btn">保存資料</button>
@@ -173,52 +214,21 @@ try {
         
         <div id="message"></div>
         
-        <a href="teacher.php" class="back-btn">← 返回老師頁面</a>
+        <a href="<?php echo $is_teacher ? 'teacher.php' : 'student.php'; ?>" class="back-btn">← 返回<?php echo $is_teacher ? '老師' : '學生'; ?>頁面</a>
     </div>
 
     <script>
-        // 頁面載入時檢查是否已有個人資料（暫時禁用，避免 500 錯誤）
+        // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
         window.addEventListener('load', function() {
-            const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
-            if (username) {
-                // 暫時禁用自動填入功能，等後端服務器修復後再啟用
-                console.log('個人資料檢查功能已暫時禁用');
-                return;
-                
-                // 使用 AbortController 來設置超時
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
-                
-                fetch(`http://localhost:5000/teacher/profile/${username}`, {
-                    signal: controller.signal,
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    }
-                })
-                    .then(response => {
-                        clearTimeout(timeoutId);
-                        if (response.ok) {
-                            return response.json();
-                        } else if (response.status === 404) {
-                            // 尚未填寫個人資料，不填入表單
-                            return null;
-                        } else {
-                            // 其他錯誤狀態碼，靜默處理
-                            return null;
-                        }
-                    })
-                    .then(data => {
-                        if (data) {
-                            // 如果已有資料，填入表單
-                            document.getElementById('department').value = data.department;
-                            document.getElementById('phone').value = data.phone;
-                        }
-                    })
-                    .catch(error => {
-                        clearTimeout(timeoutId);
-                        // 靜默處理錯誤，不顯示任何錯誤訊息
-                    });
+            // 如果 PHP 已經從資料庫載入了資料，直接使用（不需要 API 調用）
+            const currentDept = '<?php echo htmlspecialchars($current_department ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentPhone = '<?php echo htmlspecialchars($current_phone ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            
+            if (currentDept) {
+                document.getElementById('department').value = currentDept;
+            }
+            if (currentPhone) {
+                document.getElementById('phone').value = currentPhone;
             }
         });
 
@@ -227,7 +237,8 @@ try {
             e.preventDefault();
             
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
-            const name = '<?php echo htmlspecialchars($teacher_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
+            const name = '<?php echo htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
+            const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
             const department = document.getElementById('department').value;
             const phone = document.getElementById('phone').value;
             
@@ -236,35 +247,66 @@ try {
             formData.append('name', name); // 將姓名加入表單數據
             formData.append('department', department);
             formData.append('phone', phone);
+            formData.append('role', role); // 添加角色資訊
             
             // 使用 AbortController 來設置超時
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
             
-            fetch('http://localhost:5000/teacher/profile', {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal
-            })
-            .then(response => {
-                clearTimeout(timeoutId);
-                return response.json().then(data => {
+            // 根據角色選擇不同的保存方式
+            if (role === '老師') {
+                // 老師使用後端 API
+                fetch('http://localhost:5000/teacher/profile', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json().then(data => {
+                        const messageDiv = document.getElementById('message');
+                        if (response.ok) {
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = data.message;
+                        } else {
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.message || '提交失敗，請稍後再試';
+                        }
+                    });
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
                     const messageDiv = document.getElementById('message');
-                    if (response.ok) {
-                        messageDiv.className = 'message success';
-                        messageDiv.textContent = data.message;
-                    } else {
-                        messageDiv.className = 'message error';
-                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
-                    }
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '保存失敗，請稍後再試。';
                 });
-            })
-            .catch(error => {
-                clearTimeout(timeoutId);
-                const messageDiv = document.getElementById('message');
-                messageDiv.className = 'message error';
-                messageDiv.textContent = '保存失敗，請稍後再試。';
-            });
+            } else {
+                // 學生使用前端 PHP 保存
+                fetch('save_student_profile.php', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json().then(data => {
+                        const messageDiv = document.getElementById('message');
+                        if (response.ok && data.success) {
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = data.message || '個人資料保存成功';
+                        } else {
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.message || '提交失敗，請稍後再試';
+                        }
+                    });
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '保存失敗，請稍後再試。';
+                });
+            }
         });
     </script>
 <?php include("share/footer.php"); ?>

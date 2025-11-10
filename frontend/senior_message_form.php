@@ -24,24 +24,41 @@ $auth = new SeniorMessageAuth();
 $user_email = $_SESSION['username']; // 假設username就是email
 $permission_result = $auth->checkPermission($user_email);
 
-// 從資料庫獲取用戶姓名
+// 從資料庫獲取用戶姓名 - 使用與 senior_messages.php 相同的連接方式
 $user_name = '';
 try {
-    $configPath = dirname(__DIR__) . '/config.php';
-    if (file_exists($configPath)) {
-        require_once $configPath;
-        $conn = getDatabaseConnection();
-        if ($conn) {
-            $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
-            $stmt->bind_param("s", $user_email);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($row = $result->fetch_assoc()) {
-                $user_name = $row['name'] ?? '';
-            }
-            $conn->close();
+    // 使用直接 PDO 連接（與 senior_messages.php 一致）
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 優先從 student 表獲取姓名（因為學生資料主要在 student 表）
+    $stmt = $pdo->prepare("
+        SELECT s.name 
+        FROM student s
+        JOIN user u ON s.user_id = u.id
+        WHERE u.username = ?
+    ");
+    $stmt->execute([$user_email]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($result && !empty($result['name'])) {
+        $user_name = $result['name'];
+    } else {
+        // 如果 student 表中沒有，嘗試從 user 表獲取（備用方案）
+        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ?");
+        $stmt->execute([$user_email]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result && !empty($result['name'])) {
+            $user_name = $result['name'];
         }
     }
+} catch (PDOException $e) {
+    error_log("獲取用戶姓名錯誤: " . $e->getMessage());
 } catch (Exception $e) {
     error_log("獲取用戶姓名錯誤: " . $e->getMessage());
 }
@@ -69,9 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     $author_contact = trim($_POST['author_contact'] ?? '');
     $message_type = $_POST['message_type'] ?? '經驗分享';
     
-    // 驗證表單資料
-    if (empty($title) || empty($content) || empty($author_name)) {
-        $form_error = '請填寫所有必填欄位';
+    // 驗證表單資料（姓名已從資料庫自動填入，不需要檢查）
+    if (empty($title) || empty($content)) {
+        $form_error = '請填寫標題和留言內容';
+    } elseif (empty($author_name)) {
+        $form_error = '系統錯誤：無法獲取您的姓名資料，請聯繫管理員';
     } else {
         // 準備留言資料
         $messageData = [
@@ -593,7 +612,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     </div>
                     
                     <div class="form-group">
-                        <label for="author_name">您的姓名 <span class="required">*</span></label>
+                        <label for="author_name">您的姓名</label>
                         <input type="text" id="author_name" name="author_name" value="<?php echo htmlspecialchars($user_name); ?>" readonly style="background-color: var(--border-color); cursor: not-allowed;">
                         <small style="color: var(--secondary-text); font-size: 0.9rem;">姓名已從您的帳號資料中自動填入</small>
                     </div>
