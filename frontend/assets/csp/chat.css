@@ -112,6 +112,8 @@ body::before {
   height: 200%;
   background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
   animation: float 6s ease-in-out infinite;
+  pointer-events: none; /* 確保不阻擋按鈕點擊 */
+  z-index: 0; /* 放在最底層 */
 }
 
 @keyframes float {
@@ -125,8 +127,24 @@ body::before {
   color: white;
   margin: 0;
   position: relative;
-  z-index: 1;
+  z-index: 2;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 確保按鈕可以點擊 */
+.sidebar-header > div,
+.sidebar-header button {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* 確保按鈕樣式正確 */
+.sidebar-header button {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
 }
 
 .user-list {
@@ -217,8 +235,121 @@ body::before {
     0 0 0 2px rgba(255, 255, 255, 0.2);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* 改為 visible 讓徽章能顯示在頭像外 */
   border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 未讀訊息徽章樣式 - 精美現代化設計 */
+.unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff4757 100%);
+  color: white;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  font-size: 10px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  font-weight: 700;
+  border: 2px solid #ffffff;
+  box-shadow: 
+    0 2px 8px rgba(255, 71, 87, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  z-index: 100;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.1;
+  letter-spacing: -0.1px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* 單個數字時使用圓形 */
+.unread-badge[data-count="1"] {
+  min-width: 18px;
+  max-width: 18px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* 多個數字時使用圓角矩形 */
+.unread-badge[data-count]:not([data-count="1"]) {
+  border-radius: 9px;
+  padding: 0 4px;
+  min-width: 18px;
+}
+
+.unread-badge.show {
+  display: flex !important;
+  animation: badgeAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badgeAppear {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes badgeHide {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+.unread-badge.hiding {
+  animation: badgeHide 0.25s ease-out forwards;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 
+      0 2px 10px rgba(255, 71, 87, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 
+      0 3px 15px rgba(255, 71, 87, 0.7),
+      0 2px 5px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 
+      0 2px 10px rgba(255, 71, 87, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+}
+
+.unread-badge.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* 數字較多時的調整 */
+.unread-badge:has-text("99+") {
+  font-size: 9px;
+  padding: 0 4px;
+  letter-spacing: -0.3px;
 }
 
 .user-avatar::before {
@@ -567,10 +698,28 @@ body::before {
 }
 
 .chat-input button:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: #cccccc !important;
+  background-image: none !important;
+  color: #666666 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  opacity: 0.6 !important;
+}
+
+.chat-input button:not(:disabled) {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+  color: white !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+}
+
+.chat-input button:not(:disabled):hover {
+  background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 
+    0 6px 20px rgba(0, 123, 255, 0.4),
+    0 0 0 2px rgba(255, 255, 255, 0.3) !important;
 }
 
 
