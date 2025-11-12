@@ -4,7 +4,7 @@
  * 不需要創建額外的表，直接使用現有的 user 表
  */
 
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';

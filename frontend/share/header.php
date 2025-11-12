@@ -923,13 +923,12 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
     <?php else: ?>
       <!-- 僅登入用戶可見的連結 -->
+      <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">學長姐留言板</a>
+    <?php endif; ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
-    
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
-      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
-    <?php endif; ?>
-    
+
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
@@ -995,7 +994,7 @@ function getActiveClass($targetFile) {
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
          <span class="username"><?php echo $isLoggedIn ? htmlspecialchars($_SESSION['username']) : '未知用戶'; ?></span>
-         <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+         <?php if ($isLoggedIn && isset($_SESSION['role']) && in_array($_SESSION['role'], ['老師', '學生'])): ?>
            <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>
@@ -1385,7 +1384,7 @@ function checkTeacherProfile() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超時
     
-    fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+    fetch(`http://localhost:5000/teacher/profile/${username}`, {
       signal: controller.signal,
       method: 'GET',
       headers: {

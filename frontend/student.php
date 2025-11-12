@@ -503,14 +503,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
             <a href="admission_recommend.php" class="slide-btn">推薦報名</a>
           </div>
         </div>
-        <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
-          <div class="slide-overlay"></div>
-          <div class="slide-content">
-            <h2>五專入學說明會</h2>
-            <p>深入了解五專課程特色與未來發展方向</p>
-            <a href="admission.php" class="slide-btn">立即報名</a>
-          </div>
-        </div>
+        
       `;
       
       slides = document.querySelectorAll('.carousel-slide');
@@ -664,32 +657,12 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
 			</div>
 			
 			<div class="feature-card">
-				<div class="feature-icon">👥</div>
-				<h3 class="feature-title">續招報名</h3>
-				<p class="feature-description">查看續招報名情況和進度。</p>
-				<a href="continued_admission.php" class="feature-link">續招報名</a>
-			</div>
-			
-			<div class="feature-card">
-				<div class="feature-icon">📊</div>
-				<h3 class="feature-title">五專入學說明會</h3>
-				<p class="feature-description">查看五專入學說明會情況和進度。</p>
-				<a href="admission.php" class="feature-link">五專入學說明會</a>
-			</div>
-			
-			<div class="feature-card">
 				<div class="feature-icon">👑</div>
 				<h3 class="feature-title">推薦報名</h3>
 				<p class="feature-description">查看推薦報名情況和進度。</p>
 				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
 			</div>
 			
-			<div class="feature-card">
-				<div class="feature-icon">🎓</div>
-				<h3 class="feature-title">就讀意願管理</h3>
-				<p class="feature-description">管理學生和家長的就讀意願登錄，查看申請狀態並進行聯絡。</p>
-				<a href="admin_enrollment_review_fixed.php" class="feature-link">管理就讀意願</a>
-			</div>
 		</div>
 	</div>
 	</main>
@@ -711,7 +684,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
 			
-			fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+			fetch(`http://localhost:5000/teacher/profile/${username}`, {
 				signal: controller.signal,
 				method: 'GET',
 				headers: {

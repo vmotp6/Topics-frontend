@@ -68,7 +68,7 @@ class FirebaseNotificationService {
             'from_user' => $fromUser,
             'to_user' => $toUser,
             'message' => $message,
-            'chat_url' => $chatUrl ?: 'http://100.79.58.120/frontend/chat/chat.php',
+            'chat_url' => $chatUrl ?: 'http://localhost/frontend/chat/chat.php',
             'timestamp' => time()
         ];
         
@@ -90,7 +90,7 @@ class FirebaseNotificationService {
         //     INDEX idx_username (username)
         // );
         
-        $host = '100.79.58.120';
+        $host = 'localhost';
         $dbname = 'topics_good';
         $db_username = 'root';
         $db_password = '';

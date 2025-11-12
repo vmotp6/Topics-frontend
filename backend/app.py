@@ -33,13 +33,17 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=['http://localhost', 'http://localhost:80', 'http://127.0.0.1'])
 app.secret_key = 'your-secret-key-here'  # 請更改為安全的密鑰
 
-# 資料庫連接配置
+# 資料庫連接配置 - 優先使用環境變數，否則使用預設值
 DB_CONFIG = {
-    'host': '100.79.58.120',
-    'user': 'root',
-    'password': '',
-    'database': 'topics_good',
-    'charset': 'utf8mb4'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '3306')),  # MySQL 默認端口
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'topics_good'),
+    'charset': 'utf8mb4',
+    'connect_timeout': 10,  # 連接超時時間（秒）
+    'read_timeout': 10,     # 讀取超時時間（秒）
+    'write_timeout': 10     # 寫入超時時間（秒）
 }
 
 # Google OAuth 配置 - 優先使用環境變數，否則使用config.py
@@ -50,13 +54,51 @@ GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI') or globals().get('GOOGLE_
 # 存儲 state 參數（生產環境應使用 Redis 或資料庫）
 google_states = {}
 
-def get_db_connection():
-    """獲取資料庫連接"""
-    try:
-        return pymysql.connect(**DB_CONFIG)
-    except Exception as e:
-        print(f"資料庫連接失敗: {e}")
-        return None
+def get_db_connection(retries=3, retry_delay=1):
+    """
+    獲取資料庫連接，帶重試機制
+    
+    Args:
+        retries: 重試次數，預設3次
+        retry_delay: 重試延遲時間（秒），預設1秒，每次重試會翻倍
+    
+    Returns:
+        pymysql.connections.Connection 或 None
+    """
+    last_error = None
+    
+    for attempt in range(retries):
+        try:
+            conn = pymysql.connect(**DB_CONFIG)
+            print(f"✅ 資料庫連接成功 (嘗試 {attempt + 1}/{retries})")
+            return conn
+        except pymysql.Error as e:
+            last_error = e
+            error_msg = str(e)
+            
+            if attempt < retries - 1:
+                print(f"⚠️  資料庫連接失敗 (嘗試 {attempt + 1}/{retries}): {error_msg}")
+                print(f"   將在 {retry_delay} 秒後重試...")
+                import time
+                time.sleep(retry_delay)
+                retry_delay *= 2  # 指數退避
+            else:
+                print(f"❌ 資料庫連接最終失敗 (已嘗試 {retries} 次): {error_msg}")
+                print(f"   請檢查：")
+                print(f"   1. 資料庫伺服器 {DB_CONFIG['host']}:{DB_CONFIG['port']} 是否可訪問")
+                print(f"   2. 網路連線是否正常")
+                print(f"   3. 防火牆設定是否允許連接（端口 {DB_CONFIG['port']}）")
+                print(f"   4. 資料庫服務是否正在運行")
+                print(f"   5. MySQL用戶權限是否正確")
+        
+        except Exception as e:
+            last_error = e
+            print(f"❌ 資料庫連接發生未知錯誤: {e}")
+            import traceback
+            traceback.print_exc()
+            break
+    
+    return None
 
 @app.route('/')
 def home():
@@ -170,16 +212,9 @@ def google_callback():
                     # 創建新用戶
                     username = name or email.split('@')[0]
                     
-                    # 基於email domain自動判斷身分
-                    if email.endswith('@stu.ukn.edu.tw'):
-                        role = '學生'
-                        print(f"根據email domain判斷為學生: {email}")
-                    elif email.endswith('@ukn.edu.tw'):
-                        role = '老師'
-                        print(f"根據email domain判斷為老師: {email}")
-                    else:
-                        role = '學生'  # 非學校帳號都視為學生
-                        print(f"非學校帳號，判斷為學生: {email}")
+                    # 所有新註冊用戶都設為學生（老師身分由後端管理員手動設定）
+                    role = '學生'
+                    print(f"新用戶預設設為學生: {email}")
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -198,6 +233,18 @@ def google_callback():
                     )
                     user_id = cursor.lastrowid
                     print(f"創建新用戶: {username}, ID: {user_id}")
+                    
+                    # 同步插入 student 表
+                    try:
+                        cursor.execute(
+                            """INSERT INTO student (user_id, name, email) 
+                               VALUES (%s, %s, %s)""",
+                            (user_id, name, email)
+                        )
+                        print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+                    except Exception as student_error:
+                        # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
+                        print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
                 
                 conn.commit()
                 print(f"用戶資料保存成功: {username}")
@@ -307,13 +354,20 @@ def login():
 @app.route('/sign', methods=['POST'])
 def register():
     """註冊功能"""
-    username = request.form.get('username')
-    password = request.form.get('password')
-    email = request.form.get('email')
-    name = request.form.get('name')
+    # 同時支援 form 與 JSON
+    data = request.form if request.form else (request.get_json(silent=True) or {})
+    username = data.get('username')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    email = data.get('email')
+    name = data.get('name')
     
     if not all([username, password, email, name]):
         return jsonify({"message": "請填寫所有必填欄位"}), 400
+    if confirm_password is not None and password != confirm_password:
+        return jsonify({"message": "兩次密碼輸入不一致"}), 400
+    if len(password) < 6:
+        return jsonify({"message": "密碼長度至少需 6 碼"}), 400
     
     conn = get_db_connection()
     if not conn:
@@ -325,19 +379,42 @@ def register():
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
                 return jsonify({"message": "用戶名已存在"}), 400
-            
-            # 插入新用戶
+
+            # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
+            cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({"message": "Email 已被使用"}), 400
+
+            # 插入新用戶（角色預設為學生）
             cursor.execute(
                 "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
                 (username, password, email, name)
             )
-            conn.commit()
+            user_id = cursor.lastrowid
             
+            # 同步插入 student 表
+            try:
+                cursor.execute(
+                    """INSERT INTO student (user_id, name, email) 
+                       VALUES (%s, %s, %s)""",
+                    (user_id, name, email)
+                )
+                print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+            except Exception as student_error:
+                # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
+                print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
+            
+            conn.commit()
+
             return jsonify({"message": "註冊成功"}), 200
             
+    except pymysql.err.IntegrityError as e:
+        # 可能的唯一鍵衝突（如 username/email）
+        print(f"註冊唯一鍵衝突: {e}")
+        return jsonify({"message": "帳號或 Email 已被使用"}), 400
     except Exception as e:
         print(f"註冊錯誤: {e}")
-        return jsonify({"message": "註冊失敗，請稍後再試。"}), 500
+        return jsonify({"message": f"註冊失敗，請稍後再試。"}), 500
     finally:
         conn.close()
 
@@ -389,13 +466,12 @@ def submit_enrollment():
         data = request.form.to_dict()
         
         # 連接資料庫
-        connection = pymysql.connect(
-            host='100.79.58.120',
-            user='root',
-            password='',
-            database='topics_good',
-            charset='utf8mb4'
-        )
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({
+                'success': False,
+                'message': '資料庫連接失敗，請稍後再試'
+            }), 500
         
         with connection.cursor() as cursor:
             # 檢查資料表是否存在，如果不存在則創建
@@ -487,10 +563,16 @@ def submit_enrollment():
         })
         
     except Exception as e:
+        print(f"提交就讀意願表單錯誤: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'message': f'提交失敗: {str(e)}'
         }), 500
+    finally:
+        if 'connection' in locals() and connection:
+            connection.close()
 
 # ✅ 獲取老師個人資料
 @app.route('/teacher/profile/<username>', methods=['GET'])

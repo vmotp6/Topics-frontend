@@ -2,7 +2,7 @@
 // 資料庫連接配置檔案
 // 與 backend/app.py 保持一致的連線設定
 
-define('DB_HOST', '100.79.58.120');    // 組員電腦的IP地址
+define('DB_HOST', 'localhost');    // 本地資料庫
 define('DB_USERNAME', 'root');          // 資料庫使用者名稱
 define('DB_PASSWORD', '');              // 資料庫密碼
 define('DB_NAME', 'topics_good');       // 資料庫名稱

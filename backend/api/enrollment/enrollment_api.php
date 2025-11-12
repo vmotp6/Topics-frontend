@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // 資料庫連接
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';
@@ -104,7 +104,7 @@ try {
     $captcha_input = $_POST['captcha'] ?? '';
     $captcha_session = $_SESSION['captcha_code'] ?? '';
     
-    if (empty($captcha_input) || empty($captcha_session) || $captcha_input !== $captcha_session) {
+    if (empty($captcha_input) || empty($captcha_session) || strtoupper($captcha_input) !== strtoupper($captcha_session)) {
         echo json_encode(['success' => false, 'message' => '驗證碼錯誤，請重新輸入']);
         exit;
     }

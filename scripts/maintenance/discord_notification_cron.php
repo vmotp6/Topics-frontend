@@ -54,7 +54,7 @@ function main() {
 // 獲取統計信息
 function getNotificationStats() {
     try {
-        $host = '100.79.58.120';
+        $host = 'localhost';
         $dbname = 'topics_good';
         $username = 'root';
         $password = '';

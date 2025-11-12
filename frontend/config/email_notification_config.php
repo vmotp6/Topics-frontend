@@ -1,6 +1,17 @@
 <?php
 // 郵件通知配置檔案
 
+// 設定時區為台灣時區 (UTC+8)
+if (!ini_get('date.timezone')) {
+    date_default_timezone_set('Asia/Taipei');
+} else {
+    // 如果已設定時區，確保是台灣時區
+    $current_timezone = date_default_timezone_get();
+    if ($current_timezone !== 'Asia/Taipei') {
+        date_default_timezone_set('Asia/Taipei');
+    }
+}
+
 // SMTP 郵件設定 (使用現有的 config.php 設定)
 require_once dirname(__DIR__) . '/config.php';
 
@@ -70,7 +81,7 @@ function getEmailTemplate($template_name, $data = []) {
                             <p><strong>被推薦學生：</strong>{student_name}</p>
                             <p><strong>被推薦學生學校：</strong>{student_school}</p>
                             <p><strong>被推薦學生年級：</strong>{student_grade}</p>
-                            <p><strong>提交時間：</strong>{submission_time}</p>
+                            <p><strong>提交時間：</strong>{submission_time} (台灣時間 UTC+8)</p>
                         </div>
                         
                         <div class="info-box">
@@ -218,7 +229,26 @@ function getEmailTemplate($template_name, $data = []) {
     
     // 替換模板變數
     foreach ($data as $key => $value) {
-        $template = str_replace('{' . $key . '}', $value, $template);
+        // 如果是時間相關的欄位，確保格式正確
+        if (strpos($key, 'time') !== false || strpos($key, 'date') !== false) {
+            // 如果已經是正確格式，直接使用；否則嘗試轉換
+            if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value)) {
+                // 嘗試解析並格式化為台灣時區
+                try {
+                    $date = new DateTime($value);
+                    // 如果時間是 UTC，轉換為台灣時區
+                    if ($date->getTimezone()->getName() === 'UTC' || 
+                        strpos($value, 'UTC') !== false || 
+                        strpos($value, '+00:00') !== false) {
+                        $date->setTimezone(new DateTimeZone('Asia/Taipei'));
+                    }
+                    $value = $date->format('Y-m-d H:i:s');
+                } catch (Exception $e) {
+                    // 如果轉換失敗，使用原始值
+                }
+            }
+        }
+        $template = str_replace('{' . $key . '}', htmlspecialchars($value), $template);
     }
     
     return $template;
@@ -227,6 +257,9 @@ function getEmailTemplate($template_name, $data = []) {
 // 發送郵件函數
 function sendNotificationEmail($to_email, $to_name, $template_name, $data = []) {
     try {
+        // 確保使用台灣時區
+        date_default_timezone_set('Asia/Taipei');
+        
         $mail = new PHPMailer(true);
         
         // SMTP 設定
@@ -238,6 +271,9 @@ function sendNotificationEmail($to_email, $to_name, $template_name, $data = []) 
         $mail->SMTPSecure = SMTP_SECURE;
         $mail->Port = SMTP_PORT;
         $mail->CharSet = 'UTF-8';
+        
+        // 設定郵件日期為台灣時區
+        $mail->MessageDate = date('D, d M Y H:i:s +0800');
         
         // 發件人設定
         $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);

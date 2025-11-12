@@ -5,8 +5,10 @@ require_once 'session_config.php';
 // 載入 reCAPTCHA 設定
 require_once '../backend/config/recaptcha_config.php';
 
+// 驗證碼將由 captcha_image.php 生成
+
 // 資料庫連接
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $db_username = 'root';
 $db_password = '';
@@ -50,6 +52,7 @@ $role = $_SESSION['role'] ?? '訪客';
     <title>康寧大學就讀意願登錄</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/cooperation_upload.css?v=20241014-3">
+    <script src="assets/js/draft-system.js"></script>
 </head>
 
 <body>
@@ -274,17 +277,22 @@ $role = $_SESSION['role'] ?? '訪客';
 
                     <!-- 驗證碼 -->
                     <div class="captcha-section">
-                        <h4>驗證碼</h4>
-                        <div class="captcha-container">
-                            <div class="captcha-display" id="captchaDisplay">1234</div>
-                            <div class="captcha-input">
-                                <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" required>
+                        <h4>驗證碼 <span class="required">*</span></h4>
+                        <div class="captcha-container" style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                            <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; text-transform: uppercase;" pattern="[A-Z0-9]{5,6}">
+                            <div id="captchaImageContainer" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; display: inline-block; vertical-align: middle; overflow: hidden;">
+                                <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; cursor: pointer; display: block;" title="點擊刷新驗證碼" onerror="handleCaptchaError(this)">
                             </div>
-                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()">刷新</button>
+                            <div id="captchaError" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 5px; padding: 5px; background: #ffebee; border-radius: 3px;">
+                                <i class="fas fa-exclamation-triangle"></i> GD 擴展未啟用，已使用文字驗證碼模式
+                            </div>
+                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                <i class="fas fa-sync-alt"></i> 刷新
+                            </button>
                         </div>
-                        <div class="help-text">
-                            驗證碼錯誤，請重新輸入
-                        </div>
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                        </small>
                     </div>
 
                     <button type="submit" class="submit-btn" id="submitBtn">
@@ -296,14 +304,61 @@ $role = $_SESSION['role'] ?? '訪客';
     </div>
 
     <script>
+        // 驗證碼錯誤處理
+        function handleCaptchaError(img) {
+            console.warn('驗證碼圖片載入失敗，嘗試載入 HTML 備用方案');
+            const container = document.getElementById('captchaImageContainer');
+            const errorDiv = document.getElementById('captchaError');
+            
+            // 隱藏圖片，載入 HTML 備用方案
+            if (img) {
+                img.style.display = 'none';
+            }
+            
+            // 使用 iframe 或直接載入 HTML 內容
+            fetch('captcha_image.php?t=' + new Date().getTime())
+                .then(response => response.text())
+                .then(html => {
+                    if (container) {
+                        // 如果返回的是 SVG 或 HTML，直接插入
+                        if (html.includes('<svg') || html.includes('<div')) {
+                            container.innerHTML = html;
+                            container.style.cursor = 'pointer';
+                            container.onclick = refreshCaptcha;
+                        }
+                    }
+                    // 顯示提示信息
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    console.error('無法載入驗證碼:', err);
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 驗證碼載入失敗，請刷新頁面重試';
+                    }
+                });
+        }
+
         // 驗證碼刷新功能
         function refreshCaptcha() {
-            // 生成新的4位數字驗證碼
-            let newCaptcha = '';
-            for (let i = 0; i < 4; i++) {
-                newCaptcha += Math.floor(Math.random() * 10);
+            const captchaImage = document.getElementById('captchaImage');
+            const captchaInput = document.getElementById('captchaInput');
+            const errorDiv = document.getElementById('captchaError');
+            
+            // 清空輸入框和錯誤訊息
+            if (captchaInput) {
+                captchaInput.value = '';
             }
-            document.getElementById('captchaDisplay').textContent = newCaptcha;
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
+            
+            // 刷新驗證碼圖片（添加時間戳防止緩存）
+            if (captchaImage) {
+                captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+            }
         }
 
         // 即時搜尋功能 - 使用教育部API
@@ -391,6 +446,34 @@ $role = $_SESSION['role'] ?? '訪客';
             }
         });
 
+        // 草稿系統
+        let draftSystem;
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('enrollmentForm');
+            if (form) {
+                draftSystem = new DraftSystem({
+                    storageKey: 'enrollment_form_draft',
+                    formSelector: form,
+                    excludeFields: ['captcha'],
+                    autoLoad: true,
+                    showStatus: true
+                });
+                
+                // 添加草稿管理按鈕
+                const draftActions = document.createElement('div');
+                draftActions.style.cssText = 'margin-bottom: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; display: flex; gap: 10px; justify-content: flex-end;';
+                draftActions.innerHTML = `
+                    <button type="button" onclick="draftSystem.loadDraft(true)" style="background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-download"></i> 載入草稿
+                    </button>
+                    <button type="button" onclick="if(confirm('確定要清除草稿嗎？')) { draftSystem.clearDraft(); form.reset(); }" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-trash"></i> 清除草稿
+                    </button>
+                `;
+                form.insertBefore(draftActions, form.firstChild);
+            }
+        });
+        
         // 表單提交處理
         document.getElementById('enrollmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -410,7 +493,17 @@ $role = $_SESSION['role'] ?? '訪客';
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
+                .then(async response => {
+                    // 檢查響應類型
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        // 如果不是JSON，讀取文本以查看錯誤
+                        const text = await response.text();
+                        console.error('非JSON響應:', text);
+                        throw new Error('服務器返回了非JSON格式的響應');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         messageDiv.className = 'success';
@@ -420,6 +513,11 @@ $role = $_SESSION['role'] ?? '訪客';
                         // 清空表單
                         this.reset();
                         refreshCaptcha();
+                        
+                        // 清除草稿
+                        if (draftSystem) {
+                            draftSystem.clearDraft();
+                        }
 
                         // 3秒後隱藏訊息
                         setTimeout(() => {
@@ -427,7 +525,7 @@ $role = $_SESSION['role'] ?? '訪客';
                         }, 3000);
                     } else {
                         messageDiv.className = 'error';
-                        messageDiv.textContent = data.message;
+                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
                         messageDiv.style.display = 'block';
                     }
                 })

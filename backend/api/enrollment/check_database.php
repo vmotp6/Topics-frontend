@@ -3,7 +3,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
-$host = '100.79.58.120';
+$host = 'localhost';
 $db_username = 'root';
 $db_password = '';
 

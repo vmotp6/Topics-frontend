@@ -24,24 +24,41 @@ $auth = new SeniorMessageAuth();
 $user_email = $_SESSION['username']; // 假設username就是email
 $permission_result = $auth->checkPermission($user_email);
 
-// 從資料庫獲取用戶姓名
+// 從資料庫獲取用戶姓名 - 使用與 senior_messages.php 相同的連接方式
 $user_name = '';
 try {
-    $configPath = dirname(__DIR__) . '/config.php';
-    if (file_exists($configPath)) {
-        require_once $configPath;
-        $conn = getDatabaseConnection();
-        if ($conn) {
-            $stmt = $conn->prepare("SELECT name FROM user WHERE username = ?");
-            $stmt->bind_param("s", $user_email);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($row = $result->fetch_assoc()) {
-                $user_name = $row['name'] ?? '';
-            }
-            $conn->close();
+    // 使用直接 PDO 連接（與 senior_messages.php 一致）
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 優先從 student 表獲取姓名（因為學生資料主要在 student 表）
+    $stmt = $pdo->prepare("
+        SELECT s.name 
+        FROM student s
+        JOIN user u ON s.user_id = u.id
+        WHERE u.username = ?
+    ");
+    $stmt->execute([$user_email]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($result && !empty($result['name'])) {
+        $user_name = $result['name'];
+    } else {
+        // 如果 student 表中沒有，嘗試從 user 表獲取（備用方案）
+        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ?");
+        $stmt->execute([$user_email]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result && !empty($result['name'])) {
+            $user_name = $result['name'];
         }
     }
+} catch (PDOException $e) {
+    error_log("獲取用戶姓名錯誤: " . $e->getMessage());
 } catch (Exception $e) {
     error_log("獲取用戶姓名錯誤: " . $e->getMessage());
 }
@@ -69,9 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     $author_contact = trim($_POST['author_contact'] ?? '');
     $message_type = $_POST['message_type'] ?? '經驗分享';
     
-    // 驗證表單資料
-    if (empty($title) || empty($content) || empty($author_name)) {
-        $form_error = '請填寫所有必填欄位';
+    // 驗證表單資料（姓名已從資料庫自動填入，不需要檢查）
+    if (empty($title) || empty($content)) {
+        $form_error = '請填寫標題和留言內容';
+    } elseif (empty($author_name)) {
+        $form_error = '系統錯誤：無法獲取您的姓名資料，請聯繫管理員';
     } else {
         // 準備留言資料
         $messageData = [
@@ -593,7 +612,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     </div>
                     
                     <div class="form-group">
-                        <label for="author_name">您的姓名 <span class="required">*</span></label>
+                        <label for="author_name">您的姓名</label>
                         <input type="text" id="author_name" name="author_name" value="<?php echo htmlspecialchars($user_name); ?>" readonly style="background-color: var(--border-color); cursor: not-allowed;">
                         <small style="color: var(--secondary-text); font-size: 0.9rem;">姓名已從您的帳號資料中自動填入</small>
                     </div>
@@ -615,7 +634,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         </div>
     </div>
     
+    <!-- 草稿系統 -->
+    <script src="assets/js/draft-system.js"></script>
     <script>
+        // 初始化草稿系統
+        let draftSystem;
+        document.addEventListener('DOMContentLoaded', function() {
+            draftSystem = new DraftSystem({
+                storageKey: 'senior_message_draft',
+                formSelector: 'form[method="POST"]',
+                excludeFields: ['author_name'], // 排除只讀欄位
+                autoLoad: true,
+                showStatus: true
+            });
+            
+            // 添加草稿管理按鈕
+            const form = document.querySelector('form[method="POST"]');
+            if (form) {
+                const draftActions = document.createElement('div');
+                draftActions.style.cssText = 'margin-bottom: 20px; padding: 15px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 10px; display: flex; gap: 10px; justify-content: flex-end;';
+                draftActions.innerHTML = `
+                    <button type="button" onclick="draftSystem.loadDraft(true)" style="background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-download"></i> 載入草稿
+                    </button>
+                    <button type="button" onclick="if(confirm('確定要清除草稿嗎？')) { draftSystem.clearDraft(); form.reset(); }" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-trash"></i> 清除草稿
+                    </button>
+                `;
+                form.insertBefore(draftActions, form.firstChild);
+            }
+        });
+        
         // 主題切換功能
         function toggleTheme() {
             const body = document.body;
@@ -660,6 +709,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 e.preventDefault();
                 alert('留言內容至少需要20個字');
                 return false;
+            }
+            
+            // 提交成功後清除草稿
+            if (draftSystem) {
+                draftSystem.clearDraft();
             }
         });
         

@@ -3,7 +3,11 @@
  * 更新驗證碼API
  */
 
-session_start();
+// 載入 session 配置
+require_once 'session_config.php';
+
+// 設定回應為 JSON
+header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $captcha = $_POST['captcha'] ?? '';
@@ -18,6 +22,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => false, 'message' => '只支援POST請求']);
 }
 ?>
+
+
+
+
+
 
 
 

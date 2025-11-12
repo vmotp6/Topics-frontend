@@ -783,11 +783,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
         </div>
         <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
           <div class="slide-overlay"></div>
-          <div class="slide-content">
-            <h2>五專入學說明會</h2>
-            <p>深入了解五專課程特色與未來發展方向</p>
-            <a href="admission.php" class="slide-btn">立即報名</a>
-          </div>
+          
         </div>
       `;
       
@@ -935,31 +931,10 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			</div>
 			
 			<div class="feature-card">
-				<div class="feature-icon">👥</div>
-				<h3 class="feature-title">續招報名</h3>
-				<p class="feature-description">查看續招報名情況和進度。</p>
-				<a href="continued_admission.php" class="feature-link">續招報名</a>
-			</div>
-			
-			<div class="feature-card">
-				<div class="feature-icon">📊</div>
-				<h3 class="feature-title">五專入學說明會</h3>
-				<p class="feature-description">查看五專入學說明會情況和進度。</p>
-				<a href="admission.php" class="feature-link">五專入學說明會</a>
-			</div>
-			
-			<div class="feature-card">
 				<div class="feature-icon">👑</div>
 				<h3 class="feature-title">推薦報名</h3>
 				<p class="feature-description">查看推薦報名情況和進度。</p>
 				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
-			</div>
-			
-			<div class="feature-card">
-				<div class="feature-icon">🎓</div>
-				<h3 class="feature-title">就讀意願管理</h3>
-				<p class="feature-description">管理學生和家長的就讀意願登錄，查看申請狀態並進行聯絡。</p>
-				<a href="admin_enrollment_review_fixed.php" class="feature-link">管理就讀意願</a>
 			</div>
 
 			<div class="feature-card">
@@ -973,7 +948,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 				<div class="feature-icon">👨‍🎓</div>
 				<h3 class="feature-title">學生管理</h3>
 				<p class="feature-description">查看和管理分配給您的學生，進行聯絡和追蹤。</p>
-				<button onclick="openStudentManagement()" class="feature-link" style="border: none; cursor: pointer;">學生管理</button>
+				<button onclick="openStudentManagement()" class="feature-link" style="border: none; cursor: pointer; width: 35%;">學生管理</button>
 			</div>
 		</div>
 	</div>
@@ -1028,7 +1003,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
 			
-			fetch(`http://100.79.58.120:5000/teacher/profile/${username}`, {
+			fetch(`http://localhost:5000/teacher/profile/${username}`, {
 				signal: controller.signal,
 				method: 'GET',
 				headers: {
@@ -1182,9 +1157,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 						<button class="action-btn btn-contact" onclick="contactStudent('${student.phone1}', '${student.name}')">
 							<i class="fas fa-phone"></i> 聯絡
 						</button>
-						<button class="action-btn btn-notes" onclick="addStudentNotes(${student.id}, '${student.name}')">
-							<i class="fas fa-sticky-note"></i> 備註
-						</button>
+                        <button class="action-btn btn-notes" onclick="openAddContactLog(${student.id}, '${student.name}')">
+                            <i class="fas fa-sticky-note"></i> 新增聯絡紀錄
+                        </button>
 					</div>
 				</div>
 			`).join('');
@@ -1229,6 +1204,109 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 		// 搜尋功能
 		document.getElementById('studentSearch').addEventListener('input', searchStudents);
 	</script>
+
+    <!-- 聯絡紀錄新增模態視窗 -->
+    <div id="addContactLogModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增聯絡紀錄</h3>
+                <span class="close" onclick="closeAddContactLog()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="margin-bottom: 12px; font-weight: 600; color: #003366;">學生：<span id="contactLogStudentName"></span></div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                    <div>
+                        <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">聯絡日期</label>
+                        <input type="date" id="contactDate" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">聯絡方式</label>
+                        <select id="contactMethod" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <option value="電話">電話</option>
+                            <option value="Line">Line</option>
+                            <option value="Email">Email</option>
+                            <option value="面談">面談</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top: 16px;">
+                    <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">聯絡結果</label>
+                    <textarea id="contactResult" rows="4" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+                </div>
+                <div style="margin-top: 16px;">
+                    <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">後續追蹤備註（選填）</label>
+                    <textarea id="followUpNotes" rows="3" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #e0e0e0; display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn-cancel" onclick="closeAddContactLog()" style="background:#f5f5f5; border:none; padding:8px 16px; border-radius:6px;">取消</button>
+                <button class="btn-confirm" onclick="submitAddContactLog()" style="background:#1890ff; color:white; border:none; padding:8px 16px; border-radius:6px;">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentContactStudentId = null;
+
+        function openAddContactLog(studentId, studentName) {
+            currentContactStudentId = studentId;
+            document.getElementById('contactLogStudentName').textContent = studentName;
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('contactDate').value = today;
+            document.getElementById('contactMethod').value = '電話';
+            document.getElementById('contactResult').value = '';
+            document.getElementById('followUpNotes').value = '';
+            document.getElementById('addContactLogModal').style.display = 'flex';
+        }
+
+        function closeAddContactLog() {
+            document.getElementById('addContactLogModal').style.display = 'none';
+            currentContactStudentId = null;
+        }
+
+        async function submitAddContactLog() {
+            if (!currentContactStudentId) return;
+            const contact_date = document.getElementById('contactDate').value;
+            const contact_method = document.getElementById('contactMethod').value;
+            const contact_result = document.getElementById('contactResult').value.trim();
+            const follow_up_notes = document.getElementById('followUpNotes').value.trim();
+
+            if (!contact_result) {
+                alert('請填寫聯絡結果');
+                return;
+            }
+
+            try {
+                const resp = await fetch('api/contact_logs_api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: currentContactStudentId,
+                        contact_date,
+                        contact_method,
+                        contact_result,
+                        follow_up_notes
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert('已新增聯絡紀錄');
+                    closeAddContactLog();
+                } else {
+                    alert('新增失敗：' + (data.message || '未知錯誤'));
+                }
+            } catch (e) {
+                alert('請求失敗：' + e.message);
+            }
+        }
+
+        // 點擊模態外關閉
+        document.getElementById('addContactLogModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddContactLog();
+            }
+        });
+    </script>
 	
     <?php include("share/footer.php"); ?>
     <?php include("share/chat_widget.php"); ?>

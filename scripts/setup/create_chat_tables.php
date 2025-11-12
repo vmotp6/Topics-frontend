@@ -3,7 +3,7 @@
  * 創建聊天表
  */
 
-$host = '100.79.58.120';
+$host = 'localhost';
 $dbname = 'topics_good';
 $username = 'root';
 $password = '';
@@ -52,6 +52,15 @@ try {
     echo "❌ 錯誤: " . $e->getMessage() . "\n";
 }
 ?>
+
+
+
+
+
+
+
+
+
 
 
 

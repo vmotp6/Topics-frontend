@@ -9,7 +9,7 @@ class SeniorMessageAuth {
     
     public function __construct() {
         // 資料庫連接 - 使用與現有系統相同的配置
-        $host = '100.79.58.120';
+        $host = 'localhost';
         $dbname = 'topics_good';
         $username = 'root';
         $password = '';
