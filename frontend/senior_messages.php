@@ -565,6 +565,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             transform: scale(1.05);
         }
         
+        .like-btn:hover .like-icon {
+            transform: scale(1.2);
+        }
+        
         .like-btn:disabled {
             opacity: 0.7;
             cursor: not-allowed;
@@ -580,6 +584,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         .like-icon {
             transition: all 0.3s ease;
+            font-size: 1.1rem;
+            display: inline-block;
+        }
+        
+        /* 空心愛心樣式（未點過） */
+        .like-btn:not(.liked) .like-icon {
+            filter: grayscale(0);
+        }
+        
+        /* 實心愛心樣式（已點過） */
+        .like-btn.liked .like-icon {
+            filter: none;
+            animation: heartBeat 0.5s ease;
+        }
+        
+        @keyframes heartBeat {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.3); }
+            50% { transform: scale(1.1); }
         }
         
         .like-count {
@@ -902,7 +925,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" 
                                     data-message-id="<?php echo $message['id']; ?>"
                                     onclick="toggleLike(<?php echo $message['id']; ?>)">
-                                <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '❤️'; ?></span>
+                                <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '🤍'; ?></span>
                                 <span class="like-count"><?php echo $message['like_count'] ?? 0; ?></span>
                             </button>
                             <div class="view-count">
@@ -1032,7 +1055,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 return;
             }
             
-            // 檢查當前狀態
+            // 檢查當前狀態 - 實心愛心表示已點過
             const isLiked = likeIcon.textContent === '💖' || likeBtn.classList.contains('liked');
             const currentCount = parseInt(likeCount.textContent) || 0;
             
@@ -1043,12 +1066,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             // 立即更新視覺效果（樂觀更新）
             if (isLiked) {
-                // 取消愛心
+                // 取消愛心 - 改為空心愛心
                 likeCount.textContent = Math.max(0, currentCount - 1);
-                likeIcon.textContent = '❤️';
+                likeIcon.textContent = '🤍';
                 likeBtn.classList.remove('liked');
             } else {
-                // 添加愛心
+                // 添加愛心 - 改為實心粉紅愛心
                 likeCount.textContent = currentCount + 1;
                 likeIcon.textContent = '💖';
                 likeBtn.classList.add('liked');
@@ -1079,6 +1102,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     if (data.new_count !== undefined) {
                         likeCount.textContent = data.new_count;
                     }
+                    // 確保圖標狀態正確
+                    if (data.action === 'liked') {
+                        likeIcon.textContent = '💖';
+                        likeBtn.classList.add('liked');
+                    } else if (data.action === 'unliked') {
+                        likeIcon.textContent = '🤍';
+                        likeBtn.classList.remove('liked');
+                    }
                     console.log(data.action === 'liked' ? '點讚成功' : data.action === 'unliked' ? '取消愛心成功' : data.message || '操作成功');
                 } else {
                     // 如果失敗，恢復原狀
@@ -1099,8 +1130,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 likeIcon.textContent = originalIcon;
                 if (originalLiked) {
                     likeBtn.classList.add('liked');
+                    // 確保圖標是實心愛心
+                    if (likeIcon.textContent !== '💖') {
+                        likeIcon.textContent = '💖';
+                    }
                 } else {
                     likeBtn.classList.remove('liked');
+                    // 確保圖標是空心愛心
+                    if (likeIcon.textContent !== '🤍') {
+                        likeIcon.textContent = '🤍';
+                    }
                 }
                 alert('操作失敗，請檢查網路連線或稍後再試');
             })

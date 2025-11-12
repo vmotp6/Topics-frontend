@@ -137,3 +137,5 @@ INSERT INTO schools (name, city, district, address, type) VALUES
 
 
 
+
+

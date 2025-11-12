@@ -634,7 +634,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         </div>
     </div>
     
+    <!-- 草稿系統 -->
+    <script src="assets/js/draft-system.js"></script>
     <script>
+        // 初始化草稿系統
+        let draftSystem;
+        document.addEventListener('DOMContentLoaded', function() {
+            draftSystem = new DraftSystem({
+                storageKey: 'senior_message_draft',
+                formSelector: 'form[method="POST"]',
+                excludeFields: ['author_name'], // 排除只讀欄位
+                autoLoad: true,
+                showStatus: true
+            });
+            
+            // 添加草稿管理按鈕
+            const form = document.querySelector('form[method="POST"]');
+            if (form) {
+                const draftActions = document.createElement('div');
+                draftActions.style.cssText = 'margin-bottom: 20px; padding: 15px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 10px; display: flex; gap: 10px; justify-content: flex-end;';
+                draftActions.innerHTML = `
+                    <button type="button" onclick="draftSystem.loadDraft(true)" style="background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-download"></i> 載入草稿
+                    </button>
+                    <button type="button" onclick="if(confirm('確定要清除草稿嗎？')) { draftSystem.clearDraft(); form.reset(); }" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        <i class="fas fa-trash"></i> 清除草稿
+                    </button>
+                `;
+                form.insertBefore(draftActions, form.firstChild);
+            }
+        });
+        
         // 主題切換功能
         function toggleTheme() {
             const body = document.body;
@@ -679,6 +709,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 e.preventDefault();
                 alert('留言內容至少需要20個字');
                 return false;
+            }
+            
+            // 提交成功後清除草稿
+            if (draftSystem) {
+                draftSystem.clearDraft();
             }
         });
         
