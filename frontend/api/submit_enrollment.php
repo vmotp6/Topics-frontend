@@ -359,8 +359,8 @@ if (empty($captcha_session)) {
     exit;
 }
 
-// 驗證驗證碼是否匹配（不區分大小寫，但通常驗證碼是數字）
-if ($captcha !== $captcha_session) {
+// 驗證驗證碼是否匹配（不區分大小寫）
+if (strtoupper($captcha) !== strtoupper($captcha_session)) {
     error_log("驗證碼驗證失敗: 輸入=" . $captcha . ", session=" . $captcha_session);
     if (ob_get_level() > 0) {
         @ob_clean();

@@ -3,15 +3,7 @@
 require_once 'session_config.php';
 require_once 'config.php';
 
-// 產生驗證碼函數
-function generateCaptcha() {
-    return CAPTCHA_CODES[array_rand(CAPTCHA_CODES)];
-}
-
-// 初始化驗證碼
-if (!isset($_SESSION['captcha'])) {
-    $_SESSION['captcha'] = generateCaptcha();
-}
+// 驗證碼將由 captcha_image.php 生成（使用 $_SESSION['captcha_code']）
 
 // 建立資料庫連接
 $conn = getDatabaseConnection();
@@ -372,8 +364,10 @@ if ($_POST && !isset($_POST['action'])) {
         $session_check_stmt->close();
     }
     
-    // 驗證驗證碼
-    if (!isset($_SESSION['captcha']) || $_POST['captcha'] !== $_SESSION['captcha']) {
+    // 驗證驗證碼（不區分大小寫）
+    $captcha_input = $_POST['captcha'] ?? '';
+    $captcha_session = $_SESSION['captcha_code'] ?? '';
+    if (empty($captcha_input) || empty($captcha_session) || strtoupper($captcha_input) !== strtoupper($captcha_session)) {
         $missing_fields[] = 'captcha_invalid';
     }
     
@@ -543,8 +537,8 @@ if ($_POST && !isset($_POST['action'])) {
             }
             
             $messageType = "success";
-            // 提交成功後重新生成驗證碼
-            $_SESSION['captcha'] = generateCaptcha();
+            // 提交成功後清除驗證碼（將由 captcha_image.php 重新生成）
+            unset($_SESSION['captcha_code']);
             // 清空 POST 資料，避免表單資料被保留
             $_POST = array();
         } else {
@@ -854,9 +848,16 @@ $conn->close();
                 <!-- 驗證碼 -->
                 <div class="captcha-section">
                     <h3><i class="fas fa-shield-alt"></i> 安全驗證 <span class="required">*</span></h3>
-                    <p>請輸入下方顯示的驗證碼：</p>
-                    <div class="captcha-display"><?php echo $_SESSION['captcha']; ?></div>
-                    <input type="text" name="captcha" placeholder="請輸入驗證碼" required maxlength="4" style="width: 150px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" required maxlength="6" autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
+                        <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">
+                        <button type="button" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> 刷新
+                        </button>
+                    </div>
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                    </small>
                 </div>
 
                 <button type="submit" class="submit-btn">
@@ -1291,6 +1292,24 @@ $conn->close();
             // 重整頁面並清空資料
             window.location.href = window.location.pathname;
         }
+    </script>
+    
+    <script>
+    // 驗證碼刷新功能
+    function refreshCaptcha() {
+        const captchaImage = document.getElementById('captchaImage');
+        const captchaInput = document.getElementById('captchaInput');
+        
+        // 清空輸入框
+        if (captchaInput) {
+            captchaInput.value = '';
+        }
+        
+        // 刷新驗證碼圖片（添加時間戳防止緩存）
+        if (captchaImage) {
+            captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+        }
+    }
     </script>
 </main>
 <?php include("share/footer.php"); ?>

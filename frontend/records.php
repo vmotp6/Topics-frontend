@@ -532,16 +532,15 @@ $conn->close();
                     <!-- 驗證碼 -->
                     <div class="form-section">
                         <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
-                        <div class="captcha-section">
-                            <label>請輸入右側驗證碼:</label>
-                            <input type="text" name="captcha" class="captcha-input" placeholder="請輸入驗證碼" maxlength="4" required autocomplete="off">
-                            <div class="captcha-code" id="captcha-display"><?php echo getCurrentCaptcha(); ?></div>
-                            <button type="button" class="refresh-btn" onclick="refreshCaptcha()" title="重新產生驗證碼">
+                        <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
+                            <input type="text" name="captcha" class="captcha-input" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
+                            <img src="captcha_image.php" id="captcha-display" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">
+                            <button type="button" class="refresh-btn" onclick="refreshCaptcha()" title="重新產生驗證碼" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
                                 <i class="fas fa-sync-alt"></i> 重整
                             </button>
                         </div>
                         <small style="color: #666; margin-top: 8px; display: block;">
-                            <i class="fas fa-info-circle"></i> 點擊「重整」按鈕可產生新的驗證碼
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫），點擊圖片或「重整」按鈕可產生新的驗證碼
                         </small>
                     </div>
                 </div>
@@ -1600,34 +1599,26 @@ $conn->close();
             refreshBtn.disabled = true;
             refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 載入中...';
             
-            // 發送 AJAX 請求獲取新驗證碼
-            fetch('generate_captcha.php?action=refresh', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // 更新驗證碼顯示
-                captchaDisplay.textContent = data.captcha;
+            // 刷新驗證碼圖片（添加時間戳防止緩存）
+            if (captchaDisplay && captchaDisplay.tagName === 'IMG') {
+                captchaDisplay.src = 'captcha_image.php?t=' + new Date().getTime();
                 // 清空輸入框
-                captchaInput.value = '';
+                if (captchaInput) {
+                    captchaInput.value = '';
+                }
                 // 恢復按鈕狀態
                 refreshBtn.disabled = false;
                 refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
                 // 聚焦到輸入框
-                captchaInput.focus();
-            })
-            .catch(error => {
-                console.error('驗證碼重整失敗:', error);
-                // 備用方案：生成前端隨機數字
-                const fallbackCode = Math.floor(1000 + Math.random() * 9000);
-                captchaDisplay.textContent = fallbackCode;
+                if (captchaInput) {
+                    captchaInput.focus();
+                }
+            } else {
+                // 備用方案：如果圖片元素不存在
                 refreshBtn.disabled = false;
                 refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
-                alert('驗證碼重整失敗，請重新載入頁面或稍後再試。');
-            });
+                alert('驗證碼重整失敗，請重新載入頁面。');
+            }
         }
         
         // 驗證碼輸入框限制只能輸入數字

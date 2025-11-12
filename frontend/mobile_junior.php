@@ -6,6 +6,8 @@ date_default_timezone_set('Asia/Taipei');
 
 // 載入配置檔案
 require_once __DIR__ . '/config.php';
+// 載入 session 配置
+require_once __DIR__ . '/session_config.php';
 // 雿輻 PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -711,6 +713,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
+                <!-- 驗證碼 -->
+                <div class="form-section">
+                    <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
+                    <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px;">
+                        <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer;" title="點擊刷新驗證碼" onerror="this.onerror=null; this.src='captcha_image.php?t='+Date.now();">
+                        <button type="button" onclick="refreshCaptcha()" style="padding: 12px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-sync-alt"></i> 刷新
+                        </button>
+                    </div>
+                    <small style="color: #666; margin-top: 8px; display: block;">
+                        <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                    </small>
+                </div>
+
                 <button type="submit" class="submit-btn" id="submit_btn">
                     <i class="fas fa-paper-plane"></i> <span id="submit_btn_text">??唾?</span>
                 </button>
@@ -821,6 +838,22 @@ function selectApplication(applicationId) {
         });
     }
 });
+
+// 驗證碼刷新功能
+function refreshCaptcha() {
+    const captchaImage = document.getElementById('captchaImage');
+    const captchaInput = document.getElementById('captchaInput');
+    
+    // 清空輸入框
+    if (captchaInput) {
+        captchaInput.value = '';
+    }
+    
+    // 刷新驗證碼圖片（添加時間戳防止緩存）
+    if (captchaImage) {
+        captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+    }
+}
 </script>
 </body>
 </html>

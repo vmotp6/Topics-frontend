@@ -104,7 +104,7 @@ try {
     $captcha_input = $_POST['captcha'] ?? '';
     $captcha_session = $_SESSION['captcha_code'] ?? '';
     
-    if (empty($captcha_input) || empty($captcha_session) || $captcha_input !== $captcha_session) {
+    if (empty($captcha_input) || empty($captcha_session) || strtoupper($captcha_input) !== strtoupper($captcha_session)) {
         echo json_encode(['success' => false, 'message' => '驗證碼錯誤，請重新輸入']);
         exit;
     }

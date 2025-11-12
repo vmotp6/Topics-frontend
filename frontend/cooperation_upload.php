@@ -5,11 +5,7 @@ require_once 'session_config.php';
 // 載入 reCAPTCHA 設定
 require_once '../backend/config/recaptcha_config.php';
 
-// 初始化驗證碼（如果session中沒有）
-if (!isset($_SESSION['captcha_code'])) {
-    // 生成4位隨機數字驗證碼
-    $_SESSION['captcha_code'] = sprintf("%04d", rand(1000, 9999));
-}
+// 驗證碼將由 captcha_image.php 生成
 
 // 資料庫連接
 $host = 'localhost';
@@ -281,17 +277,22 @@ $role = $_SESSION['role'] ?? '訪客';
 
                     <!-- 驗證碼 -->
                     <div class="captcha-section">
-                        <h4>驗證碼</h4>
-                        <div class="captcha-container">
-                            <div class="captcha-display" id="captchaDisplay"><?php echo htmlspecialchars($_SESSION['captcha_code'] ?? '0000'); ?></div>
-                            <div class="captcha-input">
-                                <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" required>
+                        <h4>驗證碼 <span class="required">*</span></h4>
+                        <div class="captcha-container" style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                            <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; text-transform: uppercase;" pattern="[A-Z0-9]{5,6}">
+                            <div id="captchaImageContainer" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; display: inline-block; vertical-align: middle; overflow: hidden;">
+                                <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; cursor: pointer; display: block;" title="點擊刷新驗證碼" onerror="handleCaptchaError(this)">
                             </div>
-                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()">刷新</button>
+                            <div id="captchaError" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 5px; padding: 5px; background: #ffebee; border-radius: 3px;">
+                                <i class="fas fa-exclamation-triangle"></i> GD 擴展未啟用，已使用文字驗證碼模式
+                            </div>
+                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                <i class="fas fa-sync-alt"></i> 刷新
+                            </button>
                         </div>
-                        <div class="help-text">
-                            驗證碼錯誤，請重新輸入
-                        </div>
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                        </small>
                     </div>
 
                     <button type="submit" class="submit-btn" id="submitBtn">
@@ -303,67 +304,61 @@ $role = $_SESSION['role'] ?? '訪客';
     </div>
 
     <script>
+        // 驗證碼錯誤處理
+        function handleCaptchaError(img) {
+            console.warn('驗證碼圖片載入失敗，嘗試載入 HTML 備用方案');
+            const container = document.getElementById('captchaImageContainer');
+            const errorDiv = document.getElementById('captchaError');
+            
+            // 隱藏圖片，載入 HTML 備用方案
+            if (img) {
+                img.style.display = 'none';
+            }
+            
+            // 使用 iframe 或直接載入 HTML 內容
+            fetch('captcha_image.php?t=' + new Date().getTime())
+                .then(response => response.text())
+                .then(html => {
+                    if (container) {
+                        // 如果返回的是 SVG 或 HTML，直接插入
+                        if (html.includes('<svg') || html.includes('<div')) {
+                            container.innerHTML = html;
+                            container.style.cursor = 'pointer';
+                            container.onclick = refreshCaptcha;
+                        }
+                    }
+                    // 顯示提示信息
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                    }
+                })
+                .catch(err => {
+                    console.error('無法載入驗證碼:', err);
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 驗證碼載入失敗，請刷新頁面重試';
+                    }
+                });
+        }
+
         // 驗證碼刷新功能
         function refreshCaptcha() {
-            const captchaDisplay = document.getElementById('captchaDisplay');
+            const captchaImage = document.getElementById('captchaImage');
             const captchaInput = document.getElementById('captchaInput');
+            const errorDiv = document.getElementById('captchaError');
             
-            // 清空輸入框
+            // 清空輸入框和錯誤訊息
             if (captchaInput) {
                 captchaInput.value = '';
             }
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
             
-            // 從服務器獲取新的驗證碼（確保同步到session）
-            fetch('generate_captcha.php?action=refresh', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            }).then(response => response.json())
-              .then(data => {
-                  if (data.success && data.captcha) {
-                      // 更新顯示
-                      captchaDisplay.textContent = data.captcha;
-                  } else {
-                      // 如果API失敗，使用備用方案：前端生成並更新到session
-                      let newCaptcha = '';
-                      for (let i = 0; i < 4; i++) {
-                          newCaptcha += Math.floor(Math.random() * 10);
-                      }
-                      captchaDisplay.textContent = newCaptcha;
-                      
-                      // 更新到session
-                      fetch('update_captcha.php', {
-                          method: 'POST',
-                          headers: {
-                              'Content-Type': 'application/x-www-form-urlencoded',
-                          },
-                          body: 'captcha=' + encodeURIComponent(newCaptcha)
-                      }).catch(error => {
-                          console.error('更新驗證碼到session失敗:', error);
-                      });
-                  }
-              })
-              .catch(error => {
-                  console.error('獲取驗證碼失敗:', error);
-                  // 備用方案：前端生成
-                  let newCaptcha = '';
-                  for (let i = 0; i < 4; i++) {
-                      newCaptcha += Math.floor(Math.random() * 10);
-                  }
-                  captchaDisplay.textContent = newCaptcha;
-                  
-                  // 嘗試更新到session
-                  fetch('update_captcha.php', {
-                      method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/x-www-form-urlencoded',
-                      },
-                      body: 'captcha=' + encodeURIComponent(newCaptcha)
-                  }).catch(err => {
-                      console.error('更新驗證碼到session失敗:', err);
-                  });
-              });
+            // 刷新驗證碼圖片（添加時間戳防止緩存）
+            if (captchaImage) {
+                captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+            }
         }
 
         // 即時搜尋功能 - 使用教育部API
