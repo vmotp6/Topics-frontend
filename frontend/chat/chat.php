@@ -1073,17 +1073,17 @@ try {
         if (contactBadge) {
           // 添加消失動畫
           if (contactBadge.classList.contains('show')) {
-            contactBadge.classList.add('hiding');
-            contactBadge.classList.remove('pulse');
-            
-            setTimeout(() => {
-              contactBadge.classList.remove('show', 'hiding');
+          contactBadge.classList.add('hiding');
+          contactBadge.classList.remove('pulse');
+          
+          setTimeout(() => {
+            contactBadge.classList.remove('show', 'hiding');
               contactBadge.style.display = 'none'; // 完全隱藏
               contactBadge.style.visibility = 'hidden'; // 完全隱藏
-            }, 250);
+          }, 250);
           } else {
             // 如果徽章沒有顯示，也確保它被完全隱藏
-            contactBadge.classList.remove('show', 'pulse', 'hiding');
+          contactBadge.classList.remove('show', 'pulse', 'hiding');
             contactBadge.style.display = 'none'; // 完全隱藏
             contactBadge.style.visibility = 'hidden'; // 完全隱藏
           }
@@ -1117,11 +1117,11 @@ try {
           readContacts.add(newUserId);
           saveReadContactsToStorage();
         });
-        
-        // 延遲更新所有聯絡人的未讀計數（確保資料庫已更新）
-        setTimeout(() => {
-          updateContactUnreadCounts();
-        }, 800);
+          
+          // 延遲更新所有聯絡人的未讀計數（確保資料庫已更新）
+          setTimeout(() => {
+            updateContactUnreadCounts();
+          }, 800);
       });
     });
 
@@ -1197,13 +1197,13 @@ try {
         } else {
           console.error('載入聊天記錄失敗:', result.error || result);
           if (chatMessages) {
-            chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
+          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
           }
         }
       } catch (error) {
         console.error('載入聊天記錄失敗:', error);
         if (chatMessages) {
-          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
+        chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗</div>';
         }
       }
     }
@@ -1306,7 +1306,7 @@ try {
               imageUrl = '../share/' + imageUrl;
             } else {
               // 其他情況，嘗試提取文件名
-              imageUrl = '../share/' + fileName;
+                imageUrl = '../share/' + fileName;
             }
           }
           
@@ -1540,10 +1540,10 @@ try {
               messageDiv.appendChild(contentDiv);
               
               if (chatMessages) {
-                chatMessages.appendChild(messageDiv);
-                
-                // 滾動到底部
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+              chatMessages.appendChild(messageDiv);
+              
+              // 滾動到底部
+              chatMessages.scrollTop = chatMessages.scrollHeight;
               }
               
               // 更新 lastMessageId
@@ -1619,12 +1619,12 @@ try {
         
         // 直接從資料庫查詢該聯絡人的所有未讀訊息ID（更可靠）
         try {
-          const queryResponse = await fetch(`update_read_status.php?action=get_unread_messages&from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
+        const queryResponse = await fetch(`update_read_status.php?action=get_unread_messages&from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
           if (queryResponse && queryResponse.ok) {
-            const queryResult = await queryResponse.json();
-            if (queryResult.success && queryResult.message_ids && queryResult.message_ids.length > 0) {
-              unreadMessageIds = queryResult.message_ids;
-              console.log(`📬 從資料庫查詢到 ${unreadMessageIds.length} 條來自 ${contactUsername} 的未讀訊息`);
+        const queryResult = await queryResponse.json();
+        if (queryResult.success && queryResult.message_ids && queryResult.message_ids.length > 0) {
+          unreadMessageIds = queryResult.message_ids;
+          console.log(`📬 從資料庫查詢到 ${unreadMessageIds.length} 條來自 ${contactUsername} 的未讀訊息`);
             }
           }
         } catch (queryError) {
@@ -1634,20 +1634,20 @@ try {
         // 如果沒有從專門API獲取到，則從聊天記錄中獲取
         if (unreadMessageIds.length === 0) {
           try {
-            const response = await fetch(`load_private_messages.php?from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
+          const response = await fetch(`load_private_messages.php?from=${encodeURIComponent(contactUsername)}&to=${encodeURIComponent(username)}`);
             if (response && response.ok) {
-              const result = await response.json();
-              
-              if (result.success && result.messages) {
-                // 找出所有未讀的訊息ID（發送者是聯絡人，接收者是當前用戶）
-                unreadMessageIds = result.messages
-                  .filter(msg => {
-                    const isFromContact = msg.from_user === contactUsername;
-                    const isToCurrentUser = msg.to_user === username;
-                    const isUnread = !msg.is_read || msg.is_read === false || msg.is_read === 0 || msg.is_read === null;
-                    return isFromContact && isToCurrentUser && isUnread;
-                  })
-                  .map(msg => parseInt(msg.id));
+          const result = await response.json();
+          
+          if (result.success && result.messages) {
+            // 找出所有未讀的訊息ID（發送者是聯絡人，接收者是當前用戶）
+            unreadMessageIds = result.messages
+              .filter(msg => {
+                const isFromContact = msg.from_user === contactUsername;
+                const isToCurrentUser = msg.to_user === username;
+                const isUnread = !msg.is_read || msg.is_read === false || msg.is_read === 0 || msg.is_read === null;
+                return isFromContact && isToCurrentUser && isUnread;
+              })
+              .map(msg => parseInt(msg.id));
               }
             }
           } catch (loadError) {
@@ -1664,17 +1664,17 @@ try {
           
           try {
             markResponse = await fetch('update_read_status.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                action: 'mark_as_read',
-                message_ids: unreadMessageIds,
-                reader: username
-              })
-            });
-            
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action: 'mark_as_read',
+              message_ids: unreadMessageIds,
+              reader: username
+            })
+          });
+          
             if (markResponse && markResponse.ok) {
               markResult = await markResponse.json();
             }
@@ -1683,7 +1683,7 @@ try {
             return false;
           }
           
-          if (markResult.success) {
+            if (markResult.success) {
             console.log(`✅ 已成功標記 ${unreadMessageIds.length} 條訊息為已讀`);
             
             // 將該聯絡人添加到已讀列表
@@ -2403,9 +2403,9 @@ try {
             if (currentMaxId > lastMessageId) {
               // 有新訊息，更新顯示
               try {
-                displayMessages(result.messages);
-                lastMessageId = currentMaxId;
-                console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+              displayMessages(result.messages);
+              lastMessageId = currentMaxId;
+              console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
               } catch (displayError) {
                 console.error('顯示新訊息時發生錯誤:', displayError);
               }

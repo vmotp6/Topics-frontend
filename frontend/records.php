@@ -454,11 +454,49 @@ $conn->close();
                             <?php 
                             $participants_options = ['國中九年級', '國中八年級', '國中七年級', '高中三年級', '高中二年級', '高中一年級', '教師(職員工)', '家長', '其他'];
                             $selected_participants = isset($_POST['participants']) ? $_POST['participants'] : [];
+                            $participants_other_text = isset($_POST['participants_other']) ? htmlspecialchars($_POST['participants_other']) : '';
+                            
+                            // 檢查是否有「其他」選項被選中，並提取自定義文字
+                            $is_participants_other_checked = false;
+                            $participants_other_value = '';
+                            foreach ($selected_participants as $selected) {
+                                if ($selected === '其他' || strpos($selected, '其他: ') === 0) {
+                                    $is_participants_other_checked = true;
+                                    if (strpos($selected, '其他: ') === 0) {
+                                        $participants_other_text = htmlspecialchars(substr($selected, 4)); // 移除「其他: 」前綴
+                                        $participants_other_value = $selected; // 保留完整值用於 checkbox
+                                    } else {
+                                        $participants_other_value = '其他';
+                                    }
+                                    break;
+                                }
+                            }
                             ?>
                             <?php foreach ($participants_options as $option): ?>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="participants[]" value="<?php echo htmlspecialchars($option); ?>" <?php echo in_array($option, $selected_participants) ? 'checked' : ''; ?>>
+                            <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px;">
+                                <?php 
+                                $is_checked = false;
+                                $checkbox_value = $option;
+                                if ($option === '其他') {
+                                    $is_checked = $is_participants_other_checked;
+                                    $checkbox_value = $is_participants_other_checked && !empty($participants_other_value) ? $participants_other_value : '其他';
+                                } else {
+                                    $is_checked = in_array($option, $selected_participants);
+                                }
+                                ?>
+                                <input type="checkbox" name="participants[]" value="<?php echo htmlspecialchars($checkbox_value); ?>" 
+                                       <?php echo $is_checked ? 'checked' : ''; ?>
+                                       <?php if ($option === '其他'): ?>
+                                       onchange="toggleOtherInput(this, 'participants_other')"
+                                       <?php endif; ?>>
                                 <span><?php echo htmlspecialchars($option); ?></span>
+                                <?php if ($option === '其他'): ?>
+                                <input type="text" name="participants_other" id="participants_other" 
+                                       placeholder="請輸入其他參與對象" 
+                                       value="<?php echo $participants_other_text; ?>"
+                                       style="flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px; display: <?php echo $is_participants_other_checked ? 'block' : 'none'; ?>;"
+                                       onchange="updateOtherCheckboxValue('participants', this)">
+                                <?php endif; ?>
                             </label>
                             <?php endforeach; ?>
                         </div>
@@ -471,11 +509,49 @@ $conn->close();
                             <?php 
                             $feedback_options = ['反應熱絡、詢問度高', '反應冷淡', '願意參與小活動', '願意加入LINE', '願意追蹤FB、IG', '其他'];
                             $selected_feedback = isset($_POST['activity_feedback']) ? $_POST['activity_feedback'] : [];
+                            $feedback_other_text = isset($_POST['activity_feedback_other']) ? htmlspecialchars($_POST['activity_feedback_other']) : '';
+                            
+                            // 檢查是否有「其他」選項被選中，並提取自定義文字
+                            $is_feedback_other_checked = false;
+                            $feedback_other_value = '';
+                            foreach ($selected_feedback as $selected) {
+                                if ($selected === '其他' || strpos($selected, '其他: ') === 0) {
+                                    $is_feedback_other_checked = true;
+                                    if (strpos($selected, '其他: ') === 0) {
+                                        $feedback_other_text = htmlspecialchars(substr($selected, 4)); // 移除「其他: 」前綴
+                                        $feedback_other_value = $selected; // 保留完整值用於 checkbox
+                                    } else {
+                                        $feedback_other_value = '其他';
+                                    }
+                                    break;
+                                }
+                            }
                             ?>
                             <?php foreach ($feedback_options as $option): ?>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="activity_feedback[]" value="<?php echo htmlspecialchars($option); ?>" <?php echo in_array($option, $selected_feedback) ? 'checked' : ''; ?>>
+                            <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px;">
+                                <?php 
+                                $is_checked = false;
+                                $checkbox_value = $option;
+                                if ($option === '其他') {
+                                    $is_checked = $is_feedback_other_checked;
+                                    $checkbox_value = $is_feedback_other_checked && !empty($feedback_other_value) ? $feedback_other_value : '其他';
+                                } else {
+                                    $is_checked = in_array($option, $selected_feedback);
+                                }
+                                ?>
+                                <input type="checkbox" name="activity_feedback[]" value="<?php echo htmlspecialchars($checkbox_value); ?>" 
+                                       <?php echo $is_checked ? 'checked' : ''; ?>
+                                       <?php if ($option === '其他'): ?>
+                                       onchange="toggleOtherInput(this, 'activity_feedback_other')"
+                                       <?php endif; ?>>
                                 <span><?php echo htmlspecialchars($option); ?></span>
+                                <?php if ($option === '其他'): ?>
+                                <input type="text" name="activity_feedback_other" id="activity_feedback_other" 
+                                       placeholder="請輸入其他活動紀錄" 
+                                       value="<?php echo $feedback_other_text; ?>"
+                                       style="flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px; display: <?php echo $is_feedback_other_checked ? 'block' : 'none'; ?>;"
+                                       onchange="updateOtherCheckboxValue('activity_feedback', this)">
+                                <?php endif; ?>
                             </label>
                             <?php endforeach; ?>
                         </div>
@@ -568,6 +644,43 @@ $conn->close();
     </div>
 
     <script>
+        // 控制「其他」選項的輸入框顯示/隱藏
+        function toggleOtherInput(checkbox, inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                if (checkbox.checked) {
+                    input.style.display = 'block';
+                    input.focus();
+                } else {
+                    input.style.display = 'none';
+                    input.value = ''; // 取消勾選時清空輸入框
+                    // 恢復 checkbox 值為「其他」
+                    if (checkbox.value.startsWith('其他: ')) {
+                        checkbox.value = '其他';
+                    }
+                }
+            }
+        }
+        
+        // 更新「其他」選項的 checkbox 值，將自定義文字附加到值中
+        function updateOtherCheckboxValue(type, inputElement) {
+            // 找到對應的 checkbox（在同一個 label 中）
+            const label = inputElement.closest('label');
+            if (label) {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                if (checkbox && (checkbox.value === '其他' || checkbox.value.startsWith('其他: '))) {
+                    const customText = inputElement.value.trim();
+                    if (customText) {
+                        // 將自定義文字附加到 checkbox 值中
+                        checkbox.value = '其他: ' + customText;
+                    } else {
+                        // 如果沒有輸入文字，恢復為「其他」
+                        checkbox.value = '其他';
+                    }
+                }
+            }
+        }
+        
         // 重整驗證碼函數
         function refreshCaptcha() {
             const refreshBtn = document.querySelector('.refresh-btn');
@@ -639,16 +752,66 @@ $conn->close();
             const feedback = document.querySelectorAll('input[name="activity_feedback[]"]:checked');
             const captchaInput = document.querySelector('input[name="captcha"]');
             
+            // 檢查參與對象
             if (participants.length === 0) {
                 e.preventDefault();
                 alert('請至少選擇一個參與對象！');
                 return;
             }
             
+            // 檢查是否勾選了「其他」參與對象，如果有，必須輸入自定義文字
+            const participantsOtherInput = document.getElementById('participants_other');
+            let hasParticipantsOther = false;
+            participants.forEach(function(checkbox) {
+                if (checkbox.value === '其他' || checkbox.value.startsWith('其他: ')) {
+                    hasParticipantsOther = true;
+                }
+            });
+            if (hasParticipantsOther && participantsOtherInput) {
+                const otherText = participantsOtherInput.value.trim();
+                if (!otherText) {
+                    e.preventDefault();
+                    alert('請輸入「其他」參與對象的具體內容！');
+                    participantsOtherInput.focus();
+                    return;
+                }
+                // 更新 checkbox 值
+                participants.forEach(function(checkbox) {
+                    if (checkbox.value === '其他' || checkbox.value.startsWith('其他: ')) {
+                        checkbox.value = '其他: ' + otherText;
+                    }
+                });
+            }
+            
+            // 檢查活動紀錄
             if (feedback.length === 0) {
                 e.preventDefault();
                 alert('請至少選擇一個活動紀錄！');
                 return;
+            }
+            
+            // 檢查是否勾選了「其他」活動紀錄，如果有，必須輸入自定義文字
+            const feedbackOtherInput = document.getElementById('activity_feedback_other');
+            let hasFeedbackOther = false;
+            feedback.forEach(function(checkbox) {
+                if (checkbox.value === '其他' || checkbox.value.startsWith('其他: ')) {
+                    hasFeedbackOther = true;
+                }
+            });
+            if (hasFeedbackOther && feedbackOtherInput) {
+                const otherText = feedbackOtherInput.value.trim();
+                if (!otherText) {
+                    e.preventDefault();
+                    alert('請輸入「其他」活動紀錄的具體內容！');
+                    feedbackOtherInput.focus();
+                    return;
+                }
+                // 更新 checkbox 值
+                feedback.forEach(function(checkbox) {
+                    if (checkbox.value === '其他' || checkbox.value.startsWith('其他: ')) {
+                        checkbox.value = '其他: ' + otherText;
+                    }
+                });
             }
             
             if (captchaInput.value.length !== 4) {
