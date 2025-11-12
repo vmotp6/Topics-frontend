@@ -617,157 +617,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			color: #ccc;
 		}
 
-		/* 聯絡資訊模態視窗樣式 */
-		#contactInfoModal.modal {
-			position: fixed;
-			z-index: 1001;
-			left: 0;
-			top: 0;
-			width: 100%;
-			height: 100%;
-			background-color: rgba(0,0,0,0.5);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
-
-		#contactInfoModal .modal-content {
-			background-color: white;
-			border-radius: 12px;
-			box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-			width: 90%;
-			max-width: 600px;
-			max-height: 80vh;
-			overflow-y: auto;
-		}
-
-		#contactInfoModal .modal-header {
-			padding: 20px 30px;
-			border-bottom: 1px solid #e0e0e0;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			background: #f8f9fa;
-			border-radius: 12px 12px 0 0;
-		}
-
-		#contactInfoModal .modal-header h3 {
-			margin: 0;
-			color: #003366;
-			font-size: 24px;
-			font-weight: 600;
-		}
-
-		#contactInfoModal .close {
-			font-size: 28px;
-			font-weight: bold;
-			cursor: pointer;
-			color: #666;
-			transition: color 0.3s;
-		}
-
-		#contactInfoModal .close:hover {
-			color: #000;
-		}
-
-		#contactInfoModal .modal-body {
-			padding: 30px;
-		}
-
-		.contact-info-item {
-			display: flex;
-			align-items: center;
-			padding: 16px;
-			margin-bottom: 12px;
-			background: #f8f9fa;
-			border-radius: 8px;
-			border: 1px solid #e0e0e0;
-		}
-
-		.contact-info-icon {
-			font-size: 24px;
-			margin-right: 16px;
-			width: 40px;
-			text-align: center;
-			color: #007bff;
-		}
-
-		.contact-info-content {
-			flex: 1;
-		}
-
-		.contact-info-label {
-			font-size: 12px;
-			color: #666;
-			margin-bottom: 4px;
-			font-weight: 500;
-		}
-
-		.contact-info-value {
-			font-size: 16px;
-			color: #333;
-			font-weight: 500;
-		}
-
-		.contact-info-actions {
-			display: flex;
-			gap: 8px;
-		}
-
-		.contact-action-btn {
-			padding: 8px 16px;
-			border: none;
-			border-radius: 6px;
-			cursor: pointer;
-			font-size: 14px;
-			font-weight: 500;
-			transition: all 0.3s;
-			white-space: nowrap;
-		}
-
-		.contact-action-btn.phone {
-			background: #28a745;
-			color: white;
-		}
-
-		.contact-action-btn.phone:hover {
-			background: #218838;
-		}
-
-		.contact-action-btn.line {
-			background: #00c300;
-			color: white;
-		}
-
-		.contact-action-btn.line:hover {
-			background: #00a800;
-		}
-
-		.contact-action-btn.email {
-			background: #17a2b8;
-			color: white;
-		}
-
-		.contact-action-btn.email:hover {
-			background: #138496;
-		}
-
-		.contact-action-btn.copy {
-			background: #6c757d;
-			color: white;
-		}
-
-		.contact-action-btn.copy:hover {
-			background: #5a6268;
-		}
-
-		.contact-info-empty {
-			text-align: center;
-			padding: 20px;
-			color: #999;
-			font-style: italic;
-		}
-
 		/* 響應式設計 */
 		@media (max-width: 768px) {
 			.modal-content {
@@ -791,22 +640,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 
 			.student-actions {
 				justify-content: center;
-			}
-
-			.contact-info-item {
-				flex-direction: column;
-				align-items: flex-start;
-			}
-
-			.contact-info-actions {
-				width: 100%;
-				margin-top: 12px;
-				flex-wrap: wrap;
-			}
-
-			.contact-action-btn {
-				flex: 1;
-				min-width: 100px;
 			}
 		}
 	</style>
@@ -1110,13 +943,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 				<p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
 				<a href="records.php" class="feature-link">活動紀錄填寫</a>
 			</div>
-
-			<div class="feature-card">
-				<div class="feature-icon">📱</div>
-				<h3 class="feature-title">學校活動通知系統</h3>
-				<p class="feature-description">發送學校活動通知給學生。</p>
-				<a href="mobile_teacher.php" class="feature-link">學校活動通知系統</a>
-			</div>
 			
 			<div class="feature-card">
 				<div class="feature-icon">👨‍🎓</div>
@@ -1328,7 +1154,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 					</div>
 
 					<div class="student-actions">
-						<button class="action-btn btn-contact" onclick="contactStudentById(${student.id})">
+						<button class="action-btn btn-contact" onclick="contactStudent('${student.phone1}', '${student.name}')">
 							<i class="fas fa-phone"></i> 聯絡
 						</button>
                         <button class="action-btn btn-notes" onclick="openAddContactLog(${student.id}, '${student.name}')">
@@ -1351,196 +1177,12 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			displayStudents(filteredStudents);
 		}
 
-		// 聯絡學生 - 通過ID查找學生資料並顯示聯絡資訊模態視窗
-		function contactStudentById(studentId) {
-			// 從 studentsData 中查找學生資料
-			const student = studentsData.find(s => s.id == studentId);
-			if (student) {
-				openContactInfoModal(student);
-			} else {
-				alert('找不到學生資料');
+		// 聯絡學生
+		function contactStudent(phone, name) {
+			if (confirm(`是否要聯絡 ${name}？\n電話：${phone}`)) {
+				// 這裡可以添加實際的聯絡功能，比如打開電話應用或發送簡訊
+				window.open(`tel:${phone}`);
 			}
-		}
-
-		// 聯絡學生 - 顯示聯絡資訊模態視窗（兼容舊格式）
-		function contactStudent(student) {
-			// 如果傳入的是舊格式（phone, name），轉換為新格式
-			if (typeof student === 'string') {
-				// 舊格式兼容
-				const name = arguments[1] || '學生';
-				const phone = student;
-				student = { name: name, phone1: phone };
-			}
-			
-			openContactInfoModal(student);
-		}
-
-		// 開啟聯絡資訊模態視窗
-		function openContactInfoModal(student) {
-			document.getElementById('contactInfoStudentName').textContent = student.name || '學生';
-			document.getElementById('contactInfoModal').style.display = 'flex';
-			displayContactInfo(student);
-		}
-
-		// 關閉聯絡資訊模態視窗
-		function closeContactInfoModal() {
-			document.getElementById('contactInfoModal').style.display = 'none';
-		}
-
-		// 顯示聯絡資訊
-		function displayContactInfo(student) {
-			const contactInfoBody = document.getElementById('contactInfoBody');
-			let html = '';
-
-			// 電話一
-			if (student.phone1) {
-				html += `
-					<div class="contact-info-item">
-						<div class="contact-info-icon"><i class="fas fa-phone"></i></div>
-						<div class="contact-info-content">
-							<div class="contact-info-label">聯絡電話一</div>
-							<div class="contact-info-value">${escapeHtml(student.phone1)}</div>
-						</div>
-						<div class="contact-info-actions">
-							<button class="contact-action-btn copy" onclick="copyToClipboard('${escapeHtml(student.phone1)}', '電話')">
-								<i class="fas fa-copy"></i> 複製
-							</button>
-						</div>
-					</div>
-				`;
-			}
-
-			// 電話二
-			if (student.phone2) {
-				html += `
-					<div class="contact-info-item">
-						<div class="contact-info-icon"><i class="fas fa-mobile-alt"></i></div>
-						<div class="contact-info-content">
-							<div class="contact-info-label">聯絡電話二</div>
-							<div class="contact-info-value">${escapeHtml(student.phone2)}</div>
-						</div>
-						<div class="contact-info-actions">
-							<button class="contact-action-btn copy" onclick="copyToClipboard('${escapeHtml(student.phone2)}', '電話')">
-								<i class="fas fa-copy"></i> 複製
-							</button>
-						</div>
-					</div>
-				`;
-			}
-
-			// Line ID
-			if (student.line_id) {
-				html += `
-					<div class="contact-info-item">
-						<div class="contact-info-icon"><i class="fab fa-line" style="color: #00c300;"></i></div>
-						<div class="contact-info-content">
-							<div class="contact-info-label">Line ID</div>
-							<div class="contact-info-value">${escapeHtml(student.line_id)}</div>
-						</div>
-						<div class="contact-info-actions">
-							<button class="contact-action-btn copy" onclick="copyToClipboard('${escapeHtml(student.line_id)}', 'Line ID')">
-								<i class="fas fa-copy"></i> 複製
-							</button>
-						</div>
-					</div>
-				`;
-			}
-
-			// Email - 始終顯示
-			const emailValue = student.email || '無';
-			const hasEmail = student.email && student.email.trim() !== '';
-			const emailColor = hasEmail ? '#333' : '#999';
-			const emailStyle = hasEmail ? 'normal' : 'italic';
-			
-			html += '<div class="contact-info-item">';
-			html += '<div class="contact-info-icon"><i class="fas fa-envelope"></i></div>';
-			html += '<div class="contact-info-content">';
-			html += '<div class="contact-info-label">Email</div>';
-			html += `<div class="contact-info-value" style="color: ${emailColor}; font-style: ${emailStyle};">${escapeHtml(emailValue)}</div>`;
-			html += '</div>';
-			html += '<div class="contact-info-actions">';
-			
-			if (hasEmail) {
-				html += `<button class="contact-action-btn email" onclick="sendEmail('${escapeHtml(student.email)}')">`;
-				html += '<i class="fas fa-envelope"></i> 發送郵件';
-				html += '</button>';
-				html += `<button class="contact-action-btn copy" onclick="copyToClipboard('${escapeHtml(student.email)}', 'Email')">`;
-				html += '<i class="fas fa-copy"></i> 複製';
-				html += '</button>';
-			}
-			
-			html += '</div>';
-			html += '</div>';
-
-			// Facebook
-			if (student.facebook) {
-				html += `
-					<div class="contact-info-item">
-						<div class="contact-info-icon"><i class="fab fa-facebook" style="color: #1877f2;"></i></div>
-						<div class="contact-info-content">
-							<div class="contact-info-label">Facebook</div>
-							<div class="contact-info-value">${escapeHtml(student.facebook)}</div>
-						</div>
-						<div class="contact-info-actions">
-							<button class="contact-action-btn copy" onclick="copyToClipboard('${escapeHtml(student.facebook)}', 'Facebook')">
-								<i class="fas fa-copy"></i> 複製
-							</button>
-						</div>
-					</div>
-				`;
-			}
-
-			if (!html) {
-				html = '<div class="contact-info-empty">此學生尚未提供聯絡資訊</div>';
-			}
-
-			contactInfoBody.innerHTML = html;
-		}
-
-		// 發送郵件
-		function sendEmail(email) {
-			window.open(`mailto:${email}`);
-		}
-
-		// 複製到剪貼板
-		function copyToClipboard(text, label) {
-			if (navigator.clipboard && navigator.clipboard.writeText) {
-				navigator.clipboard.writeText(text).then(() => {
-					alert(`${label}已複製到剪貼板`);
-				}).catch(err => {
-					console.error('複製失敗:', err);
-					fallbackCopyToClipboard(text, label);
-				});
-			} else {
-				fallbackCopyToClipboard(text, label);
-			}
-		}
-
-		// 備用複製方法
-		function fallbackCopyToClipboard(text, label) {
-			const textArea = document.createElement('textarea');
-			textArea.value = text;
-			textArea.style.position = 'fixed';
-			textArea.style.left = '-999999px';
-			document.body.appendChild(textArea);
-			textArea.focus();
-			textArea.select();
-			try {
-				document.execCommand('copy');
-				alert(`${label}已複製到剪貼板`);
-			} catch (err) {
-				console.error('複製失敗:', err);
-				alert(`複製失敗，請手動複製：${text}`);
-			}
-			document.body.removeChild(textArea);
-		}
-
-		// HTML 轉義函數
-		function escapeHtml(text) {
-			if (!text) return '';
-			const div = document.createElement('div');
-			div.textContent = text;
-			return div.innerHTML;
 		}
 
 		// 添加學生備註
@@ -1562,22 +1204,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 		// 搜尋功能
 		document.getElementById('studentSearch').addEventListener('input', searchStudents);
 	</script>
-
-    <!-- 聯絡資訊模態視窗 -->
-    <div id="contactInfoModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>聯絡資訊 - <span id="contactInfoStudentName"></span></h3>
-                <span class="close" onclick="closeContactInfoModal()">&times;</span>
-            </div>
-            <div class="modal-body" id="contactInfoBody">
-                <!-- 聯絡資訊將由 JavaScript 動態載入 -->
-            </div>
-            <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #e0e0e0; display:flex; justify-content:flex-end; gap:10px;">
-                <button class="btn-cancel" onclick="closeContactInfoModal()" style="background:#f5f5f5; border:none; padding:8px 16px; border-radius:6px;">關閉</button>
-            </div>
-        </div>
-    </div>
 
     <!-- 聯絡紀錄新增模態視窗 -->
     <div id="addContactLogModal" class="modal" style="display: none;">
@@ -1678,13 +1304,6 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
         document.getElementById('addContactLogModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeAddContactLog();
-            }
-        });
-
-        // 點擊聯絡資訊模態視窗外部關閉
-        document.getElementById('contactInfoModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeContactInfoModal();
             }
         });
     </script>

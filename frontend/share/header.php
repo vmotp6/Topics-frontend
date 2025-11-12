@@ -71,7 +71,7 @@ function getActiveClass($targetFile) {
       padding-top: 120px;
     }
   }
-  
+
   @media (max-width: 480px) {
     body:not(.custom-spacing) {
       padding-top: 130px;
@@ -914,8 +914,7 @@ function getActiveClass($targetFile) {
   <div class="navbar-links">
     <!-- 共同可見的連結 -->
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    
-    
+    <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
     
     <?php if (!$isLoggedIn): ?>
       <!-- 僅訪客可見的連結 -->
@@ -932,12 +931,15 @@ function getActiveClass($targetFile) {
     <?php endif; ?>
 
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
       <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
     <?php endif; ?>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
       <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
     <?php endif; ?>
@@ -997,7 +999,7 @@ function getActiveClass($targetFile) {
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
          <span class="username"><?php echo $isLoggedIn ? htmlspecialchars($_SESSION['username']) : '未知用戶'; ?></span>
-         <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+         <?php if ($isLoggedIn && isset($_SESSION['role']) && in_array($_SESSION['role'], ['老師', '學生'])): ?>
            <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>
@@ -1026,7 +1028,7 @@ function getActiveClass($targetFile) {
   <div class="mobile-nav-links">
     <!-- 共同可見的連結 -->
     <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
-    
+    <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
     
     <?php if (!$isLoggedIn): ?>
       <!-- 僅訪客可見的連結 -->
@@ -1039,13 +1041,20 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
     <?php endif; ?>
+<<<<<<< HEAD
+    
+=======
+>>>>>>> ce7476d4adf78a47a832e5829f6694274152cd28
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
+    
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
       <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
     <?php endif; ?>

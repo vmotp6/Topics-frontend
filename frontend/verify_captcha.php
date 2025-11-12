@@ -21,7 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    if ($captcha_input === $captcha_session) {
+    // 不區分大小寫比較
+    if (strtoupper($captcha_input) === strtoupper($captcha_session)) {
         echo json_encode(['success' => true, 'message' => '驗證碼正確']);
     } else {
         echo json_encode(['success' => false, 'message' => '驗證碼錯誤']);
@@ -30,6 +31,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode(['success' => false, 'message' => '只支援POST請求']);
 }
 ?>
+
+
+
+
+
+
+
+
+
 
 
 

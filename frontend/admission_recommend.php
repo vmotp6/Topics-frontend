@@ -1,4 +1,7 @@
 <?php
+// 設定時區為台灣時區 (UTC+8)
+date_default_timezone_set('Asia/Taipei');
+
 // 載入 session 配置
 require_once 'session_config.php';
 require_once 'config.php';
@@ -190,6 +193,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $recommendation_id = $conn->insert_id;
             
             // 準備郵件資料
+            // 確保使用台灣時區顯示時間
             $email_data = [
                 'recommender_name' => $_POST['recommender_name'],
                 'recommender_student_id' => $_POST['recommender_student_id'],
@@ -197,7 +201,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 'student_name' => $_POST['student_name'],
                 'student_school' => $_POST['student_school'],
                 'student_grade' => $_POST['student_grade'],
-                'submission_time' => date('Y-m-d H:i:s')
+                'submission_time' => date('Y-m-d H:i:s', time()) // 使用台灣時區 (UTC+8)，郵件模板會自動加上時區標示
             ];
             
             // 發送推薦成功通知郵件
@@ -375,7 +379,12 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                   ?>
                 </span>
               </td>
-              <td><?php echo date('Y-m-d H:i', strtotime($result['created_at'])); ?></td>
+              <td><?php 
+                  // 確保使用台灣時區顯示時間
+                  $date = new DateTime($result['created_at'], new DateTimeZone('UTC'));
+                  $date->setTimezone(new DateTimeZone('Asia/Taipei'));
+                  echo $date->format('Y-m-d H:i');
+              ?></td>
             </tr>
             <?php endforeach; ?>
           </tbody>

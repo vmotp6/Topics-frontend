@@ -164,7 +164,7 @@ if ($_POST) {
     }
     
     // 驗證驗證碼
-    if (!isset($_SESSION['captcha']) || $_POST['captcha'] !== $_SESSION['captcha']) {
+    if (!isset($_SESSION['captcha_code']) || $_POST['captcha'] !== $_SESSION['captcha_code']) {
         $missing_fields[] = 'captcha_invalid';
     }
     
@@ -242,7 +242,7 @@ if ($_POST) {
             $message = "資料已成功提交！";
             $messageType = "success";
             // 提交成功後重新生成驗證碼
-            $_SESSION['captcha'] = generateCaptcha();
+            $_SESSION['captcha_code'] = generateCaptcha();
             // 清空 POST 資料，避免表單資料被保留
             $_POST = array();
         } else {
@@ -289,7 +289,7 @@ if ($_POST) {
         
         // 驗證失敗後重新生成驗證碼
         if (in_array('captcha_invalid', $missing_fields)) {
-            $_SESSION['captcha'] = generateCaptcha();
+            $_SESSION['captcha_code'] = generateCaptcha();
         }
     }
 }
@@ -608,16 +608,15 @@ $conn->close();
                     <!-- 驗證碼 -->
                     <div class="form-section">
                         <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
-                        <div class="captcha-section">
-                            <label>請輸入右側驗證碼:</label>
-                            <input type="text" name="captcha" class="captcha-input" placeholder="請輸入驗證碼" maxlength="4" required autocomplete="off">
-                            <div class="captcha-code" id="captcha-display"><?php echo getCurrentCaptcha(); ?></div>
-                            <button type="button" class="refresh-btn" onclick="refreshCaptcha()" title="重新產生驗證碼">
+                        <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
+                            <input type="text" name="captcha" class="captcha-input" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
+                            <img src="captcha_image.php" id="captcha-display" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">
+                            <button type="button" class="refresh-btn" onclick="refreshCaptcha()" title="重新產生驗證碼" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
                                 <i class="fas fa-sync-alt"></i> 重整
                             </button>
                         </div>
                         <small style="color: #666; margin-top: 8px; display: block;">
-                            <i class="fas fa-info-circle"></i> 點擊「重整」按鈕可產生新的驗證碼
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫），點擊圖片或「重整」按鈕可產生新的驗證碼
                         </small>
                     </div>
                 </div>
@@ -643,7 +642,151 @@ $conn->close();
     </div>
     </div>
 
+    <style>
+        /* RIC 功能樣式 */
+        .ric-status-bar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .ric-status-bar.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .ric-status-bar.saving {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .ric-status-bar.saved {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .form-progress {
+            position: sticky;
+            top: 100px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            z-index: 100;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        .field-validation {
+            margin-top: 5px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .field-validation.valid {
+            color: #28a745;
+        }
+        .field-validation.invalid {
+            color: #dc3545;
+        }
+        .field-validation i {
+            font-size: 14px;
+        }
+        .file-preview-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .file-preview-item {
+            position: relative;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f9fa;
+        }
+        .file-preview-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+        .file-preview-item .file-info {
+            padding: 8px;
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+        }
+        .file-preview-item .remove-preview {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        .char-counter {
+            text-align: right;
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .draft-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .draft-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .draft-btn.load {
+            background: #17a2b8;
+            color: white;
+        }
+        .draft-btn.clear {
+            background: #6c757d;
+            color: white;
+        }
+        .draft-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+
     <script>
+<<<<<<< HEAD
         // 控制「其他」選項的輸入框顯示/隱藏
         function toggleOtherInput(checkbox, inputId) {
             const input = document.getElementById(inputId);
@@ -681,6 +824,884 @@ $conn->close();
             }
         }
         
+        // ==================== RIC 核心功能 ====================
+        
+        // 表單資料管理
+        const FORM_STORAGE_KEY = 'activity_record_draft';
+        let autoSaveTimer = null;
+        let isSubmitting = false;
+        
+        // 初始化 RIC 功能
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('RIC 功能開始初始化...');
+            
+            initRIC();
+            initAutoSave();
+            initRealTimeValidation();
+            initFilePreview();
+            initProgressTracker();
+            initCharCounter();
+            
+            // 自動載入草稿（靜默模式）
+            // 延遲載入，確保頁面完全渲染
+            setTimeout(() => {
+                console.log('🔍 開始檢查草稿...');
+                
+                // 檢查是否有草稿
+                const hasDraft = localStorage.getItem(FORM_STORAGE_KEY);
+                if (!hasDraft) {
+                    console.log('❌ 沒有找到儲存的草稿');
+                    return;
+                }
+                
+                console.log('✅ 找到草稿，準備載入...');
+                console.log('草稿內容:', JSON.parse(hasDraft));
+                
+                // 檢查是否有伺服器端資料（PHP 回傳的資料）
+                // 如果表單已經有資料，可能是 PHP 回傳的，不應該覆蓋
+                const form = document.querySelector('form');
+                if (!form) {
+                    console.warn('⚠️ 找不到表單元素');
+                    return;
+                }
+                
+                const activityDate = form.querySelector('input[name="activity_date"]');
+                const schoolName = form.querySelector('input[name="school_name"]');
+                const suggestion = form.querySelector('textarea[name="suggestion"]');
+                
+                // 檢查是否有明顯的伺服器端資料（排除預設值和 readonly 欄位）
+                // 注意：teacher_unit 和 teacher_name 是 readonly，有值不代表是伺服器端資料
+                const hasServerData = (activityDate && activityDate.value && activityDate.value !== '') ||
+                                     (schoolName && schoolName.value && schoolName.value.trim() !== '') ||
+                                     (suggestion && suggestion.value && suggestion.value.trim() !== '');
+                
+                console.log('📊 伺服器端資料檢查:', {
+                    activityDate: activityDate?.value,
+                    schoolName: schoolName?.value,
+                    suggestion: suggestion?.value,
+                    hasServerData: hasServerData
+                });
+                
+                // 只有在沒有伺服器端資料時才載入草稿
+                if (!hasServerData) {
+                    console.log('🚀 沒有伺服器端資料，開始載入草稿...');
+                    const loaded = loadDraft(false); // false = 靜默模式，不顯示提示
+                    if (loaded) {
+                        console.log('✅ 草稿載入成功');
+                    } else {
+                        console.warn('⚠️ 草稿載入失敗或沒有載入任何欄位');
+                    }
+                } else {
+                    console.log('⏭️ 檢測到伺服器端資料，跳過草稿載入（避免覆蓋伺服器資料）');
+                }
+            }, 1500); // 增加延遲到 1.5 秒，確保頁面完全載入
+            
+            console.log('RIC 功能初始化完成');
+        });
+        
+        // 初始化 RIC 系統
+        function initRIC() {
+            console.log('初始化 RIC 系統...');
+            
+            // 創建狀態欄
+            const statusBar = document.createElement('div');
+            statusBar.id = 'ric-status-bar';
+            statusBar.className = 'ric-status-bar';
+            statusBar.innerHTML = '<i class="fas fa-save"></i> <span>就緒</span>';
+            document.body.appendChild(statusBar);
+            console.log('狀態欄已創建');
+            
+            // 創建進度條
+            const form = document.querySelector('form');
+            if (form) {
+                console.log('找到表單，創建進度條...');
+                const progressHTML = `
+                    <div class="form-progress">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <strong><i class="fas fa-tasks"></i> 表單填寫進度</strong>
+                            <span id="progress-percentage">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="draft-actions" style="margin-top: 15px;">
+                            <button type="button" class="draft-btn load" onclick="loadDraft(true)">
+                                <i class="fas fa-download"></i> 載入草稿
+                            </button>
+                            <button type="button" class="draft-btn clear" onclick="clearDraft()">
+                                <i class="fas fa-trash"></i> 清除草稿
+                            </button>
+                        </div>
+                    </div>
+                `;
+                form.insertAdjacentHTML('afterbegin', progressHTML);
+                console.log('進度條已創建');
+            } else {
+                console.error('找不到表單元素！');
+            }
+        }
+        
+        // 顯示狀態訊息
+        function showStatus(message, type = 'info') {
+            const statusBar = document.getElementById('ric-status-bar');
+            if (!statusBar) return;
+            
+            const icons = {
+                saving: '<i class="fas fa-spinner fa-spin"></i>',
+                saved: '<i class="fas fa-check-circle"></i>',
+                info: '<i class="fas fa-info-circle"></i>'
+            };
+            
+            statusBar.className = `ric-status-bar show ${type}`;
+            statusBar.innerHTML = `${icons[type] || icons.info} <span>${message}</span>`;
+            
+            if (type === 'saved') {
+                setTimeout(() => {
+                    statusBar.classList.remove('show');
+                }, 2000);
+            }
+        }
+        
+        // ==================== 自動儲存功能 ====================
+        
+        // 防抖函數（全局）
+        let saveTimeout = null;
+        const debouncedSave = () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                console.log('⏰ 觸發自動儲存（防抖延遲結束）...');
+                saveDraft();
+            }, 1000); // 1秒後儲存
+        };
+        
+        function initAutoSave() {
+            console.log('初始化自動儲存功能...');
+            
+            // 找到正確的表單（使用更具體的選擇器）
+            // 先嘗試找到包含 activity_date 欄位的表單
+            let form = null;
+            const activityDateInput = document.querySelector('input[name="activity_date"]');
+            if (activityDateInput) {
+                form = activityDateInput.closest('form');
+                console.log('通過 activity_date 找到表單:', form);
+            }
+            
+            // 如果沒找到，使用通用選擇器
+            if (!form) {
+                form = document.querySelector('form[action=""]');
+                console.log('通過 action="" 找到表單:', form);
+            }
+            
+            // 如果還是沒找到，使用第一個表單
+            if (!form) {
+                form = document.querySelector('form');
+                console.log('使用第一個表單:', form);
+            }
+            
+            if (!form) {
+                console.error('找不到表單，無法初始化自動儲存');
+                return;
+            }
+            
+            console.log('✅ 表單找到，開始設置事件監聽器...');
+            console.log('表單資訊:', {
+                action: form.action,
+                method: form.method,
+                id: form.id,
+                className: form.className
+            });
+            
+            // 使用事件委派（Event Delegation）來監聽表單內的所有變化
+            // 使用 document 來監聽，確保能捕獲到所有事件
+            const handleFormChange = function(e) {
+                const target = e.target;
+                
+                // 找到目標元素所在的表單
+                const targetForm = target.closest('form');
+                
+                // 記錄所有事件（用於調試）
+                console.log('🔔 事件觸發:', {
+                    type: e.type,
+                    tagName: target.tagName,
+                    typeAttr: target.type,
+                    name: target.name,
+                    value: target.value,
+                    targetForm: targetForm,
+                    ourForm: form,
+                    isSameForm: targetForm === form,
+                    formContains: form.contains(target)
+                });
+                
+                // 確保目標元素在我們要監聽的表單內
+                // 使用 closest 方法更可靠
+                if (targetForm !== form) {
+                    // 如果目標元素沒有表單，可能是動態添加的，嘗試檢查是否在我們的表單內
+                    if (!targetForm && form.contains(target)) {
+                        console.log('  ℹ️ 元素沒有表單標籤，但在目標表單內，繼續處理');
+                    } else {
+                        console.log('  ⏭️ 跳過：元素不在目標表單內');
+                        console.log('  - 目標元素所在表單:', targetForm);
+                        console.log('  - 我們監聽的表單:', form);
+                        return;
+                    }
+                }
+                
+                // 所有欄位都記錄，包括檔案和驗證碼
+                
+                // 處理檔案上傳（記錄檔案名稱）
+                if (target.type === 'file') {
+                    console.log('📁 檔案選擇改變！');
+                    if (target.files && target.files.length > 0) {
+                        Array.from(target.files).forEach(file => {
+                            console.log('  - 檔案名稱: ' + file.name + ' (大小: ' + (file.size / 1024).toFixed(2) + ' KB)');
+                        });
+                    }
+                    debouncedSave();
+                    return;
+                }
+                
+                // 處理 checkbox
+                if (target.type === 'checkbox') {
+                    console.log('☑️ Checkbox 被點擊！');
+                    console.log('  - 名稱: ' + target.name);
+                    console.log('  - 值: ' + target.value);
+                    console.log('  - 狀態: ' + target.checked);
+                    debouncedSave();
+                    return;
+                }
+                
+                // 處理文字輸入框、選擇框、文字區域（包括驗證碼）
+                if (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA') {
+                    console.log('📝 欄位 ' + target.name + ' 發生變化，值: ' + target.value);
+                    debouncedSave();
+                    return;
+                }
+                
+                console.log('  ⏭️ 跳過：不是表單元素類型');
+            };
+            
+            // 監聽 input 事件（文字輸入）
+            document.addEventListener('input', handleFormChange, true);
+            console.log('✅ input 事件監聽器已設置（document 級別）');
+            
+            // 監聽 change 事件（選擇框、checkbox、日期等）
+            document.addEventListener('change', handleFormChange, true);
+            console.log('✅ change 事件監聽器已設置（document 級別）');
+            
+            // 也直接在表單上監聽（雙重保險）
+            form.addEventListener('input', handleFormChange, true);
+            form.addEventListener('change', handleFormChange, true);
+            console.log('✅ 表單事件監聽器已設置（form 級別）');
+            
+            // 測試：手動觸發一個測試事件來確認監聽器工作
+            setTimeout(() => {
+                const testInput = form.querySelector('input[name="school_name"]');
+                if (testInput) {
+                    console.log('🧪 測試：找到 school_name 欄位，準備測試事件...');
+                    // 創建並觸發一個測試事件
+                    const testEvent = new Event('input', { bubbles: true, cancelable: true });
+                    testInput.dispatchEvent(testEvent);
+                    console.log('🧪 測試事件已觸發，請查看上方是否有事件日誌');
+                } else {
+                    console.warn('⚠️ 測試：找不到 school_name 欄位');
+                }
+            }, 1000);
+            
+            // 延遲檢查元素數量（用於調試）
+            setTimeout(() => {
+                const allInputs = form.querySelectorAll('input, select, textarea');
+                const participantsCheckboxes = form.querySelectorAll('input[name="participants[]"]');
+                const feedbackCheckboxes = form.querySelectorAll('input[name="activity_feedback[]"]');
+                const allCheckboxes = form.querySelectorAll('input[type="checkbox"]');
+                
+                console.log('📊 表單元素統計:');
+                console.log('  - 總表單欄位: ' + allInputs.length);
+                console.log('  - 參與對象 checkbox: ' + participantsCheckboxes.length);
+                console.log('  - 活動紀錄 checkbox: ' + feedbackCheckboxes.length);
+                console.log('  - 總 checkbox: ' + allCheckboxes.length);
+                
+                // 如果還是找不到，嘗試其他方法
+                if (allCheckboxes.length === 0) {
+                    console.warn('⚠️ 警告：未找到任何 checkbox，嘗試其他選擇器...');
+                    const allInputsInForm = form.getElementsByTagName('input');
+                    let checkboxCount = 0;
+                    for (let i = 0; i < allInputsInForm.length; i++) {
+                        if (allInputsInForm[i].type === 'checkbox') {
+                            checkboxCount++;
+                            console.log('找到 checkbox: ' + allInputsInForm[i].name + ' = ' + allInputsInForm[i].value);
+                        }
+                    }
+                    console.log('使用 getElementsByTagName 找到 ' + checkboxCount + ' 個 checkbox');
+                } else {
+                    // 列出所有找到的 checkbox
+                    allCheckboxes.forEach((cb, index) => {
+                        console.log('Checkbox #' + index + ': name=' + cb.name + ', value=' + cb.value);
+                    });
+                }
+            }, 500); // 增加延遲時間到 500ms
+            
+            console.log('✅ 自動儲存功能初始化完成（使用事件委派）');
+        }
+        
+        // 儲存草稿（記錄所有欄位）
+        function saveDraft() {
+            if (isSubmitting) {
+                console.log('表單正在提交，跳過儲存');
+                return;
+            }
+            
+            // 找到正確的表單（活動紀錄表單）
+            let form = null;
+            const activityDateInput = document.querySelector('input[name="activity_date"]');
+            if (activityDateInput) {
+                form = activityDateInput.closest('form');
+            }
+            
+            if (!form) {
+                form = document.querySelector('form[action=""]');
+            }
+            
+            if (!form) {
+                console.error('找不到表單，無法儲存草稿');
+                return;
+            }
+            
+            // 確認這是正確的表單（應該包含 activity_date 欄位）
+            if (!form.querySelector('input[name="activity_date"]')) {
+                console.warn('⚠️ 找到的表單不包含 activity_date，可能不是正確的表單，跳過儲存');
+                return;
+            }
+            
+            // 靜默儲存，不顯示提示
+            // console.log('開始儲存草稿...');
+            
+            const draftData = {};
+            let fieldCount = 0;
+            
+            // 收集所有文字輸入框和選擇框（包括驗證碼）
+            // 只收集這個表單內的欄位
+            const inputs = form.querySelectorAll('input[type="text"], input[type="date"], input[type="email"], input[type="tel"], select, textarea');
+            console.log('找到 ' + inputs.length + ' 個輸入欄位');
+            
+            inputs.forEach(input => {
+                // 確保欄位在表單內，並且有 name 屬性
+                if (input.name && form.contains(input)) {
+                    const value = input.value.trim();
+                    // 只記錄這個表單的欄位（排除其他表單的欄位）
+                    const validFields = ['activity_date', 'teacher_unit', 'teacher_name', 'school_name', 
+                                       'contact_person', 'contact_phone', 'activity_type', 'activity_time', 
+                                       'suggestion', 'captcha'];
+                    
+                    if (validFields.includes(input.name) || input.name.startsWith('participants') || 
+                        input.name.startsWith('activity_feedback')) {
+                        draftData[input.name] = value;
+                        if (value) {
+                            fieldCount++;
+                            // 靜默儲存，不顯示每個欄位的日誌
+                        }
+                    }
+                }
+            });
+            
+            // 儲存檔案名稱（無法儲存檔案本身，但可以記錄檔案名稱）
+            const fileInputs = form.querySelectorAll('input[type="file"][name="files[]"]');
+            const fileNames = [];
+            fileInputs.forEach(fileInput => {
+                if (fileInput.files && fileInput.files.length > 0) {
+                    Array.from(fileInput.files).forEach(file => {
+                        fileNames.push(file.name);
+                        // 靜默儲存，不顯示檔案名稱日誌
+                    });
+                }
+            });
+            if (fileNames.length > 0) {
+                draftData['files_names'] = fileNames;
+                fieldCount += fileNames.length;
+            }
+            
+            // 儲存 checkbox 群組（參與對象）
+            const participants = Array.from(form.querySelectorAll('input[name="participants[]"]:checked'))
+                .map(cb => cb.value);
+            if (participants.length > 0) {
+                draftData.participants = participants;
+                fieldCount += participants.length;
+                // 靜默儲存，不顯示日誌
+            }
+            
+            // 儲存 checkbox 群組（活動紀錄）
+            const feedback = Array.from(form.querySelectorAll('input[name="activity_feedback[]"]:checked'))
+                .map(cb => cb.value);
+            if (feedback.length > 0) {
+                draftData.activity_feedback = feedback;
+                fieldCount += feedback.length;
+                // 靜默儲存，不顯示日誌
+            }
+            
+            // 記錄儲存時間
+            draftData.saved_at = new Date().toISOString();
+            
+            // 儲存到 localStorage（靜默儲存，不顯示提示）
+            try {
+                const dataString = JSON.stringify(draftData);
+                localStorage.setItem(FORM_STORAGE_KEY, dataString);
+                // 靜默儲存，不顯示狀態提示
+                // 只在 console 記錄（用於調試）
+                if (fieldCount > 0) {
+                    console.log('✅ 草稿已自動儲存（靜默），包含 ' + fieldCount + ' 個有值的欄位');
+                }
+            } catch (e) {
+                console.error('❌ 儲存草稿失敗:', e);
+                // 只有失敗時才顯示提示
+                showStatus('儲存失敗', 'info');
+            }
+            
+            updateProgress();
+        }
+        
+        // 載入草稿（靜默模式：有草稿就載入，沒有就不提示）
+        function loadDraft(showMessage = false) {
+            try {
+                const draftData = localStorage.getItem(FORM_STORAGE_KEY);
+                if (!draftData) {
+                    // 只有在手動點擊載入按鈕時才顯示提示
+                    if (showMessage) {
+                        alert('沒有找到儲存的草稿');
+                    }
+                    return false;
+                }
+                
+                const data = JSON.parse(draftData);
+                console.log('準備載入草稿資料:', data);
+                
+                // 檢查資料格式是否正確（應該包含活動紀錄表單的欄位）
+                const validFields = ['activity_date', 'teacher_unit', 'teacher_name', 'school_name', 
+                                   'contact_person', 'contact_phone', 'activity_type', 'activity_time', 
+                                   'suggestion', 'captcha', 'participants', 'activity_feedback', 
+                                   'files_names', 'saved_at'];
+                
+                const hasValidFields = Object.keys(data).some(key => 
+                    validFields.includes(key) || key.startsWith('participants') || key.startsWith('activity_feedback')
+                );
+                
+                if (!hasValidFields) {
+                    console.error('❌ 草稿資料格式錯誤：不包含有效的活動紀錄欄位');
+                    console.error('資料內容:', data);
+                    if (showMessage) {
+                        alert('草稿資料格式錯誤或無法載入。請清除草稿後重新填寫。');
+                    }
+                    return false;
+                }
+                
+                // 找到正確的表單
+                let form = null;
+                const activityDateInput = document.querySelector('input[name="activity_date"]');
+                if (activityDateInput) {
+                    form = activityDateInput.closest('form');
+                }
+                
+                if (!form) {
+                    form = document.querySelector('form[action=""]');
+                }
+                
+                if (!form) {
+                    console.warn('⚠️ 表單元素未找到，無法載入草稿');
+                    return false;
+                }
+                
+                // 確認這是正確的表單
+                if (!form.querySelector('input[name="activity_date"]')) {
+                    console.warn('⚠️ 找到的表單不包含 activity_date，可能不是正確的表單');
+                    return false;
+                }
+                
+                let loadedCount = 0;
+                
+                // 載入文字欄位和選擇框
+                Object.keys(data).forEach(key => {
+                    // 跳過特殊欄位
+                    if (key === 'participants' || key === 'activity_feedback' || key === 'saved_at' || key === 'files_names') {
+                        return;
+                    }
+                    
+                    const input = form.querySelector(`[name="${key}"]`);
+                    if (input) {
+                        if (input.type === 'file') {
+                            // 檔案無法載入，但可以顯示提示
+                            console.log('⚠️ 檔案欄位 ' + key + ' 無法自動載入，請重新選擇檔案');
+                            return;
+                        } else if (input.type === 'checkbox') {
+                            // 單選 checkbox
+                            if (data[key] === input.value) {
+                                input.checked = true;
+                                loadedCount++;
+                                console.log('✅ 載入 checkbox: ' + key + ' = ' + data[key]);
+                            }
+                        } else if (input.type === 'radio') {
+                            // radio button
+                            if (data[key] === input.value) {
+                                input.checked = true;
+                                loadedCount++;
+                                console.log('✅ 載入 radio: ' + key + ' = ' + data[key]);
+                            }
+                        } else {
+                            // 文字輸入框、選擇框等
+                            input.value = data[key] || '';
+                            if (data[key]) {
+                                loadedCount++;
+                                console.log('✅ 載入欄位: ' + key + ' = ' + data[key]);
+                            }
+                        }
+                    } else {
+                        console.warn('⚠️ 找不到欄位: ' + key);
+                    }
+                });
+                
+                // 載入 checkbox 群組（參與對象）
+                if (data.participants && Array.isArray(data.participants)) {
+                    data.participants.forEach(value => {
+                        const checkbox = form.querySelector(`input[name="participants[]"][value="${CSS.escape(value)}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            loadedCount++;
+                        }
+                    });
+                }
+                
+                // 載入 checkbox 群組（活動紀錄）
+                if (data.activity_feedback && Array.isArray(data.activity_feedback)) {
+                    data.activity_feedback.forEach(value => {
+                        const checkbox = form.querySelector(`input[name="activity_feedback[]"][value="${CSS.escape(value)}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            loadedCount++;
+                        }
+                    });
+                }
+                
+                // 載入成功時顯示提示（無論是手動還是自動）
+                if (loadedCount > 0) {
+                    showStatus('草稿已載入', 'saved');
+                    console.log('✅ 草稿已載入，共載入 ' + loadedCount + ' 個欄位');
+                } else {
+                    // 載入失敗時才顯示錯誤
+                    if (showMessage) {
+                        alert('草稿資料格式錯誤或無法載入');
+                    } else {
+                        console.warn('⚠️ 草稿載入失敗或沒有載入任何欄位');
+                    }
+                }
+                
+                updateProgress();
+                
+                // 觸發驗證和進度更新
+                form.querySelectorAll('input, select, textarea').forEach(input => {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+                
+                return loadedCount > 0;
+            } catch (e) {
+                console.error('載入草稿失敗:', e);
+                if (showMessage) {
+                    alert('載入草稿時發生錯誤: ' + e.message);
+                }
+                return false;
+            }
+        }
+        
+        // 清除草稿
+        function clearDraft() {
+            if (confirm('確定要清除所有草稿資料嗎？')) {
+                localStorage.removeItem(FORM_STORAGE_KEY);
+                showStatus('草稿已清除', 'info');
+                document.querySelector('form').reset();
+                updateProgress();
+            }
+        }
+        
+        // ==================== 即時驗證功能 ====================
+        
+        function initRealTimeValidation() {
+            const form = document.querySelector('form');
+            if (!form) return;
+            
+            // 驗證活動日期
+            const dateInput = form.querySelector('input[name="activity_date"]');
+            if (dateInput) {
+                dateInput.addEventListener('change', function() {
+                    validateDate(this);
+                });
+            }
+            
+            // 驗證學校名稱
+            const schoolInput = form.querySelector('input[name="school_name"]');
+            if (schoolInput) {
+                schoolInput.addEventListener('input', function() {
+                    validateRequired(this, '請輸入學校名稱');
+                });
+            }
+            
+            // 驗證電話
+            const phoneInput = form.querySelector('input[name="contact_phone"]');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', function() {
+                    validatePhone(this);
+                });
+            }
+            
+            // 驗證活動性質和時間
+            const activityType = form.querySelector('select[name="activity_type"]');
+            const activityTime = form.querySelector('select[name="activity_time"]');
+            
+            if (activityType) {
+                activityType.addEventListener('change', function() {
+                    validateRequired(this, '請選擇活動性質');
+                });
+            }
+            
+            if (activityTime) {
+                activityTime.addEventListener('change', function() {
+                    validateRequired(this, '請選擇活動時間');
+                });
+            }
+            
+            // 驗證參與對象和活動紀錄
+            const participants = form.querySelectorAll('input[name="participants[]"]');
+            const feedback = form.querySelectorAll('input[name="activity_feedback[]"]');
+            
+            participants.forEach(cb => {
+                cb.addEventListener('change', function() {
+                    validateCheckboxGroup('participants[]', '請至少選擇一個參與對象');
+                });
+            });
+            
+            feedback.forEach(cb => {
+                cb.addEventListener('change', function() {
+                    validateCheckboxGroup('activity_feedback[]', '請至少選擇一個活動紀錄');
+                });
+            });
+        }
+        
+        function validateRequired(input, message) {
+            const isValid = input.value.trim() !== '';
+            showFieldValidation(input, isValid, message);
+            return isValid;
+        }
+        
+        function validateDate(input) {
+            const date = new Date(input.value);
+            const today = new Date();
+            const isValid = input.value && date <= today;
+            showFieldValidation(input, isValid, isValid ? '' : '活動日期不能是未來日期');
+            return isValid;
+        }
+        
+        function validatePhone(input) {
+            if (!input.value) {
+                removeFieldValidation(input);
+                return true; // 電話是選填的
+            }
+            const isValid = /^[0-9]{1,10}$/.test(input.value);
+            showFieldValidation(input, isValid, isValid ? '' : '請輸入1-10位數字');
+            return isValid;
+        }
+        
+        function validateCheckboxGroup(name, message) {
+            const checked = document.querySelectorAll(`input[name="${name}"]:checked`);
+            const isValid = checked.length > 0;
+            
+            // 找到第一個 checkbox 來顯示驗證訊息
+            const firstCheckbox = document.querySelector(`input[name="${name}"]`);
+            if (firstCheckbox) {
+                showFieldValidation(firstCheckbox, isValid, isValid ? '' : message);
+            }
+            
+            return isValid;
+        }
+        
+        function showFieldValidation(input, isValid, message) {
+            // 移除舊的驗證訊息
+            removeFieldValidation(input);
+            
+            if (!message) return;
+            
+            const validation = document.createElement('div');
+            validation.className = `field-validation ${isValid ? 'valid' : 'invalid'}`;
+            validation.innerHTML = `<i class="fas fa-${isValid ? 'check' : 'exclamation-circle'}"></i> ${message}`;
+            
+            input.parentElement.appendChild(validation);
+            
+            // 添加視覺回饋
+            if (isValid) {
+                input.style.borderColor = '#28a745';
+            } else {
+                input.style.borderColor = '#dc3545';
+            }
+        }
+        
+        function removeFieldValidation(input) {
+            const existing = input.parentElement.querySelector('.field-validation');
+            if (existing) {
+                existing.remove();
+            }
+            input.style.borderColor = '';
+        }
+        
+        // ==================== 檔案預覽功能 ====================
+        
+        function initFilePreview() {
+            const fileInputs = document.querySelectorAll('input[type="file"][name="files[]"]');
+            
+            fileInputs.forEach(input => {
+                input.addEventListener('change', function(e) {
+                    handleFilePreview(this);
+                });
+            });
+        }
+        
+        function handleFilePreview(input) {
+            const files = Array.from(input.files);
+            const container = input.closest('.file-upload-area');
+            if (!container) return;
+            
+            // 創建預覽容器
+            let previewContainer = container.querySelector('.file-preview-container');
+            if (!previewContainer) {
+                previewContainer = document.createElement('div');
+                previewContainer.className = 'file-preview-container';
+                container.querySelector('.file-upload-controls').insertAdjacentElement('beforebegin', previewContainer);
+            }
+            
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'file-preview-item';
+                        previewItem.innerHTML = `
+                            <img src="${e.target.result}" alt="${file.name}">
+                            <div class="file-info">${file.name}</div>
+                            <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        previewContainer.appendChild(previewItem);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    // 非圖片檔案顯示檔案資訊
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'file-preview-item';
+                    previewItem.innerHTML = `
+                        <div style="padding: 20px; text-align: center;">
+                            <i class="fas fa-file" style="font-size: 48px; color: #6c757d;"></i>
+                            <div class="file-info">${file.name}</div>
+                        </div>
+                        <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(previewItem);
+                }
+            });
+        }
+        
+        function removeFilePreview(button, inputName) {
+            const previewItem = button.closest('.file-preview-item');
+            previewItem.remove();
+        }
+        
+        // ==================== 進度追蹤功能 ====================
+        
+        function initProgressTracker() {
+            updateProgress();
+        }
+        
+        function updateProgress() {
+            const form = document.querySelector('form');
+            if (!form) return;
+            
+            const requiredFields = [
+                { name: 'activity_date', type: 'input' },
+                { name: 'school_name', type: 'input' },
+                { name: 'activity_type', type: 'select' },
+                { name: 'activity_time', type: 'select' },
+                { name: 'participants[]', type: 'checkbox' },
+                { name: 'activity_feedback[]', type: 'checkbox' }
+            ];
+            
+            let completed = 0;
+            const total = requiredFields.length;
+            
+            requiredFields.forEach(field => {
+                let isCompleted = false;
+                
+                if (field.type === 'checkbox') {
+                    const checked = form.querySelectorAll(`input[name="${field.name}"]:checked`);
+                    isCompleted = checked.length > 0;
+                } else if (field.type === 'select') {
+                    const select = form.querySelector(`select[name="${field.name}"]`);
+                    isCompleted = select && select.value !== '';
+                } else {
+                    const input = form.querySelector(`input[name="${field.name}"]`);
+                    isCompleted = input && input.value.trim() !== '';
+                }
+                
+                if (isCompleted) completed++;
+            });
+            
+            const percentage = Math.round((completed / total) * 100);
+            const progressFill = document.getElementById('progress-fill');
+            const progressPercentage = document.getElementById('progress-percentage');
+            
+            if (progressFill) {
+                progressFill.style.width = percentage + '%';
+            }
+            if (progressPercentage) {
+                progressPercentage.textContent = percentage + '%';
+            }
+        }
+        
+        // ==================== 字數統計功能 ====================
+        
+        function initCharCounter() {
+            const textarea = document.querySelector('textarea[name="suggestion"]');
+            if (!textarea) return;
+            
+            const counter = document.createElement('div');
+            counter.className = 'char-counter';
+            counter.id = 'char-counter';
+            counter.textContent = '0 字';
+            textarea.parentElement.appendChild(counter);
+            
+            textarea.addEventListener('input', function() {
+                const length = this.value.length;
+                counter.textContent = `${length} 字`;
+                
+                if (length > 1000) {
+                    counter.style.color = '#dc3545';
+                } else if (length > 500) {
+                    counter.style.color = '#ffc107';
+                } else {
+                    counter.style.color = '#6c757d';
+                }
+            });
+        }
+        
+        // ==================== 工具函數 ====================
+        
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        // ==================== 原有功能 ====================
         // 重整驗證碼函數
         function refreshCaptcha() {
             const refreshBtn = document.querySelector('.refresh-btn');
@@ -691,34 +1712,26 @@ $conn->close();
             refreshBtn.disabled = true;
             refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 載入中...';
             
-            // 發送 AJAX 請求獲取新驗證碼
-            fetch('generate_captcha.php?action=refresh', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // 更新驗證碼顯示
-                captchaDisplay.textContent = data.captcha;
+            // 刷新驗證碼圖片（添加時間戳防止緩存）
+            if (captchaDisplay && captchaDisplay.tagName === 'IMG') {
+                captchaDisplay.src = 'captcha_image.php?t=' + new Date().getTime();
                 // 清空輸入框
-                captchaInput.value = '';
+                if (captchaInput) {
+                    captchaInput.value = '';
+                }
                 // 恢復按鈕狀態
                 refreshBtn.disabled = false;
                 refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
                 // 聚焦到輸入框
-                captchaInput.focus();
-            })
-            .catch(error => {
-                console.error('驗證碼重整失敗:', error);
-                // 備用方案：生成前端隨機數字
-                const fallbackCode = Math.floor(1000 + Math.random() * 9000);
-                captchaDisplay.textContent = fallbackCode;
+                if (captchaInput) {
+                    captchaInput.focus();
+                }
+            } else {
+                // 備用方案：如果圖片元素不存在
                 refreshBtn.disabled = false;
                 refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
-                alert('驗證碼重整失敗，請重新載入頁面或稍後再試。');
-            });
+                alert('驗證碼重整失敗，請重新載入頁面。');
+            }
         }
         
         // 驗證碼輸入框限制只能輸入數字
@@ -746,7 +1759,7 @@ $conn->close();
             }
         });
         
-        // 表單驗證
+        // 表單驗證與提交處理
         document.querySelector('form').addEventListener('submit', function(e) {
             const participants = document.querySelectorAll('input[name="participants[]"]:checked');
             const feedback = document.querySelectorAll('input[name="activity_feedback[]"]:checked');
@@ -820,6 +1833,14 @@ $conn->close();
                 captchaInput.focus();
                 return;
             }
+            
+            // 標記為正在提交，防止自動儲存
+            isSubmitting = true;
+            
+            // 提交成功後清除草稿（在頁面重新載入時）
+            setTimeout(() => {
+                localStorage.removeItem(FORM_STORAGE_KEY);
+            }, 1000);
         });
         
         // 檔案上傳相關函數
@@ -908,6 +1929,13 @@ $conn->close();
         // 頁面載入完成後初始化
         document.addEventListener('DOMContentLoaded', function() {
             updateRemoveButtons(); // 初始化刪除按鈕狀態
+            
+            // 監聽表單欄位變化以更新進度
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('input', updateProgress);
+                form.addEventListener('change', updateProgress);
+            }
         });
     </script>
     

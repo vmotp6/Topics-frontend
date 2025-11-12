@@ -385,3 +385,25 @@
     }
 }
 
+/* 頭像圖片樣式 */
+.user-avatar .avatar-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    display: block !important;
+}
+
+.user-avatar .avatar-text {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    color: white !important;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    border-radius: 50% !important;
+    font-family: 'Microsoft JhengHei', 'PingFang TC', 'Hiragino Sans GB', sans-serif !important;
+}

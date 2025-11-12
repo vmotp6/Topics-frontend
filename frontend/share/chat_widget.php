@@ -53,6 +53,13 @@ $isLoggedIn = isset($_SESSION['username']);
 
 <!-- 聊天室樣式 -->
 <style>
+/* 隱藏小聊天室 */
+#chat-float-btn,
+#chat-box {
+  display: none !important;
+  visibility: hidden !important;
+}
+
 /* 浮動聊天按鈕 */
 #chat-float-btn {
   position: fixed;
@@ -63,7 +70,7 @@ $isLoggedIn = isset($_SESSION['username']);
   background: linear-gradient(135deg, #00bcd4, #0097a7);
   color: white;
   border-radius: 50%;
-  display: flex;
+  display: none !important;
   align-items: center;
   justify-content: center;
   font-size: 24px;

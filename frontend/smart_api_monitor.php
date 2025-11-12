@@ -219,7 +219,7 @@ $monitor_script = '<?php
 require_once "session_config.php";
 
 // 資料庫連接
-$host = "localhost";
+$host = 'localhost';
 $dbname = "topics_good";
 $db_username = "root";
 $db_password = "";
@@ -307,7 +307,7 @@ $update_script = '<?php
 require_once "session_config.php";
 
 // 資料庫連接
-$host = "localhost";
+$host = 'localhost';
 $dbname = "topics_good";
 $db_username = "root";
 $db_password = "";
@@ -442,7 +442,7 @@ try {
     $pdo->beginTransaction();
     
     // 清空現有資料
-    $pdo->exec("DELETE FROM school_data WHERE type = \"國民中學\"");
+    $pdo->exec("DELETE FROM school_data WHERE type = "國民中學"");
     
     // 準備插入語句
     $stmt = $pdo->prepare("
