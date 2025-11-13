@@ -926,7 +926,6 @@ try {
           noChatSelected.classList.add('hidden');
         }
         
-<<<<<<< HEAD
         // 立即清除該聯絡人的未讀徽章（即時回饋，不等待API響應）
         const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${newUserId}"]`);
         if (contactBadge) {
@@ -1028,7 +1027,6 @@ try {
           const loadTime = performance.now() - startTime;
           console.log(`聊天記錄載入完成，耗時: ${loadTime.toFixed(2)}ms`);
         } else {
-<<<<<<< HEAD
           console.error('載入聊天記錄失敗:', result.error || result);
           if (chatMessages) {
           chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
@@ -1082,7 +1080,6 @@ try {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-<<<<<<< HEAD
         
         // 檢查訊息是否包含圖片URL，並正確處理
         let messageText = message.message || '';
@@ -1297,7 +1294,6 @@ try {
           
           if (result.success) {
             input.value = '';
-<<<<<<< HEAD
             console.log('訊息發送成功:', result);
             
             // 如果有保存的訊息資料，直接添加到顯示中
@@ -1395,7 +1391,6 @@ try {
       }
     }
     
-<<<<<<< HEAD
     // 標記聯絡人的所有未讀訊息為已讀
     async function markContactMessagesAsRead(contactUsername) {
       try {
@@ -1848,7 +1843,6 @@ try {
           
           if (result.success && result.messages) {
             // 檢查是否有新訊息
-<<<<<<< HEAD
             const currentMaxId = result.messages.length > 0 ? Math.max(...result.messages.map(m => parseInt(m.id) || 0)) : 0;
             if (currentMaxId > lastMessageId) {
               // 有新訊息，更新顯示

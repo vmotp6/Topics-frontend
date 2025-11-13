@@ -166,3 +166,4 @@ mysql -u root -p
 3. 檢查系統事件日誌（`eventvwr.msc`）
 
 
+
