@@ -12,54 +12,29 @@ require_once 'config.php';
     <link rel="stylesheet" href="assets/css/maps.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
+<body class="custom-spacing">
     <?php include 'share/header.php'; ?>
     
-    <div class="container">
-        <div class="page-header">
-            <h1><i class="fas fa-map-marked-alt"></i> 康寧大學校園地圖</h1>
-            <p>探索康寧大學各校區位置，了解校園環境與周邊設施</p>
-        </div>
-
+    <div class="map-page-container">
         <div class="maps-container">
-            <!-- 地圖控制面板 -->
-            <div class="maps-controls">
-                <div class="control-group">
-                    <label for="campus-select">選擇校區：</label>
-                    <select id="campus-select" class="form-control">
-                        <option value="all">所有校區</option>
-                        <option value="main_campus">校本部</option>
-                        <option value="tamsui_campus">淡水校區</option>
-                    </select>
-                </div>
-                
-                <div class="control-group">
-                    <label for="search-input">搜尋地址：</label>
-                    <div class="search-container">
-                        <input type="text" id="search-input" class="form-control" placeholder="輸入地址或地點...">
-                        <button id="search-btn" class="btn btn-primary">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="control-group">
-                    <label>交通方式：</label>
-                    <div class="transport-modes">
-                        <button class="transport-btn active" data-mode="driving">
-                            <i class="fas fa-car"></i> 開車
-                        </button>
-                        <button class="transport-btn" data-mode="transit">
-                            <i class="fas fa-bus"></i> 大眾運輸
-                        </button>
-                        <button class="transport-btn" data-mode="walking">
-                            <i class="fas fa-walking"></i> 步行
-                        </button>
-                    </div>
-                </div>
+
+            <!-- 浮動控制按鈕 -->
+            <div class="floating-controls">
+                <button id="show-restaurants-btn" class="floating-btn" title="附近餐廳">
+                    <i class="fas fa-utensils"></i>
+                    <span>附近餐廳</span>
+                </button>
+                <button id="show-campus-info-btn" class="floating-btn active" title="校園資訊">
+                    <i class="fas fa-info-circle"></i>
+                    <span>校園資訊</span>
+                </button>
+                <button id="get-directions-btn" class="floating-btn" title="規劃路線">
+                    <i class="fas fa-route"></i>
+                    <span>規劃路線</span>
+                </button>
             </div>
 
-            <!-- 地圖容器 -->
+            <!-- 地圖容器 - 全寬顯示，類似 Google Maps -->
             <div class="map-container">
                 <div id="map" class="google-map"></div>
                 <div id="map-loading" class="map-loading">
@@ -69,11 +44,18 @@ require_once 'config.php';
                 <!-- 備用靜態地圖 -->
                 <div id="static-map" class="static-map" style="display: none;">
                     <div class="static-map-content">
-                        <h3><i class="fas fa-map-marker-alt"></i> 康寧大學校本部</h3>
+                        <h3><i class="fas fa-map-marker-alt"></i> 康寧大學台北校區</h3>
                         <p><strong>地址：</strong>台北市內湖區康寧路三段75巷137號</p>
                         <p><strong>座標：</strong>25.07575358359577, 121.60949282881778</p>
                         <div class="static-map-image">
-                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=25.07575358359577,121.60949282881778&zoom=15&size=600x400&markers=color:red%7C25.07575358359577,121.60949282881778&key=<?php echo getenv("GOOGLE_MAPS_API_KEY") ?: ""; ?>" 
+                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=25.07575358359577,121.60949282881778&zoom=15&size=600x400&markers=color:red%7C25.07575358359577,121.60949282881778&key=<?php 
+                                // 確保載入 config.php
+                                if (!defined('GOOGLE_MAPS_API_KEY')) {
+                                    require_once __DIR__ . '/config.php';
+                                }
+                                $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : '';
+                                echo htmlspecialchars($apiKey, ENT_QUOTES, 'UTF-8');
+                            ?>" 
                                  alt="康寧大學地圖" 
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                             <div class="map-placeholder" style="display: none;">
@@ -86,29 +68,47 @@ require_once 'config.php';
                 </div>
             </div>
 
-            <!-- 地圖資訊面板 -->
-            <div class="map-info-panel">
-                <div class="info-header">
-                    <h3><i class="fas fa-info-circle"></i> 校園資訊</h3>
+            <!-- 側邊資訊面板 - 可收合 -->
+            <div id="side-panel" class="side-panel">
+                <div class="panel-header">
+                    <h3 id="panel-title"><i class="fas fa-info-circle"></i> 校園資訊</h3>
+                    <button id="close-panel-btn" class="close-panel-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div id="campus-info" class="campus-info">
-                    <div class="campus-card">
-                        <h4>康寧大學校本部</h4>
-                        <p><i class="fas fa-map-marker-alt"></i> 台北市內湖區康寧路三段75巷137號</p>
-                        <p><i class="fas fa-phone"></i> (02) 2632-1181</p>
-                        <p><i class="fas fa-globe"></i> <a href="https://www.ukn.edu.tw" target="_blank">www.ukn.edu.tw</a></p>
-                        <div class="campus-features">
-                            <span class="feature-tag">圖書館</span>
-                            <span class="feature-tag">體育館</span>
-                            <span class="feature-tag">餐廳</span>
-                            <span class="feature-tag">停車場</span>
+                <div class="panel-content">
+                    <!-- 校園資訊 -->
+                    <div id="campus-info" class="campus-info">
+                        <div class="campus-card">
+                            <h4><i class="fas fa-university"></i> 康寧大學台北校區</h4>
+                            <p><i class="fas fa-map-marker-alt"></i> 台北市內湖區康寧路三段75巷137號</p>
+                            <p><i class="fas fa-phone"></i> (02) 2632-1181</p>
+                            <p><i class="fas fa-globe"></i> <a href="https://www.ukn.edu.tw" target="_blank">www.ukn.edu.tw</a></p>
+                            <div class="campus-features">
+                                <span class="feature-tag"><i class="fas fa-book"></i> 圖書館</span>
+                                <span class="feature-tag"><i class="fas fa-dumbbell"></i> 體育館</span>
+                                <span class="feature-tag"><i class="fas fa-utensils"></i> 餐廳</span>
+                                <span class="feature-tag"><i class="fas fa-car"></i> 停車場</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div id="directions-info" class="directions-info" style="display: none;">
-                    <h4><i class="fas fa-route"></i> 路線規劃</h4>
-                    <div id="directions-content"></div>
+                    
+                    <!-- 附近餐廳列表 -->
+                    <div id="restaurants-list" class="restaurants-list" style="display: none;">
+                        <div class="restaurants-header">
+                            <h4><i class="fas fa-utensils"></i> 附近餐廳</h4>
+                            <span id="restaurants-count" class="restaurants-count"></span>
+                        </div>
+                        <div id="restaurants-content" class="restaurants-content">
+                            <p class="loading-text">正在搜尋附近餐廳...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 路線規劃 -->
+                    <div id="directions-info" class="directions-info" style="display: none;">
+                        <h4><i class="fas fa-route"></i> 路線規劃</h4>
+                        <div id="directions-content"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -168,36 +168,49 @@ require_once 'config.php';
 
     <!-- Google Maps API -->
     <script>
-        // 從後端獲取 Google Maps API Key，或從 URL 參數獲取
+        // 從後端獲取 Google Maps API Key
         const GOOGLE_MAPS_API_KEY = '<?php 
-            $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv("GOOGLE_MAPS_API_KEY") ?: "");
+            // 確保載入 config.php
+            if (!defined('GOOGLE_MAPS_API_KEY')) {
+                require_once __DIR__ . '/config.php';
+            }
+            $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : '';
             if (empty($apiKey) && isset($_GET['key'])) {
                 $apiKey = $_GET['key'];
             }
-            echo $apiKey;
+            echo htmlspecialchars($apiKey, ENT_QUOTES, 'UTF-8');
         ?>';
         
         // 調試輸出
-        console.log('API Key 長度:', GOOGLE_MAPS_API_KEY.length);
-        console.log('API Key 前5個字元:', GOOGLE_MAPS_API_KEY.substring(0, 5));
+        console.log('Google Maps API Key 已載入，長度:', GOOGLE_MAPS_API_KEY ? GOOGLE_MAPS_API_KEY.length : 0);
         
         // 如果沒有 API Key，顯示提示訊息
-        if (!GOOGLE_MAPS_API_KEY) {
+        if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY.trim() === '') {
             console.warn('Google Maps API Key 未設定，地圖功能可能無法正常使用');
             console.log('請在網址加上 ?key=你的API_KEY 來測試地圖功能');
             // 顯示靜態地圖
             document.addEventListener('DOMContentLoaded', function() {
-                document.getElementById('map-loading').style.display = 'none';
-                document.getElementById('static-map').style.display = 'flex';
+                const loadingElement = document.getElementById('map-loading');
+                const staticMapElement = document.getElementById('static-map');
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
+                if (staticMapElement) {
+                    staticMapElement.style.display = 'flex';
+                }
             });
         }
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=<?php 
-        $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv("GOOGLE_MAPS_API_KEY") ?: "");
+        // 確保載入 config.php
+        if (!defined('GOOGLE_MAPS_API_KEY')) {
+            require_once __DIR__ . '/config.php';
+        }
+        $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : '';
         if (empty($apiKey) && isset($_GET['key'])) {
             $apiKey = $_GET['key'];
         }
-        echo $apiKey;
+        echo htmlspecialchars($apiKey, ENT_QUOTES, 'UTF-8');
     ?>&libraries=places&language=zh-TW&region=TW&callback=initMap" async defer></script>
     <script src="assets/js/maps.js"></script>
 </body>
