@@ -1045,10 +1045,7 @@ function getActiveClass($targetFile) {
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
     <?php endif; ?>
-<<<<<<< HEAD
     
-=======
->>>>>>> ce7476d4adf78a47a832e5829f6694274152cd28
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>

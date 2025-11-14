@@ -223,3 +223,4 @@ SELECT '🔍 可以使用以下查詢檢查表結構：' AS info;
 SELECT '   SHOW CREATE TABLE junior_school_recruitment_applications;' AS query;
 
 
+

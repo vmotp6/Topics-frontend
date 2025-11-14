@@ -330,6 +330,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
     <title>國中學校招生申請 - 康寧大學</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/admission.css">
+    <link rel="stylesheet" href="assets/css/maps.css">
     <style>
         .recruitment-container {
             max-width: 900px;
@@ -477,6 +478,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+        
     </style>
 </head>
 <body>
@@ -1120,6 +1122,7 @@ function refreshCaptcha() {
         captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
     }
 }
+
 </script>
 </body>
 </html>
