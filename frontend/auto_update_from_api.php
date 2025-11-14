@@ -4,6 +4,13 @@
  * 當API恢復時自動執行
  */
 
+// 增加執行時間限制到 10 分鐘（600秒）
+set_time_limit(600);
+ini_set('max_execution_time', 600);
+
+// 增加記憶體限制
+ini_set('memory_limit', '256M');
+
 require_once "session_config.php";
 
 // 資料庫連接
@@ -15,6 +22,8 @@ $db_password = "";
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // 增加資料庫連接超時時間
+    $pdo->setAttribute(PDO::ATTR_TIMEOUT, 300);
 } catch(PDOException $e) {
     error_log("自動更新 - 資料庫連接失敗: " . $e->getMessage());
     exit(1);
@@ -142,39 +151,69 @@ try {
     $pdo->beginTransaction();
     
     // 清空現有資料
+    logUpdate("開始清空現有資料...");
     $pdo->exec("DELETE FROM school_data WHERE type = '國民中學'");
+    logUpdate("現有資料已清空");
     
-    // 準備插入語句
-    $stmt = $pdo->prepare("
-        INSERT INTO school_data (
+    // 批量插入優化（每批 100 筆）
+    $batch_size = 100;
+    $total = count($schools);
+    $inserted_count = 0;
+    $batch_count = 0;
+    
+    logUpdate("開始批量插入資料，總共 $total 筆，每批 $batch_size 筆");
+    
+    for ($i = 0; $i < $total; $i += $batch_size) {
+        $batch = array_slice($schools, $i, $batch_size);
+        $batch_count++;
+        
+        // 構建批量插入 SQL
+        $values = [];
+        $params = [];
+        foreach ($batch as $school) {
+            $values[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $params[] = $school["name"];
+            $params[] = $school["city"];
+            $params[] = $school["district"];
+            $params[] = $school["type"];
+            $params[] = $school["school_code"];
+            $params[] = $school["address"];
+            $params[] = $school["phone"];
+            $params[] = $school["website"];
+            $params[] = $school["is_active"];
+            $params[] = $school["data_source"];
+        }
+        
+        $sql = "INSERT INTO school_data (
             name, city, district, type, school_code, 
             address, phone, website, is_active, data_source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    
-    $inserted_count = 0;
-    foreach ($schools as $school) {
-        $stmt->execute([
-            $school["name"],
-            $school["city"],
-            $school["district"],
-            $school["type"],
-            $school["school_code"],
-            $school["address"],
-            $school["phone"],
-            $school["website"],
-            $school["is_active"],
-            $school["data_source"]
-        ]);
-        $inserted_count++;
+        ) VALUES " . implode(", ", $values);
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $inserted_count += count($batch);
+        
+        // 記錄進度
+        if ($batch_count % 5 == 0 || $i + $batch_size >= $total) {
+            $progress = round(($inserted_count / $total) * 100, 1);
+            logUpdate("進度: $inserted_count/$total ($progress%) - 已處理 $batch_count 批");
+        }
+        
+        // 每批處理後稍作休息，避免資料庫鎖定
+        if ($i + $batch_size < $total) {
+            usleep(50000); // 0.05 秒，減少鎖定時間
+        }
     }
     
     $pdo->commit();
-    logUpdate("✅ 成功更新 $inserted_count 所國民中學到資料庫");
+    logUpdate("✅ 成功更新 $inserted_count 所國民中學到資料庫（共 $batch_count 批）");
     
 } catch (PDOException $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     logUpdate("❌ 資料庫更新失敗: " . $e->getMessage());
+    error_log("自動更新資料庫錯誤: " . $e->getMessage());
     exit(1);
 }
 

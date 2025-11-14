@@ -95,12 +95,40 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
                                    suggestion = ?
                                    WHERE id = ? AND teacher_id = ?";
                     
+                    // 讀取活動類型選項，將名稱轉換為代碼
+                    $activity_type_options_map = [];
+                    $activity_type_options_query = "SELECT code, name FROM activity_type_options WHERE is_active = 1";
+                    $activity_type_options_result = $conn->query($activity_type_options_query);
+                    if ($activity_type_options_result) {
+                        while ($row = $activity_type_options_result->fetch_assoc()) {
+                            $activity_type_options_map[$row['code']] = $row['name'];
+                        }
+                    }
+                    
+                    // 將活動類型轉換為代碼
+                    $activity_type_code = $_POST['activity_type'];
+                    if (!empty($activity_type_options_map)) {
+                        // 檢查是否為名稱，如果是則轉換為代碼
+                        $code_found = false;
+                        foreach ($activity_type_options_map as $code => $name) {
+                            if ($name === $_POST['activity_type']) {
+                                $activity_type_code = $code;
+                                $code_found = true;
+                                break;
+                            }
+                        }
+                        // 如果找不到對應的代碼，且不是代碼格式，保留原值（向後兼容）
+                        if (!$code_found && !isset($activity_type_options_map[$_POST['activity_type']])) {
+                            $activity_type_code = $_POST['activity_type'];
+                        }
+                    }
+                    
                     $update_stmt = $conn->prepare($update_sql);
                     if ($update_stmt) {
                         $update_stmt->bind_param("sssssii", 
                             $_POST['activity_date'],
                             $_POST['school_name'],
-                            $_POST['activity_type'],
+                            $activity_type_code, // 存儲代碼而不是名稱
                             $_POST['activity_time'],
                             $_POST['suggestion'],
                             $record_id,
@@ -161,6 +189,18 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
 
         if ($records_result) {
             while ($row = $records_result->fetch_assoc()) {
+                // 轉換 participants 代碼為名稱
+                if (!empty($row['participants'])) {
+                    $row['participants_display'] = convertParticipantCodesToNames($row['participants'], $conn);
+                } else {
+                    $row['participants_display'] = '';
+                }
+                // 轉換 activity_type 代碼為名稱
+                if (!empty($row['activity_type'])) {
+                    $row['activity_type_display'] = convertActivityTypeCodeToName($row['activity_type'], $conn);
+                } else {
+                    $row['activity_type_display'] = '';
+                }
                 $activity_records[] = $row;
             }
         }
@@ -191,11 +231,40 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
         
         if ($records_result) {
             while ($row = $records_result->fetch_assoc()) {
+                // 轉換 participants 代碼為名稱
+                if (!empty($row['participants'])) {
+                    $row['participants_display'] = convertParticipantCodesToNames($row['participants'], $conn);
+                } else {
+                    $row['participants_display'] = '';
+                }
+                // 轉換 activity_type 代碼為名稱
+                if (!empty($row['activity_type'])) {
+                    $row['activity_type_display'] = convertActivityTypeCodeToName($row['activity_type'], $conn);
+                } else {
+                    $row['activity_type_display'] = '';
+                }
                 $activity_records[] = $row;
             }
         }
         $records_stmt->close();
     }
+}
+
+// 讀取活動類型選項，用於編輯表單
+$activity_type_options = [];
+$activity_type_options_query = "SELECT code, name FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
+$activity_type_options_result = $conn->query($activity_type_options_query);
+if ($activity_type_options_result) {
+    while ($row = $activity_type_options_result->fetch_assoc()) {
+        $activity_type_options[] = $row;
+    }
+} else {
+    // 如果表不存在，使用預設選項（向後兼容）
+    $activity_type_options = [
+        ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗'],
+        ['code' => 'TYPE_OFF_CAMPUS', 'name' => '校外參訪'],
+        ['code' => 'TYPE_LECTURE', 'name' => '講座分享']
+    ];
 }
 
 $conn->close();
@@ -212,7 +281,6 @@ $conn->close();
     <title>活動記錄管理系統</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/records.css">
-<<<<<<< HEAD
     <style>
          .management-container {
              max-width: 1200px;
@@ -506,9 +574,6 @@ $conn->close();
          }
          
     </style>
-=======
-    <link rel="stylesheet" href="assets/csp/activity_records_management.css">
->>>>>>> 9e216731cdb08f4b37bc5fa33d9b45a117cad662
 </head>
 
 <?php include("share/header.php"); ?>
@@ -683,11 +748,11 @@ $conn->close();
                         <?php foreach ($activity_records as $record): ?>
                             <tr class="record-row">
                                 <td><?php echo htmlspecialchars($record['activity_date']); ?></td>
-                                <td><?php echo htmlspecialchars($record['teacher_name'] ?? '—'); ?></td>
-                                 <td><?php echo htmlspecialchars($record['teacher_department'] ?? '—'); ?></td>
+                                <td><?php echo htmlspecialchars($record['teacher_name_display'] ?? $record['teacher_name'] ?? '—'); ?></td>
+                                 <td><?php echo htmlspecialchars($record['teacher_department_display'] ?? $record['teacher_department'] ?? '—'); ?></td>
                                 <td><?php echo htmlspecialchars($record['school_name']); ?></td>
                                 <td>
-                                    <span class="activity-type"><?php echo htmlspecialchars($record['activity_type']); ?></span>
+                                    <span class="activity-type"><?php echo htmlspecialchars($record['activity_type_display'] ?? convertActivityTypeCodeToName($record['activity_type'], $conn)); ?></span>
                                 </td>
                                 <td><?php echo htmlspecialchars($record['activity_time']); ?></td>
                                 <td><?php echo date('Y/m/d H:i', strtotime($record['created_at'] ?? $record['activity_date'])); ?></td>
@@ -743,6 +808,7 @@ $conn->close();
     <script>
         // 記錄資料 (轉為JavaScript可用格式)
         const activityRecords = <?php echo json_encode($activity_records); ?>;
+        const activityTypeOptions = <?php echo json_encode($activity_type_options); ?>;
         
         // 篩選記錄功能
         function filterRecords() {
@@ -799,15 +865,15 @@ $conn->close();
             modalBody.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                     <div><strong>活動日期:</strong><br>${record.activity_date}</div>
-                    <div><strong>教師單位:</strong><br>${record.teacher_department}</div>
-                    <div><strong>教師姓名:</strong><br>${record.teacher_name}</div>
+                    <div><strong>教師單位:</strong><br>${record.teacher_department_display || record.teacher_department || '—'}</div>
+                    <div><strong>教師姓名:</strong><br>${record.teacher_name_display || record.teacher_name || '—'}</div>
                     <div><strong>學校名稱:</strong><br>${record.school_name}</div>
                     <div><strong>聯絡窗口:</strong><br>${record.contact_person || '未填寫'}</div>
                     <div><strong>聯絡電話:</strong><br>${record.contact_phone || '未填寫'}</div>
-                    <div><strong>活動性質:</strong><br>${record.activity_type}</div>
+                    <div><strong>活動性質:</strong><br>${record.activity_type_display || record.activity_type || '—'}</div>
                     <div><strong>活動時間:</strong><br>${record.activity_time}</div>
                 </div>
-                ${record.participants ? `<div style="margin-top: 15px;"><strong>參與對象:</strong><br>${record.participants}</div>` : ''}
+                ${record.participants_display ? `<div style="margin-top: 15px;"><strong>參與對象:</strong><br>${record.participants_display}</div>` : ''}
                 ${record.activity_feedback ? `<div style="margin-top: 15px;"><strong>活動紀錄:</strong><br>${record.activity_feedback}</div>` : ''}
                 ${record.suggestion ? `<div style="margin-top: 15px;"><strong>檢討與建議:</strong><br>${record.suggestion}</div>` : ''}
             `;
@@ -841,9 +907,9 @@ $conn->close();
                         <div>
                             <label><strong>活動性質:</strong></label>
                             <select name="activity_type" required style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
-                                <option value="來校體驗" ${record.activity_type === '來校體驗' ? 'selected' : ''}>來校體驗</option>
-                                <option value="校外參訪" ${record.activity_type === '校外參訪' ? 'selected' : ''}>校外參訪</option>
-                                <option value="講座分享" ${record.activity_type === '講座分享' ? 'selected' : ''}>講座分享</option>
+                                ${activityTypeOptions.map(option => 
+                                    `<option value="${option.code}" ${record.activity_type === option.code || record.activity_type === option.name ? 'selected' : ''}>${option.name}</option>`
+                                ).join('')}
                             </select>
                         </div>
                         <div>

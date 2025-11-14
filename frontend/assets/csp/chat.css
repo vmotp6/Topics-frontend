@@ -80,6 +80,7 @@ body::before {
   background: #f8f9fa;
   border-right: 1px solid #e9ecef;
   overflow-y: auto;
+  overflow-x: visible; /* 允許橫向溢出，讓徽章不被裁剪 */
   position: relative;
 }
 
@@ -151,6 +152,8 @@ body::before {
   padding: 0;
   margin: 0;
   list-style: none;
+  overflow: visible; /* 確保未讀徽章不被裁剪 */
+  position: relative;
 }
 
 .user-item {
@@ -161,11 +164,12 @@ body::before {
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible !important; /* 強制 visible 讓未讀徽章不被裁剪 */
   margin: 5px 10px;
   border-radius: 12px;
   background: #ffffff;
   border: 1px solid #e9ecef;
+  z-index: 1; /* 確保在正確的層級 */
 }
 
 .user-item::before {
@@ -235,52 +239,85 @@ body::before {
     0 0 0 2px rgba(255, 255, 255, 0.2);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: visible; /* 改為 visible 讓徽章能顯示在頭像外 */
+  overflow: visible !important; /* 強制 visible 讓徽章能顯示在頭像外 */
   border: 2px solid rgba(255, 255, 255, 0.3);
+  /* 移除 z-index，避免創建堆疊上下文，讓徽章可以顯示在最上層 */
+}
+
+/* 確保頭像內的圖片和文字不會遮擋徽章 */
+.user-avatar img,
+.user-avatar .avatar-img {
+  position: relative;
+  z-index: 0 !important; /* 強制在徽章下方 */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.user-avatar .avatar-text {
+  position: relative;
+  z-index: 0 !important; /* 強制在徽章下方 */
 }
 
 /* 未讀訊息徽章樣式 - 精美現代化設計 */
+/* 徽章現在在 user-item 層級，相對於 user-item 定位 */
 .unread-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff4757 100%);
-  color: white;
+  /* 精確計算：user-item padding-left: 25px, user-avatar width: 60px, margin-right: 20px */
+  /* 頭像右邊緣位置：25px (padding) + 60px (avatar width) = 85px */
+  /* user-info 從 25px + 60px + 20px = 105px 開始 */
+  /* 徽章寬度約 20px，讓徽章重疊一點在頭像右上角，右邊緣不超過 100px，避免遮擋使用者名稱 */
+  /* left = 73px，徽章右邊緣在 93px，不會遮擋文字（105px開始） */
+  left: 73px !important; /* 重疊在頭像右上角，但不遮擋使用者名稱 */
+  /* user-item padding-top: 20px, 頭像頂部在 20px，徽章要重疊在頭像頂部外側 */
+  /* 讓徽章稍微重疊在頭像上方 */
+  top: 6px !important; /* 稍微重疊在頭像頂部外側 */
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff4757 100%) !important;
+  color: white !important;
   border-radius: 10px;
-  min-width: 18px;
-  height: 18px;
-  font-size: 10px;
+  min-width: 20px; /* 稍微增大尺寸，更容易看到 */
+  height: 20px; /* 稍微增大尺寸，更容易看到 */
+  font-size: 11px; /* 稍微增大字體 */
   display: none;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
+  padding: 0 5px;
   font-weight: 700;
-  border: 2px solid #ffffff;
+  border: 2.5px solid #ffffff !important; /* 稍微增大邊框 */
   box-shadow: 
-    0 2px 8px rgba(255, 71, 87, 0.5),
-    0 1px 3px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  z-index: 100;
+    0 3px 10px rgba(255, 71, 87, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  z-index: 999999 !important; /* 極高的 z-index 確保在最上層 */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.1;
   letter-spacing: -0.1px;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  pointer-events: none !important; /* 防止徽章阻擋點擊事件 */
+  transform: translateZ(0); /* 啟用硬件加速，創建新的堆疊上下文 */
+  /* 確保徽章在獨立的堆疊上下文中，顯示在最上層 */
+  will-change: transform, opacity;
+  /* 使用 isolation 創建新的堆疊上下文，確保不受父元素影響 */
+  isolation: isolate;
 }
 
 /* 單個數字時使用圓形 */
 .unread-badge[data-count="1"] {
-  min-width: 18px;
-  max-width: 18px;
+  min-width: 20px;
+  max-width: 20px;
+  height: 20px;
   padding: 0;
   border-radius: 50%;
 }
 
 /* 多個數字時使用圓角矩形 */
 .unread-badge[data-count]:not([data-count="1"]) {
-  border-radius: 9px;
-  padding: 0 4px;
-  min-width: 18px;
+  border-radius: 10px;
+  padding: 0 5px;
+  min-width: 20px;
+  height: 20px;
 }
 
 .unread-badge.show {
@@ -362,6 +399,8 @@ body::before {
   background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  z-index: -1 !important; /* 強制確保 ::before 在徽章下方 */
+  pointer-events: none !important; /* 防止阻擋點擊 */
 }
 
 .user-item:hover .user-avatar {
@@ -386,6 +425,10 @@ body::before {
   margin-bottom: 6px;
   font-size: 15px;
   transition: color 0.3s ease;
+  /* 為未讀徽章預留空間，避免被遮擋 */
+  padding-left: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .user-item:hover .user-name {

@@ -66,7 +66,10 @@ try {
             $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $contacts = array_merge($contacts, $sameDeptTeachers);
             
-            // 獲取所有學生（包含頭像）
+            // 獲取所有學生（包含頭像）- 從 student 表和 user 表獲取
+            $studentUsernames = [];
+            
+            // 先從 student 表獲取學生
             try {
                 $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, u.profile_picture, '學生' as contact_type, s.grade, s.class_name
                                       FROM student s 
@@ -76,15 +79,133 @@ try {
                 $stmt->execute();
                 $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $contacts = array_merge($contacts, $allStudents);
+                // 記錄已獲取的學生 username
+                foreach ($allStudents as $student) {
+                    $studentUsernames[] = $student['username'];
+                }
             } catch (PDOException $e) {
-                // 如果學生表不存在或結構不同，使用用戶表（包含頭像）
-                $stmt = $pdo->prepare("SELECT u.id as user_id, u.username as name, '未設定' as department, u.username, u.profile_picture, '學生' as contact_type, '未設定' as grade, '未設定' as class_name
-                                      FROM user u 
-                                      WHERE u.role = '學生'
-                                      ORDER BY u.username");
-                $stmt->execute();
-                $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $contacts = array_merge($contacts, $allStudents);
+                // 如果學生表不存在，跳過
+            }
+            
+            // 從 user 表獲取所有學生（包括 student 表中沒有的）
+            // 這樣可以確保所有有未讀消息的用戶都會顯示
+            $stmt = $pdo->prepare("SELECT u.id as user_id, 
+                                          COALESCE(s.name, u.username) as name, 
+                                          COALESCE(s.department, '未設定') as department, 
+                                          u.username, 
+                                          u.profile_picture, 
+                                          '學生' as contact_type, 
+                                          COALESCE(s.grade, '未設定') as grade, 
+                                          COALESCE(s.class_name, '未設定') as class_name
+                                   FROM user u 
+                                   LEFT JOIN student s ON u.id = s.user_id
+                                   WHERE u.role = '學生'
+                                   ORDER BY COALESCE(s.department, '未設定'), COALESCE(s.grade, '未設定'), COALESCE(s.name, u.username)");
+            $stmt->execute();
+            $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 合併所有用戶（避免重複）
+            foreach ($allUsers as $user) {
+                if (!in_array($user['username'], $studentUsernames)) {
+                    $contacts[] = $user;
+                }
+            }
+            
+            // 獲取所有有未讀消息的用戶（包括不在 student 或 teacher 表中的）
+            // 這樣可以確保所有有未讀消息的用戶都會顯示在聯絡人列表中
+            try {
+                // 檢查表結構，判斷使用哪種查詢方式
+                $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                    WHERE TABLE_SCHEMA = 'topics_good' 
+                                    AND TABLE_NAME = 'private_chat_history' 
+                                    AND COLUMN_NAME IN ('from_user', 'to_user', 'from_user_id', 'to_user_id')");
+                $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
+                
+                // 檢查是否有 is_read 欄位
+                $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                    WHERE TABLE_SCHEMA = 'topics_good' 
+                                    AND TABLE_NAME = 'private_chat_history' 
+                                    AND COLUMN_NAME = 'is_read'");
+                $hasIsRead = $stmt->rowCount() > 0;
+                
+                if ($useUserId) {
+                    // 使用正規化版本（user_id）
+                    $stmt = $pdo->prepare("SELECT u.id FROM user WHERE username = ?");
+                    $stmt->execute([$username]);
+                    $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $currentUserId = $currentUser ? $currentUser['id'] : null;
+                    
+                    if ($currentUserId) {
+                        $sql = "SELECT DISTINCT u.id as user_id,
+                                    COALESCE(s.name, t.name, u.username) as name,
+                                    COALESCE(s.department, t.department, '未設定') as department,
+                                    u.username,
+                                    u.profile_picture,
+                                    CASE 
+                                        WHEN u.role = '學生' THEN '學生'
+                                        WHEN u.role = '老師' THEN '老師'
+                                        ELSE '其他'
+                                    END as contact_type,
+                                    COALESCE(s.grade, '未設定') as grade,
+                                    COALESCE(s.class_name, '未設定') as class_name
+                             FROM private_chat_history pch
+                             JOIN user u ON pch.from_user_id = u.id
+                             LEFT JOIN student s ON u.id = s.user_id
+                             LEFT JOIN teacher t ON u.id = t.user_id
+                             WHERE pch.to_user_id = ?
+                               AND u.id != ?";
+                        if ($hasIsRead) {
+                            $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
+                        }
+                        $sql .= " GROUP BY u.id, u.username";
+                        $stmt = $pdo->prepare($sql);
+                        $stmt->execute([$currentUserId, $currentUserId]);
+                    } else {
+                        $stmt = null;
+                    }
+                } else {
+                    // 使用舊版本（username）
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(s.name, t.name, u.username) as name,
+                                COALESCE(s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = '學生' THEN '學生'
+                                    WHEN u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                COALESCE(s.grade, '未設定') as grade,
+                                COALESCE(s.class_name, '未設定') as class_name
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user = u.username
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user = ?
+                           AND u.username != ?";
+                    if ($hasIsRead) {
+                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
+                    }
+                    $sql .= " GROUP BY u.id, u.username";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$username, $username]);
+                }
+                
+                if ($stmt) {
+                    $unreadContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // 合併到聯絡人列表（避免重複）
+                    $existingUsernames = array_column($contacts, 'username');
+                    foreach ($unreadContacts as $contact) {
+                        if (!in_array($contact['username'], $existingUsernames)) {
+                            $contacts[] = $contact;
+                        }
+                    }
+                }
+            } catch (PDOException $e) {
+                // 如果查詢失敗，記錄錯誤但不中斷
+                error_log("獲取未讀消息聯絡人失敗: " . $e->getMessage());
             }
         }
         
@@ -161,6 +282,8 @@ try {
                   }
                   ?>
                 </div>
+                <!-- 未讀訊息徽章 - 移到 user-item 層級，避免被頭像遮擋 -->
+                <span class="unread-badge" data-contact-id="<?php echo $contact['username']; ?>" style="display: none;"></span>
                 <div class="user-info">
                   <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                   <div class="user-role"><?php echo htmlspecialchars($contact['department']); ?></div>
@@ -235,7 +358,7 @@ try {
             <?php if (!empty($contacts)): ?>
               <?php foreach ($contacts as $contact): ?>
               <li class="user-item" data-user-id="<?php echo $contact['username']; ?>" data-user-name="<?php echo htmlspecialchars($contact['name']); ?>" data-chat-type="private" data-contact-type="<?php echo $contact['contact_type']; ?>" data-department="<?php echo htmlspecialchars($contact['department'] ?? ''); ?>" data-grade="<?php echo htmlspecialchars($contact['grade'] ?? ''); ?>" data-class="<?php echo htmlspecialchars($contact['class_name'] ?? ''); ?>">
-                <div class="user-avatar">
+                <div class="user-avatar" style="position: relative;">
                   <?php 
                   // 從資料庫獲取頭像
                   $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
@@ -258,6 +381,8 @@ try {
                   }
                   ?>
                 </div>
+                <!-- 未讀訊息徽章 - 移到 user-item 層級，避免被頭像遮擋 -->
+                <span class="unread-badge" data-contact-id="<?php echo $contact['username']; ?>" style="display: none;"></span>
                 <div class="user-info">
                   <div class="user-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                   <div class="user-role"><?php echo htmlspecialchars($contact['department'] ?? ''); ?></div>
@@ -338,6 +463,20 @@ try {
     let currentUserName = null;
     let currentChatType = 'private'; // 'private' 或 'group'
     let currentGroupId = null;
+    
+    // 檢查輸入框內容並更新發送按鈕狀態（提前定義，確保在所有地方都能使用）
+    function updateSendButtonState() {
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.querySelector('.chat-input button:not(#voiceRecordBtn)');
+      
+      if (messageInput && sendButton) {
+        const hasContent = messageInput.value.trim().length > 0;
+        const isInputEnabled = !messageInput.disabled;
+        
+        // 只有當輸入框啟用且有內容時，才啟用發送按鈕
+        sendButton.disabled = !isInputEnabled || !hasContent;
+      }
+    }
     let lastMessageId = 0;
     let messageCache = new Map(); // 快取聊天記錄
     
@@ -438,13 +577,16 @@ try {
       
       // 啟用輸入框
       const messageInput = document.getElementById('messageInput');
-      const sendButton = document.querySelector('.chat-input button');
+      const sendButton = document.querySelector('.chat-input button:not(#voiceRecordBtn)');
       if (messageInput) {
         messageInput.disabled = false;
       }
       if (sendButton) {
-        sendButton.disabled = false;
+        // 初始狀態：禁用發送按鈕（等待用戶輸入）
+        sendButton.disabled = true;
       }
+      // 更新按鈕狀態（檢查是否有內容）
+      updateSendButtonState();
       
       // 隱藏提示訊息
       const noChatSelected = document.querySelector('.no-chat-selected');
@@ -917,7 +1059,11 @@ try {
         
         // 啟用輸入框
         document.getElementById('messageInput').disabled = false;
-        document.querySelector('.chat-input button').disabled = false;
+        // 初始狀態：禁用發送按鈕（等待用戶輸入）
+        const sendButton = document.querySelector('.chat-input button:not(#voiceRecordBtn)');
+        if (sendButton) {
+            sendButton.disabled = true;
+        }
         updateVoiceButtonState();
         
         // 隱藏提示訊息
@@ -926,7 +1072,6 @@ try {
           noChatSelected.classList.add('hidden');
         }
         
-<<<<<<< HEAD
         // 立即清除該聯絡人的未讀徽章（即時回饋，不等待API響應）
         const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${newUserId}"]`);
         if (contactBadge) {
@@ -1028,7 +1173,6 @@ try {
           const loadTime = performance.now() - startTime;
           console.log(`聊天記錄載入完成，耗時: ${loadTime.toFixed(2)}ms`);
         } else {
-<<<<<<< HEAD
           console.error('載入聊天記錄失敗:', result.error || result);
           if (chatMessages) {
           chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">載入失敗: ' + (result.error || '未知錯誤') + '</div>';
@@ -1082,7 +1226,6 @@ try {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-<<<<<<< HEAD
         
         // 檢查訊息是否包含圖片URL，並正確處理
         let messageText = message.message || '';
@@ -1235,8 +1378,10 @@ try {
       
       if (!message) return;
       
-      const sendButton = document.querySelector('.chat-input button');
-      sendButton.disabled = true;
+      const sendButton = document.querySelector('.chat-input button:not(#voiceRecordBtn)');
+      if (sendButton) {
+        sendButton.disabled = true;
+      }
       
       try {
         if (currentChatType === 'group') {
@@ -1269,6 +1414,7 @@ try {
           
           if (result.success) {
             input.value = '';
+            updateSendButtonState(); // 清空後更新按鈕狀態
             console.log('群組訊息發送成功，重新載入聊天記錄');
             // 重新載入群組聊天記錄
             loadGroupChatHistory();
@@ -1297,7 +1443,7 @@ try {
           
           if (result.success) {
             input.value = '';
-<<<<<<< HEAD
+            updateSendButtonState(); // 清空後更新按鈕狀態
             console.log('訊息發送成功:', result);
             
             // 如果有保存的訊息資料，直接添加到顯示中
@@ -1367,7 +1513,8 @@ try {
         console.error('發送訊息失敗:', error);
         alert('發送失敗: ' + error.message);
       } finally {
-        sendButton.disabled = false;
+        // 發送完成後，根據輸入框內容更新按鈕狀態
+        updateSendButtonState();
       }
     }
     
@@ -1395,7 +1542,6 @@ try {
       }
     }
     
-<<<<<<< HEAD
     // 標記聯絡人的所有未讀訊息為已讀
     async function markContactMessagesAsRead(contactUsername) {
       try {
@@ -1554,6 +1700,60 @@ try {
       }
     }
     
+    // 更新所有聯絡人的未讀訊息數量
+    async function updateContactUnreadCounts() {
+      try {
+        const response = await fetch(`get_contact_unread_count.php?username=${encodeURIComponent(username)}`);
+        const result = await response.json();
+        
+        if (result.success && result.unread_counts) {
+          // 先隱藏所有徽章
+          document.querySelectorAll('.unread-badge').forEach(badge => {
+            badge.classList.remove('show', 'pulse', 'hiding');
+            badge.style.display = 'none';
+            badge.style.visibility = 'hidden';
+          });
+          
+          // 處理 unread_counts（可能是對象或數組）
+          let unreadCountsArray = [];
+          if (Array.isArray(result.unread_counts)) {
+            // 如果是數組，直接使用
+            unreadCountsArray = result.unread_counts;
+          } else if (typeof result.unread_counts === 'object' && result.unread_counts !== null) {
+            // 如果是對象，轉換為數組格式
+            unreadCountsArray = Object.keys(result.unread_counts).map(username => ({
+              username: username,
+              unread_count: result.unread_counts[username]
+            }));
+          }
+          
+          // 更新每個聯絡人的未讀數量
+          unreadCountsArray.forEach(item => {
+            const contactId = item.username || item.contact_id;
+            const unreadCount = parseInt(item.unread_count || 0);
+            
+            if (unreadCount > 0) {
+              const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactId}"]`);
+              if (contactBadge) {
+                contactBadge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+                contactBadge.setAttribute('data-count', unreadCount);
+                contactBadge.style.display = 'flex';
+                contactBadge.style.visibility = 'visible';
+                contactBadge.classList.add('show');
+                
+                // 如果未讀數量 > 0，添加脈衝動畫
+                if (unreadCount > 0) {
+                  contactBadge.classList.add('pulse');
+                }
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('更新聯絡人未讀數量失敗:', error);
+      }
+    }
+    
     // 更新用戶活動時間
     async function updateUserActivity() {
       try {
@@ -1705,12 +1905,28 @@ try {
       }
     }
     
-    // 按Enter發送訊息
-    document.getElementById('messageInput').addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        sendMessage();
+    // 監聽輸入框變化（在頁面載入時設置）
+    document.addEventListener('DOMContentLoaded', function() {
+      const messageInputForListener = document.getElementById('messageInput');
+      if (messageInputForListener) {
+        // 監聽 input 事件（實時更新）
+        messageInputForListener.addEventListener('input', updateSendButtonState);
+        // 監聽 paste 事件（貼上時也更新）
+        messageInputForListener.addEventListener('paste', function() {
+          setTimeout(updateSendButtonState, 10);
+        });
       }
     });
+    
+    // 按Enter發送訊息
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+      messageInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+    }
     
     // 語音錄製功能 - 類似LINE的開關模式
     function toggleVoiceRecording() {
@@ -1795,6 +2011,7 @@ try {
     // 初始化已讀功能
     updateUserActivity(); // 更新活動時間
     getUnreadCount(); // 獲取未讀數量
+    updateContactUnreadCounts(); // 更新聯絡人未讀數量
     
     // 初始化FCM推播通知
     initializeFCM();
@@ -1805,6 +2022,7 @@ try {
     // 定期更新未讀數量和活動時間（每30秒）
     setInterval(() => {
       getUnreadCount();
+      updateContactUnreadCounts(); // 定期更新聯絡人未讀數量
       updateUserActivity();
     }, 30000);
     
@@ -1848,7 +2066,6 @@ try {
           
           if (result.success && result.messages) {
             // 檢查是否有新訊息
-<<<<<<< HEAD
             const currentMaxId = result.messages.length > 0 ? Math.max(...result.messages.map(m => parseInt(m.id) || 0)) : 0;
             if (currentMaxId > lastMessageId) {
               // 有新訊息，更新顯示

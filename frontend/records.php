@@ -129,10 +129,14 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
     exit();
 }
 
-// 查詢該教師的活動記錄
+// 查詢該教師的活動記錄（通過 JOIN 獲取 teacher 名稱）
 $activity_records = [];
 if ($teacher_id) {
-    $records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY activity_date DESC, id DESC";
+    $records_sql = "SELECT ar.*, t.name AS teacher_name_display, t.department AS teacher_department_display
+                    FROM activity_records ar
+                    LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+                    WHERE ar.teacher_id = ? 
+                    ORDER BY ar.activity_date DESC, ar.id DESC";
     $records_stmt = $conn->prepare($records_sql);
     if ($records_stmt) {
         $records_stmt->bind_param("i", $teacher_id);
@@ -141,6 +145,7 @@ if ($teacher_id) {
         
         if ($records_result) {
             while ($row = $records_result->fetch_assoc()) {
+                // teacher_name 字段存儲的是代碼，teacher_name_display 是從 teacher 表 JOIN 來的名稱
                 $activity_records[] = $row;
             }
         }
@@ -148,13 +153,71 @@ if ($teacher_id) {
     }
 }
 
+// 從 participant_options 表讀取參與者選項
+$participants_options = [];
+$participants_options_map = []; // code => name 映射
+$participants_options_query = "SELECT code, name, category, display_order FROM participant_options WHERE is_active = 1 ORDER BY display_order, id";
+$participants_options_result = $conn->query($participants_options_query);
+if ($participants_options_result) {
+    while ($row = $participants_options_result->fetch_assoc()) {
+        $participants_options[] = $row;
+        $participants_options_map[$row['code']] = $row['name'];
+    }
+} else {
+    // 如果表不存在，使用預設選項（向後兼容）
+    $participants_options = [
+        ['code' => 'JHS_9', 'name' => '國中九年級', 'category' => '國中', 'display_order' => 3],
+        ['code' => 'JHS_8', 'name' => '國中八年級', 'category' => '國中', 'display_order' => 2],
+        ['code' => 'JHS_7', 'name' => '國中七年級', 'category' => '國中', 'display_order' => 1],
+        ['code' => 'SHS_3', 'name' => '高中三年級', 'category' => '高中', 'display_order' => 6],
+        ['code' => 'SHS_2', 'name' => '高中二年級', 'category' => '高中', 'display_order' => 5],
+        ['code' => 'SHS_1', 'name' => '高中一年級', 'category' => '高中', 'display_order' => 4],
+        ['code' => 'TEACHER', 'name' => '教師(職員工)', 'category' => '其他', 'display_order' => 7],
+        ['code' => 'PARENT', 'name' => '家長', 'category' => '其他', 'display_order' => 8],
+        ['code' => 'OTHER', 'name' => '其他', 'category' => '其他', 'display_order' => 9]
+    ];
+    foreach ($participants_options as $opt) {
+        $participants_options_map[$opt['code']] = $opt['name'];
+    }
+}
+
+// 從 activity_type_options 表讀取活動類型選項
+$activity_type_options = [];
+$activity_type_options_map = []; // code => name 映射
+$activity_type_options_query = "SELECT code, name, category, display_order FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
+$activity_type_options_result = $conn->query($activity_type_options_query);
+if ($activity_type_options_result) {
+    while ($row = $activity_type_options_result->fetch_assoc()) {
+        $activity_type_options[] = $row;
+        $activity_type_options_map[$row['code']] = $row['name'];
+    }
+} else {
+    // 如果表不存在，使用預設選項（向後兼容）
+    $activity_type_options = [
+        ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗', 'category' => '校內', 'display_order' => 1],
+        ['code' => 'TYPE_OFF_CAMPUS', 'name' => '校外參訪', 'category' => '校外', 'display_order' => 2],
+        ['code' => 'TYPE_LECTURE', 'name' => '講座分享', 'category' => '其他', 'display_order' => 3]
+    ];
+    foreach ($activity_type_options as $opt) {
+        $activity_type_options_map[$opt['code']] = $opt['name'];
+    }
+}
+
 $message = "";
 $messageType = "";
+
+// 檢查是否有成功提交的參數
+if (isset($_GET['success']) && $_GET['success'] == '1') {
+    $message = "資料已成功提交！";
+    $messageType = "success";
+    // 重新生成驗證碼
+    $_SESSION['captcha_code'] = generateCaptcha();
+}
 
 // 處理表單提交
 if ($_POST) {
     // 驗證必填欄位
-    $required_fields = ['activity_date', 'teacher_unit', 'teacher_name', 'school_name', 'activity_type', 'activity_time', 'captcha'];
+    $required_fields = ['activity_date', 'teacher_unit', 'school_name', 'activity_type', 'activity_time', 'captcha'];
     $missing_fields = [];
     
     foreach ($required_fields as $field) {
@@ -163,8 +226,8 @@ if ($_POST) {
         }
     }
     
-    // 驗證驗證碼
-    if (!isset($_SESSION['captcha_code']) || $_POST['captcha'] !== $_SESSION['captcha_code']) {
+    // 驗證驗證碼（不區分大小寫）
+    if (!isset($_SESSION['captcha_code']) || strtoupper(trim($_POST['captcha'])) !== strtoupper(trim($_SESSION['captcha_code']))) {
         $missing_fields[] = 'captcha_invalid';
     }
     
@@ -176,10 +239,27 @@ if ($_POST) {
     }
     
     if (empty($missing_fields)) {
-        // 處理參與對象多選
+        // 處理參與對象多選（使用代碼存儲）
         $participants = [];
         if (isset($_POST['participants'])) {
             $participants = $_POST['participants'];
+            // 處理「其他」選項：如果有自定義文字，存儲為 "OTHER:自定義文字"
+            if (isset($_POST['participants_other']) && !empty(trim($_POST['participants_other']))) {
+                $other_text = trim($_POST['participants_other']);
+                // 檢查是否有 OTHER 代碼被選中
+                $has_other = false;
+                foreach ($participants as $key => $code) {
+                    if ($code === 'OTHER') {
+                        $participants[$key] = 'OTHER:' . $other_text;
+                        $has_other = true;
+                        break;
+                    }
+                }
+                // 如果沒有 OTHER 但填寫了其他文字，添加它
+                if (!$has_other) {
+                    $participants[] = 'OTHER:' . $other_text;
+                }
+            }
         }
         $participants_str = implode(',', $participants);
         
@@ -219,18 +299,40 @@ if ($_POST) {
         $files_json = !empty($uploaded_files) ? json_encode($uploaded_files) : null;
         
         // 插入資料庫
-        $sql = "INSERT INTO activity_records (activity_date, teacher_unit, teacher_name, teacher_id, school_name, contact_person, contact_phone, activity_type, activity_time, participants, activity_feedback, suggestion, uploaded_files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // activity_type 字段存儲代碼，而不是名稱
+        // 顯示時通過 JOIN 相應表獲取名稱
+        // 注意：已移除 teacher_name 字段，只使用 teacher_id
+        $sql = "INSERT INTO activity_records (activity_date, teacher_unit, teacher_id, school_name, contact_person, contact_phone, activity_type, activity_time, participants, activity_feedback, suggestion, uploaded_files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sssisssssssss", 
+        
+        // activity_type 存儲代碼，如果提交的是名稱，則轉換為代碼
+        $activity_type_code = $_POST['activity_type'];
+        if (isset($activity_type_options_map) && !empty($activity_type_options_map)) {
+            // 檢查是否為名稱，如果是則轉換為代碼
+            $code_found = false;
+            foreach ($activity_type_options_map as $code => $name) {
+                if ($name === $_POST['activity_type']) {
+                    $activity_type_code = $code;
+                    $code_found = true;
+                    break;
+                }
+            }
+            // 如果找不到對應的代碼，且不是代碼格式，保留原值（向後兼容）
+            if (!$code_found && !isset($activity_type_options_map[$_POST['activity_type']])) {
+                // 可能是舊數據或直接輸入的代碼，保持原樣
+                $activity_type_code = $_POST['activity_type'];
+            }
+        }
+        
+        $stmt->bind_param("ssisssssssss", 
             $_POST['activity_date'],
             $_POST['teacher_unit'],
-            $_POST['teacher_name'],
             $teacher_id,
             $_POST['school_name'],
             $_POST['contact_person'],
             $_POST['contact_phone'],
-            $_POST['activity_type'],
+            $activity_type_code, // 存儲代碼而不是名稱
             $_POST['activity_time'],
             $participants_str,
             $feedback_str,
@@ -239,12 +341,13 @@ if ($_POST) {
         );
         
         if ($stmt->execute()) {
-            $message = "資料已成功提交！";
-            $messageType = "success";
             // 提交成功後重新生成驗證碼
             $_SESSION['captcha_code'] = generateCaptcha();
             // 清空 POST 資料，避免表單資料被保留
             $_POST = array();
+            // 重定向到當前頁面，帶上成功參數，並清空表單
+            header("Location: " . $_SERVER['PHP_SELF'] . "?success=1");
+            exit();
         } else {
             $message = "提交失敗：" . $stmt->error;
             $messageType = "error";
@@ -399,12 +502,11 @@ $conn->close();
                                         ?>" readonly>
                             </div>
                             <div class="field-group readonly-field">
-                                <label><span class="required"></span> 教師姓名: <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small></label>
-                                <input type="text" name="teacher_name" placeholder="請輸入教師姓名" 
+                                <label><span class="required"></span> 教師姓名: <small style="color: #6c757d; font-style: italic;">(系統自動填入，僅供顯示)</small></label>
+                                <input type="text" name="teacher_name_display" placeholder="系統自動填入" 
                                        value="<?php 
-                                       echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name']) : 
-                                            (isset($teacher_info['name']) ? htmlspecialchars($teacher_info['name']) : ''); 
-                                       ?>" readonly>
+                                       echo isset($teacher_info['name']) ? htmlspecialchars($teacher_info['name']) : ''; 
+                                       ?>" readonly disabled>
                             </div>
                         </div>
                         <div class="form-row">
@@ -431,10 +533,18 @@ $conn->close();
                                 <label><span class="required">*</span> 活動性質:</label>
                                 <select name="activity_type" required>
                                     <option value="">請選擇活動性質</option>
-                                    <option value="來校體驗" <?php echo (isset($_POST['activity_type']) && $_POST['activity_type'] === '來校體驗') ? 'selected' : ''; ?>>來校體驗</option>
-                                    <option value="校外參訪" <?php echo (isset($_POST['activity_type']) && $_POST['activity_type'] === '校外參訪') ? 'selected' : ''; ?>>校外參訪</option>
-                                    <option value="講座分享" <?php echo (isset($_POST['activity_type']) && $_POST['activity_type'] === '講座分享') ? 'selected' : ''; ?>>講座分享</option>
-                </select>
+                                    <?php 
+                                    // 從 activity_type_options 表讀取選項
+                                    $selected_activity_type = isset($_POST['activity_type']) ? $_POST['activity_type'] : '';
+                                    foreach ($activity_type_options as $option): 
+                                        // 檢查是否選中（支持代碼或名稱）
+                                        $is_selected = ($selected_activity_type === $option['code'] || $selected_activity_type === $option['name']);
+                                    ?>
+                                    <option value="<?php echo htmlspecialchars($option['code']); ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($option['name']); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="field-group">
                                 <label><span class="required">*</span> 活動時間:</label>
@@ -452,7 +562,6 @@ $conn->close();
                         <h3><i class="fas fa-users"></i> 參與對象 <span class="required">*</span></h3>
                         <div class="checkbox-grid">
                             <?php 
-                            $participants_options = ['國中九年級', '國中八年級', '國中七年級', '高中三年級', '高中二年級', '高中一年級', '教師(職員工)', '家長', '其他'];
                             $selected_participants = isset($_POST['participants']) ? $_POST['participants'] : [];
                             $participants_other_text = isset($_POST['participants_other']) ? htmlspecialchars($_POST['participants_other']) : '';
                             
@@ -460,13 +569,13 @@ $conn->close();
                             $is_participants_other_checked = false;
                             $participants_other_value = '';
                             foreach ($selected_participants as $selected) {
-                                if ($selected === '其他' || strpos($selected, '其他: ') === 0) {
+                                if ($selected === 'OTHER' || strpos($selected, 'OTHER:') === 0) {
                                     $is_participants_other_checked = true;
-                                    if (strpos($selected, '其他: ') === 0) {
-                                        $participants_other_text = htmlspecialchars(substr($selected, 4)); // 移除「其他: 」前綴
+                                    if (strpos($selected, 'OTHER:') === 0) {
+                                        $participants_other_text = htmlspecialchars(substr($selected, 6)); // 移除「OTHER:」前綴
                                         $participants_other_value = $selected; // 保留完整值用於 checkbox
                                     } else {
-                                        $participants_other_value = '其他';
+                                        $participants_other_value = 'OTHER';
                                     }
                                     break;
                                 }
@@ -476,21 +585,21 @@ $conn->close();
                             <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px;">
                                 <?php 
                                 $is_checked = false;
-                                $checkbox_value = $option;
-                                if ($option === '其他') {
+                                $checkbox_value = $option['code'];
+                                if ($option['code'] === 'OTHER') {
                                     $is_checked = $is_participants_other_checked;
-                                    $checkbox_value = $is_participants_other_checked && !empty($participants_other_value) ? $participants_other_value : '其他';
+                                    $checkbox_value = $is_participants_other_checked && !empty($participants_other_value) ? $participants_other_value : 'OTHER';
                                 } else {
-                                    $is_checked = in_array($option, $selected_participants);
+                                    $is_checked = in_array($option['code'], $selected_participants);
                                 }
                                 ?>
                                 <input type="checkbox" name="participants[]" value="<?php echo htmlspecialchars($checkbox_value); ?>" 
                                        <?php echo $is_checked ? 'checked' : ''; ?>
-                                       <?php if ($option === '其他'): ?>
+                                       <?php if ($option['code'] === 'OTHER'): ?>
                                        onchange="toggleOtherInput(this, 'participants_other')"
                                        <?php endif; ?>>
-                                <span><?php echo htmlspecialchars($option); ?></span>
-                                <?php if ($option === '其他'): ?>
+                                <span><?php echo htmlspecialchars($option['name']); ?></span>
+                                <?php if ($option['code'] === 'OTHER'): ?>
                                 <input type="text" name="participants_other" id="participants_other" 
                                        placeholder="請輸入其他參與對象" 
                                        value="<?php echo $participants_other_text; ?>"
@@ -609,14 +718,14 @@ $conn->close();
                     <div class="form-section">
                         <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
                         <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
-                            <input type="text" name="captcha" class="captcha-input" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
+                            <input type="text" name="captcha" id="captcha-input" class="captcha-input" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; pointer-events: auto !important; cursor: text !important; user-select: text !important; -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; position: relative !important; z-index: 1000 !important; background-color: white !important; color: #333 !important; opacity: 1 !important; visibility: visible !important; text-transform: uppercase;">
                             <img src="captcha_image.php" id="captcha-display" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">
                             <button type="button" class="refresh-btn" onclick="refreshCaptcha()" title="重新產生驗證碼" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
                                 <i class="fas fa-sync-alt"></i> 重整
                             </button>
                         </div>
                         <small style="color: #666; margin-top: 8px; display: block;">
-                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫），點擊圖片或「重整」按鈕可產生新的驗證碼
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫，自動轉為大寫），點擊圖片或「重整」按鈕可產生新的驗證碼
                         </small>
                     </div>
                 </div>
@@ -786,12 +895,108 @@ $conn->close();
     </style>
 
     <script>
-<<<<<<< HEAD
+        // 禁用瀏覽器的自動滾動恢復功能，確保頁面總是從頂部開始
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+        
+        // 立即滾動到頂部的函數（通用函數，用於所有情況）
+        const forceScrollToTop = function() {
+            window.scrollTo(0, 0);
+            if (document.documentElement) {
+                document.documentElement.scrollTop = 0;
+            }
+            if (document.body) {
+                document.body.scrollTop = 0;
+            }
+        };
+        
+        // 立即執行滾動到頂部（確保頁面首次加載時從頂部開始）
+        forceScrollToTop();
+        
+        // 監聽滾動事件，防止頁面自動滾動到底部
+        let scrollProtectionActive = true;
+        let lastScrollTop = 0;
+        const scrollProtection = function() {
+            if (!scrollProtectionActive) return;
+            
+            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+            
+            // 如果頁面滾動到底部附近（可能是自動聚焦導致的），強制滾動回頂部
+            const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+            const clientHeight = document.documentElement.clientHeight || window.innerHeight;
+            const isNearBottom = (scrollHeight - currentScrollTop - clientHeight) < 100;
+            
+            // 如果檢測到頁面滾動到底部，且不是用戶主動滾動（滾動距離突然變大），則強制回到頂部
+            if (isNearBottom && currentScrollTop > 500 && (currentScrollTop - lastScrollTop) > 200) {
+                console.log('檢測到自動滾動到底部，強制回到頂部');
+                forceScrollToTop();
+            }
+            
+            lastScrollTop = currentScrollTop;
+        };
+        
+        // 在頁面加載的前3秒內，持續監聽並防止自動滾動
+        window.addEventListener('scroll', scrollProtection, { passive: true });
+        setTimeout(() => {
+            scrollProtectionActive = false;
+            window.removeEventListener('scroll', scrollProtection);
+        }, 3000);
+        
+        // 立即檢查並滾動到頂部（在頁面加載時立即執行，不等待 DOMContentLoaded）
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const isSuccessPage = urlParams.get('success') === '1';
+            
+            // 無論是否有 success 參數，都確保滾動到頂部
+            forceScrollToTop();
+            
+            if (isSuccessPage) {
+                // 持續檢查並滾動，直到頁面完全加載
+                const scrollToTop = function() {
+                    forceScrollToTop();
+                    
+                    // 移除 scrollIntoView，只使用 scrollTo(0, 0) 確保頁面在頂部
+                };
+                
+                // 在頁面加載的各個階段都執行滾動
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', scrollToTop);
+                }
+                window.addEventListener('load', scrollToTop);
+                
+                // 使用多個延遲確保滾動執行
+                setTimeout(scrollToTop, 0);
+                setTimeout(scrollToTop, 10);
+                setTimeout(scrollToTop, 50);
+                setTimeout(scrollToTop, 100);
+                setTimeout(scrollToTop, 200);
+                setTimeout(scrollToTop, 500);
+                setTimeout(scrollToTop, 1000);
+            } else {
+                // 即使沒有 success 參數，也確保頁面從頂部開始
+                // 在頁面加載的各個階段都執行滾動
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', forceScrollToTop);
+                }
+                window.addEventListener('load', forceScrollToTop);
+                
+                // 使用多個延遲確保滾動執行
+                setTimeout(forceScrollToTop, 0);
+                setTimeout(forceScrollToTop, 10);
+                setTimeout(forceScrollToTop, 50);
+                setTimeout(forceScrollToTop, 100);
+                setTimeout(forceScrollToTop, 200);
+                setTimeout(forceScrollToTop, 500);
+            }
+        })();
+        
         // 控制「其他」選項的輸入框顯示/隱藏
         function toggleOtherInput(checkbox, inputId) {
             const input = document.getElementById(inputId);
             if (input) {
                 if (checkbox.checked) {
+                    // 使用 flex 顯示，因為父元素是 flex 容器
                     input.style.display = 'block';
                     input.focus();
                 } else {
@@ -835,6 +1040,100 @@ $conn->close();
         document.addEventListener('DOMContentLoaded', function() {
             console.log('RIC 功能開始初始化...');
             
+            // 檢查是否有成功提交的參數
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('success') === '1') {
+                // 滾動到頂部的函數（只滾動到頂部，不使用 scrollIntoView 避免干擾）
+                const forceScrollToTop = function() {
+                    window.scrollTo(0, 0);
+                    if (document.documentElement) {
+                        document.documentElement.scrollTop = 0;
+                    }
+                    if (document.body) {
+                        document.body.scrollTop = 0;
+                    }
+                    // 移除 scrollIntoView，避免任何自動滾動干擾
+                };
+                
+                // 立即執行滾動
+                forceScrollToTop();
+                
+                // 提交成功，重置表單並清除草稿
+                const form = document.querySelector('form');
+                if (form) {
+                    form.reset();
+                    console.log('✅ 表單已重置');
+                }
+                
+                // 清除草稿
+                localStorage.removeItem(FORM_STORAGE_KEY);
+                console.log('✅ 草稿已清除');
+                
+                // 刷新驗證碼圖片（因為服務器已生成新的驗證碼）
+                // 使用直接刷新圖片的方式，避免調用 refreshCaptcha 可能導致的聚焦
+                setTimeout(() => {
+                    const captchaImg = document.getElementById('captcha-display');
+                    const captchaInput = document.querySelector('input[name="captcha"]');
+                    if (captchaImg) {
+                        captchaImg.src = 'captcha_image.php?t=' + new Date().getTime();
+                    }
+                    if (captchaInput) {
+                        captchaInput.value = '';
+                        // 確保輸入框可用，但不聚焦
+                        captchaInput.disabled = false;
+                        captchaInput.readOnly = false;
+                        captchaInput.removeAttribute('disabled');
+                        captchaInput.removeAttribute('readonly');
+                    }
+                    // 刷新後再次確保頁面在頂部
+                    forceScrollToTop();
+                }, 100);
+                
+                // 確保頁面完全加載後再次滾動到頂部（多重保障，增加更多時間點）
+                setTimeout(forceScrollToTop, 10);
+                setTimeout(forceScrollToTop, 50);
+                setTimeout(forceScrollToTop, 100);
+                setTimeout(forceScrollToTop, 200);
+                setTimeout(forceScrollToTop, 300);
+                setTimeout(forceScrollToTop, 500);
+                setTimeout(forceScrollToTop, 800);
+                setTimeout(forceScrollToTop, 1000);
+                setTimeout(forceScrollToTop, 1500);
+                setTimeout(forceScrollToTop, 2000);
+                
+                // 監聽窗口大小變化，確保滾動位置正確
+                const resizeHandler = function() {
+                    forceScrollToTop();
+                };
+                window.addEventListener('resize', resizeHandler);
+                setTimeout(() => {
+                    window.removeEventListener('resize', resizeHandler);
+                }, 3000);
+                
+                // 持續監聽滾動事件，防止任何自動滾動到底部
+                let scrollProtectionCount = 0;
+                const scrollProtectionHandler = function() {
+                    const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+                    if (currentScrollTop > 100) {
+                        scrollProtectionCount++;
+                        if (scrollProtectionCount > 2) {
+                            console.log('檢測到意外滾動，強制回到頂部');
+                            forceScrollToTop();
+                        }
+                    } else {
+                        scrollProtectionCount = 0;
+                    }
+                };
+                window.addEventListener('scroll', scrollProtectionHandler, { passive: true });
+                setTimeout(() => {
+                    window.removeEventListener('scroll', scrollProtectionHandler);
+                }, 3000);
+                
+                // 移除URL中的success參數，避免刷新時重複觸發
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+            
             initRIC();
             initAutoSave();
             initRealTimeValidation();
@@ -844,7 +1143,9 @@ $conn->close();
             
             // 自動載入草稿（靜默模式）
             // 延遲載入，確保頁面完全渲染
-            setTimeout(() => {
+            // 只有在沒有成功提交時才載入草稿
+            if (urlParams.get('success') !== '1') {
+                setTimeout(() => {
                 console.log('🔍 開始檢查草稿...');
                 
                 // 檢查是否有草稿
@@ -894,7 +1195,8 @@ $conn->close();
                 } else {
                     console.log('⏭️ 檢測到伺服器端資料，跳過草稿載入（避免覆蓋伺服器資料）');
                 }
-            }, 1500); // 增加延遲到 1.5 秒，確保頁面完全載入
+                }, 1500); // 增加延遲到 1.5 秒，確保頁面完全載入
+            } // 結束 if (urlParams.get('success') !== '1')
             
             console.log('RIC 功能初始化完成');
         });
@@ -1709,53 +2011,238 @@ $conn->close();
             const captchaInput = document.querySelector('input[name="captcha"]');
             
             // 顯示載入狀態
-            refreshBtn.disabled = true;
-            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 載入中...';
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 載入中...';
+            }
             
             // 刷新驗證碼圖片（添加時間戳防止緩存）
             if (captchaDisplay && captchaDisplay.tagName === 'IMG') {
                 captchaDisplay.src = 'captcha_image.php?t=' + new Date().getTime();
-                // 清空輸入框
+                // 清空輸入框並確保可以輸入
                 if (captchaInput) {
                     captchaInput.value = '';
+                    // 強制確保輸入框沒有被禁用
+                    captchaInput.disabled = false;
+                    captchaInput.readOnly = false;
+                    captchaInput.removeAttribute('disabled');
+                    captchaInput.removeAttribute('readonly');
+                    captchaInput.style.pointerEvents = 'auto';
+                    captchaInput.style.opacity = '1';
+                    captchaInput.style.cursor = 'text';
                 }
                 // 恢復按鈕狀態
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
-                // 聚焦到輸入框
-                if (captchaInput) {
-                    captchaInput.focus();
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
                 }
+                // 不自動聚焦到輸入框，避免頁面滾動到底部
+                // 只有在用戶主動點擊刷新按鈕時才聚焦
+                // if (captchaInput) {
+                //     setTimeout(function() {
+                //         captchaInput.focus();
+                //     }, 100);
+                // }
             } else {
                 // 備用方案：如果圖片元素不存在
-                refreshBtn.disabled = false;
-                refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 重整';
+                }
                 alert('驗證碼重整失敗，請重新載入頁面。');
             }
         }
         
-        // 驗證碼輸入框限制只能輸入數字
-        document.querySelector('input[name="captcha"]').addEventListener('input', function(e) {
-            // 移除非數字字符
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
-        
-        // 電話欄位限制只能輸入數字且最多10位
-        document.querySelector('input[name="contact_phone"]').addEventListener('input', function(e) {
-            // 移除非數字字符
-            this.value = this.value.replace(/[^0-9]/g, '');
-            // 限制最多10位數字
-            if (this.value.length > 10) {
-                this.value = this.value.slice(0, 10);
+        // 驗證碼輸入框限制只能輸入數字（確保在DOM加載完成後執行）
+        function initCaptchaInput() {
+            const captchaInput = document.querySelector('input[name="captcha"]') || document.getElementById('captcha-input');
+            if (captchaInput) {
+                // 強制確保輸入框沒有被禁用
+                captchaInput.disabled = false;
+                captchaInput.readOnly = false;
+                captchaInput.removeAttribute('disabled');
+                captchaInput.removeAttribute('readonly');
+                
+                // 確保輸入框可以接收輸入
+                captchaInput.style.pointerEvents = 'auto';
+                captchaInput.style.opacity = '1';
+                captchaInput.style.cursor = 'text';
+                captchaInput.style.userSelect = 'text';
+                captchaInput.style.webkitUserSelect = 'text';
+                captchaInput.style.mozUserSelect = 'text';
+                captchaInput.style.msUserSelect = 'text';
+                
+                // 確保z-index足夠高
+                captchaInput.style.position = 'relative';
+                captchaInput.style.zIndex = '1000';
+                
+                // 檢查是否有覆蓋層
+                const rect = captchaInput.getBoundingClientRect();
+                const elementAtPoint = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                if (elementAtPoint && elementAtPoint !== captchaInput && !captchaInput.contains(elementAtPoint)) {
+                    console.warn('發現可能的覆蓋層:', elementAtPoint);
+                    if (elementAtPoint.style) {
+                        elementAtPoint.style.pointerEvents = 'none';
+                    }
+                }
+                
+                // 移除所有可能阻止輸入的事件監聽器（使用新的事件處理方式）
+                const originalInput = captchaInput;
+                
+                // 移除舊的事件監聽器（通過克隆）
+                const newInput = originalInput.cloneNode(true);
+                // 確保克隆的元素保留所有屬性
+                newInput.value = originalInput.value || '';
+                newInput.id = originalInput.id || 'captcha-input';
+                newInput.name = originalInput.name || 'captcha';
+                newInput.type = originalInput.type || 'text';
+                newInput.placeholder = originalInput.placeholder || '請輸入驗證碼';
+                newInput.maxLength = originalInput.maxLength || 4;
+                newInput.required = originalInput.required || true;
+                newInput.autocomplete = originalInput.autocomplete || 'off';
+                
+                // 保留所有內聯樣式
+                if (originalInput.style.cssText) {
+                    newInput.style.cssText = originalInput.style.cssText;
+                }
+                
+                originalInput.parentNode.replaceChild(newInput, originalInput);
+                const freshInput = document.querySelector('input[name="captcha"]') || document.getElementById('captcha-input');
+                
+                // 再次確保屬性正確
+                freshInput.disabled = false;
+                freshInput.readOnly = false;
+                freshInput.style.pointerEvents = 'auto';
+                freshInput.style.cursor = 'text';
+                freshInput.style.userSelect = 'text';
+                
+                // 限制只能輸入字母和數字（驗證碼包含字母和數字）
+                freshInput.addEventListener('input', function(e) {
+                    // 保存原始值
+                    const originalValue = e.target.value || '';
+                    
+                    // 只保留字母和數字，轉換為大寫（驗證碼通常不區分大小寫）
+                    const alphanumericValue = originalValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                    // 限制最多6位（驗證碼通常是5-6位）
+                    const finalValue = alphanumericValue.slice(0, 6);
+                    
+                    // 只有在值確實改變時才更新（避免無限循環）
+                    if (this.value !== finalValue) {
+                        // 保存光標位置
+                        const cursorPosition = this.selectionStart || 0;
+                        
+                        // 設置新值
+                        this.value = finalValue;
+                        
+                        // 強制確保值被設置（防止被其他代碼覆蓋）
+                        setTimeout(() => {
+                            if (this.value !== finalValue) {
+                                this.value = finalValue;
+                            }
+                        }, 0);
+                        
+                        // 恢復光標位置（如果刪除了字符，調整位置）
+                        setTimeout(() => {
+                            const newCursorPosition = Math.min(
+                                Math.max(0, cursorPosition - (originalValue.length - finalValue.length)), 
+                                finalValue.length
+                            );
+                            this.setSelectionRange(newCursorPosition, newCursorPosition);
+                        }, 0);
+                    }
+                }, { passive: true });
+                
+                // 在keydown時處理，允許字母和數字（但允許控制鍵）
+                freshInput.addEventListener('keydown', function(e) {
+                    // 允許控制鍵（退格、刪除、方向鍵等）
+                    const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Home', 'End', 'Enter'];
+                    if (allowedKeys.includes(e.key)) {
+                        return; // 允許這些鍵，不阻止
+                    }
+                    
+                    // 允許 Ctrl/Cmd + A, C, V, X 等組合鍵
+                    if (e.ctrlKey || e.metaKey) {
+                        return; // 允許複製、粘貼等操作
+                    }
+                    
+                    // 允許數字鍵
+                    if (e.key >= '0' && e.key <= '9') {
+                        return; // 允許數字，不阻止
+                    }
+                    
+                    // 允許字母鍵（大小寫都可以，會在input事件中轉為大寫）
+                    if ((e.key >= 'a' && e.key <= 'z') || (e.key >= 'A' && e.key <= 'Z')) {
+                        return; // 允許字母，不阻止
+                    }
+                    
+                    // 阻止其他字符
+                    e.preventDefault();
+                }, { passive: false });
+                
+                // 確保可以聚焦
+                freshInput.addEventListener('focus', function(e) {
+                    this.style.borderColor = '#6c7aed';
+                    this.style.boxShadow = '0 0 0 4px rgba(108, 122, 237, 0.15)';
+                    this.style.outline = 'none';
+                }, { passive: true });
+                
+                freshInput.addEventListener('blur', function(e) {
+                    this.style.borderColor = '#ddd';
+                    this.style.boxShadow = 'none';
+                }, { passive: true });
+                
+                // 不自動聚焦，避免頁面滾動到底部
+                // 只有在用戶主動操作時才聚焦
+                // setTimeout(function() {
+                //     if (document.activeElement !== freshInput) {
+                //         freshInput.focus();
+                //         console.log('強制聚焦到驗證碼輸入框');
+                //     }
+                // }, 100);
+                
+                console.log('驗證碼輸入框已初始化，可以輸入', freshInput);
+            } else {
+                console.error('找不到驗證碼輸入框');
             }
-        });
+        }
         
-        // 電話欄位按鍵限制（防止輸入非數字字符）
-        document.querySelector('input[name="contact_phone"]').addEventListener('keypress', function(e) {
-            // 只允許數字鍵、退格鍵、刪除鍵、方向鍵等
-            const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'];
-            if (!allowedKeys.includes(e.key) && (e.key < '0' || e.key > '9')) {
-                e.preventDefault();
+        // 在DOM加載完成後執行（但不自動聚焦）
+        // 延遲執行，確保不會在頁面首次加載時干擾滾動到頂部
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                // 延遲執行，避免干擾頁面滾動到頂部
+                setTimeout(initCaptchaInput, 1000);
+            });
+        } else {
+            // 延遲執行，避免干擾頁面滾動到頂部
+            setTimeout(initCaptchaInput, 1000);
+        }
+        
+        // 電話欄位限制只能輸入數字且最多10位（確保在DOM加載完成後執行）
+        document.addEventListener('DOMContentLoaded', function() {
+            const phoneInput = document.querySelector('input[name="contact_phone"]');
+            if (phoneInput) {
+                // 確保輸入框沒有被禁用
+                phoneInput.removeAttribute('disabled');
+                phoneInput.removeAttribute('readonly');
+                
+                // 移除非數字字符
+                phoneInput.addEventListener('input', function(e) {
+                    this.value = this.value.replace(/[^0-9]/g, '');
+                    // 限制最多10位數字
+                    if (this.value.length > 10) {
+                        this.value = this.value.slice(0, 10);
+                    }
+                });
+                
+                // 電話欄位按鍵限制（防止輸入非數字字符）
+                phoneInput.addEventListener('keypress', function(e) {
+                    // 只允許數字鍵、退格鍵、刪除鍵、方向鍵等
+                    const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'];
+                    if (!allowedKeys.includes(e.key) && (e.key < '0' || e.key > '9')) {
+                        e.preventDefault();
+                    }
+                });
             }
         });
         
@@ -1827,9 +2314,11 @@ $conn->close();
                 });
             }
             
-            if (captchaInput.value.length !== 4) {
+            // 驗證碼長度檢查（5-6位字母數字）
+            const captchaValue = captchaInput.value.trim();
+            if (captchaValue.length < 4 || captchaValue.length > 6) {
                 e.preventDefault();
-                alert('請輸入4位數字的驗證碼！');
+                alert('請輸入4-6位字母或數字的驗證碼！');
                 captchaInput.focus();
                 return;
             }

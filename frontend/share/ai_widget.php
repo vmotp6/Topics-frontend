@@ -54,7 +54,7 @@ $isLoggedIn = isset($_SESSION['username']);
 	</div>
 	<?php if ($isLoggedIn): ?>
 		<div id="ai-input">
-			<input type="text" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" id="ai-input-field" maxlength="500">
+			<input type="text" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" id="ai-input-field" maxlength="500" style="pointer-events: auto !important; cursor: text !important;">
 			<button id="ai-send-msg">🚀 發送</button>
 		</div>
 		<div id="ai-controls">
@@ -750,12 +750,34 @@ $isLoggedIn = isset($_SESSION['username']);
 $(document).ready(function() {
 	let qaKeywords = null; // 儲存關鍵詞資料
 	
-	// 1. 載入關鍵詞資料
-	$.getJSON("../assets/qa_keywords.json", function(data) {
+	// 1. 載入關鍵詞資料（使用相對路徑，兼容不同頁面位置）
+	let keywordsPath = 'assets/qa_keywords.json';
+	// 嘗試從當前頁面路徑推斷正確的相對路徑
+	if (window.location.pathname.includes('/frontend/')) {
+		keywordsPath = 'assets/qa_keywords.json';
+	} else if (window.location.pathname.includes('/share/')) {
+		keywordsPath = '../assets/qa_keywords.json';
+	} else {
+		// 默認嘗試當前目錄
+		keywordsPath = 'assets/qa_keywords.json';
+	}
+	
+	$.getJSON(keywordsPath, function(data) {
 		qaKeywords = data;
 		console.log("關鍵詞資料載入成功", qaKeywords);
-	}).fail(function() {
-		console.error("關鍵詞資料載入失敗");
+	}).fail(function(jqXHR, textStatus, errorThrown) {
+		console.error("關鍵詞資料載入失敗:", textStatus, errorThrown);
+		console.error("嘗試的路徑:", keywordsPath);
+		// 嘗試備用路徑
+		const altPath = '../assets/qa_keywords.json';
+		if (keywordsPath !== altPath) {
+			$.getJSON(altPath, function(data) {
+				qaKeywords = data;
+				console.log("關鍵詞資料載入成功（使用備用路徑）", qaKeywords);
+			}).fail(function() {
+				console.error("備用路徑也失敗:", altPath);
+			});
+		}
 	});
 	
 	// 2. 檢查Ollama服務狀態
@@ -865,11 +887,40 @@ $(document).ready(function() {
 	
 	$('#ai-send-msg').click(sendQuestion);
 	
+	// 確保輸入框可以輸入
+	function initAIInputField() {
+		const aiInputField = $('#ai-input-field');
+		if (aiInputField.length) {
+			// 強制確保輸入框沒有被禁用
+			aiInputField.prop('disabled', false);
+			aiInputField.prop('readonly', false);
+			aiInputField.removeAttr('disabled');
+			aiInputField.removeAttr('readonly');
+			aiInputField.css({
+				'pointer-events': 'auto',
+				'cursor': 'text',
+				'opacity': '1'
+			});
+			console.log('AI輸入框已初始化，可以輸入');
+		}
+	}
+	
+	// 初始化輸入框
+	initAIInputField();
+	
+	// 延遲執行一次，確保所有腳本都執行完畢
+	setTimeout(initAIInputField, 500);
+	
 	$('#ai-input-field').keypress(function(e) {
 		if (e.which === 13 && !e.shiftKey) { // Enter 鍵且沒按 Shift
 			e.preventDefault();
 			sendQuestion();
 		}
+	});
+	
+	// 當AI視窗顯示時，確保輸入框可以輸入
+	$('#ai-float-btn').on('click', function() {
+		setTimeout(initAIInputField, 100);
 	});
 	
 	// 添加消息到對話記錄（新版本，支持元數據）

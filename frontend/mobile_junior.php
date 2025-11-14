@@ -1,75 +1,110 @@
 ﻿<?php
-// 設定時區為台灣時區 (UTC+8)
+// ===============================================
+// 康寧大學 - 國中學校招生申請系統
+// ===============================================
+
+// 設定時區為台灣
 date_default_timezone_set('Asia/Taipei');
 
-// 國中學校招生申請表單 - 康寧大學招生系統
+// 啟用輸出緩衝，避免 header() 錯誤
+ob_start();
 
-// 載入配置檔案
+// 載入設定檔與 Session 設定
 require_once __DIR__ . '/config.php';
-// 載入 session 配置
 require_once __DIR__ . '/session_config.php';
-// 雿輻 PHPMailer
+
+// 載入 PHPMailer
+require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+require_once __DIR__ . '/PHPMailer/src/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// 撱箇? PDO ???
+// --------------------------------------------------
+// 建立 PDO 資料庫連線
+// --------------------------------------------------
 try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
+    $pdo = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET,
+        DB_USERNAME,
+        DB_PASSWORD
+    );
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die('鞈?摨恍?憭望?: ' . $e->getMessage());
+    die('資料庫連接失敗: ' . htmlspecialchars($e->getMessage()));
 }
 
-// 撱箄”嚗?銝剖飛?⊥??隢”
+// --------------------------------------------------
+// 建立資料表（若不存在）
+// --------------------------------------------------
 try {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS junior_school_recruitment_applications (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        school_name VARCHAR(100) NOT NULL COMMENT '摮豢?迂',
-        city VARCHAR(20) NOT NULL COMMENT '蝮??',
-        district VARCHAR(20) NOT NULL COMMENT '?/?撣?,
-        school_address VARCHAR(255) DEFAULT NULL COMMENT '摮豢?啣?',
-        contact_name VARCHAR(50) NOT NULL COMMENT '?舐窗鈭箏???,
-        contact_title VARCHAR(50) DEFAULT NULL COMMENT '?舐窗鈭箄蝔?,
-        contact_phone VARCHAR(20) NOT NULL COMMENT '?舐窗?餉店',
-        contact_email VARCHAR(120) NOT NULL COMMENT '?舐窗Email',
-        preferred_date DATE DEFAULT NULL COMMENT '?????交?',
-        preferred_time VARCHAR(50) DEFAULT NULL COMMENT '????嚗?憒?銝?????',
-        target_grades VARCHAR(50) DEFAULT NULL COMMENT '?格?撟渡?嚗?憒?銝僑蝝?撟渡?嚗?,
-        expected_students INT DEFAULT NULL COMMENT '????摮貊?鈭箸',
-        venue_type VARCHAR(50) DEFAULT NULL COMMENT '?游憿?嚗?憒?蝳桀???摰歹?',
-        special_requirements TEXT DEFAULT NULL COMMENT '?寞??瘙?,
-        remarks TEXT DEFAULT NULL COMMENT '?酉',
-        status ENUM('pending', 'approved', 'rejected', 'completed') DEFAULT 'pending' COMMENT '?唾????,
-        admin_comment TEXT DEFAULT NULL COMMENT '蝞∠??∪?閮?,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '?唾???',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '?湔??',
-        INDEX idx_school_name (school_name),
-        INDEX idx_city (city),
-        INDEX idx_status (status),
-        INDEX idx_created_at (created_at),
-        INDEX idx_contact_email (contact_email)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='?葉摮豢???唾?銵?");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS junior_school_recruitment_applications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            school_name VARCHAR(100) NOT NULL COMMENT '學校名稱',
+            city VARCHAR(20) NOT NULL COMMENT '縣市',
+            district VARCHAR(20) NOT NULL COMMENT '區/鄉鎮市',
+            school_address VARCHAR(255) DEFAULT NULL COMMENT '學校地址',
+            contact_name VARCHAR(50) NOT NULL COMMENT '聯絡人姓名',
+            contact_title VARCHAR(50) DEFAULT NULL COMMENT '聯絡人職稱',
+            contact_phone VARCHAR(20) NOT NULL COMMENT '聯絡電話',
+            contact_email VARCHAR(120) NOT NULL COMMENT '聯絡Email',
+            preferred_date DATE NOT NULL COMMENT '期望招生日期',
+            preferred_time VARCHAR(50) NOT NULL COMMENT '期望時間',
+            target_grades VARCHAR(50) NOT NULL COMMENT '目標年級',
+            expected_students INT NOT NULL COMMENT '預期學生數',
+            venue_type VARCHAR(50) DEFAULT NULL COMMENT '場地類型',
+            special_requirements TEXT DEFAULT NULL COMMENT '特殊需求',
+            remarks TEXT DEFAULT NULL COMMENT '備註',
+            `status` ENUM('pending','approved','rejected','completed','cancelled') DEFAULT 'pending' COMMENT '申請狀態',
+            admin_comment TEXT DEFAULT NULL COMMENT '管理員備註',
+            admin_id INT DEFAULT NULL COMMENT '處理的管理員ID',
+            processed_at TIMESTAMP NULL DEFAULT NULL COMMENT '處理時間',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '建立時間',
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新時間',
+            INDEX idx_school_name (school_name),
+            INDEX idx_city (city),
+            INDEX idx_district (district),
+            INDEX idx_status (`status`),
+            INDEX idx_created_at (created_at),
+            INDEX idx_contact_email (contact_email),
+            INDEX idx_preferred_date (preferred_date),
+            INDEX idx_admin_id (admin_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='國中學校招生申請表單';
+    ");
 } catch (PDOException $e) {
-    die('?????”憭望?: ' . $e->getMessage());
+    die('建立資料表失敗: ' . htmlspecialchars($e->getMessage()));
 }
 
-// ???亥岷?唾?鞈?
+// --------------------------------------------------
+// 初始化變數
+// --------------------------------------------------
 $search_email = '';
 $application_data = null;
 $application_list = [];
-$selected_application_id = isset($_GET['application_id']) ? (int)$_GET['application_id'] : 0;
-$action = isset($_GET['action']) ? $_GET['action'] : '';
+$selected_application_id = 0;
+$action = '';
+$result_message = '';
+$result_type = '';
+
+// --------------------------------------------------
+// 處理 GET 搜尋邏輯
+// --------------------------------------------------
+if (isset($_GET['application_id'])) {
+    $selected_application_id = (int)$_GET['application_id'];
+}
+if (isset($_GET['action'])) {
+    $action = $_GET['action'];
+}
 
 if ($action === 'search' && isset($_GET['email'])) {
     $search_email = trim($_GET['email']);
     if ($search_email !== '') {
         try {
-            // 根據 email 查詢資料表
             $stmt = $pdo->prepare("SELECT * FROM junior_school_recruitment_applications WHERE contact_email = ? ORDER BY created_at DESC");
             $stmt->execute([$search_email]);
             $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // 如果有指定申請 ID，則查詢該申請
+
             if ($selected_application_id > 0) {
                 foreach ($application_list as $app) {
                     if ($app['id'] == $selected_application_id) {
@@ -78,169 +113,213 @@ if ($action === 'search' && isset($_GET['email'])) {
                     }
                 }
             } elseif (count($application_list) > 0) {
-                // 如果沒有 ID，則使用第一筆資料作為預設
                 $application_data = $application_list[0];
             }
         } catch (PDOException $e) {
-            error_log("?亥岷?唾?鞈?憭望?: " . $e->getMessage());
+            error_log("搜尋申請資料失敗: " . $e->getMessage());
         }
     }
 }
 
-// ??銵典?
-$result_message = '';
-$result_type = '';
-
+// --------------------------------------------------
+// 處理 POST 表單提交邏輯
+// --------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action_post = isset($_POST['action']) ? $_POST['action'] : 'submit';
+    $action_post = $_POST['action'] ?? 'submit';
     $application_id = isset($_POST['application_id']) ? (int)$_POST['application_id'] : 0;
-    
-    $school_name = isset($_POST['school_name']) ? trim($_POST['school_name']) : '';
-    $city = isset($_POST['city']) ? trim($_POST['city']) : '';
-    $district = isset($_POST['district']) ? trim($_POST['district']) : '';
-    $school_address = isset($_POST['school_address']) ? trim($_POST['school_address']) : '';
-    $contact_name = isset($_POST['contact_name']) ? trim($_POST['contact_name']) : '';
-    $contact_title = isset($_POST['contact_title']) ? trim($_POST['contact_title']) : '';
-    $contact_phone = isset($_POST['contact_phone']) ? trim($_POST['contact_phone']) : '';
-    $contact_email = isset($_POST['contact_email']) ? trim($_POST['contact_email']) : '';
-    $preferred_date = isset($_POST['preferred_date']) ? trim($_POST['preferred_date']) : '';
-    $preferred_time = isset($_POST['preferred_time']) ? trim($_POST['preferred_time']) : '';
-    $target_grades = isset($_POST['target_grades']) ? trim($_POST['target_grades']) : '';
-    $expected_students = isset($_POST['expected_students']) ? trim($_POST['expected_students']) : '';
-    $venue_type = isset($_POST['venue_type']) ? trim($_POST['venue_type']) : '';
-    $special_requirements = isset($_POST['special_requirements']) ? trim($_POST['special_requirements']) : '';
-    $remarks = isset($_POST['remarks']) ? trim($_POST['remarks']) : '';
 
-    // ?箸撽?嚗??急????閮?憛恬?
-    if ($school_name === '' || $city === '' || $district === '' || 
-        $contact_name === '' || $contact_phone === '' || $contact_email === '' ||
-        $preferred_date === '' || $preferred_time === '' || $target_grades === '' ||
-        $expected_students === '' || $venue_type === '') {
-        $result_message = '隢‵撖急???憛急?雿?????賊?鞈?嚗?;
+    $school_name = trim($_POST['school_name'] ?? '');
+    $city = trim($_POST['city'] ?? '');
+    $district = trim($_POST['district'] ?? '');
+    $school_address = trim($_POST['school_address'] ?? '');
+    $contact_name = trim($_POST['contact_name'] ?? '');
+    $contact_title = trim($_POST['contact_title'] ?? '');
+    $contact_phone = trim($_POST['contact_phone'] ?? '');
+    $contact_email = trim($_POST['contact_email'] ?? '');
+    $preferred_date = trim($_POST['preferred_date'] ?? '');
+    $preferred_time = trim($_POST['preferred_time'] ?? '');
+    $target_grades = trim($_POST['target_grades'] ?? '');
+    $expected_students = trim($_POST['expected_students'] ?? '');
+    $venue_type = trim($_POST['venue_type'] ?? '');
+    $special_requirements = trim($_POST['special_requirements'] ?? '');
+    $remarks = trim($_POST['remarks'] ?? '');
+    $captcha = trim($_POST['captcha'] ?? '');
+
+    // 表單驗證
+    if ($school_name === '' || $city === '' || $district === '' || $contact_name === '' ||
+        $contact_phone === '' || $contact_email === '' || $preferred_date === '' ||
+        $preferred_time === '' || $target_grades === '' || $expected_students === '') {
+        $result_message = '請填寫所有必填欄位。';
         $result_type = 'error';
-    } else if (!filter_var($contact_email, FILTER_VALIDATE_EMAIL)) {
-        $result_message = '隢?靘迤蝣箇? Email ?啣??澆?';
+    } elseif ($captcha === '') {
+        $result_message = '請輸入驗證碼。';
         $result_type = 'error';
-    } else if (!is_numeric($expected_students) || (int)$expected_students <= 0) {
-        $result_message = '????摮貊?鈭箸敹??臬之??0 ?摮?;
+    } elseif (!filter_var($contact_email, FILTER_VALIDATE_EMAIL)) {
+        $result_message = '請輸入有效的 Email 格式。';
+        $result_type = 'error';
+    } elseif (!is_numeric($expected_students) || (int)$expected_students <= 0) {
+        $result_message = '預期學生數必須為大於 0 的數字。';
         $result_type = 'error';
     } else {
-        try {
-            $pdo->beginTransaction();
-            
-            $expected_students_int = (int)$expected_students;
-            
-            if ($action_post === 'update' && $application_id > 0) {
-                // ?湔?唾?閮?
-                $upd = $pdo->prepare("UPDATE junior_school_recruitment_applications SET 
-                    school_name = ?, city = ?, district = ?, school_address = ?, 
-                    contact_name = ?, contact_title = ?, contact_phone = ?, contact_email = ?,
-                    preferred_date = ?, preferred_time = ?, target_grades = ?, 
-                    expected_students = ?, venue_type = ?, special_requirements = ?, remarks = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND contact_email = ?");
-                
-                $upd->execute([
-                    $school_name, $city, $district, $school_address ?: null, 
-                    $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
-                    $preferred_date, $preferred_time, $target_grades,
-                    $expected_students_int, $venue_type, $special_requirements ?: null, $remarks ?: null,
-                    $application_id, $contact_email
-                ]);
-                
-                if ($upd->rowCount() > 0) {
-                    $pdo->commit();
-                    // ?湔??敺??啣????ｇ?皜征???雿?                    header('Location: ' . $_SERVER['PHP_SELF'] . '?updated=1&id=' . $application_id);
-                    exit;
+        // 驗證碼檢查
+        $captcha_session = $_SESSION['captcha_code'] ?? '';
+        if (empty($captcha_session)) {
+            $result_message = '驗證碼已過期，請重新載入。';
+            $result_type = 'error';
+        } elseif (strtoupper($captcha) !== strtoupper($captcha_session)) {
+            $result_message = '驗證碼錯誤。';
+            $result_type = 'error';
+        } else {
+            unset($_SESSION['captcha_code']); // 驗證成功後清除
+
+            try {
+                $pdo->beginTransaction();
+                $expected_students_int = (int)$expected_students;
+
+                if ($action_post === 'update' && $application_id > 0) {
+                    // 更新申請資料
+                    $upd = $pdo->prepare("UPDATE junior_school_recruitment_applications SET
+                        school_name=?, city=?, district=?, school_address=?, contact_name=?, contact_title=?,
+                        contact_phone=?, contact_email=?, preferred_date=?, preferred_time=?, target_grades=?,
+                        expected_students=?, venue_type=?, special_requirements=?, remarks=?, updated_at=CURRENT_TIMESTAMP
+                        WHERE id=? AND contact_email=?");
+
+                    $upd->execute([
+                        $school_name, $city, $district, $school_address ?: null,
+                        $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
+                        $preferred_date, $preferred_time, $target_grades,
+                        $expected_students_int, $venue_type ?: null, $special_requirements ?: null, $remarks ?: null,
+                        $application_id, $contact_email
+                    ]);
+
+                    if ($upd->rowCount() > 0) {
+                        $pdo->commit();
+                        header('Location: ' . $_SERVER['PHP_SELF'] . '?updated=1&id=' . $application_id);
+                        exit;
+                    } else {
+                        $result_message = '更新失敗，請確認申請資料。';
+                        $result_type = 'error';
+                        $pdo->rollBack();
+                    }
                 } else {
-                    $result_message = '?湔憭望?嚗銝閰脩隢??? Email 銝??;
-                    $result_type = 'error';
+                    // 新增申請資料
+                    $ins = $pdo->prepare("INSERT INTO junior_school_recruitment_applications
+                        (school_name, city, district, school_address, contact_name, contact_title,
+                         contact_phone, contact_email, preferred_date, preferred_time, target_grades,
+                         expected_students, venue_type, special_requirements, remarks)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+                    $ins->execute([
+                        $school_name, $city, $district, $school_address ?: null,
+                        $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
+                        $preferred_date, $preferred_time, $target_grades,
+                        $expected_students_int, $venue_type ?: null, $special_requirements ?: null, $remarks ?: null
+                    ]);
+
+                    $application_id = (int)$pdo->lastInsertId();
+                    $pdo->commit();
+
+                    // 發送確認信
+                    try {
+                        $mail = new PHPMailer(true);
+                        $mail->isSMTP();
+                        $mail->Host = SMTP_HOST;
+                        $mail->SMTPAuth = true;
+                        $mail->Username = SMTP_USERNAME;
+                        $mail->Password = SMTP_PASSWORD;
+                        $mail->SMTPSecure = SMTP_SECURE;
+                        $mail->Port = SMTP_PORT;
+                        $mail->CharSet = 'UTF-8';
+                        $mail->setFrom(SMTP_FROM_EMAIL, '康寧大學招生系統');
+                        $mail->addAddress($contact_email, $contact_name);
+                        $mail->isHTML(true);
+                        $mail->Subject = '國中學校招生申請已收到 - ' . htmlspecialchars($school_name, ENT_QUOTES, 'UTF-8');
+
+                        $mailBody = "
+                            <html><body style='font-family:Arial,sans-serif'>
+                            <h2>感謝您的申請</h2>
+                            <p>親愛的 {$contact_name} 您好，</p>
+                            <p>貴校 <strong>{$school_name}</strong> 的招生申請已收到，申請編號為：<strong>#{$application_id}</strong>。</p>
+                            <p>我們將於 3-5 個工作天內與您聯繫。</p>
+                            <hr>
+                            <p style='font-size:12px;color:#777;'>此為系統自動發送郵件，請勿直接回覆。</p>
+                            </body></html>";
+
+                        $mail->Body = $mailBody;
+                        $mail->AltBody = "感謝您的申請。貴校 {$school_name} 的招生申請已收到，申請編號 #{$application_id}。";
+                        $mail->send();
+                    } catch (Exception $e) {
+                        error_log("郵件發送失敗: " . $e->getMessage());
+                    }
+
+                    // 重導向避免重複提交
+                    header('Location: ' . $_SERVER['PHP_SELF'] . '?submitted=1&id=' . $application_id);
+                    exit;
+                }
+            } catch (PDOException $ex) {
+                if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
-            } else {
-                // ??啁隢???                $ins = $pdo->prepare("INSERT INTO junior_school_recruitment_applications 
-                    (school_name, city, district, school_address, contact_name, contact_title, 
-                     contact_phone, contact_email, preferred_date, preferred_time, target_grades, 
-                     expected_students, venue_type, special_requirements, remarks) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 
-                $ins->execute([
-                    $school_name, $city, $district, $school_address ?: null, 
-                    $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
-                    $preferred_date, $preferred_time, $target_grades,
-                    $expected_students_int, $venue_type, $special_requirements ?: null, $remarks ?: null
-                ]);
+                // 優化錯誤提示
+                $error_message = $ex->getMessage();
+                $error_code = $ex->getCode();
                 
-                $application_id = (int)$pdo->lastInsertId();
-                $pdo->commit();
+                // 記錄詳細錯誤到日誌
+                error_log("資料庫錯誤 [Code: $error_code]: " . $error_message);
                 
-                // ?潮Ⅱ隤隞嗥策?唾?鈭綽???啣???
-                try {
-                    $mail = new PHPMailer(true);
-                    $mail->isSMTP();
-                    $mail->Host = SMTP_HOST;
-                    $mail->SMTPAuth = true;
-                    $mail->Username = SMTP_USERNAME;
-                    $mail->Password = SMTP_PASSWORD;
-                    $mail->SMTPSecure = SMTP_SECURE;
-                    $mail->Port = SMTP_PORT;
-                    $mail->CharSet = 'UTF-8';
-                    $mail->setFrom(SMTP_FROM_EMAIL, '摨瑕祐憭批飛????');
-                    $mail->addAddress($contact_email, $contact_name);
-                    
-                    $mail->isHTML(true);
-                    $mail->Subject = '?熒撖批之摮詻??隢歇?嗅 - ' . htmlspecialchars($school_name, ENT_QUOTES, 'UTF-8');
-                    
-                    $mailBody = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f4f6f8;">'
-                        . '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f6f8;padding:24px 0;">'
-                        . '<tr><td align="center">'
-                        . '<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.08);">'
-                        . '<tr><td style="background:linear-gradient(90deg,#667eea,#764ba2);padding:18px 24px;color:#fff;font-size:18px;font-weight:700;">???唾?撌脫??/td></tr>'
-                        . '<tr><td style="padding:22px 24px;">'
-                        . '<h2 style="margin:0 0 12px 0;color:#222;font-size:22px;line-height:1.35;">???函??唾?</h2>'
-                        . '<div style="font-size:15px;color:#333;line-height:1.8;">'
-                        . '<p>閬芣???' . htmlspecialchars($contact_name, ENT_QUOTES, 'UTF-8') . ' ?葦嚗?/p>'
-                        . '<p>?歇?嗅 <strong>' . htmlspecialchars($school_name, ENT_QUOTES, 'UTF-8') . '</strong> ???隢??唾?蝺刻??綽?<strong>#' . $application_id . '</strong>??/p>'
-                        . '<p>??????撠敹怠祟?豢?隢?銝血 3-5 ?極雿予?扯??刻蝜怒?/p>'
-                        . '<div style="background:#f8f9fb;padding:16px;border-radius:8px;margin:20px 0;">'
-                        . '<h3 style="margin:0 0 12px 0;color:#667eea;font-size:16px;">?唾?鞈???</h3>'
-                        . '<table style="width:100%;font-size:14px;color:#333;">'
-                        . '<tr><td style="padding:6px 0;"><strong>摮豢?迂嚗?/strong>' . htmlspecialchars($school_name, ENT_QUOTES, 'UTF-8') . '</td></tr>'
-                        . '<tr><td style="padding:6px 0;"><strong>?舐窗鈭綽?</strong>' . htmlspecialchars($contact_name, ENT_QUOTES, 'UTF-8') . '</td></tr>'
-                        . '<tr><td style="padding:6px 0;"><strong>?舐窗?餉店嚗?/strong>' . htmlspecialchars($contact_phone, ENT_QUOTES, 'UTF-8') . '</td></tr>'
-                        . ($preferred_date ? '<tr><td style="padding:6px 0;"><strong>???交?嚗?/strong>' . htmlspecialchars($preferred_date, ENT_QUOTES, 'UTF-8') . '</td></tr>' : '')
-                        . ($target_grades ? '<tr><td style="padding:6px 0;"><strong>?格?撟渡?嚗?/strong>' . htmlspecialchars($target_grades, ENT_QUOTES, 'UTF-8') . '</td></tr>' : '')
-                        . '</table></div>'
-                        . '<p>憒?隞颱???嚗迭餈???蝜怒?/p>'
-                        . '</div>'
-                        . '<tr><td style="padding-top:22px;color:#999;font-size:12px;">甇日隞嗥蝟餌絞?潮?隢?湔????/td></tr>'
-                        . '</td></tr>'
-                        . '<tr><td style="background:#f8f9fb;padding:14px 24px;color:#98a6ad;font-size:12px;">穢 摨瑕祐憭批飛??撟喳</td></tr>'
-                        . '</table>'
-                        . '</td></tr></table>'
-                        . '</body></html>';
-                    
-                    $mail->Body = $mailBody;
-                    $mail->AltBody = "???函??唾????歇?嗅 " . $school_name . " ???隢??唾?蝺刻???#" . $application_id . "????????撠敹怨??刻蝜怒?;
-                    $mail->send();
-                } catch (Exception $e) {
-                    // ?萎辣?潮仃??敶梢?唾??漱
-                    error_log("?萎辣?潮仃?? " . $e->getMessage());
+                // 根據錯誤類型提供友好的中文提示
+                if ($error_code == 1644) {
+                    // MySQL SIGNAL 錯誤（自定義錯誤）
+                    if (strpos($error_message, '期望招生日期不能是過去的日期') !== false) {
+                        $result_message = '期望招生日期不能是過去的日期，請選擇今天或未來的日期。';
+                    } else {
+                        // 提取自定義錯誤訊息（去除 SQLSTATE 前綴）
+                        $result_message = '資料驗證失敗：' . preg_replace('/^SQLSTATE\[45000\]:.*?:\s*/', '', $error_message);
+                    }
+                } elseif (strpos($error_message, 'Duplicate entry') !== false) {
+                    $result_message = '此申請資料已存在，請勿重複提交。';
+                } elseif (strpos($error_message, 'foreign key constraint') !== false) {
+                    $result_message = '資料關聯錯誤，請檢查輸入的資料是否正確。';
+                } elseif (strpos($error_message, 'cannot be null') !== false) {
+                    $result_message = '必填欄位未填寫完整，請檢查所有標示 * 的欄位。';
+                } else {
+                    // 其他資料庫錯誤，提供通用提示
+                    $result_message = '申請提交失敗，請檢查輸入的資料是否正確。如問題持續，請聯繫系統管理員。';
                 }
                 
-                // 雿輻 POST-Redirect-GET 璅∪??脫迫???漱
-                header('Location: ' . $_SERVER['PHP_SELF'] . '?submitted=1&id=' . $application_id);
-                exit;
+                $result_type = 'error';
+            } catch (Exception $ex) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                
+                // 記錄一般錯誤
+                error_log("申請提交錯誤: " . $ex->getMessage());
+                
+                $result_message = '申請提交失敗，請稍後再試。如問題持續，請聯繫系統管理員。';
+                $result_type = 'error';
             }
-            
-        } catch (Exception $ex) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $result_message = '?唾??漱憭望?嚗? . $ex->getMessage();
-            $result_type = 'error';
         }
     }
+}
+
+// 處理提交成功後的顯示
+if (isset($_GET['submitted']) && $_GET['submitted'] == '1' && isset($_GET['id'])) {
+    $result_message = '申請已成功提交！申請編號：' . htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8') . '。我們將盡快處理您的申請。';
+    $result_type = 'success';
+    // 清除搜尋結果，避免顯示舊資料
+    $application_data = null;
+    $search_email = '';
+}
+
+// 處理更新成功後的顯示
+if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
+    $result_message = '申請資料已更新！申請編號：' . htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8');
+    $result_type = 'success';
+    // 清除搜尋結果，避免顯示舊資料
+    $application_data = null;
+    $search_email = '';
 }
 ?>
 <!DOCTYPE html>
@@ -248,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>?葉摮豢???唾? - 摨瑕祐憭批飛</title>
+    <title>國中學校招生申請 - 康寧大學</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/admission.css">
     <style>
@@ -291,8 +370,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 15px;
-            transition: border-color 0.3s;
+            transition: all 0.3s;
             font-family: inherit;
+            background-color: #ffffff;
+            color: #333;
+        }
+        
+        /* 可用狀態 - 明顯的視覺提示 */
+        .field-group input:not(:disabled),
+        .field-group select:not(:disabled),
+        .field-group textarea:not(:disabled) {
+            background-color: #ffffff;
+            border-color: #d0d0d0;
+            box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.1);
+        }
+        
+        .field-group input:not(:disabled):hover,
+        .field-group select:not(:disabled):hover,
+        .field-group textarea:not(:disabled):hover {
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
         }
         
         .field-group input:focus,
@@ -300,6 +397,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .field-group textarea:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+            background-color: #ffffff;
+        }
+        
+        /* 禁用狀態 - 明顯的灰色提示 */
+        .field-group input:disabled,
+        .field-group select:disabled,
+        .field-group textarea:disabled {
+            background-color: #f5f5f5;
+            border-color: #d0d0d0;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.6;
         }
         
         .field-group textarea {
@@ -321,9 +431,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 20px;
         }
         
-        .submit-btn:hover {
+        /* 啟用狀態 - 藍色 */
+        .submit-btn:not(:disabled) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            opacity: 1;
+        }
+        
+        .submit-btn:not(:disabled):hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 禁用狀態 - 灰色 */
+        .submit-btn:disabled {
+            background: #cccccc;
+            color: #999999;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .submit-btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
         }
         
         .message {
@@ -353,44 +484,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <main>
     <div class="recruitment-container">
         <div class="header">
-            <h1><i class="fas fa-school"></i> ?葉摮豢???唾?</h1>
-            <div class="subtitle">甇∟??葉摮豢?唾?摨瑕祐憭批飛????</div>
+            <h1><i class="fas fa-school"></i> 國中學校招生申請</h1>
+            <div class="subtitle">歡迎各國中學校申請康寧大學招生服務</div>
         </div>
 
         <div class="info-box">
             <i class="fas fa-info-circle"></i>
-            <strong>?唾?隤芣?嚗?/strong>憛怠神?祈”?桀?嚗???????撠 3-5 ?極雿予?扯??刻蝜恬?閮????賊?鈭??銋隞乩蝙??Email ?亥岷?耨?寞?隢???        </div>
+            <strong>申請須知：</strong>請填寫完整資料，我們將在收到申請後 3-5 個工作天內與您聯繫。您也可以使用申請時填寫的 Email 搜尋查詢您的申請狀態。
+        </div>
 
-        <!-- ?亥岷?唾?鞈??憛?-->
+        <!-- 搜尋申請資料功能 -->
         <div class="form-container" style="margin-bottom: 20px;">
             <div class="form-section">
-                <h3><i class="fas fa-search"></i> ?亥岷/靽格?唾?鞈?</h3>
+                <h3><i class="fas fa-search"></i> 搜尋/查詢申請資料</h3>
                 <form method="get" action="" style="display: flex; gap: 10px; align-items: flex-end;">
                     <input type="hidden" name="action" value="search">
                     <div class="field-group" style="width: 50%;">
-                        <label>頛詨 Email ?亥岷?唾?鞈?</label>
-                        <input type="email" name="email" placeholder="隢撓?亦隢?雿輻??Email" 
+                        <label>請輸入 Email 搜尋申請資料</label>
+                        <input type="email" name="email" placeholder="請輸入您申請時使用的 Email" 
                                value="<?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?>" required>
                     </div>
                     <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%;">
-                        <i class="fas fa-search"></i> ?亥岷
+                        <i class="fas fa-search"></i> 搜尋
                     </button>
                 </form>
                 
                 <?php if (count($application_list) > 0): ?>
                     <div style="margin-top: 20px;">
                         <p style="margin: 0 0 15px 0; font-weight: 600; color: #2e7d32; font-size: 16px;">
-                            <i class="fas fa-check-circle"></i> ?曉 <?php echo count($application_list); ?> 蝑隢???                        </p>
+                            <i class="fas fa-check-circle"></i> 找到 <?php echo count($application_list); ?> 筆申請資料
+                        </p>
                         
-                        <!-- ?唾?閮??” -->
+                        <!-- 申請資料列表 -->
                         <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
                             <?php foreach ($application_list as $app): 
                                 $is_selected = ($application_data && $application_data['id'] == $app['id']);
                                 $status_text = [
-                                    'pending' => ['text' => '敺祟??, 'color' => '#ff9800'],
-                                    'approved' => ['text' => '撌脫??, 'color' => '#28a745'],
-                                    'rejected' => ['text' => '撌脫?蝯?, 'color' => '#dc3545'],
-                                    'completed' => ['text' => '撌脣???, 'color' => '#17a2b8']
+                                    'pending' => ['text' => '審核中', 'color' => '#ff9800'],
+                                    'approved' => ['text' => '已通過', 'color' => '#28a745'],
+                                    'rejected' => ['text' => '已拒絕', 'color' => '#dc3545'],
+                                    'completed' => ['text' => '已完成', 'color' => '#17a2b8']
                                 ];
                                 $status = $status_text[$app['status']] ?? ['text' => $app['status'], 'color' => '#6c757d'];
                             ?>
@@ -398,9 +531,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                                         <div style="flex: 1;">
                                             <div style="font-weight: 600; color: #333; margin-bottom: 5px;">
-                                                ?唾?蝺刻?嚗?<?php echo $app['id']; ?>
+                                                申請編號：<?php echo $app['id']; ?>
                                                 <?php if ($is_selected): ?>
-                                                    <span style="background: #2196f3; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">?桀??豢?</span>
+                                                    <span style="background: #2196f3; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">已選取</span>
                                                 <?php endif; ?>
                                             </div>
                                             <div style="font-size: 14px; color: #666; margin-bottom: 5px;">
@@ -409,7 +542,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             <div style="font-size: 13px; color: #888;">
                                                 <i class="fas fa-calendar"></i> <?php echo date('Y-m-d H:i', strtotime($app['created_at'])); ?>
                                                 <?php if ($app['preferred_date']): ?>
-                                                    | <i class="fas fa-clock"></i> ???交?嚗??php echo htmlspecialchars($app['preferred_date'], ENT_QUOTES, 'UTF-8'); ?>
+                                                    | <i class="fas fa-clock"></i> 首選日期：<?php echo htmlspecialchars($app['preferred_date'], ENT_QUOTES, 'UTF-8'); ?>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -422,12 +555,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div style="display: flex; gap: 10px; margin-top: 10px;">
                                         <button type="button" onclick="selectApplication(<?php echo $app['id']; ?>)" 
                                                 style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                                            <i class="fas fa-edit"></i> <?php echo $is_selected ? '撌脤?? : '?豢?甇斤?'; ?>
+                                            <i class="fas fa-edit"></i> <?php echo $is_selected ? '已選取' : '選取此筆'; ?>
                                         </button>
                                         <?php if ($is_selected): ?>
                                             <button type="button" onclick="loadApplicationData()" 
                                                     style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                                                <i class="fas fa-edit"></i> 頛鞈??脰?靽格
+                                                <i class="fas fa-edit"></i> 載入資料到表單
                                             </button>
                                         <?php endif; ?>
                                     </div>
@@ -438,31 +571,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php elseif ($search_email !== ''): ?>
                     <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
                         <p style="margin: 0; color: #856404;">
-                            <i class="fas fa-exclamation-triangle"></i> ?曆??啗府 Email ?隢???                        </p>
+                            <i class="fas fa-exclamation-triangle"></i> 找不到該 Email 的申請資料
+                        </p>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
-
-        <?php 
-        // 瑼Ｘ?臬??鈭斗???閮
-        if (isset($_GET['submitted']) && $_GET['submitted'] == '1' && isset($_GET['id'])) {
-            $result_message = '?唾?撌脫???鈭歹??唾?蝺刻?嚗?' . htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8') . '?????∪翰??舐鼠??;
-            $result_type = 'success';
-            // 皜征?亥岷鞈?嚗Ⅱ靽”?格?雿蝛箇?
-            $application_data = null;
-            $search_email = '';
-        }
-        
-        // 瑼Ｘ?臬??唳???閮
-        if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
-            $result_message = '?唾?鞈?撌脫???堆??唾?蝺刻?嚗?' . htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8');
-            $result_type = 'success';
-            // 皜征?亥岷鞈?嚗Ⅱ靽”?格?雿蝛箇?
-            $application_data = null;
-            $search_email = '';
-        }
-        ?>
         
         <?php if ($result_message !== ''): ?>
             <div class="message <?php echo $result_type; ?>">
@@ -476,13 +590,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="action" id="form_action" value="submit">
                 <input type="hidden" name="application_id" id="application_id" value="<?php echo $application_data ? $application_data['id'] : '0'; ?>">
                 
-                <!-- 摮豢?箸鞈? -->
+                <!-- 學校基本資料 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-building"></i> 摮豢?箸鞈?</h3>
+                    <h3><i class="fas fa-building"></i> 學校基本資料</h3>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> 摮豢?迂</label>
-                            <input type="text" name="school_name" placeholder="隢撓?亙飛?∪?? required 
+                            <label><span class="required">*</span> 學校名稱</label>
+                            <input type="text" name="school_name" placeholder="請輸入學校全名" required 
                                    value="<?php 
                                    $school_name_value = '';
                                    if ($application_data) {
@@ -496,8 +610,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> 蝮??</label>
-                            <input type="text" name="city" placeholder="靘?嚗?????" required 
+                            <label><span class="required">*</span> 縣市</label>
+                            <input type="text" name="city" placeholder="例如：台北市、新北市" required 
                                    value="<?php 
                                    $city_value = '';
                                    if ($application_data) {
@@ -509,8 +623,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    ?>" />
                         </div>
                         <div class="field-group">
-                            <label><span class="required">*</span> ?/?撣?/label>
-                            <input type="text" name="district" placeholder="靘?嚗葉甇???璈?" required 
+                            <label><span class="required">*</span> 區/鄉鎮市</label>
+                            <input type="text" name="district" placeholder="例如：中正區、板橋區" required 
                                    value="<?php 
                                    $district_value = '';
                                    if ($application_data) {
@@ -524,8 +638,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label>摮豢?啣?</label>
-                            <input type="text" name="school_address" placeholder="摰?飛?∪?嚗憛恬?" 
+                            <label>學校地址</label>
+                            <input type="text" name="school_address" placeholder="請輸入完整地址（選填）" 
                                    value="<?php 
                                    $school_address_value = '';
                                    if ($application_data) {
@@ -539,13 +653,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
-                <!-- ?舐窗鈭箄?閮?-->
+                <!-- 聯絡人資訊 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-user"></i> ?舐窗鈭箄?閮?/h3>
+                    <h3><i class="fas fa-user"></i> 聯絡人資訊</h3>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> ?舐窗鈭箏???/label>
-                            <input type="text" name="contact_name" placeholder="隢撓?亥蝯∩犖憪?" required 
+                            <label><span class="required">*</span> 聯絡人姓名</label>
+                            <input type="text" name="contact_name" placeholder="請輸入聯絡人姓名" required 
                                    value="<?php 
                                    $contact_name_value = '';
                                    if ($application_data) {
@@ -557,8 +671,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    ?>" />
                         </div>
                         <div class="field-group">
-                            <label>?瑞迂</label>
-                            <input type="text" name="contact_title" placeholder="靘?嚗蜓隞颯??? 
+                            <label>職稱</label>
+                            <input type="text" name="contact_title" placeholder="例如：教務主任、輔導主任" 
                                    value="<?php 
                                    $contact_title_value = '';
                                    if ($application_data) {
@@ -572,8 +686,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> ?舐窗?餉店</label>
-                            <input type="tel" name="contact_phone" placeholder="靘?嚗?2-1234-5678" required 
+                            <label><span class="required">*</span> 聯絡人電話</label>
+                            <input type="tel" name="contact_phone" placeholder="例如：02-1234-5678" required 
                                    value="<?php 
                                    $contact_phone_value = '';
                                    if ($application_data) {
@@ -585,8 +699,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    ?>" />
                         </div>
                         <div class="field-group">
-                            <label><span class="required">*</span> ?舐窗 Email</label>
-                            <input type="email" name="contact_email" placeholder="靘?嚗ontact@school.edu.tw" required 
+                            <label><span class="required">*</span> 聯絡人 Email</label>
+                            <input type="email" name="contact_email" placeholder="例如：contact@school.edu.tw" required 
                                    value="<?php 
                                    $contact_email_value = '';
                                    if ($application_data) {
@@ -600,13 +714,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
-                <!-- ???賊?鞈? -->
+                <!-- 招生安排資料 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-calendar-check"></i> ???賊?鞈?</h3>
+                    <h3><i class="fas fa-calendar-check"></i> 招生安排資料</h3>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span><i class="fas fa-calendar-alt" style="color:#667eea;"></i> ?????交?</label>
-                            <input type="date" name="preferred_date" required
+                            <label><span class="required">*</span><i class="fas fa-calendar-alt" style="color:#667eea;"></i> 首選日期</label>
+                            <input type="date" name="preferred_date" required min="<?php echo date('Y-m-d'); ?>"
                                    value="<?php 
                                    $preferred_date_value = '';
                                    if ($application_data) {
@@ -616,11 +730,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    }
                                    echo $preferred_date_value;
                                    ?>" />
+                            <small style="color: #666; margin-top: 5px; display: block;">
+                                <i class="fas fa-info-circle"></i> 請選擇今天或未來的日期
+                            </small>
                         </div>
                         <div class="field-group">
-                            <label><span class="required">*</span><i class="fas fa-clock" style="color:#667eea;"></i> ????</label>
+                            <label><span class="required">*</span><i class="fas fa-clock" style="color:#667eea;"></i> 首選時段</label>
                             <select name="preferred_time" required>
-                                <option value="">隢??/option>
+                                <option value="">請選擇</option>
                                 <?php
                                 $preferred_time_value = '';
                                 if ($application_data) {
@@ -629,16 +746,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $preferred_time_value = $_POST['preferred_time'];
                                 }
                                 ?>
-                                <option value="銝?" <?php echo ($preferred_time_value === '銝?') ? 'selected' : ''; ?>>銝?</option>
-                                <option value="銝?" <?php echo ($preferred_time_value === '銝?') ? 'selected' : ''; ?>>銝?</option>
-                                <option value="?典予" <?php echo ($preferred_time_value === '?典予') ? 'selected' : ''; ?>>?典予</option>
+                                <option value="上午" <?php echo ($preferred_time_value === '上午') ? 'selected' : ''; ?>>上午</option>
+                                <option value="下午" <?php echo ($preferred_time_value === '下午') ? 'selected' : ''; ?>>下午</option>
+                                <option value="晚上" <?php echo ($preferred_time_value === '晚上') ? 'selected' : ''; ?>>晚上</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> ?格?撟渡?</label>
-                            <input type="text" name="target_grades" placeholder="靘?嚗?撟渡???撟渡????券" required
+                            <label><span class="required">*</span> 目標年級</label>
+                            <input type="text" name="target_grades" placeholder="例如：七年級、八年級、九年級" required
                                    value="<?php 
                                    $target_grades_value = '';
                                    if ($application_data) {
@@ -650,8 +767,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    ?>" />
                         </div>
                         <div class="field-group">
-                            <label><span class="required">*</span> ????摮貊?鈭箸</label>
-                            <input type="number" name="expected_students" min="1" placeholder="靘?嚗?00" required
+                            <label><span class="required">*</span> 預期參與學生數</label>
+                            <input type="number" name="expected_students" min="1" placeholder="例如：100" required
                                    value="<?php 
                                    $expected_students_value = '';
                                    if ($application_data) {
@@ -665,9 +782,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> ?游憿?</label>
-                            <select name="venue_type" required>
-                                <option value="">隢??/option>
+                            <label>場地類型</label>
+                            <select name="venue_type">
+                                <option value="">請選擇（選填）</option>
                                 <?php
                                 $venue_type_value = '';
                                 if ($application_data) {
@@ -676,17 +793,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $venue_type_value = $_POST['venue_type'];
                                 }
                                 ?>
-                                <option value="蝳桀?" <?php echo ($venue_type_value === '蝳桀?') ? 'selected' : ''; ?>>蝳桀?</option>
-                                <option value="瘣餃?銝剖?" <?php echo ($venue_type_value === '瘣餃?銝剖?') ? 'selected' : ''; ?>>瘣餃?銝剖?</option>
-                                <option value="?恕" <?php echo ($venue_type_value === '?恕') ? 'selected' : ''; ?>>?恕</option>
-                                <option value="?嗡?" <?php echo ($venue_type_value === '?嗡?') ? 'selected' : ''; ?>>?嗡?</option>
+                                <option value="校內" <?php echo ($venue_type_value === '校內') ? 'selected' : ''; ?>>校內</option>
+                                <option value="校外" <?php echo ($venue_type_value === '校外') ? 'selected' : ''; ?>>校外</option>
+                                <option value="線上" <?php echo ($venue_type_value === '線上') ? 'selected' : ''; ?>>線上</option>
+                                <option value="其他" <?php echo ($venue_type_value === '其他') ? 'selected' : ''; ?>>其他</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label>?寞??瘙?/label>
-                            <textarea name="special_requirements" placeholder="隢牧?遙雿畾?瘙?靘?嚗身??瘙????嗥?"><?php 
+                            <label>特殊需求</label>
+                            <textarea name="special_requirements" placeholder="請描述任何特殊需求或注意事項（選填）"><?php 
                             $special_requirements_value = '';
                             if ($application_data) {
                                 $special_requirements_value = htmlspecialchars($application_data['special_requirements'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -699,8 +816,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label>?酉</label>
-                            <textarea name="remarks" placeholder="?嗡??閬???鞈?"><?php 
+                            <label>備註</label>
+                            <textarea name="remarks" placeholder="其他需要補充的資訊（選填）"><?php 
                             $remarks_value = '';
                             if ($application_data) {
                                 $remarks_value = htmlspecialchars($application_data['remarks'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -717,7 +834,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-section">
                     <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
                     <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
-                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px;">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; background-color: #ffffff; color: #333; transition: all 0.3s;">
                         <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer;" title="點擊刷新驗證碼" onerror="this.onerror=null; this.src='captcha_image.php?t='+Date.now();">
                         <button type="button" onclick="refreshCaptcha()" style="padding: 12px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                             <i class="fas fa-sync-alt"></i> 刷新
@@ -729,7 +846,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <button type="submit" class="submit-btn" id="submit_btn">
-                    <i class="fas fa-paper-plane"></i> <span id="submit_btn_text">??唾?</span>
+                    <i class="fas fa-paper-plane"></i> <span id="submit_btn_text">提交申請</span>
                 </button>
             </form>
         </div>
@@ -738,19 +855,137 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php include("share/footer.php"); ?>
     
 <script>
-// ?豢??唾?閮?
-function selectApplication(applicationId) {
-    const email = document.querySelector('input[name="email"]').value;
-    if (email) {
-        window.location.href = '?action=search&email=' + encodeURIComponent(email) + '&application_id=' + applicationId;
+// 檢查必填欄位並更新提交按鈕狀態
+function checkRequiredFields() {
+    const submitBtn = document.getElementById('submit_btn');
+    if (!submitBtn) return;
+    
+    // 獲取所有必填欄位
+    const requiredFields = [
+        document.querySelector('input[name="school_name"]'),
+        document.querySelector('input[name="city"]'),
+        document.querySelector('input[name="district"]'),
+        document.querySelector('input[name="contact_name"]'),
+        document.querySelector('input[name="contact_phone"]'),
+        document.querySelector('input[name="contact_email"]'),
+        document.querySelector('input[name="preferred_date"]'),
+        document.querySelector('select[name="preferred_time"]'),
+        document.querySelector('input[name="target_grades"]'),
+        document.querySelector('input[name="expected_students"]'),
+        document.getElementById('captchaInput')
+    ];
+    
+    // 檢查所有必填欄位是否都有值
+    let allFilled = true;
+    for (let field of requiredFields) {
+        if (!field) {
+            allFilled = false;
+            break;
+        }
+        const value = field.value ? field.value.trim() : '';
+        if (value === '') {
+            allFilled = false;
+            break;
+        }
+    }
+    
+    // 更新按鈕狀態
+    if (allFilled) {
+        submitBtn.disabled = false;
+    } else {
+        submitBtn.disabled = true;
     }
 }
 
-// 頛?唾?鞈??啗”??function loadApplicationData() {
+// 頁面載入時初始化輸入框視覺效果
+document.addEventListener('DOMContentLoaded', function() {
+    // 為驗證碼輸入框添加視覺反饋
+    const captchaInput = document.getElementById('captchaInput');
+    if (captchaInput) {
+        // 添加 hover 效果
+        captchaInput.addEventListener('mouseenter', function() {
+            if (!this.disabled) {
+                this.style.borderColor = '#667eea';
+                this.style.boxShadow = '0 0 0 2px rgba(102, 126, 234, 0.15)';
+            }
+        });
+        captchaInput.addEventListener('mouseleave', function() {
+            if (!this.disabled && document.activeElement !== this) {
+                this.style.borderColor = '#d0d0d0';
+                this.style.boxShadow = 'none';
+            }
+        });
+        // 添加 focus 效果
+        captchaInput.addEventListener('focus', function() {
+            if (!this.disabled) {
+                this.style.borderColor = '#667eea';
+                this.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.2)';
+            }
+        });
+        captchaInput.addEventListener('blur', function() {
+            if (!this.disabled) {
+                this.style.borderColor = '#d0d0d0';
+                this.style.boxShadow = 'none';
+            }
+        });
+    }
+    
+    // 初始狀態：禁用提交按鈕
+    const submitBtn = document.getElementById('submit_btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+    }
+    
+    // 監聽所有必填欄位的變化
+    const form = document.getElementById('recruitmentForm');
+    if (form) {
+        // 監聽 input、select 和 textarea 的變化
+        form.addEventListener('input', checkRequiredFields);
+        form.addEventListener('change', checkRequiredFields);
+        
+        // 初始檢查一次
+        checkRequiredFields();
+    }
+});
+
+// 選取申請資料
+function selectApplication(applicationId) {
+    // 優先從搜索框獲取 email
+    let email = '';
+    const emailInput = document.querySelector('input[name="email"]');
+    if (emailInput) {
+        email = emailInput.value.trim();
+    }
+    
+    // 如果搜索框沒有值，嘗試從 URL 參數獲取
+    if (!email) {
+        const urlParams = new URLSearchParams(window.location.search);
+        email = urlParams.get('email') || '';
+    }
+    
+    // 如果還是沒有，使用 PHP 傳入的搜索 email
+    if (!email) {
+        email = '<?php echo htmlspecialchars($search_email ?? "", ENT_QUOTES, "UTF-8"); ?>';
+    }
+    
+    if (email) {
+        // 構建新的 URL
+        const baseUrl = window.location.pathname;
+        window.location.href = baseUrl + '?action=search&email=' + encodeURIComponent(email) + '&application_id=' + applicationId;
+    } else {
+        alert('請先輸入 Email 進行搜尋');
+        if (emailInput) {
+            emailInput.focus();
+        }
+    }
+}
+
+// 載入申請資料到表單
+function loadApplicationData() {
     <?php if ($application_data): ?>
     const data = <?php echo json_encode($application_data); ?>;
     
-    // 憛怠?銵典甈?
+    // 填入表單資料
     document.querySelector('input[name="school_name"]').value = data.school_name || '';
     document.querySelector('input[name="city"]').value = data.city || '';
     document.querySelector('input[name="district"]').value = data.district || '';
@@ -767,26 +1002,35 @@ function selectApplication(applicationId) {
     document.querySelector('textarea[name="special_requirements"]').value = data.special_requirements || '';
     document.querySelector('textarea[name="remarks"]').value = data.remarks || '';
     
-    // 閮剖??箸?唳芋撘?    document.getElementById('form_action').value = 'update';
+    // 設定為更新模式
+    document.getElementById('form_action').value = 'update';
     document.getElementById('application_id').value = data.id;
-    document.getElementById('submit_btn_text').textContent = '?湔?唾?鞈?';
+    document.getElementById('submit_btn_text').textContent = '更新申請資料';
     
-    // 皛曉??啗”??    document.getElementById('recruitmentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 檢查必填欄位並更新按鈕狀態
+    checkRequiredFields();
     
-    // 憿舐內?內閮
-    alert('?唾?鞈?撌脰??亥”?殷??典隞乩耨?孵?暺???啁隢?????摮?);
+    // 滾動到表單
+    document.getElementById('recruitmentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // 顯示提示訊息
+    alert('申請資料已載入到表單，您可以修改後重新提交。');
     <?php endif; ?>
 }
 
-// ?寞?銵典???唳?鈭斗???摮?document.addEventListener('DOMContentLoaded', function() {
+// 處理表單初始化
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('recruitmentForm');
     const formAction = document.getElementById('form_action');
     const submitBtnText = document.getElementById('submit_btn_text');
     
     if (formAction && formAction.value === 'update') {
-        submitBtnText.textContent = '?湔?唾?鞈?';
+        submitBtnText.textContent = '更新申請資料';
+        // 如果是更新模式，檢查必填欄位並更新按鈕狀態
+        setTimeout(checkRequiredFields, 100);
     }
     
-    // 憒???唳???閮嚗?蝘??芸?蝘駁?亥岷?
+    // 處理更新成功後的顯示，5秒後清除URL參數避免重新整理時重複顯示
     if (window.location.search.includes('updated=1')) {
         setTimeout(function() {
             if (window.history && window.history.replaceState) {
@@ -795,37 +1039,57 @@ function selectApplication(applicationId) {
         }, 5000);
     }
     
-    // ??銵典?漱嚗甇ａ?銴?鈭?    const form = document.getElementById('recruitmentForm');
+    // 處理表單提交
     const submitBtn = document.getElementById('submit_btn');
     let isSubmitting = false;
     
     if (form) {
         form.addEventListener('submit', function(e) {
-            // 憒?甇??漱銝哨??餅迫???漱
+            // 防止重複提交
             if (isSubmitting) {
                 e.preventDefault();
                 return false;
             }
             
-            const action = formAction.value;
-            if (action === 'update') {
-                if (!confirm('蝣箏?閬?啁隢???嚗?)) {
+            // 驗證日期不能是過去的日期
+            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
+            if (preferredDateInput && preferredDateInput.value) {
+                const selectedDate = new Date(preferredDateInput.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
+                selectedDate.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < today) {
                     e.preventDefault();
+                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
+                    preferredDateInput.focus();
+                    isSubmitting = false;
                     return false;
                 }
             }
             
-            // 璅??箸迤?冽?鈭?            isSubmitting = true;
+            const action = formAction.value;
+            if (action === 'update') {
+                if (!confirm('確定要更新申請資料嗎？')) {
+                    e.preventDefault();
+                    isSubmitting = false;
+                    return false;
+                }
+            }
             
-            // 蝳?漱??
+            // 設定提交狀態
+            isSubmitting = true;
+            
+            // 更新按鈕狀態
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.style.opacity = '0.6';
                 submitBtn.style.cursor = 'not-allowed';
                 const originalText = submitBtnText.textContent;
-                submitBtnText.textContent = '??銝?..';
+                submitBtnText.textContent = '處理中...';
                 
-                // 憒?5蝘????漱??嚗敺拇????脫迫蝬脰楝??嚗?                setTimeout(function() {
+                // 如果5秒後仍在提交，恢復按鈕狀態
+                setTimeout(function() {
                     if (isSubmitting) {
                         isSubmitting = false;
                         submitBtn.disabled = false;
@@ -847,6 +1111,8 @@ function refreshCaptcha() {
     // 清空輸入框
     if (captchaInput) {
         captchaInput.value = '';
+        // 清空後檢查必填欄位並更新按鈕狀態
+        checkRequiredFields();
     }
     
     // 刷新驗證碼圖片（添加時間戳防止緩存）
@@ -857,7 +1123,3 @@ function refreshCaptcha() {
 </script>
 </body>
 </html>
-
-
-
-

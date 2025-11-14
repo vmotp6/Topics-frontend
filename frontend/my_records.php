@@ -31,8 +31,12 @@ if ($teacher_result->num_rows > 0) {
 }
 $teacher_stmt->close();
 
-// 查詢該教師的所有活動紀錄
-$records_sql = "SELECT * FROM activity_records WHERE teacher_id = ? ORDER BY created_at DESC";
+// 查詢該教師的所有活動紀錄（通過 JOIN 獲取 teacher 名稱）
+$records_sql = "SELECT ar.*, t.name AS teacher_name_display, t.department AS teacher_department_display
+                FROM activity_records ar
+                LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+                WHERE ar.teacher_id = ? 
+                ORDER BY ar.created_at DESC";
 $records_stmt = $conn->prepare($records_sql);
 $records_stmt->bind_param("i", $teacher_id);
 $records_stmt->execute();
@@ -40,6 +44,7 @@ $records_result = $records_stmt->get_result();
 
 if ($records_result->num_rows > 0) {
     while ($row = $records_result->fetch_assoc()) {
+        // teacher_name 字段存儲的是代碼，teacher_name_display 是從 teacher 表 JOIN 來的名稱
         $records[] = $row;
     }
 }
@@ -285,7 +290,7 @@ $conn->close();
                                 <div class="record-details">
                                     <div class="detail-item">
                                         <div class="detail-label">活動性質</div>
-                                        <div class="detail-value"><?php echo htmlspecialchars($record['activity_type']); ?></div>
+                                        <div class="detail-value"><?php echo htmlspecialchars(convertActivityTypeCodeToName($record['activity_type'], $conn)); ?></div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">活動時間</div>
@@ -302,7 +307,7 @@ $conn->close();
                                     <?php if ($record['participants']): ?>
                                         <div class="detail-item">
                                             <div class="detail-label">參與對象</div>
-                                            <div class="detail-value"><?php echo htmlspecialchars($record['participants']); ?></div>
+                                            <div class="detail-value"><?php echo convertParticipantCodesToNames($record['participants']); ?></div>
                                         </div>
                                     <?php endif; ?>
                                     <?php if ($record['activity_feedback']): ?>
