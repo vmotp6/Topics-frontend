@@ -267,12 +267,12 @@ body::before {
   /* 精確計算：user-item padding-left: 25px, user-avatar width: 60px, margin-right: 20px */
   /* 頭像右邊緣位置：25px (padding) + 60px (avatar width) = 85px */
   /* user-info 從 25px + 60px + 20px = 105px 開始 */
-  /* 徽章寬度約 20px，讓徽章重疊一點在頭像右上角，右邊緣不超過 100px，避免遮擋使用者名稱 */
-  /* left = 73px，徽章右邊緣在 93px，不會遮擋文字（105px開始） */
-  left: 73px !important; /* 重疊在頭像右上角，但不遮擋使用者名稱 */
-  /* user-item padding-top: 20px, 頭像頂部在 20px，徽章要重疊在頭像頂部外側 */
-  /* 讓徽章稍微重疊在頭像上方 */
-  top: 6px !important; /* 稍微重疊在頭像頂部外側 */
+  /* 徽章寬度約 20px，讓徽章重疊在頭像右上角，右邊緣約在 92px，不遮擋使用者名稱（105px開始） */
+  /* 調整位置：再往上移動一點，往左移動多一些，避免遮擋名稱 */
+  left: 64px !important; /* 往左移動更多，讓徽章更靠近頭像右上角 */
+  /* user-item padding-top: 20px, 頭像高度 60px，讓徽章在頭像的右上角區域 */
+  /* 將徽章放在頭像的右上角，往上移動一點避免遮擋 */
+  top: 20px !important; /* 再往上移動一點，讓徽章更靠近頭像頂部，避免遮擋名稱 */
   background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff4757 100%) !important;
   color: white !important;
   border-radius: 10px;

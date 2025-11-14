@@ -42,6 +42,78 @@ try {
         if (empty($contacts)) {
             $contacts = [];
         }
+        
+        // 學生角色也需要獲取有未讀消息的聯絡人
+        try {
+            // 檢查表結構
+            $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                WHERE TABLE_SCHEMA = 'topics_good' 
+                                AND TABLE_NAME = 'private_chat_history' 
+                                AND COLUMN_NAME IN ('from_user_id', 'to_user_id', 'is_read')");
+            $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
+            $hasIsRead = in_array('is_read', $columns);
+            
+            // 獲取當前用戶ID
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+            $stmt->execute([$username]);
+            $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $currentUserId = $currentUser ? $currentUser['id'] : null;
+            
+            if ($currentUserId) {
+                if ($useUserId) {
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(t.name, u.username) as name,
+                                COALESCE(t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                '老師' as contact_type
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user_id = u.id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user_id = ?
+                           AND u.id != ?";
+                    if ($hasIsRead) {
+                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
+                    }
+                    $sql .= " GROUP BY u.id, u.username";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$currentUserId, $currentUserId]);
+                } else {
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(t.name, u.username) as name,
+                                COALESCE(t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                '老師' as contact_type
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user = u.username
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user = ?
+                           AND u.username != ?";
+                    if ($hasIsRead) {
+                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
+                    }
+                    $sql .= " GROUP BY u.id, u.username";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$username, $username]);
+                }
+                
+                if ($stmt) {
+                    $unreadContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // 合併到聯絡人列表（避免重複）
+                    $existingUsernames = array_column($contacts, 'username');
+                    foreach ($unreadContacts as $contact) {
+                        if (!in_array($contact['username'], $existingUsernames)) {
+                            $contacts[] = $contact;
+                        }
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("獲取未讀消息聯絡人失敗: " . $e->getMessage());
+        }
     } elseif ($role === '老師' || $role === 'teacher') {
         // 老師：獲取同科系老師和所有學生
         $contacts = [];
@@ -213,6 +285,80 @@ try {
         if (empty($contacts)) {
             $contacts = [];
         }
+    }
+    
+    // 為每個聯絡人添加未讀消息數量，並按未讀消息數量排序
+    try {
+        // 獲取當前用戶ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$username]);
+        $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        $currentUserId = $currentUser ? $currentUser['id'] : null;
+        
+        if ($currentUserId) {
+            // 檢查表結構
+            $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                WHERE TABLE_SCHEMA = 'topics_good' 
+                                AND TABLE_NAME = 'private_chat_history' 
+                                AND COLUMN_NAME IN ('from_user_id', 'to_user_id', 'is_read')");
+            $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
+            $hasIsRead = in_array('is_read', $columns);
+            
+            // 為每個聯絡人計算未讀消息數量
+            foreach ($contacts as &$contact) {
+                $contact['unread_count'] = 0;
+                
+                // 獲取聯絡人的user_id
+                $contactUserId = $contact['user_id'] ?? null;
+                if (!$contactUserId) {
+                    $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+                    $stmt->execute([$contact['username']]);
+                    $contactUser = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $contactUserId = $contactUser ? $contactUser['id'] : null;
+                }
+                
+                if ($contactUserId) {
+                    if ($useUserId && $hasIsRead) {
+                        // 使用正規化版本（user_id + is_read）
+                        $stmt = $pdo->prepare("SELECT COUNT(*) as unread_count 
+                                              FROM private_chat_history 
+                                              WHERE from_user_id = ? AND to_user_id = ? 
+                                              AND (is_read = 0 OR is_read IS NULL)");
+                        $stmt->execute([$contactUserId, $currentUserId]);
+                    } elseif ($useUserId) {
+                        // 使用正規化版本（user_id，但沒有is_read欄位）
+                        $stmt = $pdo->prepare("SELECT COUNT(*) as unread_count 
+                                              FROM private_chat_history 
+                                              WHERE from_user_id = ? AND to_user_id = ?");
+                        $stmt->execute([$contactUserId, $currentUserId]);
+                    } else {
+                        // 使用舊版本（username）
+                        $stmt = $pdo->prepare("SELECT COUNT(*) as unread_count 
+                                              FROM private_chat_history 
+                                              WHERE from_user = ? AND to_user = ?");
+                        $stmt->execute([$contact['username'], $username]);
+                    }
+                    
+                    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $contact['unread_count'] = $result['unread_count'] ?? 0;
+                }
+            }
+            unset($contact); // 釋放引用
+            
+            // 按未讀消息數量排序（有未讀消息的排在前面，未讀消息多的排在更前面）
+            usort($contacts, function($a, $b) {
+                // 先按未讀消息數量排序（降序）
+                if ($b['unread_count'] != $a['unread_count']) {
+                    return $b['unread_count'] - $a['unread_count'];
+                }
+                // 如果未讀消息數量相同，按名稱排序（升序）
+                return strcmp($a['name'] ?? '', $b['name'] ?? '');
+            });
+        }
+    } catch (PDOException $e) {
+        // 如果獲取未讀消息數量失敗，不影響聯絡人列表顯示
+        error_log("獲取未讀消息數量失敗: " . $e->getMessage());
     }
     
 } catch(PDOException $e) {
