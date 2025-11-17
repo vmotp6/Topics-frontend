@@ -1853,7 +1853,12 @@ $conn->close();
         function initFilePreview() {
             const fileInputs = document.querySelectorAll('input[type="file"][name="files[]"]');
             
-            fileInputs.forEach(input => {
+            fileInputs.forEach((input, index) => {
+                // 為每個輸入添加唯一標識符
+                if (!input.dataset.inputId) {
+                    input.dataset.inputId = 'file-input-' + index;
+                }
+                
                 input.addEventListener('change', function(e) {
                     handleFilePreview(this);
                 });
@@ -1865,6 +1870,16 @@ $conn->close();
             const container = input.closest('.file-upload-area');
             if (!container) return;
             
+            // 獲取或創建輸入的唯一標識符
+            let inputId = input.dataset.inputId;
+            if (!inputId) {
+                // 如果沒有標識符，創建一個
+                const allInputs = container.querySelectorAll('input[type="file"][name="files[]"]');
+                const inputIndex = Array.from(allInputs).indexOf(input);
+                inputId = 'file-input-' + inputIndex;
+                input.dataset.inputId = inputId;
+            }
+            
             // 創建預覽容器
             let previewContainer = container.querySelector('.file-preview-container');
             if (!previewContainer) {
@@ -1873,16 +1888,37 @@ $conn->close();
                 container.querySelector('.file-upload-controls').insertAdjacentElement('beforebegin', previewContainer);
             }
             
-            files.forEach(file => {
+            // 清除該輸入的舊預覽項（如果重新選擇文件）
+            const existingPreviews = previewContainer.querySelectorAll(`.file-preview-item[data-input-id="${inputId}"]`);
+            existingPreviews.forEach(preview => preview.remove());
+            
+            // 如果沒有選擇文件，直接返回
+            if (files.length === 0) {
+                return;
+            }
+            
+            files.forEach((file, fileIndex) => {
+                // 為每個預覽項創建唯一標識符
+                const previewId = inputId + '-file-' + fileIndex;
+                
                 if (file.type.startsWith('image/')) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
+                        // 檢查是否已經存在相同ID的預覽項（防止重複）
+                        const existingPreview = previewContainer.querySelector(`.file-preview-item[data-preview-id="${previewId}"]`);
+                        if (existingPreview) {
+                            return;
+                        }
+                        
                         const previewItem = document.createElement('div');
                         previewItem.className = 'file-preview-item';
+                        previewItem.dataset.inputId = inputId;
+                        previewItem.dataset.previewId = previewId;
+                        previewItem.dataset.fileName = file.name;
                         previewItem.innerHTML = `
                             <img src="${e.target.result}" alt="${file.name}">
                             <div class="file-info">${file.name}</div>
-                            <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}')">
+                            <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}', '${inputId}')">
                                 <i class="fas fa-times"></i>
                             </button>
                         `;
@@ -1890,15 +1926,24 @@ $conn->close();
                     };
                     reader.readAsDataURL(file);
                 } else {
+                    // 檢查是否已經存在相同ID的預覽項（防止重複）
+                    const existingPreview = previewContainer.querySelector(`.file-preview-item[data-preview-id="${previewId}"]`);
+                    if (existingPreview) {
+                        return;
+                    }
+                    
                     // 非圖片檔案顯示檔案資訊
                     const previewItem = document.createElement('div');
                     previewItem.className = 'file-preview-item';
+                    previewItem.dataset.inputId = inputId;
+                    previewItem.dataset.previewId = previewId;
+                    previewItem.dataset.fileName = file.name;
                     previewItem.innerHTML = `
                         <div style="padding: 20px; text-align: center;">
                             <i class="fas fa-file" style="font-size: 48px; color: #6c757d;"></i>
                             <div class="file-info">${file.name}</div>
                         </div>
-                        <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}')">
+                        <button type="button" class="remove-preview" onclick="removeFilePreview(this, '${input.name}', '${inputId}')">
                             <i class="fas fa-times"></i>
                         </button>
                     `;
@@ -1907,9 +1952,25 @@ $conn->close();
             });
         }
         
-        function removeFilePreview(button, inputName) {
+        function removeFilePreview(button, inputName, inputId) {
             const previewItem = button.closest('.file-preview-item');
-            previewItem.remove();
+            if (previewItem) {
+                // 獲取對應的文件輸入
+                const inputIdToUse = inputId || previewItem.dataset.inputId;
+                if (inputIdToUse) {
+                    const fileInput = document.querySelector(`input[type="file"][data-input-id="${inputIdToUse}"]`);
+                    if (fileInput) {
+                        // 清除文件輸入的值
+                        fileInput.value = '';
+                        // 隱藏刪除按鈕
+                        const removeBtn = fileInput.closest('.file-input-group').querySelector('.remove-file-btn');
+                        if (removeBtn) {
+                            removeBtn.style.display = 'none';
+                        }
+                    }
+                }
+                previewItem.remove();
+            }
         }
         
         // ==================== 進度追蹤功能 ====================
@@ -2345,18 +2406,34 @@ $conn->close();
             
             const newFileGroup = document.createElement('div');
             newFileGroup.className = 'file-input-group';
-            newFileGroup.innerHTML = `
-                <input type="file" name="files[]" accept="image/*,.zip,.rar,.pdf">
-                <button type="button" class="remove-file-btn" onclick="removeFileInput(this)">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
+            const newInput = document.createElement('input');
+            newInput.type = 'file';
+            newInput.name = 'files[]';
+            newInput.accept = 'image/*,.zip,.rar,.pdf';
+            
+            // 為新輸入添加唯一標識符
+            const inputIndex = fileInputs.length;
+            newInput.dataset.inputId = 'file-input-' + inputIndex;
+            
+            // 添加事件監聽器
+            newInput.addEventListener('change', function(e) {
+                handleFilePreview(this);
+            });
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-file-btn';
+            removeBtn.onclick = function() { removeFileInput(this); };
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            
+            newFileGroup.appendChild(newInput);
+            newFileGroup.appendChild(removeBtn);
             
             container.appendChild(newFileGroup);
             updateRemoveButtons();
             
             // 聚焦到新增的檔案輸入框
-            newFileGroup.querySelector('input[type="file"]').focus();
+            newInput.focus();
         }
         
         function removeFileInput(button) {
