@@ -146,20 +146,51 @@ class SeniorMessageAuth {
      */
     public function createMessage($messageData) {
         try {
-            $sql = "INSERT INTO senior_messages (title, content, author_name, author_email, author_department, author_grade, author_contact, message_type, author_grade_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $this->pdo->prepare($sql);
+            // 檢查是否需要添加餐廳相關欄位
+            $hasRestaurantData = isset($messageData['restaurant_name']) && !empty($messageData['restaurant_name']);
             
-            $result = $stmt->execute([
-                $messageData['title'],
-                $messageData['content'],
-                $messageData['author_name'],
-                $messageData['author_email'],
-                $messageData['author_department'],
-                $messageData['author_grade'],
-                $messageData['author_contact'],
-                $messageData['message_type'],
-                $messageData['author_grade_year']
-            ]);
+            if ($hasRestaurantData) {
+                // 先檢查表是否有餐廳相關欄位，如果沒有則添加
+                $this->ensureRestaurantColumns();
+                
+                $sql = "INSERT INTO senior_messages (title, content, author_name, author_email, author_department, author_grade, author_contact, message_type, author_grade_year, restaurant_name, restaurant_address, restaurant_lat, restaurant_lng, restaurant_place_id, restaurant_rating, delivery_rating, price_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $this->pdo->prepare($sql);
+                
+                $result = $stmt->execute([
+                    $messageData['title'],
+                    $messageData['content'],
+                    $messageData['author_name'],
+                    $messageData['author_email'],
+                    $messageData['author_department'],
+                    $messageData['author_grade'],
+                    $messageData['author_contact'],
+                    $messageData['message_type'],
+                    $messageData['author_grade_year'],
+                    $messageData['restaurant_name'] ?? null,
+                    $messageData['restaurant_address'] ?? null,
+                    $messageData['restaurant_lat'] ?? null,
+                    $messageData['restaurant_lng'] ?? null,
+                    $messageData['restaurant_place_id'] ?? null,
+                    $messageData['restaurant_rating'] ?? null,
+                    $messageData['delivery_rating'] ?? null,
+                    $messageData['price_level'] ?? null
+                ]);
+            } else {
+                $sql = "INSERT INTO senior_messages (title, content, author_name, author_email, author_department, author_grade, author_contact, message_type, author_grade_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $this->pdo->prepare($sql);
+                
+                $result = $stmt->execute([
+                    $messageData['title'],
+                    $messageData['content'],
+                    $messageData['author_name'],
+                    $messageData['author_email'],
+                    $messageData['author_department'],
+                    $messageData['author_grade'],
+                    $messageData['author_contact'],
+                    $messageData['message_type'],
+                    $messageData['author_grade_year']
+                ]);
+            }
             
             if ($result) {
                 return [
@@ -178,6 +209,32 @@ class SeniorMessageAuth {
                 'success' => false,
                 'error' => '資料庫錯誤: ' . $e->getMessage()
             ];
+        }
+    }
+    
+    /**
+     * 確保表中有餐廳相關欄位
+     */
+    private function ensureRestaurantColumns() {
+        try {
+            // 檢查欄位是否存在
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM senior_messages LIKE 'restaurant_name'");
+            if ($stmt->rowCount() == 0) {
+                // 添加餐廳相關欄位
+                $alterSql = "ALTER TABLE senior_messages 
+                    ADD COLUMN restaurant_name VARCHAR(255) DEFAULT NULL COMMENT '餐廳名稱（僅用於推薦餐廳類型）',
+                    ADD COLUMN restaurant_address VARCHAR(500) DEFAULT NULL COMMENT '餐廳地址',
+                    ADD COLUMN restaurant_lat DECIMAL(10, 8) DEFAULT NULL COMMENT '餐廳緯度',
+                    ADD COLUMN restaurant_lng DECIMAL(11, 8) DEFAULT NULL COMMENT '餐廳經度',
+                    ADD COLUMN restaurant_place_id VARCHAR(255) DEFAULT NULL COMMENT 'Google Places ID',
+                    ADD COLUMN restaurant_rating INT DEFAULT NULL COMMENT '餐廳評分 (1-5)',
+                    ADD COLUMN delivery_rating INT DEFAULT NULL COMMENT '外送評分 (1-5)',
+                    ADD COLUMN price_level INT DEFAULT NULL COMMENT '價格等級 (1-4)'";
+                $this->pdo->exec($alterSql);
+            }
+        } catch(PDOException $e) {
+            // 如果欄位已存在或其他錯誤，忽略
+            error_log("添加餐廳欄位時發生錯誤: " . $e->getMessage());
         }
     }
     

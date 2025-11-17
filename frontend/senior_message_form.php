@@ -86,13 +86,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     $author_contact = trim($_POST['author_contact'] ?? '');
     $message_type = $_POST['message_type'] ?? '經驗分享';
     
-    // 驗證表單資料（姓名已從資料庫自動填入，不需要檢查）
+    // 餐廳相關欄位（僅用於推薦餐廳類型）
+    $restaurant_name = trim($_POST['restaurant_name'] ?? '');
+    $restaurant_address = trim($_POST['restaurant_address'] ?? '');
+    $restaurant_lat = $_POST['restaurant_lat'] ?? null;
+    $restaurant_lng = $_POST['restaurant_lng'] ?? null;
+    $restaurant_place_id = trim($_POST['restaurant_place_id'] ?? '');
+    $restaurant_rating = $_POST['restaurant_rating'] ?? null;
+    $delivery_rating = $_POST['delivery_rating'] ?? null;
+    $price_level = $_POST['price_level'] ?? null;
+    
+    // 驗證表單資料
     if (empty($title) || empty($content)) {
         $form_error = '請填寫標題和留言內容';
     } elseif (empty($author_name)) {
         $form_error = '系統錯誤：無法獲取您的姓名資料，請聯繫管理員';
+    } elseif ($message_type === '推薦餐廳') {
+        // 推薦餐廳類型的額外驗證
+        if (empty($restaurant_name)) {
+            $form_error = '請填寫餐廳名稱';
+        } elseif (empty($restaurant_address)) {
+            $form_error = '請填寫餐廳地址';
+        } elseif (empty($restaurant_rating)) {
+            $form_error = '請選擇餐廳評分';
+        } else {
+            // 準備留言資料（包含餐廳信息）
+            $messageData = [
+                'title' => $title,
+                'content' => $content,
+                'author_name' => $author_name,
+                'author_email' => $user_email,
+                'author_department' => $author_department,
+                'author_grade' => $auth->getGradeDisplay($grade_year),
+                'author_contact' => $author_contact,
+                'message_type' => $message_type,
+                'author_grade_year' => $grade_year,
+                'restaurant_name' => $restaurant_name,
+                'restaurant_address' => $restaurant_address,
+                'restaurant_lat' => $restaurant_lat ? floatval($restaurant_lat) : null,
+                'restaurant_lng' => $restaurant_lng ? floatval($restaurant_lng) : null,
+                'restaurant_place_id' => $restaurant_place_id,
+                'restaurant_rating' => $restaurant_rating ? intval($restaurant_rating) : null,
+                'delivery_rating' => $delivery_rating ? intval($delivery_rating) : null,
+                'price_level' => $price_level ? intval($price_level) : null
+            ];
+            
+            // 創建留言
+            $result = $auth->createMessage($messageData);
+            
+            if ($result['success']) {
+                $success_message = $result['message'];
+                // 清空表單
+                $_POST = [];
+            } else {
+                $form_error = $result['error'];
+            }
+        }
     } else {
-        // 準備留言資料
+        // 非餐廳推薦類型的正常流程
         $messageData = [
             'title' => $title,
             'content' => $content,
@@ -597,13 +648,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     
                     <div class="form-group">
                         <label for="message_type">留言類型</label>
-                        <select id="message_type" name="message_type">
+                        <select id="message_type" name="message_type" onchange="toggleRestaurantFields()">
                             <option value="經驗分享" <?php echo ($_POST['message_type'] ?? '') === '經驗分享' ? 'selected' : ''; ?>>經驗分享</option>
                             <option value="學習建議" <?php echo ($_POST['message_type'] ?? '') === '學習建議' ? 'selected' : ''; ?>>學習建議</option>
                             <option value="生活指南" <?php echo ($_POST['message_type'] ?? '') === '生活指南' ? 'selected' : ''; ?>>生活指南</option>
                             <option value="就業資訊" <?php echo ($_POST['message_type'] ?? '') === '就業資訊' ? 'selected' : ''; ?>>就業資訊</option>
+                            <option value="推薦餐廳" <?php echo ($_POST['message_type'] ?? '') === '推薦餐廳' ? 'selected' : ''; ?>>推薦餐廳</option>
                             <option value="其他" <?php echo ($_POST['message_type'] ?? '') === '其他' ? 'selected' : ''; ?>>其他</option>
                         </select>
+                    </div>
+                    
+                    <!-- 餐廳推薦專用欄位 -->
+                    <div id="restaurant-fields" style="display: <?php echo ($_POST['message_type'] ?? '') === '推薦餐廳' ? 'block' : 'none'; ?>;">
+                        <div class="form-group">
+                            <label for="restaurant_name">餐廳名稱 <span class="required">*</span></label>
+                            <input type="text" id="restaurant_name" name="restaurant_name" 
+                                   value="<?php echo htmlspecialchars($_POST['restaurant_name'] ?? ''); ?>" 
+                                   placeholder="例如：薩爾溫滇緬泰食堂">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="restaurant_search">搜尋餐廳位置</label>
+                            <div style="display: flex; gap: 8px; align-items: stretch;">
+                                <input type="text" id="restaurant_search" 
+                                       placeholder="輸入餐廳名稱或地址搜尋..." 
+                                       style="flex: 1; min-width: 0;">
+                                <button type="button" onclick="searchRestaurant()" 
+                                        style="padding: 12px 14px; background: var(--accent-color); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap; flex-shrink: 0; font-size: 13px; min-width: auto; width: auto;">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <div id="restaurant-results" style="margin-top: 10px; max-height: 200px; overflow-y: auto; display: none;"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>餐廳地址 <span class="required">*</span></label>
+                            <input type="text" id="restaurant_address" name="restaurant_address" 
+                                   value="<?php echo htmlspecialchars($_POST['restaurant_address'] ?? ''); ?>" 
+                                   placeholder="選擇餐廳後自動填入" required>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label for="restaurant_rating">餐廳評分 <span class="required">*</span></label>
+                                <select id="restaurant_rating" name="restaurant_rating" required>
+                                    <option value="">請選擇</option>
+                                    <option value="5" <?php echo ($_POST['restaurant_rating'] ?? '') === '5' ? 'selected' : ''; ?>>5 星 - 非常推薦</option>
+                                    <option value="4" <?php echo ($_POST['restaurant_rating'] ?? '') === '4' ? 'selected' : ''; ?>>4 星 - 推薦</option>
+                                    <option value="3" <?php echo ($_POST['restaurant_rating'] ?? '') === '3' ? 'selected' : ''; ?>>3 星 - 普通</option>
+                                    <option value="2" <?php echo ($_POST['restaurant_rating'] ?? '') === '2' ? 'selected' : ''; ?>>2 星 - 不推薦</option>
+                                    <option value="1" <?php echo ($_POST['restaurant_rating'] ?? '') === '1' ? 'selected' : ''; ?>>1 星 - 非常不推薦</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="delivery_rating">外送評分</label>
+                                <select id="delivery_rating" name="delivery_rating">
+                                    <option value="">無外送</option>
+                                    <option value="5" <?php echo ($_POST['delivery_rating'] ?? '') === '5' ? 'selected' : ''; ?>>5 星</option>
+                                    <option value="4" <?php echo ($_POST['delivery_rating'] ?? '') === '4' ? 'selected' : ''; ?>>4 星</option>
+                                    <option value="3" <?php echo ($_POST['delivery_rating'] ?? '') === '3' ? 'selected' : ''; ?>>3 星</option>
+                                    <option value="2" <?php echo ($_POST['delivery_rating'] ?? '') === '2' ? 'selected' : ''; ?>>2 星</option>
+                                    <option value="1" <?php echo ($_POST['delivery_rating'] ?? '') === '1' ? 'selected' : ''; ?>>1 星</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="price_level">價格等級</label>
+                            <select id="price_level" name="price_level">
+                                <option value="">請選擇</option>
+                                <option value="1" <?php echo ($_POST['price_level'] ?? '') === '1' ? 'selected' : ''; ?>>$ - 平價</option>
+                                <option value="2" <?php echo ($_POST['price_level'] ?? '') === '2' ? 'selected' : ''; ?>>$$ - 中等</option>
+                                <option value="3" <?php echo ($_POST['price_level'] ?? '') === '3' ? 'selected' : ''; ?>>$$$ - 較貴</option>
+                                <option value="4" <?php echo ($_POST['price_level'] ?? '') === '4' ? 'selected' : ''; ?>>$$$$ - 高檔</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 隱藏欄位用於儲存地圖座標 -->
+                        <input type="hidden" id="restaurant_lat" name="restaurant_lat" value="<?php echo htmlspecialchars($_POST['restaurant_lat'] ?? ''); ?>">
+                        <input type="hidden" id="restaurant_lng" name="restaurant_lng" value="<?php echo htmlspecialchars($_POST['restaurant_lng'] ?? ''); ?>">
+                        <input type="hidden" id="restaurant_place_id" name="restaurant_place_id" value="<?php echo htmlspecialchars($_POST['restaurant_place_id'] ?? ''); ?>">
                     </div>
                     
                     <div class="form-group">
@@ -738,6 +863,179 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         
         contentTextarea.addEventListener('input', updateCharCount);
         updateCharCount();
+        
+        // 切換餐廳欄位顯示
+        function toggleRestaurantFields() {
+            const messageType = document.getElementById('message_type').value;
+            const restaurantFields = document.getElementById('restaurant-fields');
+            if (messageType === '推薦餐廳') {
+                restaurantFields.style.display = 'block';
+            } else {
+                restaurantFields.style.display = 'none';
+            }
+        }
+        
+        // 初始化時檢查
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleRestaurantFields();
+        });
+    </script>
+    
+    <!-- Google Maps API for restaurant search -->
+    <?php
+    if (!defined('GOOGLE_MAPS_API_KEY')) {
+        require_once 'config.php';
+    }
+    $google_maps_key = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : '';
+    ?>
+    <script src="https://maps.googleapis.com/maps/api/js?key=<?php echo $google_maps_key; ?>&libraries=places&language=zh-TW&callback=initRestaurantSearch" async defer></script>
+    <script>
+        let autocomplete;
+        let placesService;
+        let geocoder;
+        
+        function initRestaurantSearch() {
+            if (typeof google === 'undefined' || !google.maps) {
+                console.error('Google Maps API 未載入');
+                return;
+            }
+            
+            const searchInput = document.getElementById('restaurant_search');
+            if (!searchInput) return;
+            
+            // 初始化自動完成
+            autocomplete = new google.maps.places.Autocomplete(searchInput, {
+                types: ['establishment'],
+                componentRestrictions: { country: 'tw' },
+                fields: ['name', 'formatted_address', 'geometry', 'place_id', 'rating', 'price_level', 'types']
+            });
+            
+            // 初始化 Places Service
+            const map = new google.maps.Map(document.createElement('div'));
+            placesService = new google.maps.places.PlacesService(map);
+            geocoder = new google.maps.Geocoder();
+            
+            // 當選擇餐廳時
+            autocomplete.addListener('place_changed', function() {
+                const place = autocomplete.getPlace();
+                if (place.geometry) {
+                    // 填充表單欄位
+                    document.getElementById('restaurant_name').value = place.name || '';
+                    document.getElementById('restaurant_address').value = place.formatted_address || '';
+                    document.getElementById('restaurant_lat').value = place.geometry.location.lat();
+                    document.getElementById('restaurant_lng').value = place.geometry.location.lng();
+                    document.getElementById('restaurant_place_id').value = place.place_id || '';
+                    
+                    // 如果有評分，自動填入
+                    if (place.rating) {
+                        const rating = Math.round(place.rating);
+                        document.getElementById('restaurant_rating').value = rating;
+                    }
+                    
+                    // 如果有價格等級，自動填入
+                    if (place.price_level !== undefined) {
+                        document.getElementById('price_level').value = place.price_level;
+                    }
+                    
+                    // 檢查是否有外送服務
+                    if (place.types && place.types.includes('meal_delivery')) {
+                        // 如果有外送，可以提示用戶填寫外送評分
+                        console.log('此餐廳提供外送服務');
+                    }
+                }
+            });
+        }
+        
+        // 手動搜尋餐廳
+        function searchRestaurant() {
+            const searchInput = document.getElementById('restaurant_search');
+            const query = searchInput.value.trim();
+            
+            if (!query) {
+                alert('請輸入餐廳名稱或地址');
+                return;
+            }
+            
+            if (!placesService) {
+                alert('地圖服務未初始化，請稍候再試');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('restaurant-results');
+            resultsDiv.innerHTML = '<p style="padding: 10px; text-align: center;">搜尋中...</p>';
+            resultsDiv.style.display = 'block';
+            
+            // 使用 Text Search
+            const request = {
+                query: query + ' 台北市',
+                type: 'restaurant'
+            };
+            
+            placesService.textSearch(request, function(results, status) {
+                resultsDiv.innerHTML = '';
+                
+                if (status === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
+                    results.slice(0, 5).forEach(function(place) {
+                        const item = document.createElement('div');
+                        item.style.cssText = 'padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: var(--hover-bg); transition: all 0.2s ease;';
+                        item.innerHTML = `
+                            <div style="font-weight: 600; color: var(--text-color); margin-bottom: 4px;">${place.name}</div>
+                            <div style="font-size: 0.9rem; color: var(--secondary-text); margin-bottom: 4px;">${place.formatted_address || '地址未知'}</div>
+                            ${place.rating ? `<div style="font-size: 0.85rem; color: #f39c12;">★ ${place.rating.toFixed(1)}</div>` : ''}
+                        `;
+                        
+                        item.addEventListener('click', function() {
+                            // 填充表單
+                            document.getElementById('restaurant_name').value = place.name || '';
+                            document.getElementById('restaurant_address').value = place.formatted_address || '';
+                            document.getElementById('restaurant_lat').value = place.geometry.location.lat();
+                            document.getElementById('restaurant_lng').value = place.geometry.location.lng();
+                            document.getElementById('restaurant_place_id').value = place.place_id || '';
+                            
+                            if (place.rating) {
+                                const rating = Math.round(place.rating);
+                                document.getElementById('restaurant_rating').value = rating;
+                            }
+                            
+                            if (place.price_level !== undefined) {
+                                document.getElementById('price_level').value = place.price_level;
+                            }
+                            
+                            // 隱藏結果
+                            resultsDiv.style.display = 'none';
+                            searchInput.value = place.name;
+                        });
+                        
+                        item.addEventListener('mouseenter', function() {
+                            item.style.background = 'var(--accent-color)';
+                            item.style.color = 'white';
+                        });
+                        
+                        item.addEventListener('mouseleave', function() {
+                            item.style.background = 'var(--hover-bg)';
+                            item.style.color = '';
+                        });
+                        
+                        resultsDiv.appendChild(item);
+                    });
+                } else {
+                    resultsDiv.innerHTML = '<p style="padding: 10px; text-align: center; color: var(--secondary-text);">找不到餐廳，請嘗試其他關鍵字</p>';
+                }
+            });
+        }
+        
+        // 允許按 Enter 鍵搜尋
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('restaurant_search');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchRestaurant();
+                    }
+                });
+            }
+        });
     </script>
     
     <?php include("share/footer.php"); ?>

@@ -671,68 +671,540 @@ body.custom-spacing {
 }
 
 .directions-info {
-    padding: 20px;
+    padding: 0;
+    border-top: 1px solid #e1e5e9;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.directions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e1e5e9;
+    background: white;
+    flex-shrink: 0;
+}
+
+.directions-header h4 {
+    margin: 0;
+    color: #333;
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.clear-directions-btn {
+    background: rgba(0, 0, 0, 0.05);
+    border: none;
+    color: #5f6368;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 16px;
+}
+
+.clear-directions-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #202124;
+    transform: rotate(90deg);
+}
+
+.clear-directions-btn:active {
+    transform: rotate(90deg) scale(0.9);
+}
+
+/* 起終點輸入框 */
+.directions-inputs {
+    padding: 16px 24px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+    flex-shrink: 0;
+}
+
+.direction-input-group {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid #dadce0;
+    border-radius: 24px;
+    padding: 0 16px;
+    margin-bottom: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.direction-input-group:focus-within {
+    border-color: #4285f4;
+    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1), 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.direction-input-group:last-child {
+    margin-bottom: 0;
+}
+
+.input-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.input-icon.start-icon {
+    color: #34a853;
+}
+
+.input-icon.end-icon {
+    color: #ea4335;
+}
+
+.direction-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 12px 0;
+    font-size: 14px;
+    background: transparent;
+}
+
+.direction-input::placeholder {
+    color: #9aa0a6;
+}
+
+.use-location-btn,
+.swap-locations-btn {
+    background: #f8f9fa;
+    border: 1px solid #dadce0;
+    color: #5f6368;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin-left: 8px;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.use-location-btn:hover,
+.swap-locations-btn:hover {
+    background: #e8f0fe;
+    border-color: #4285f4;
+    color: #4285f4;
+    box-shadow: 0 1px 3px rgba(66, 133, 244, 0.2);
+}
+
+.use-location-btn:active,
+.swap-locations-btn:active {
+    transform: scale(0.95);
+}
+
+/* 交通方式選擇 */
+.travel-modes {
+    display: flex;
+    gap: 6px;
+    padding: 12px 24px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+    flex-shrink: 0;
+}
+
+.travel-mode-btn {
+    flex: 1;
+    min-width: 0; /* 允許按鈕縮小 */
+    padding: 10px 6px;
+    border: 1px solid #dadce0;
+    background: white;
+    border-radius: 24px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+    color: #5f6368;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.travel-mode-btn i {
+    font-size: 18px;
+    position: relative;
+    z-index: 1;
+    transition: transform 0.2s ease;
+}
+
+.travel-mode-btn span {
+    font-size: 10px;
+    position: relative;
+    z-index: 1;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+.travel-mode-btn:hover {
+    border-color: #4285f4;
+    background: #e8f0fe;
+    color: #4285f4;
+    box-shadow: 0 2px 4px rgba(66, 133, 244, 0.15);
+    transform: translateY(-1px);
+}
+
+.travel-mode-btn:hover i {
+    transform: scale(1.1);
+}
+
+.travel-mode-btn.active {
+    border-color: #4285f4;
+    background: #4285f4;
+    color: white;
+    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+    transform: translateY(-1px);
+}
+
+.travel-mode-btn.active i {
+    color: white;
+    transform: scale(1.1);
+}
+
+.travel-mode-btn:active {
+    transform: translateY(0);
+}
+
+/* 路線選項列表 */
+.routes-list {
+    padding: 16px 24px;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+    max-height: 200px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.routes-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.route-option {
+    padding: 12px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.route-option:hover {
+    border-color: #4285f4;
+    background: #f8f9fa;
+}
+
+.route-option.selected {
+    border-color: #4285f4;
+    background: #e8f0fe;
+}
+
+.route-option.fastest {
+    border-color: #34a853;
+}
+
+.route-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.route-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.route-number {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.route-badge {
+    background: #34a853;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.route-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.route-duration,
+.route-distance {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #666;
+}
+
+.route-duration i,
+.route-distance i {
+    font-size: 10px;
+}
+
+.route-summary {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+    padding-top: 8px;
     border-top: 1px solid #e1e5e9;
 }
 
-.directions-info h4 {
-    margin: 0 0 15px 0;
+/* 路線詳細內容 */
+.directions-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    background: white;
+}
+
+.directions-summary-card {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.summary-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.summary-item i {
+    font-size: 24px;
+    color: #4285f4;
+}
+
+.summary-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.summary-value {
+    font-size: 16px;
+    font-weight: 600;
     color: #333;
 }
 
-.direction-step {
-    padding: 10px;
-    border-left: 3px solid #667eea;
-    margin-bottom: 10px;
+.directions-addresses {
+    margin-bottom: 16px;
+}
+
+.address-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
     background: #f8f9fa;
-    border-radius: 0 5px 5px 0;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.address-item:last-child {
+    margin-bottom: 0;
+}
+
+.address-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.start-address .address-icon {
+    background: #34a853;
+    color: white;
+}
+
+.end-address .address-icon {
+    background: #ea4335;
+    color: white;
+}
+
+.address-text {
+    flex: 1;
+}
+
+.address-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.address-value {
+    font-size: 14px;
+    color: #333;
+    line-height: 1.4;
+}
+
+.directions-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.direction-step {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    margin-bottom: 8px;
+    position: relative;
 }
 
 .direction-step:last-child {
     margin-bottom: 0;
 }
 
-.direction-step {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    border-left: 3px solid #667eea;
-    margin-bottom: 10px;
-    background: #f8f9fa;
-    border-radius: 0 5px 5px 0;
+.direction-step:hover {
+    background: #e8f0fe;
+    border-color: #4285f4;
+    transform: translateX(4px);
+}
+
+.direction-step.active {
+    background: #e8f0fe;
+    border-color: #4285f4;
+    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
 }
 
 .step-number {
     width: 28px;
     height: 28px;
-    background: #667eea;
+    background: #4285f4;
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 14px;
+    font-size: 13px;
     flex-shrink: 0;
+}
+
+.step-icon {
+    width: 36px;
+    height: 36px;
+    background: #4285f4;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+    box-shadow: 0 2px 4px rgba(66, 133, 244, 0.3);
 }
 
 .step-content {
     flex: 1;
+    min-width: 0;
 }
 
-.step-content p {
-    margin: 0 0 5px 0;
-    color: #333;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.step-content small {
-    color: #666;
-    font-size: 12px;
+.step-header {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.step-turn-type {
+    background: #4285f4;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.step-road-name {
+    background: #e8f0fe;
+    color: #4285f4;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.step-instruction {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.step-details {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    color: #666;
+    font-size: 12px;
+}
+
+.step-distance,
+.step-duration {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.step-distance i,
+.step-duration i {
+    font-size: 10px;
+    color: #9aa0a6;
 }
 
 /* 餐廳列表樣式 */
@@ -795,16 +1267,25 @@ body.custom-spacing {
 .restaurant-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 10px;
+    gap: 8px;
 }
 
 .restaurant-header h5 {
+    flex: 1;
     margin: 0;
-    color: #333;
-    font-size: 1.05rem;
+    font-size: 16px;
     font-weight: 600;
+    color: #333;
     letter-spacing: 0.2px;
+}
+
+.restaurant-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .open-badge {
@@ -828,8 +1309,185 @@ body.custom-spacing {
 .restaurant-rating {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     margin-bottom: 8px;
+}
+
+.rating-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.review-count {
+    font-size: 11px;
+    color: #666;
+    font-weight: normal;
+}
+
+.delivery-rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #fff3cd;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.delivery-rating i {
+    color: #ff6b35;
+    font-size: 14px;
+}
+
+.delivery-label {
+    color: #856404;
+    font-weight: 500;
+}
+
+.delivery-stars {
+    color: #ff6b35;
+    font-size: 13px;
+}
+
+.delivery-rating-text {
+    color: #856404;
+    font-weight: 600;
+}
+
+.delivery-badge {
+    background: #ff6b35;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.delivery-badge i {
+    font-size: 10px;
+}
+
+/* 餐廳詳情頁面 */
+.restaurant-detail {
+    padding: 0;
+}
+
+.restaurant-detail-header {
+    margin-bottom: 16px;
+}
+
+.restaurant-detail-header h3 {
+    margin: 0 0 12px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+}
+
+.restaurant-detail-rating {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+/* 評論列表 */
+.restaurant-reviews {
+    margin-top: 24px;
+}
+
+.reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.review-item {
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.review-author {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.review-author strong {
+    color: #333;
+    font-size: 14px;
+}
+
+.review-time {
+    color: #999;
+    font-size: 12px;
+}
+
+.review-rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.review-rating .stars {
+    color: #f39c12;
+    font-size: 14px;
+}
+
+.review-rating-text {
+    color: #666;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.review-text {
+    margin: 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.6;
+    word-wrap: break-word;
+}
+
+.back-button:hover {
+    background: #e9ecef !important;
+    border-color: #ced4da !important;
+}
+
+/* 外送評論樣式 */
+.delivery-review {
+    border-left: 3px solid #ff6b35;
+    background: #fff8f5 !important;
+}
+
+.delivery-review-badge {
+    background: #ff6b35;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.delivery-review-badge i {
+    font-size: 9px;
 }
 
 .stars {
