@@ -3,28 +3,21 @@
 require_once 'session_config.php';
 require_once 'senior_message_auth.php';
 
-// 檢查登入狀態
+// 檢查登入狀態（允許未登入用戶查看，但只有登入用戶才能發布留言）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-// 如果未登入，重定向到首頁
-if (!$isLoggedIn) {
-    header("Location: index.php");
-    exit;
+// 檢查留言權限（只有登入的學生才能發布留言）
+$can_post_message = false;
+if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
+    $auth = new SeniorMessageAuth();
+    $user_email = $_SESSION['username'];
+    $permission_result = $auth->checkPermission($user_email);
+    $can_post_message = $permission_result['has_permission'];
+} else {
+    $permission_result = ['has_permission' => false, 'error' => '請先登入'];
 }
-
-// 檢查是否為學生角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
-    header("Location: index.php");
-    exit;
-}
-
-// 檢查留言權限
-$auth = new SeniorMessageAuth();
-$user_email = $_SESSION['username'];
-$permission_result = $auth->checkPermission($user_email);
-$can_post_message = $permission_result['has_permission'];
 
 // 資料庫連接 - 使用與現有系統相同的配置
 $host = 'localhost';
@@ -47,15 +40,19 @@ try {
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // 為每個留言檢查用戶是否已點讚
-    $user_email = $_SESSION['username'];
+    // 為每個留言檢查用戶是否已點讚（只有登入用戶才檢查）
+    $user_email = $isLoggedIn ? ($_SESSION['username'] ?? '') : '';
     foreach ($messages as &$message) {
-        try {
-            $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
-            $stmt->execute([$message['id'], $user_email]);
-            $message['user_liked'] = $stmt->fetch() ? true : false;
-        } catch(PDOException $e) {
-            // 如果 message_likes 表不存在，設為 false
+        if ($isLoggedIn && !empty($user_email)) {
+            try {
+                $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
+                $stmt->execute([$message['id'], $user_email]);
+                $message['user_liked'] = $stmt->fetch() ? true : false;
+            } catch(PDOException $e) {
+                // 如果 message_likes 表不存在，設為 false
+                $message['user_liked'] = false;
+            }
+        } else {
             $message['user_liked'] = false;
         }
     }
@@ -70,10 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     $message_id = (int)$_POST['message_id'];
     $is_liked = $_POST['is_liked'] === '1';
-    $user_email = $_SESSION['username'] ?? '';
+    $user_email = $isLoggedIn ? ($_SESSION['username'] ?? '') : '';
     
     // 檢查用戶是否登入
-    if (empty($user_email)) {
+    if (!$isLoggedIn || empty($user_email)) {
         echo json_encode(['success' => false, 'error' => '請先登入']);
         exit;
     }
@@ -184,16 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         :root {
-            --bg-color: #000;
-            --text-color: #fff;
-            --secondary-text: #71767b;
-            --border-color: #333;
-            --hover-bg: #16181c;
-            --accent-color: #1d9bf0;
-            --card-bg: transparent;
-        }
-        
-        [data-theme="light"] {
             --bg-color: #fff;
             --text-color: #000;
             --secondary-text: #536471;
@@ -344,31 +331,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             transform: translateY(0);
         }
         
-        .theme-toggle {
-            position: fixed;
-            top: 120px; /* 恢復到 header 下方位置 */
-            right: 20px;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.3rem;
-            z-index: 1000;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .theme-toggle:hover {
-            transform: scale(1.1) rotate(15deg);
-            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
-        }
 
         /* 移除不必要的間距設定 */
         .page-top-spacer {
@@ -765,13 +727,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 border-radius: 12px;
             }
             
-            .theme-toggle {
-                top: 140px; /* 手機版恢復位置 */
-                right: 15px;
-                width: 45px;
-                height: 45px;
-                font-size: 1.2rem;
-            }
             
             .filter-tabs {
                 flex-wrap: wrap;
@@ -805,13 +760,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 padding-top: 130px !important; /* 更小螢幕恢復間距 */
             }
             
-            .theme-toggle {
-                top: 150px; /* 更小螢幕恢復位置 */
-                right: 10px;
-                width: 40px;
-                height: 40px;
-                font-size: 1.1rem;
-            }
             
             .messages-grid {
                 grid-template-columns: 1fr;
@@ -851,10 +799,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <body class="custom-spacing">
     <?php include("share/header.php"); ?>
     <div class="page-top-spacer"></div>
-    
-    <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
-        <span id="theme-icon">🌙</span>
-    </button>
     
     <div class="container">
         <div class="header">
@@ -906,7 +850,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <?php else: ?>
             <div class="messages-feed" id="messagesFeed">
                 <?php foreach ($messages as $message): ?>
-                    <div class="message-card" data-type="<?php echo htmlspecialchars($message['message_type'] ?? '其他'); ?>">
+                    <div class="message-card" data-type="<?php echo htmlspecialchars($message['message_type'] ?? '其他'); ?>" data-message-id="<?php echo $message['id']; ?>">
                         <div class="message-header">
                             <div class="user-avatar"><?php echo mb_substr(htmlspecialchars($message['author_name']), 0, 1); ?></div>
                             <div class="user-info">
@@ -956,14 +900,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                         </div>
                                     <?php endif; ?>
                                 </div>
-                                
-                                <?php if (!empty($message['restaurant_lat']) && !empty($message['restaurant_lng'])): ?>
-                                    <button type="button" 
-                                            onclick="showRestaurantOnMap('<?php echo htmlspecialchars($message['restaurant_name']); ?>', <?php echo htmlspecialchars($message['restaurant_lat']); ?>, <?php echo htmlspecialchars($message['restaurant_lng']); ?>, '<?php echo htmlspecialchars($message['restaurant_address'] ?? ''); ?>')"
-                                            style="width: 100%; padding: 10px; background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s ease;">
-                                        <i class="fas fa-map-marker-alt"></i> 在地圖上查看
-                                    </button>
-                                <?php endif; ?>
                             </div>
                         <?php endif; ?>
                         
@@ -993,12 +929,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <?php endif; ?>
                         
                         <div class="message-stats">
-                            <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" 
-                                    data-message-id="<?php echo $message['id']; ?>"
-                                    onclick="toggleLike(<?php echo $message['id']; ?>)">
-                                <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '🤍'; ?></span>
-                                <span class="like-count"><?php echo $message['like_count'] ?? 0; ?></span>
-                            </button>
+                            <?php if ($isLoggedIn): ?>
+                                <button type="button" class="like-btn <?php echo $message['user_liked'] ? 'liked' : ''; ?>" 
+                                        data-message-id="<?php echo $message['id']; ?>"
+                                        onclick="toggleLike(<?php echo $message['id']; ?>)">
+                                    <span class="like-icon"><?php echo $message['user_liked'] ? '💖' : '🤍'; ?></span>
+                                    <span class="like-count"><?php echo $message['like_count'] ?? 0; ?></span>
+                                </button>
+                            <?php else: ?>
+                                <div class="like-btn" style="cursor: default; opacity: 0.7;">
+                                    <span class="like-icon">🤍</span>
+                                    <span class="like-count"><?php echo $message['like_count'] ?? 0; ?></span>
+                                </div>
+                            <?php endif; ?>
                             <div class="view-count">
                                 👁️ <?php echo $message['view_count'] ?? 0; ?>
                             </div>
@@ -1010,35 +953,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
     
     <script>
-        // 主題切換功能
-        function toggleTheme() {
-            const body = document.body;
-            const themeIcon = document.getElementById('theme-icon');
-            
-            if (body.getAttribute('data-theme') === 'light') {
-                body.setAttribute('data-theme', 'dark');
-                themeIcon.textContent = '🌙';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                body.setAttribute('data-theme', 'light');
-                themeIcon.textContent = '☀️';
-                localStorage.setItem('theme', 'light');
-            }
-        }
-        
-        // 載入保存的主題
-        function loadTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            const body = document.body;
-            const themeIcon = document.getElementById('theme-icon');
-            
-            body.setAttribute('data-theme', savedTheme);
-            themeIcon.textContent = savedTheme === 'light' ? '☀️' : '🌙';
-        }
-        
-        // 頁面載入時應用主題
-        document.addEventListener('DOMContentLoaded', loadTheme);
-        
         // 篩選功能
         document.querySelectorAll('.filter-tab').forEach(tab => {
             tab.addEventListener('click', function() {
@@ -1105,17 +1019,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         // 愛心按鈕功能 - 切換模式
         function toggleLike(messageId, event) {
-            // 使用更可靠的选择器
-            let likeBtn = null;
-            if (event && event.target) {
-                likeBtn = event.target.closest('.like-btn');
-            }
-            if (!likeBtn) {
-                likeBtn = document.querySelector(`.like-btn[data-message-id="${messageId}"]`);
-            }
+            // 檢查是否登入（通過檢查按鈕是否存在且可點擊）
+            const likeBtn = document.querySelector(`.like-btn[data-message-id="${messageId}"]`);
             
-            if (!likeBtn) {
-                console.error('找不到愛心按鈕，messageId:', messageId);
+            if (!likeBtn || likeBtn.disabled || likeBtn.style.cursor === 'default') {
+                // 未登入或按鈕不可用
+                alert('請先登入才能點讚');
                 return;
             }
             
@@ -1223,12 +1132,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             });
         }
         
-        // 增加瀏覽次數
+        // 增加瀏覽次數（所有用戶都可以觸發）
         document.querySelectorAll('.message-card').forEach(card => {
+            // 嘗試從按鈕獲取 message_id，如果沒有按鈕則從 data 屬性獲取
+            let messageId = null;
             const likeBtn = card.querySelector('button[onclick*="toggleLike"]');
-            if (!likeBtn) return; // 如果找不到按鈕就跳過
+            if (likeBtn) {
+                const match = likeBtn.onclick.toString().match(/toggleLike\((\d+)\)/);
+                if (match) {
+                    messageId = match[1];
+                }
+            }
             
-            const messageId = likeBtn.onclick.toString().match(/\d+/);
+            // 如果還是找不到，嘗試從 data 屬性獲取
+            if (!messageId) {
+                const cardId = card.id || card.getAttribute('data-message-id');
+                if (cardId) {
+                    messageId = cardId.replace('message-', '');
+                }
+            }
+            
             if (!messageId) return; // 如果找不到 messageId 就跳過
             
             // 使用 fetch 增加瀏覽次數（不重新載入頁面）
@@ -1237,14 +1160,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: 'action=view&message_id=' + messageId[0]
+                body: 'action=view&message_id=' + messageId
             }).then(response => response.json())
             .then(data => {
                 if (data.success) {
                     // 更新顯示的瀏覽次數
                     const viewCount = card.querySelector('.view-count');
                     if (viewCount) {
-                        const currentCount = parseInt(viewCount.textContent.match(/\d+/)[0]);
+                        const currentCount = parseInt(viewCount.textContent.match(/\d+/)?.[0] || 0);
                         viewCount.innerHTML = `👁️ ${currentCount + 1}`;
                     }
                 }
