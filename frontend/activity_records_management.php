@@ -87,12 +87,59 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
              case 'update':
                 if (isset($_POST['record_id']) && is_numeric($_POST['record_id'])) {
                     $record_id = $_POST['record_id'];
+                    
+                    // 先獲取現有的文件列表
+                    $get_files_sql = "SELECT uploaded_files FROM activity_records WHERE id = ? AND teacher_id = ?";
+                    $get_files_stmt = $conn->prepare($get_files_sql);
+                    $existing_files = [];
+                    if ($get_files_stmt) {
+                        $get_files_stmt->bind_param("ii", $record_id, $teacher_id);
+                        $get_files_stmt->execute();
+                        $result = $get_files_stmt->get_result();
+                        if ($row = $result->fetch_assoc()) {
+                            if (!empty($row['uploaded_files'])) {
+                                $existing_files = json_decode($row['uploaded_files'], true) ?: [];
+                            }
+                        }
+                        $get_files_stmt->close();
+                    }
+                    
+                    // 處理文件上傳
+                    $upload_dir = UPLOAD_DIR;
+                    if (!file_exists($upload_dir)) {
+                        mkdir($upload_dir, 0777, true);
+                    }
+                    
+                    $new_files = [];
+                    if (isset($_FILES['new_files']) && !empty($_FILES['new_files']['tmp_name'][0])) {
+                        foreach ($_FILES['new_files']['tmp_name'] as $key => $tmp_name) {
+                            if ($_FILES['new_files']['error'][$key] == 0 && !empty($tmp_name)) {
+                                $original_name = $_FILES['new_files']['name'][$key];
+                                $file_extension = pathinfo($original_name, PATHINFO_EXTENSION);
+                                $safe_filename = time() . "_" . $key . "_" . preg_replace('/[^a-zA-Z0-9._-]/', '', $original_name);
+                                $target_file = $upload_dir . $safe_filename;
+                                
+                                // 檢查檔案大小 (10MB)
+                                if ($_FILES['new_files']['size'][$key] <= 10 * 1024 * 1024) {
+                                    if (move_uploaded_file($tmp_name, $target_file)) {
+                                        $new_files[] = $target_file;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 合併現有文件和新文件
+                    $all_files = array_merge($existing_files, $new_files);
+                    $files_json = !empty($all_files) ? json_encode($all_files) : (!empty($existing_files) ? json_encode($existing_files) : null);
+                    
                     $update_sql = "UPDATE activity_records SET 
                                    activity_date = ?, 
                                    school_name = ?, 
                                    activity_type = ?, 
                                    activity_time = ?,
-                                   suggestion = ?
+                                   suggestion = ?,
+                                   uploaded_files = ?
                                    WHERE id = ? AND teacher_id = ?";
                     
                     // 讀取活動類型選項，將名稱轉換為代碼
@@ -125,12 +172,13 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
                     
                     $update_stmt = $conn->prepare($update_sql);
                     if ($update_stmt) {
-                        $update_stmt->bind_param("sssssii", 
+                        $update_stmt->bind_param("ssssssii", 
                             $_POST['activity_date'],
                             $_POST['school_name'],
                             $activity_type_code, // 存儲代碼而不是名稱
                             $_POST['activity_time'],
                             $_POST['suggestion'],
+                            $files_json,
                             $record_id,
                             $teacher_id
                         );
@@ -146,6 +194,93 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
                     }
                 }
                 break;
+            case 'delete_file':
+                // 檢查是否為 AJAX 請求
+                $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+                
+                if (isset($_POST['record_id']) && isset($_POST['file_path'])) {
+                    $record_id = $_POST['record_id'];
+                    $file_to_delete = $_POST['file_path'];
+                    
+                    // 獲取現有文件列表
+                    $get_files_sql = "SELECT uploaded_files FROM activity_records WHERE id = ?";
+                    // 檢查權限：管理員可以刪除所有記錄的文件，教師只能刪除自己的
+                    if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
+                        // 管理員可以刪除任何記錄的文件
+                        $get_files_stmt = $conn->prepare($get_files_sql);
+                        if ($get_files_stmt) {
+                            $get_files_stmt->bind_param("i", $record_id);
+                        }
+                    } else {
+                        // 教師只能刪除自己的記錄的文件
+                        $get_files_sql .= " AND teacher_id = ?";
+                        $get_files_stmt = $conn->prepare($get_files_sql);
+                        if ($get_files_stmt && $teacher_id) {
+                            $get_files_stmt->bind_param("ii", $record_id, $teacher_id);
+                        } else {
+                            $get_files_stmt = false;
+                        }
+                    }
+                    
+                    if ($get_files_stmt) {
+                        $get_files_stmt->execute();
+                        $result = $get_files_stmt->get_result();
+                        if ($row = $result->fetch_assoc()) {
+                            $files = json_decode($row['uploaded_files'], true) ?: [];
+                            // 移除指定文件
+                            $files = array_filter($files, function($file) use ($file_to_delete) {
+                                return $file !== $file_to_delete;
+                            });
+                            $files = array_values($files); // 重新索引
+                            
+                            // 刪除物理文件
+                            if (file_exists($file_to_delete)) {
+                                @unlink($file_to_delete);
+                            }
+                            
+                            // 更新資料庫
+                            $files_json = !empty($files) ? json_encode($files) : null;
+                            $update_files_sql = "UPDATE activity_records SET uploaded_files = ? WHERE id = ?";
+                            if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
+                                // 管理員
+                                $update_files_stmt = $conn->prepare($update_files_sql);
+                                if ($update_files_stmt) {
+                                    $update_files_stmt->bind_param("si", $files_json, $record_id);
+                                }
+                            } else {
+                                // 教師
+                                $update_files_sql .= " AND teacher_id = ?";
+                                $update_files_stmt = $conn->prepare($update_files_sql);
+                                if ($update_files_stmt && $teacher_id) {
+                                    $update_files_stmt->bind_param("sii", $files_json, $record_id, $teacher_id);
+                                } else {
+                                    $update_files_stmt = false;
+                                }
+                            }
+                            
+                            if ($update_files_stmt) {
+                                $update_files_stmt->execute();
+                                $update_files_stmt->close();
+                                
+                                // 如果是 AJAX 請求，返回 JSON
+                                if ($is_ajax || isset($_POST['ajax'])) {
+                                    header('Content-Type: application/json');
+                                    echo json_encode([
+                                        'success' => true,
+                                        'message' => '文件已成功刪除！',
+                                        'remaining_files' => $files
+                                    ]);
+                                    exit;
+                                }
+                                
+                                $message = "文件已成功刪除！";
+                                $messageType = "success";
+                            }
+                        }
+                        $get_files_stmt->close();
+                    }
+                }
+                break;
         }
     }
 }
@@ -156,7 +291,7 @@ $activity_records = [];
 
 if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
     // 🔹 若是招生中心 → 查看所有老師紀錄
-    $records_sql = "SELECT ar.*, t.name AS teacher_name, t.department AS teacher_department
+    $records_sql = "SELECT ar.*, t.name AS teacher_name_display, t.department AS teacher_department_display
                     FROM activity_records ar
                     LEFT JOIN teacher t ON ar.teacher_id = t.user_id
                     WHERE 1 ";
@@ -201,6 +336,25 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
                 } else {
                     $row['activity_type_display'] = '';
                 }
+                // 確保 uploaded_files 字段存在並正確處理
+                if (!isset($row['uploaded_files'])) {
+                    $row['uploaded_files'] = null;
+                } else if (!empty($row['uploaded_files']) && is_string($row['uploaded_files'])) {
+                    // 如果 uploaded_files 是 JSON 字符串，先解析為數組
+                    // 這樣 json_encode 會正確處理，JavaScript 可以直接使用數組
+                    $decoded = json_decode($row['uploaded_files'], true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        // JSON 有效，將數組賦值給 uploaded_files
+                        // 這樣 json_encode 會將其編碼為 JSON 數組，而不是字符串
+                        $row['uploaded_files'] = $decoded;
+                    } else {
+                        // JSON 無效，設為 null
+                        $row['uploaded_files'] = null;
+                    }
+                } else if (empty($row['uploaded_files'])) {
+                    // 空字符串也設為 null
+                    $row['uploaded_files'] = null;
+                }
                 $activity_records[] = $row;
             }
         }
@@ -215,8 +369,8 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
     $records_sql = "
         SELECT 
             ar.*, 
-            t.name AS teacher_name, 
-            t.department AS teacher_department
+            t.name AS teacher_name_display, 
+            t.department AS teacher_department_display
         FROM activity_records ar
         LEFT JOIN teacher t ON ar.teacher_id = t.user_id
         WHERE ar.teacher_id = ?
@@ -242,6 +396,25 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
                     $row['activity_type_display'] = convertActivityTypeCodeToName($row['activity_type'], $conn);
                 } else {
                     $row['activity_type_display'] = '';
+                }
+                // 確保 uploaded_files 字段存在並正確處理
+                if (!isset($row['uploaded_files'])) {
+                    $row['uploaded_files'] = null;
+                } else if (!empty($row['uploaded_files']) && is_string($row['uploaded_files'])) {
+                    // 如果 uploaded_files 是 JSON 字符串，先解析為數組
+                    // 這樣 json_encode 會正確處理，JavaScript 可以直接使用數組
+                    $decoded = json_decode($row['uploaded_files'], true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        // JSON 有效，將數組賦值給 uploaded_files
+                        // 這樣 json_encode 會將其編碼為 JSON 數組，而不是字符串
+                        $row['uploaded_files'] = $decoded;
+                    } else {
+                        // JSON 無效，設為 null
+                        $row['uploaded_files'] = null;
+                    }
+                } else if (empty($row['uploaded_files'])) {
+                    // 空字符串也設為 null
+                    $row['uploaded_files'] = null;
                 }
                 $activity_records[] = $row;
             }
@@ -477,12 +650,35 @@ $conn->close();
         
         .modal-content {
             background-color: white;
-            margin: 5% auto;
+            margin: 3% auto;
             padding: 30px;
             border-radius: 15px;
             width: 80%;
-            max-width: 600px;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 自定義滾動條樣式 */
+        .modal-content::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .modal-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+        
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 5px;
+        }
+        
+        .modal-content::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
         }
         
         .modal-header {
@@ -492,6 +688,38 @@ $conn->close();
             margin-bottom: 20px;
             padding-bottom: 15px;
             border-bottom: 1px solid #dee2e6;
+            flex-shrink: 0;
+        }
+        
+        #viewModalBody,
+        #editModalBody {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 5px;
+        }
+        
+        /* 文件預覽區域的滾動條樣式 */
+        #viewModalBody::-webkit-scrollbar,
+        #editModalBody::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #viewModalBody::-webkit-scrollbar-track,
+        #editModalBody::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #viewModalBody::-webkit-scrollbar-thumb,
+        #editModalBody::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+        
+        #viewModalBody::-webkit-scrollbar-thumb:hover,
+        #editModalBody::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
         }
         
         .close {
@@ -807,8 +1035,39 @@ $conn->close();
 
     <script>
         // 記錄資料 (轉為JavaScript可用格式)
-        const activityRecords = <?php echo json_encode($activity_records); ?>;
+        // 使用 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES 確保正確編碼
+        const activityRecords = <?php echo json_encode($activity_records, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         const activityTypeOptions = <?php echo json_encode($activity_type_options); ?>;
+        
+        // 調試：輸出記錄數據以便排查問題
+        console.log('活動記錄數據:', activityRecords);
+        console.log('總記錄數:', activityRecords.length);
+        activityRecords.forEach((record, index) => {
+            console.log(`記錄 ${index + 1} (ID: ${record.id}):`, {
+                id: record.id,
+                teacher_id: record.teacher_id,
+                uploaded_files: record.uploaded_files,
+                type: typeof record.uploaded_files,
+                isNull: record.uploaded_files === null,
+                isUndefined: record.uploaded_files === undefined,
+                isEmpty: record.uploaded_files === '',
+                isArray: Array.isArray(record.uploaded_files),
+                length: Array.isArray(record.uploaded_files) ? record.uploaded_files.length : 'N/A'
+            });
+        });
+        
+        // 特別檢查 ID 22 的記錄
+        const record22 = activityRecords.find(r => r.id == 22);
+        if (record22) {
+            console.log('=== 找到記錄 ID 22 ===');
+            console.log('完整記錄:', record22);
+            console.log('uploaded_files 值:', record22.uploaded_files);
+            console.log('uploaded_files 類型:', typeof record22.uploaded_files);
+            console.log('是否為數組:', Array.isArray(record22.uploaded_files));
+        } else {
+            console.log('=== 未找到記錄 ID 22 ===');
+            console.log('所有記錄的 ID:', activityRecords.map(r => r.id));
+        }
         
         // 篩選記錄功能
         function filterRecords() {
@@ -861,6 +1120,47 @@ $conn->close();
             const record = activityRecords.find(r => r.id == recordId);
             if (!record) return;
             
+            // 解析文件列表
+            let filesHtml = '';
+            // 檢查 uploaded_files 是否存在且不為 null
+            if (record.uploaded_files !== null && record.uploaded_files !== undefined && record.uploaded_files !== '') {
+                try {
+                    let files;
+                    if (typeof record.uploaded_files === 'string') {
+                        // 如果是字符串，嘗試解析 JSON
+                        files = JSON.parse(record.uploaded_files);
+                    } else if (Array.isArray(record.uploaded_files)) {
+                        // 如果已經是數組，直接使用
+                        files = record.uploaded_files;
+                    } else {
+                        files = [];
+                    }
+                    
+                    if (Array.isArray(files) && files.length > 0) {
+                        filesHtml = '<div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6;"><strong><i class="fas fa-file-upload"></i> 佐證資料:</strong><div style="max-height: 400px; overflow-y: auto; overflow-x: hidden; margin-top: 15px; padding-right: 10px;"><div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">';
+                        files.forEach((filePath, index) => {
+                            const fileName = filePath.split('/').pop() || filePath.split('\\\\').pop() || `檔案 ${index + 1}`;
+                            const fileExt = fileName.split('.').pop().toLowerCase();
+                            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt);
+                            const downloadUrl = 'download_file.php?file=' + encodeURIComponent(filePath) + '&record_id=' + recordId;
+                            
+                            filesHtml += `
+                                <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; text-align: center; background: #f8f9fa;">
+                                    ${isImage ? `<img src="${downloadUrl}" style="max-width: 100%; max-height: 120px; width: auto; height: auto; object-fit: contain; border-radius: 4px; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;" alt="${fileName}">` : `<i class="fas fa-file" style="font-size: 48px; color: #6c757d; margin-bottom: 8px;"></i>`}
+                                    <div style="font-size: 12px; word-break: break-all; margin-bottom: 8px; max-height: 40px; overflow: hidden; text-overflow: ellipsis;">${fileName}</div>
+                                    <a href="${downloadUrl}" target="_blank" style="display: inline-block; padding: 5px 10px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; font-size: 12px;">
+                                        <i class="fas fa-download"></i> 下載
+                                    </a>
+                                </div>
+                            `;
+                        });
+                        filesHtml += '</div></div></div>';
+                    }
+                } catch (e) {
+                    console.error('解析文件列表失敗:', e);
+                }
+            }
+            
             const modalBody = document.getElementById('viewModalBody');
             modalBody.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
@@ -876,6 +1176,7 @@ $conn->close();
                 ${record.participants_display ? `<div style="margin-top: 15px;"><strong>參與對象:</strong><br>${record.participants_display}</div>` : ''}
                 ${record.activity_feedback ? `<div style="margin-top: 15px;"><strong>活動紀錄:</strong><br>${record.activity_feedback}</div>` : ''}
                 ${record.suggestion ? `<div style="margin-top: 15px;"><strong>檢討與建議:</strong><br>${record.suggestion}</div>` : ''}
+                ${filesHtml || '<div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6;"><strong><i class="fas fa-file-upload"></i> 佐證資料:</strong><br><span style="color: #6c757d;">無上傳文件</span></div>'}
             `;
             
             document.getElementById('viewModal').style.display = 'block';
@@ -884,11 +1185,86 @@ $conn->close();
         // 編輯記錄
         function editRecord(recordId) {
             const record = activityRecords.find(r => r.id == recordId);
-            if (!record) return;
+            if (!record) {
+                console.error('找不到記錄 ID:', recordId);
+                return;
+            }
+            
+            // 解析文件列表
+            let filesHtml = '';
+            let files = [];
+            
+            // 調試：輸出當前記錄的文件信息
+            console.log('編輯記錄 ID:', recordId);
+            console.log('uploaded_files 原始值:', record.uploaded_files);
+            console.log('uploaded_files 類型:', typeof record.uploaded_files);
+            console.log('uploaded_files 是否為 null:', record.uploaded_files === null);
+            console.log('uploaded_files 是否為 undefined:', record.uploaded_files === undefined);
+            console.log('uploaded_files 是否為空字符串:', record.uploaded_files === '');
+            
+            // 檢查 uploaded_files 是否存在且不為 null
+            // 更寬鬆的檢查：只要不是 null、undefined 或空字符串，就嘗試處理
+            const hasFiles = record.uploaded_files !== null && 
+                           record.uploaded_files !== undefined && 
+                           record.uploaded_files !== '' &&
+                           !(Array.isArray(record.uploaded_files) && record.uploaded_files.length === 0);
+            
+            console.log('hasFiles 檢查結果:', hasFiles);
+            
+            if (hasFiles) {
+                try {
+                    if (Array.isArray(record.uploaded_files)) {
+                        // 如果已經是數組，直接使用（這是我們期望的情況）
+                        console.log('已經是數組，直接使用，長度:', record.uploaded_files.length);
+                        files = record.uploaded_files;
+                    } else if (typeof record.uploaded_files === 'string') {
+                        // 如果是字符串，嘗試解析 JSON
+                        console.log('嘗試解析 JSON 字符串:', record.uploaded_files);
+                        files = JSON.parse(record.uploaded_files);
+                        console.log('解析結果:', files);
+                    } else {
+                        console.log('未知格式，設為空數組，類型:', typeof record.uploaded_files);
+                        files = [];
+                    }
+                    
+                    console.log('最終文件列表:', files);
+                    console.log('文件列表類型:', typeof files);
+                    console.log('文件列表是否為數組:', Array.isArray(files));
+                    console.log('文件列表長度:', Array.isArray(files) ? files.length : 'N/A');
+                    
+                    if (Array.isArray(files) && files.length > 0) {
+                        filesHtml = '<div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6;"><strong><i class="fas fa-file-upload"></i> 現有佐證資料:</strong><div style="max-height: 400px; overflow-y: auto; overflow-x: hidden; margin-top: 15px; padding-right: 10px;"><div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">';
+                        files.forEach((filePath, index) => {
+                            const fileName = filePath.split('/').pop() || filePath.split('\\\\').pop() || `檔案 ${index + 1}`;
+                            const fileExt = fileName.split('.').pop().toLowerCase();
+                            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt);
+                            const downloadUrl = 'download_file.php?file=' + encodeURIComponent(filePath) + '&record_id=' + recordId;
+                            
+                            filesHtml += `
+                                <div style="border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; text-align: center; background: #f8f9fa; position: relative;">
+                                    ${isImage ? `<img src="${downloadUrl}" style="max-width: 100%; max-height: 120px; width: auto; height: auto; object-fit: contain; border-radius: 4px; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto;" alt="${fileName}">` : `<i class="fas fa-file" style="font-size: 48px; color: #6c757d; margin-bottom: 8px;"></i>`}
+                                    <div style="font-size: 12px; word-break: break-all; margin-bottom: 8px; max-height: 40px; overflow: hidden; text-overflow: ellipsis;">${fileName}</div>
+                                    <div style="display: flex; gap: 5px; justify-content: center;">
+                                        <a href="${downloadUrl}" target="_blank" style="display: inline-block; padding: 5px 10px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; font-size: 12px;">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                        <button type="button" onclick="deleteFile(${recordId}, '${filePath.replace(/'/g, "\\'")}', event)" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        filesHtml += '</div></div></div>';
+                    }
+                } catch (e) {
+                    console.error('解析文件列表失敗:', e);
+                }
+            }
             
             const modalBody = document.getElementById('editModalBody');
             modalBody.innerHTML = `
-                <form method="post" action="">
+                <form method="post" action="" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="update">
                     <input type="hidden" name="record_id" value="${record.id}">
                     
@@ -926,7 +1302,41 @@ $conn->close();
                         <textarea name="suggestion" rows="4" style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">${record.suggestion || ''}</textarea>
                     </div>
                     
-                    <div style="text-align: right;">
+                    ${filesHtml || '<div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6;"><strong><i class="fas fa-file-upload"></i> 現有佐證資料:</strong><br><span style="color: #6c757d;">無上傳文件</span></div>'}
+                    
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6;">
+                        <label><strong><i class="fas fa-plus-circle"></i> 新增佐證資料:</strong></label>
+                        <div id="edit-file-inputs-container" style="margin-top: 10px;">
+                            <div class="edit-file-input-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <input type="file" name="new_files[]" accept="image/*,.zip,.rar,.pdf" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
+                                <button type="button" class="edit-remove-file-btn" onclick="removeEditFileInput(this)" style="display: none; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="edit-file-input-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <input type="file" name="new_files[]" accept="image/*,.zip,.rar,.pdf" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
+                                <button type="button" class="edit-remove-file-btn" onclick="removeEditFileInput(this)" style="display: none; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="edit-file-input-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <input type="file" name="new_files[]" accept="image/*,.zip,.rar,.pdf" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
+                                <button type="button" class="edit-remove-file-btn" onclick="removeEditFileInput(this)" style="display: none; padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                            <button type="button" onclick="addEditFileInput()" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 500;">
+                                <i class="fas fa-plus"></i> 新增更多檔案
+                            </button>
+                            <small style="color: #6c757d;">
+                                <i class="fas fa-info-circle"></i> 單檔最大 10MB，支援圖片、PDF、ZIP、RAR 格式
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: right; margin-top: 20px;">
                         <button type="button" class="btn-secondary" onclick="closeModal('editModal')" style="margin-right: 10px;">取消</button>
                         <button type="submit" class="btn-primary">
                             <i class="fas fa-save"></i> 儲存變更
@@ -936,8 +1346,237 @@ $conn->close();
             `;
             
             document.getElementById('editModal').style.display = 'block';
+            
+            // 初始化文件輸入功能
+            setTimeout(() => {
+                initEditFileInputs();
+            }, 100);
         }
         
+        // 刪除文件（使用 AJAX，不重新整理頁面）
+        function deleteFile(recordId, filePath, event) {
+            if (!confirm('確定要刪除這個文件嗎？此操作無法復原。')) {
+                return;
+            }
+            
+            // 顯示載入狀態
+            const deleteBtn = event ? event.target.closest('button') : document.querySelector(`button[onclick*="deleteFile(${recordId}"]`);
+            if (deleteBtn) {
+                const originalHTML = deleteBtn.innerHTML;
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            }
+            
+            // 使用 FormData 發送 AJAX 請求
+            const formData = new FormData();
+            formData.append('action', 'delete_file');
+            formData.append('record_id', recordId);
+            formData.append('file_path', filePath);
+            formData.append('ajax', '1'); // 標記為 AJAX 請求
+            
+            fetch('', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 更新當前記錄的 uploaded_files
+                    const record = activityRecords.find(r => r.id == recordId);
+                    if (record) {
+                        // 使用服務器返回的剩餘文件列表
+                        if (data.remaining_files) {
+                            record.uploaded_files = data.remaining_files;
+                        } else {
+                            // 如果服務器沒有返回，手動移除
+                            if (Array.isArray(record.uploaded_files)) {
+                                record.uploaded_files = record.uploaded_files.filter(f => f !== filePath);
+                            } else if (typeof record.uploaded_files === 'string') {
+                                try {
+                                    const files = JSON.parse(record.uploaded_files);
+                                    record.uploaded_files = files.filter(f => f !== filePath);
+                                } catch (e) {
+                                    console.error('解析失敗:', e);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 重新渲染編輯模態框（保持表單狀態）
+                    refreshEditModal(recordId);
+                } else {
+                    alert(data.message || '刪除失敗，請稍後再試');
+                    if (deleteBtn) {
+                        deleteBtn.disabled = false;
+                        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('刪除文件時發生錯誤:', error);
+                alert('刪除失敗，請稍後再試');
+                if (deleteBtn) {
+                    deleteBtn.disabled = false;
+                    deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                }
+            });
+        }
+        
+        // 重新整理編輯模態框（保持表單狀態）
+        function refreshEditModal(recordId) {
+            const record = activityRecords.find(r => r.id == recordId);
+            if (!record) return;
+            
+            // 保存當前表單的狀態（表單字段值）
+            const form = document.querySelector('#editModalBody form');
+            let formData = {};
+            if (form) {
+                // 保存所有輸入字段的值
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    if (input.type === 'file') {
+                        // 文件輸入無法保存，跳過
+                        return;
+                    }
+                    if (input.name && input.name !== 'action' && input.name !== 'record_id') {
+                        formData[input.name] = input.value;
+                    }
+                });
+            }
+            
+            // 重新調用 editRecord 函數
+            editRecord(recordId);
+            
+            // 恢復表單字段的值（延遲執行，確保 DOM 已更新）
+            setTimeout(() => {
+                const newForm = document.querySelector('#editModalBody form');
+                if (newForm && Object.keys(formData).length > 0) {
+                    Object.keys(formData).forEach(name => {
+                        const input = newForm.querySelector(`[name="${name}"]`);
+                        if (input && input.type !== 'file') {
+                            input.value = formData[name];
+                        }
+                    });
+                }
+                // 初始化文件輸入功能
+                initEditFileInputs();
+            }, 100);
+        }
+        
+        
+        // 編輯模態框中的文件輸入管理
+        function addEditFileInput() {
+            const container = document.getElementById('edit-file-inputs-container');
+            if (!container) return;
+            
+            const fileInputs = container.querySelectorAll('.edit-file-input-group');
+            
+            // 限制最多上傳10個檔案
+            if (fileInputs.length >= 10) {
+                alert('最多只能上傳10個檔案！');
+                return;
+            }
+            
+            const newFileGroup = document.createElement('div');
+            newFileGroup.className = 'edit-file-input-group';
+            newFileGroup.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-bottom: 10px;';
+            
+            const newInput = document.createElement('input');
+            newInput.type = 'file';
+            newInput.name = 'new_files[]';
+            newInput.accept = 'image/*,.zip,.rar,.pdf';
+            newInput.style.cssText = 'flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;';
+            
+            // 添加文件大小檢查
+            newInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    Array.from(e.target.files).forEach(file => {
+                        if (file.size > 10 * 1024 * 1024) {
+                            alert(`檔案 "${file.name}" 超過 10MB 限制！`);
+                            e.target.value = '';
+                            return;
+                        }
+                    });
+                    // 顯示刪除按鈕
+                    const removeBtn = newFileGroup.querySelector('.edit-remove-file-btn');
+                    if (removeBtn) {
+                        removeBtn.style.display = 'block';
+                    }
+                }
+                updateEditRemoveButtons();
+            });
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'edit-remove-file-btn';
+            removeBtn.onclick = function() { removeEditFileInput(this); };
+            removeBtn.style.cssText = 'padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;';
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            
+            newFileGroup.appendChild(newInput);
+            newFileGroup.appendChild(removeBtn);
+            
+            container.appendChild(newFileGroup);
+            updateEditRemoveButtons();
+        }
+        
+        function removeEditFileInput(button) {
+            const fileGroup = button.closest('.edit-file-input-group');
+            if (fileGroup) {
+                fileGroup.remove();
+                updateEditRemoveButtons();
+            }
+        }
+        
+        function updateEditRemoveButtons() {
+            const container = document.getElementById('edit-file-inputs-container');
+            if (!container) return;
+            
+            const fileInputs = container.querySelectorAll('.edit-file-input-group');
+            const removeButtons = container.querySelectorAll('.edit-remove-file-btn');
+            
+            // 如果只有一個檔案輸入框，隱藏刪除按鈕
+            removeButtons.forEach(button => {
+                const fileGroup = button.closest('.edit-file-input-group');
+                const fileInput = fileGroup ? fileGroup.querySelector('input[type="file"]') : null;
+                // 如果文件輸入有值，顯示刪除按鈕；如果只有一個輸入框，隱藏
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    button.style.display = 'block';
+                } else {
+                    button.style.display = fileInputs.length > 1 ? 'block' : 'none';
+                }
+            });
+        }
+        
+        // 初始化編輯模態框中的文件輸入事件
+        function initEditFileInputs() {
+            const container = document.getElementById('edit-file-inputs-container');
+            if (!container) return;
+            
+            const fileInputs = container.querySelectorAll('input[type="file"][name="new_files[]"]');
+            fileInputs.forEach(input => {
+                input.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files.length > 0) {
+                        // 檢查檔案大小
+                        Array.from(e.target.files).forEach(file => {
+                            if (file.size > 10 * 1024 * 1024) {
+                                alert(`檔案 "${file.name}" 超過 10MB 限制！`);
+                                e.target.value = '';
+                                return;
+                            }
+                        });
+                        // 顯示刪除按鈕
+                        const removeBtn = e.target.closest('.edit-file-input-group').querySelector('.edit-remove-file-btn');
+                        if (removeBtn) {
+                            removeBtn.style.display = 'block';
+                        }
+                    }
+                    updateEditRemoveButtons();
+                });
+            });
+            
+            updateEditRemoveButtons();
+        }
         
         // 關閉模態框
         function closeModal(modalId) {
