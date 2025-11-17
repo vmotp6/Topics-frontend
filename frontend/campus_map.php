@@ -106,8 +106,72 @@ require_once 'config.php';
                     
                     <!-- 路線規劃 -->
                     <div id="directions-info" class="directions-info" style="display: none;">
-                        <h4><i class="fas fa-route"></i> 路線規劃</h4>
-                        <div id="directions-content"></div>
+                        <div class="directions-header">
+                            <h4><i class="fas fa-route"></i> 路線規劃</h4>
+                            <button id="clear-directions-btn" class="clear-directions-btn" title="清除路線">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 起終點輸入框 -->
+                        <div class="directions-inputs">
+                            <div class="direction-input-group">
+                                <div class="input-icon start-icon">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                <input type="text" 
+                                       id="directions-origin" 
+                                       class="direction-input" 
+                                       placeholder="選擇起點（或使用我的位置）"
+                                       autocomplete="off">
+                                <button class="use-location-btn" id="use-current-location-btn" title="使用我的位置">
+                                    <i class="fas fa-crosshairs"></i>
+                                </button>
+                            </div>
+                            <div class="direction-input-group">
+                                <div class="input-icon end-icon">
+                                    <i class="fas fa-flag-checkered"></i>
+                                </div>
+                                <input type="text" 
+                                       id="directions-destination" 
+                                       class="direction-input" 
+                                       placeholder="選擇終點"
+                                       autocomplete="off">
+                                <button class="swap-locations-btn" id="swap-locations-btn" title="交換起終點">
+                                    <i class="fas fa-exchange-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 交通方式選擇 -->
+                        <div class="travel-modes">
+                            <button class="travel-mode-btn active" data-mode="DRIVING" title="開車">
+                                <i class="fas fa-car"></i>
+                                <span>開車</span>
+                            </button>
+                            <button class="travel-mode-btn" data-mode="DRIVING" data-vehicle="motorcycle" title="摩托車">
+                                <i class="fas fa-motorcycle"></i>
+                                <span>摩托車</span>
+                            </button>
+                            <button class="travel-mode-btn" data-mode="WALKING" title="步行">
+                                <i class="fas fa-walking"></i>
+                                <span>步行</span>
+                            </button>
+                            <button class="travel-mode-btn" data-mode="TRANSIT" title="大眾運輸">
+                                <i class="fas fa-bus"></i>
+                                <span>大眾運輸</span>
+                            </button>
+                            <button class="travel-mode-btn" data-mode="BICYCLING" title="騎自行車">
+                                <i class="fas fa-bicycle"></i>
+                                <span>自行車</span>
+                            </button>
+                        </div>
+                        
+                        <!-- 路線選項列表 -->
+                        <div id="routes-list" class="routes-list"></div>
+                        
+                        <!-- 路線詳細步驟 -->
+                        <div id="directions-content" class="directions-content"></div>
                     </div>
                 </div>
             </div>

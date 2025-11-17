@@ -42,7 +42,8 @@ try {
 // 獲取留言資料
 $messages = [];
 try {
-    $stmt = $pdo->prepare("SELECT * FROM senior_messages WHERE is_published = 1 ORDER BY created_at DESC");
+    // 確保 message_type 不為 NULL，如果為 NULL 則設為 '其他'
+    $stmt = $pdo->prepare("SELECT *, COALESCE(message_type, '其他') as message_type FROM senior_messages WHERE is_published = 1 ORDER BY created_at DESC");
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -887,6 +888,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <div class="filter-tab" data-type="學習建議">學習建議</div>
             <div class="filter-tab" data-type="生活指南">生活指南</div>
             <div class="filter-tab" data-type="就業資訊">就業資訊</div>
+            <div class="filter-tab" data-type="推薦餐廳">推薦餐廳</div>
             <div class="filter-tab" data-type="其他">其他</div>
         </div>
         
@@ -904,14 +906,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <?php else: ?>
             <div class="messages-feed" id="messagesFeed">
                 <?php foreach ($messages as $message): ?>
-                    <div class="message-card" data-type="<?php echo htmlspecialchars($message['message_type']); ?>">
+                    <div class="message-card" data-type="<?php echo htmlspecialchars($message['message_type'] ?? '其他'); ?>">
                         <div class="message-header">
                             <div class="user-avatar"><?php echo mb_substr(htmlspecialchars($message['author_name']), 0, 1); ?></div>
                             <div class="user-info">
                                 <div class="user-name"><?php echo htmlspecialchars($message['author_name']); ?></div>
                                 <div class="user-details"><?php echo htmlspecialchars($message['author_department'] ?? '未知科系'); ?> · <?php echo htmlspecialchars($message['author_grade'] ?? '未知年級'); ?></div>
                                 <div class="message-meta">
-                                    <span class="message-type"><?php echo htmlspecialchars($message['message_type']); ?></span>
+                                    <span class="message-type"><?php echo htmlspecialchars($message['message_type'] ?? '其他'); ?></span>
                                     <span class="message-date"><?php echo date('M j', strtotime($message['created_at'])); ?></span>
                                 </div>
                             </div>
@@ -919,12 +921,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         
                         <div class="message-title"><?php echo htmlspecialchars($message['title']); ?></div>
                         
+                        <?php if (($message['message_type'] ?? '') === '推薦餐廳' && !empty($message['restaurant_name'])): ?>
+                            <div class="restaurant-info-card" style="background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05)); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <div style="font-size: 24px;">🍽️</div>
+                                    <div style="flex: 1;">
+                                        <h4 style="margin: 0 0 4px 0; color: var(--text-color); font-size: 16px; font-weight: 600;">
+                                            <?php echo htmlspecialchars($message['restaurant_name']); ?>
+                                        </h4>
+                                        <p style="margin: 0; color: var(--secondary-text); font-size: 13px;">
+                                            <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($message['restaurant_address'] ?? '地址未知'); ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+                                    <?php if (!empty($message['restaurant_rating'])): ?>
+                                        <div style="display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(243, 156, 18, 0.2); border-radius: 8px;">
+                                            <span style="color: #f39c12;">★</span>
+                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;"><?php echo htmlspecialchars($message['restaurant_rating']); ?>/5</span>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($message['delivery_rating'])): ?>
+                                        <div style="display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(255, 107, 53, 0.2); border-radius: 8px;">
+                                            <span style="color: #ff6b35;">🏍️</span>
+                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;">外送 <?php echo htmlspecialchars($message['delivery_rating']); ?>/5</span>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if (!empty($message['price_level'])): ?>
+                                        <div style="padding: 6px 12px; background: rgba(39, 174, 96, 0.2); border-radius: 8px;">
+                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;"><?php echo str_repeat('$', $message['price_level']); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <?php if (!empty($message['restaurant_lat']) && !empty($message['restaurant_lng'])): ?>
+                                    <button type="button" 
+                                            onclick="showRestaurantOnMap('<?php echo htmlspecialchars($message['restaurant_name']); ?>', <?php echo htmlspecialchars($message['restaurant_lat']); ?>, <?php echo htmlspecialchars($message['restaurant_lng']); ?>, '<?php echo htmlspecialchars($message['restaurant_address'] ?? ''); ?>')"
+                                            style="width: 100%; padding: 10px; background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s ease;">
+                                        <i class="fas fa-map-marker-alt"></i> 在地圖上查看
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        
                         <div class="message-content" id="content-<?php echo $message['id']; ?>">
                             <?php echo nl2br(htmlspecialchars($message['content'])); ?>
                         </div>
                         
                         <?php if (strlen($message['content']) > 200): ?>
                             <span class="read-more" onclick="toggleContent(<?php echo $message['id']; ?>)">展開更多</span>
+                        <?php endif; ?>
+                        
+                        <?php if (($message['message_type'] ?? '') === '推薦餐廳'): ?>
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); display: flex; gap: 10px; flex-wrap: wrap;">
+                                <?php if (!empty($message['restaurant_lat']) && !empty($message['restaurant_lng'])): ?>
+                                    <button type="button" 
+                                            onclick="showRestaurantOnMap('<?php echo htmlspecialchars($message['restaurant_name'] ?? ''); ?>', <?php echo htmlspecialchars($message['restaurant_lat']); ?>, <?php echo htmlspecialchars($message['restaurant_lng']); ?>, '<?php echo htmlspecialchars($message['restaurant_address'] ?? ''); ?>')"
+                                            style="padding: 8px 16px; background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; font-weight: 600;">
+                                        <i class="fas fa-map-marker-alt"></i> 在地圖上查看
+                                    </button>
+                                <?php endif; ?>
+                                <button type="button" 
+                                        onclick="showRestaurantReviews(<?php echo $message['id']; ?>, '<?php echo htmlspecialchars($message['restaurant_name'] ?? ''); ?>')"
+                                        style="padding: 8px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); cursor: pointer; font-size: 13px; transition: all 0.3s ease;">
+                                    <i class="fas fa-comments"></i> 查看評價與留言
+                                </button>
+                            </div>
                         <?php endif; ?>
                         
                         <div class="message-stats">
@@ -987,7 +1052,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 let visibleCount = 0;
                 
                 cards.forEach(card => {
-                    if (type === 'all' || card.getAttribute('data-type') === type) {
+                    const cardType = card.getAttribute('data-type') || '其他';
+                    if (type === 'all' || cardType === type) {
                         // 移除隱藏樣式，恢復正常顯示
                         card.style.display = '';
                         card.style.visibility = 'visible';
@@ -1184,6 +1250,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 }
             }).catch(error => console.log('瀏覽次數更新失敗:', error));
         });
+        
+        // 在地圖上顯示餐廳位置
+        function showRestaurantOnMap(restaurantName, lat, lng, address) {
+            // 構建地圖頁面 URL，帶上餐廳參數
+            const mapUrl = `campus_map.php?restaurant=${encodeURIComponent(restaurantName)}&lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}`;
+            // 在同一視窗打開，讓用戶可以直接使用地圖功能
+            window.location.href = mapUrl;
+        }
+        
+        // 顯示餐廳評價和留言
+        function showRestaurantReviews(messageId, restaurantName) {
+            // 打開評價和留言的模態框或新頁面
+            window.location.href = `restaurant_reviews.php?message_id=${messageId}&restaurant=${encodeURIComponent(restaurantName)}`;
+        }
     </script>
     
     <?php include("share/footer.php"); ?>

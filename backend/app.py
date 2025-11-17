@@ -267,8 +267,11 @@ def google_callback():
                 return redirect(redirect_url)
                 
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
             print(f"資料庫操作錯誤: {e}")
-            return jsonify({"error": "用戶資料處理失敗"}), 500
+            print(f"詳細錯誤資訊:\n{error_details}")
+            return jsonify({"error": f"用戶資料處理失敗: {str(e)}"}), 500
         finally:
             conn.close()
             
