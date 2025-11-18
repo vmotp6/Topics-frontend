@@ -178,16 +178,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
         :root {
-            --bg-color: #000;
-            --text-color: #fff;
-            --secondary-text: #71767b;
-            --border-color: #333;
-            --hover-bg: #16181c;
-            --accent-color: #1d9bf0;
-            --card-bg: transparent;
-        }
-        
-        [data-theme="light"] {
             --bg-color: #fff;
             --text-color: #000;
             --secondary-text: #536471;
@@ -216,27 +206,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         @media (max-width: 480px) {
             body {
                 padding-top: 130px !important; /* 更小螢幕間距 */
-            }
-        }
-        
-        /* 響應式間距調整 */
-        @media (max-width: 768px) {
-            .theme-toggle {
-                top: 140px; /* 手機版適當間距 */
-                right: 15px;
-                width: 45px;
-                height: 45px;
-                font-size: 1.2rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .theme-toggle {
-                top: 150px; /* 更小螢幕適當間距 */
-                right: 10px;
-                width: 40px;
-                height: 40px;
-                font-size: 1.1rem;
             }
         }
         
@@ -434,31 +403,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             border-color: var(--accent-color);
         }
         
-        .theme-toggle {
-            position: fixed;
-            top: 120px; /* 適當位置避免與 header 重疊 */
-            right: 20px;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
-            color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.3rem;
-            z-index: 1000;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .theme-toggle:hover {
-            transform: scale(1.1) rotate(15deg);
-            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
-        }
         
         .submit-btn:hover {
             transform: translateY(-2px);
@@ -579,10 +523,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
 </head>
 <body>
     <?php include("share/header.php"); ?>
-    
-    <button class="theme-toggle" onclick="toggleTheme()" title="切換主題">
-        <span id="theme-icon">🌙</span>
-    </button>
     
     <div class="container">
         <a href="senior_messages.php" class="back-btn">← 返回留言板</a>
@@ -789,35 +729,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 form.insertBefore(draftActions, form.firstChild);
             }
         });
-        
-        // 主題切換功能
-        function toggleTheme() {
-            const body = document.body;
-            const themeIcon = document.getElementById('theme-icon');
-            
-            if (body.getAttribute('data-theme') === 'light') {
-                body.setAttribute('data-theme', 'dark');
-                themeIcon.textContent = '🌙';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                body.setAttribute('data-theme', 'light');
-                themeIcon.textContent = '☀️';
-                localStorage.setItem('theme', 'light');
-            }
-        }
-        
-        // 載入保存的主題
-        function loadTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            const body = document.body;
-            const themeIcon = document.getElementById('theme-icon');
-            
-            body.setAttribute('data-theme', savedTheme);
-            themeIcon.textContent = savedTheme === 'light' ? '☀️' : '🌙';
-        }
-        
-        // 頁面載入時應用主題
-        document.addEventListener('DOMContentLoaded', loadTheme);
         
         // 表單驗證
         document.querySelector('form').addEventListener('submit', function(e) {
