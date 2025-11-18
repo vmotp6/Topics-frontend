@@ -234,3 +234,4 @@ Get-Content C:\xampp\mysql\data\*.err -Tail 50
 最後更新：2024年
 
 
+
