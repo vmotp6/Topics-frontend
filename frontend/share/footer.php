@@ -31,7 +31,7 @@
         background: rgba(217, 229, 234, 0.95);
         backdrop-filter: blur(10px);
         box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.1);
-        padding: 18px 0;
+        padding: 10px 0;
         margin-top: auto;   /* 這個才是吸底關鍵 */
         position: relative; /* ❌ 不要再用 fixed */
         width: 100%;
@@ -79,7 +79,6 @@
         text-align: center;
         font-size: 11px;
         line-height: 1.5;
-        padding: 4px 10px 10px;
     }
 
     @media (max-width: 768px) {
