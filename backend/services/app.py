@@ -861,6 +861,114 @@ def save_teacher_profile():
         if conn:
             conn.close()
 
+# ✅ 更新老師帳號和密碼
+@app.route('/teacher/update-credentials', methods=['POST'])
+def update_teacher_credentials():
+    """更新老師的帳號和/或密碼"""
+    old_username = request.form.get('old_username')
+    new_username = request.form.get('new_username')
+    new_password = request.form.get('new_password')
+    current_password = request.form.get('current_password')  # 用於驗證身份
+    
+    if not old_username:
+        return jsonify({"message": "缺少必要參數"}), 400
+    
+    if not new_password:
+        return jsonify({"message": "新密碼不能為空"}), 400
+    
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+        
+        with conn.cursor() as cursor:
+            # 先驗證當前密碼
+            # 使用 COALESCE 處理 username_changed 欄位可能不存在的情況
+            sql_get_user = "SELECT id, password, COALESCE(username_changed, 0) as username_changed FROM user WHERE username = %s"
+            cursor.execute(sql_get_user, (old_username,))
+            user_result = cursor.fetchone()
+            
+            if not user_result:
+                return jsonify({"message": "使用者不存在"}), 404
+            
+            user_id = user_result[0]
+            db_password = user_result[1] if user_result[1] else ''
+            # 安全地獲取 username_changed 欄位（如果欄位不存在，COALESCE 會返回 0）
+            username_changed = user_result[2] if len(user_result) > 2 and user_result[2] is not None else 0
+            
+            # 驗證當前密碼
+            password_valid = False
+            if db_password.startswith('$2y$') or db_password.startswith('$2b$') or db_password.startswith('$2a$'):
+                # 使用 bcrypt 驗證雜湊密碼
+                if BCrypt_AVAILABLE:
+                    try:
+                        bcrypt_hash = db_password.replace('$2y$', '$2b$') if db_password.startswith('$2y$') else db_password
+                        password_valid = bcrypt.checkpw(current_password.encode('utf-8'), bcrypt_hash.encode('utf-8'))
+                    except Exception as e:
+                        print(f"bcrypt 驗證錯誤: {e}")
+                        password_valid = False
+            else:
+                # 明文密碼比較（向後兼容）
+                password_valid = (current_password == db_password)
+            
+            if not password_valid:
+                return jsonify({"message": "當前密碼錯誤"}), 401
+            
+            # 如果要修改帳號，檢查是否允許修改
+            if new_username and new_username != old_username:
+                # 檢查是否已經修改過帳號
+                if username_changed == 1:
+                    return jsonify({"message": "帳號只能修改一次，您已經修改過帳號了"}), 403
+                
+                # 檢查新帳號是否已存在
+                sql_check_username = "SELECT COUNT(*) FROM user WHERE username = %s"
+                cursor.execute(sql_check_username, (new_username,))
+                if cursor.fetchone()[0] > 0:
+                    return jsonify({"message": "此帳號已被使用"}), 409
+                
+                # 更新帳號
+                sql_update_username = "UPDATE user SET username = %s, username_changed = 1 WHERE id = %s"
+                cursor.execute(sql_update_username, (new_username, user_id))
+            
+            # 更新密碼（使用 PHP password_hash 格式）
+            # 使用 bcrypt 生成密碼雜湊（PHP 兼容格式）
+            if BCrypt_AVAILABLE:
+                salt = bcrypt.gensalt(rounds=10)
+                hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), salt).decode('utf-8')
+                # 轉換為 PHP 格式 ($2y$)
+                hashed_password = hashed_password.replace('$2b$', '$2y$')
+            else:
+                # 如果沒有 bcrypt，使用簡單的雜湊（不推薦，但向後兼容）
+                hashed_password = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+            
+            sql_update_password = "UPDATE user SET password = %s WHERE id = %s"
+            cursor.execute(sql_update_password, (hashed_password, user_id))
+            
+            conn.commit()
+            
+            result_message = "密碼更新成功"
+            if new_username and new_username != old_username:
+                result_message = "帳號和密碼更新成功"
+            
+            return jsonify({
+                "message": result_message,
+                "new_username": new_username if new_username and new_username != old_username else old_username
+            }), 200
+    
+    except pymysql.Error as e:
+        if conn:
+            conn.rollback()
+        print(f"資料庫寫入錯誤：{e}")
+        return jsonify({"message": "更新失敗，請稍後再試。原因：資料庫錯誤"}), 500
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "更新失敗，發生未知錯誤。"}), 500
+    finally:
+        if conn:
+            conn.close()
+
 # ✅ QA 列表 API
 @app.route('/qa', methods=['GET'])
 def get_faq():
