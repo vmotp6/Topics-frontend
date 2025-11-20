@@ -381,19 +381,23 @@ def register():
             # 檢查用戶名是否已存在
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
+                conn.rollback()
                 return jsonify({"message": "用戶名已存在"}), 400
 
             # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
             cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
             if cursor.fetchone()[0] > 0:
+                conn.rollback()
                 return jsonify({"message": "Email 已被使用"}), 400
 
             # 插入新用戶（角色預設為學生）
+            print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
                 "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
                 (username, password, email, name)
             )
             user_id = cursor.lastrowid
+            print(f"✅ 已插入 user 表: user_id={user_id}")
             
             # 同步插入 student 表
             try:
@@ -407,19 +411,31 @@ def register():
                 # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
                 print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
             
+            # 提交事務
             conn.commit()
+            print(f"✅ 註冊成功並已提交: user_id={user_id}, username={username}")
 
             return jsonify({"message": "註冊成功"}), 200
             
     except pymysql.err.IntegrityError as e:
         # 可能的唯一鍵衝突（如 username/email）
-        print(f"註冊唯一鍵衝突: {e}")
+        if conn:
+            conn.rollback()
+        print(f"❌ 註冊唯一鍵衝突: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"message": "帳號或 Email 已被使用"}), 400
     except Exception as e:
-        print(f"註冊錯誤: {e}")
-        return jsonify({"message": f"註冊失敗，請稍後再試。"}), 500
+        # 發生任何異常時都要 rollback
+        if conn:
+            conn.rollback()
+        print(f"❌ 註冊錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"message": f"註冊失敗，請稍後再試。錯誤: {str(e)}"}), 500
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/user/select-role', methods=['POST'])
 def select_role():
