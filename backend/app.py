@@ -13,6 +13,12 @@ import json
 import secrets
 import hashlib
 from datetime import datetime
+try:
+    import bcrypt
+    BCrypt_AVAILABLE = True
+except ImportError:
+    BCrypt_AVAILABLE = False
+    print("⚠️  bcrypt 未安裝，將無法驗證雜湊密碼")
 
 # 載入環境變數
 try:
@@ -330,23 +336,47 @@ def login():
     
     try:
         with conn.cursor() as cursor:
-            # 查詢使用者帳號、角色、狀態是否正確
-            sql = "SELECT username, role, status FROM user WHERE username=%s AND password=%s"
-            cursor.execute(sql, (username, password))
+            # 先查詢使用者（不檢查密碼）
+            sql = "SELECT username, role, status, password FROM user WHERE username=%s"
+            cursor.execute(sql, (username,))
             user = cursor.fetchone()
             
-            if user:
-                # 檢查帳號是否被停用
-                if user[2] == 0:  # status = 0 表示停用
-                    return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
-                
-                return jsonify({
-                    "message": "登入成功",
-                    "username": user[0],
-                    "role": user[1]
-                }), 200
-            else:
+            if not user:
                 return jsonify({"message": "帳號或密碼錯誤"}), 401
+            
+            # 驗證密碼（支援雜湊密碼和明文密碼）
+            db_password = user[3] if user[3] else ''
+            password_valid = False
+            
+            # 檢查是否為雜湊密碼（PHP password_hash 格式：$2y$... 或 $2b$...）
+            if db_password.startswith('$2y$') or db_password.startswith('$2b$') or db_password.startswith('$2a$'):
+                # 使用 bcrypt 驗證雜湊密碼
+                if BCrypt_AVAILABLE:
+                    try:
+                        # 將 PHP 的 $2y$ 格式轉換為 bcrypt 可接受的格式（如果需要）
+                        bcrypt_hash = db_password.replace('$2y$', '$2b$') if db_password.startswith('$2y$') else db_password
+                        password_valid = bcrypt.checkpw(password.encode('utf-8'), bcrypt_hash.encode('utf-8'))
+                    except Exception as e:
+                        print(f"bcrypt 驗證錯誤: {e}")
+                        password_valid = False
+                else:
+                    return jsonify({"message": "系統錯誤：bcrypt 模組未安裝"}), 500
+            else:
+                # 明文密碼比較（向後兼容）
+                password_valid = (password == db_password)
+            
+            if not password_valid:
+                return jsonify({"message": "帳號或密碼錯誤"}), 401
+            
+            # 檢查帳號是否被停用
+            if user[2] == 0:  # status = 0 表示停用
+                return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
+            
+            return jsonify({
+                "message": "登入成功",
+                "username": user[0],
+                "role": user[1]
+            }), 200
                 
     except Exception as e:
         print(f"登入錯誤: {e}")

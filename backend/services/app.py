@@ -13,6 +13,12 @@ import json
 import secrets
 import hashlib
 from datetime import datetime
+try:
+    import bcrypt
+    BCrypt_AVAILABLE = True
+except ImportError:
+    BCrypt_AVAILABLE = False
+    print("⚠️  bcrypt 未安裝，將無法驗證雜湊密碼")
 
 # 載入環境變數
 try:
@@ -406,9 +412,34 @@ def login():
                 
                 print(f"   找到用戶: {user[0]}, 角色: {user[1]}, 狀態: {user[2]}")
                 
-                # 檢查密碼（支持明文和未來可能的哈希）
+                # 檢查密碼（支援雜湊密碼和明文密碼）
                 db_password = user[3] if user[3] else ''
-                if password != db_password:
+                password_valid = False
+                
+                # 檢查是否為雜湊密碼（PHP password_hash 格式：$2y$... 或 $2b$...）
+                if db_password.startswith('$2y$') or db_password.startswith('$2b$') or db_password.startswith('$2a$'):
+                    # 使用 bcrypt 驗證雜湊密碼
+                    if BCrypt_AVAILABLE:
+                        try:
+                            # 將 PHP 的 $2y$ 格式轉換為 bcrypt 可接受的格式（如果需要）
+                            bcrypt_hash = db_password.replace('$2y$', '$2b$') if db_password.startswith('$2y$') else db_password
+                            password_valid = bcrypt.checkpw(password.encode('utf-8'), bcrypt_hash.encode('utf-8'))
+                            print(f"   bcrypt 驗證結果: {password_valid}")
+                        except Exception as e:
+                            print(f"❌ bcrypt 驗證錯誤: {e}")
+                            password_valid = False
+                    else:
+                        print("❌ bcrypt 模組未安裝")
+                        return jsonify({
+                            "message": "系統錯誤：bcrypt 模組未安裝",
+                            "error": "system_error"
+                        }), 500
+                else:
+                    # 明文密碼比較（向後兼容）
+                    password_valid = (password == db_password)
+                    print(f"   明文密碼比較結果: {password_valid}")
+                
+                if not password_valid:
                     print(f"❌ 密碼錯誤: {username} (輸入: {password[:3]}..., DB: {db_password[:3] if db_password else 'None'}...)")
                     return jsonify({
                         "message": "帳號或密碼錯誤",
