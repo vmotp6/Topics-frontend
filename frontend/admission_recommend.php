@@ -31,6 +31,35 @@ try {
     error_log("無法從資料庫撈取科系資料: " . $e->getMessage());
 }
 
+// 處理通過 ID 查詢（用於後台管理系統）
+$single_detail = null; // 用於儲存單筆詳細記錄
+if (isset($_GET['id']) && !empty($_GET['id'])) {
+    try {
+        $search_id = intval($_GET['id']);
+        $conn = getDatabaseConnection();
+        $sql = "SELECT * FROM admission_recommendations WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $search_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $single_detail = $result->fetch_assoc(); // 儲存單筆記錄
+            $search_results[] = $single_detail; // 同時加入搜尋結果陣列
+            $message = "找到推薦記錄";
+            $messageType = "success";
+        } else {
+            $message = "未找到 ID 為 " . htmlspecialchars($search_id) . " 的推薦記錄";
+            $messageType = "error";
+        }
+        $stmt->close();
+        $conn->close();
+    } catch (Exception $e) {
+        $message = "查詢失敗：" . $e->getMessage();
+        $messageType = "error";
+    }
+}
+
 // 處理學號查詢
 if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'search') {
     try {
@@ -283,7 +312,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
       </div>
     <?php endif; ?>
 
-    <!-- 學號查詢功能 -->
+    <!-- 學號查詢功能（當通過ID查詢時隱藏） -->
+    <?php if (!$single_detail): ?>
     <div class="search-section">
       <h3><i class="fas fa-search"></i> 查詢推薦記錄</h3>
       <form method="POST" action="" class="search-form">
@@ -296,9 +326,177 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
       </form>
     </div>
+    <?php endif; ?>
 
-    <!-- 查詢結果 -->
-    <?php if (!empty($search_results)): ?>
+    <!-- 單筆詳細資訊（從後台查看詳情時顯示） -->
+    <?php if ($single_detail): ?>
+    <div class="detail-card">
+      <div class="detail-header">
+        <h3><i class="fas fa-file-alt"></i> 推薦記錄詳細資訊</h3>
+        <a href="javascript:window.close()" class="close-btn" title="關閉視窗">
+          <i class="fas fa-times"></i>
+        </a>
+      </div>
+      
+      <div class="detail-content">
+        <!-- 推薦人資訊 -->
+        <div class="detail-section">
+          <h4><i class="fas fa-user"></i> 推薦人資訊</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">姓名</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_name']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">學號/教師編號</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_student_id']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">年級</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_grade']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">科系</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_department']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">聯絡電話</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_phone']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">電子郵件</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_email']); ?></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 被推薦學生資訊 -->
+        <div class="detail-section">
+          <h4><i class="fas fa-graduation-cap"></i> 被推薦學生資訊</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">姓名</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['student_name']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">電子郵件</div>
+              <div class="detail-value"><?php echo !empty($single_detail['student_email']) ? htmlspecialchars($single_detail['student_email']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">就讀學校</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['student_school']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">年級</div>
+              <div class="detail-value"><?php echo !empty($single_detail['student_grade']) ? htmlspecialchars($single_detail['student_grade']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">聯絡電話</div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['student_phone']); ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">LINE ID</div>
+              <div class="detail-value"><?php echo !empty($single_detail['student_line_id']) ? htmlspecialchars($single_detail['student_line_id']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">學生興趣</div>
+              <div class="detail-value"><?php echo !empty($single_detail['student_interest']) ? htmlspecialchars($single_detail['student_interest']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 推薦資訊 -->
+        <div class="detail-section">
+          <h4><i class="fas fa-heart"></i> 推薦資訊</h4>
+          <div class="detail-grid">
+            <div class="detail-item" style="grid-column: 1 / -1;">
+              <div class="detail-label">推薦理由</div>
+              <div class="detail-value"><?php echo nl2br(htmlspecialchars($single_detail['recommendation_reason'])); ?></div>
+            </div>
+            <?php if (!empty($single_detail['additional_info'])): ?>
+            <div class="detail-item" style="grid-column: 1 / -1;">
+              <div class="detail-label">其他補充資訊</div>
+              <div class="detail-value"><?php echo nl2br(htmlspecialchars($single_detail['additional_info'])); ?></div>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($single_detail['proof_evidence'])): ?>
+            <div class="detail-item" style="grid-column: 1 / -1;">
+              <div class="detail-label">證明文件</div>
+              <div class="detail-value">
+                <a href="<?php echo htmlspecialchars($single_detail['proof_evidence']); ?>" target="_blank" class="file-link">
+                  <i class="fas fa-file"></i> 查看文件
+                </a>
+              </div>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- 狀態資訊 -->
+        <div class="detail-section">
+          <h4><i class="fas fa-info-circle"></i> 狀態資訊</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">處理狀態</div>
+              <div class="detail-value">
+                <span class="status status-<?php echo $single_detail['status'] ?? 'pending'; ?>">
+                  <?php 
+                  $status_text = [
+                    'pending' => '待處理',
+                    'contacted' => '已聯繫',
+                    'registered' => '已報名',
+                    'rejected' => '已拒絕'
+                  ];
+                  echo $status_text[$single_detail['status'] ?? 'pending'] ?? '待處理';
+                  ?>
+                </span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">入學狀態</div>
+              <div class="detail-value">
+                <span class="enrollment-status enrollment-<?php echo $single_detail['enrollment_status'] ?? '未入學'; ?>">
+                  <?php 
+                  $enrollment_text = [
+                    '未入學' => '未入學',
+                    '已入學' => '已入學',
+                    '放棄入學' => '放棄入學'
+                  ];
+                  echo $enrollment_text[$single_detail['enrollment_status'] ?? '未入學'] ?? '未入學';
+                  ?>
+                </span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">建立時間</div>
+              <div class="detail-value">
+                <?php 
+                $date = new DateTime($single_detail['created_at'], new DateTimeZone('UTC'));
+                $date->setTimezone(new DateTimeZone('Asia/Taipei'));
+                echo $date->format('Y-m-d H:i:s');
+                ?>
+              </div>
+            </div>
+            <?php if (!empty($single_detail['updated_at'])): ?>
+            <div class="detail-item">
+              <div class="detail-label">更新時間</div>
+              <div class="detail-value">
+                <?php 
+                $date = new DateTime($single_detail['updated_at'], new DateTimeZone('UTC'));
+                $date->setTimezone(new DateTimeZone('Asia/Taipei'));
+                echo $date->format('Y-m-d H:i:s');
+                ?>
+              </div>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 查詢結果（多筆記錄時顯示） -->
+    <?php if (!empty($search_results) && !$single_detail): ?>
     <div class="search-results">
       <h4>查詢結果</h4>
       
@@ -393,6 +591,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
     </div>
     <?php endif; ?>
 
+    <!-- 當通過ID查詢時，不顯示表單 -->
+    <?php if (!$single_detail): ?>
     <form method="POST" action="" enctype="multipart/form-data">
       <!-- 推薦人資訊 -->
       <div class="form-section">
@@ -551,6 +751,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         <i class="fas fa-paper-plane"></i> 提交推薦申請
       </button>
     </form>
+    <?php endif; ?>
   </div>
 </div>
 </div>
@@ -577,6 +778,170 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+/* 詳細資訊卡片樣式 */
+.detail-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+  overflow: hidden;
+}
+
+.detail-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.detail-header h3 i {
+  margin-right: 8px;
+}
+
+.close-btn {
+  color: white;
+  font-size: 20px;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+.close-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.detail-content {
+  padding: 24px;
+}
+
+.detail-section {
+  margin-bottom: 30px;
+  padding-bottom: 30px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.detail-section h4 {
+  color: #495057;
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.detail-section h4 i {
+  margin-right: 8px;
+  color: #667eea;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #6c757d;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  color: #212529;
+  font-size: 16px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.detail-value .status,
+.detail-value .enrollment-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-link {
+  color: #007bff;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.file-link:hover {
+  background: #007bff;
+  color: white;
+}
+
+/* 狀態標籤樣式 */
+.status-pending {
+  background: #fff7e6;
+  color: #d46b08;
+  border: 1px solid #ffd591;
+}
+
+.status-contacted {
+  background: #e6f7ff;
+  color: #0958d9;
+  border: 1px solid #91d5ff;
+}
+
+.status-registered {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.status-rejected {
+  background: #fff2f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+}
+
+.enrollment-未入學 {
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+.enrollment-已入學 {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.enrollment-放棄入學 {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
 /* 結果篩選樣式 */
 .result-filter {
   background: #f8f9fa;
