@@ -45,10 +45,18 @@ if (isset($_SESSION['expire_time']) && time() > $_SESSION['expire_time']) {
     session_start();
 }
 
-// 防止 session 固定攻擊
+// 防止 session 固定攻擊（但不要清除驗證碼）
 if (!isset($_SESSION['initiated'])) {
+    // 保存驗證碼（如果存在）
+    $captcha_backup = $_SESSION['captcha_code'] ?? null;
+    
     session_regenerate_id(true);
     $_SESSION['initiated'] = true;
+    
+    // 恢復驗證碼（如果存在）
+    if ($captcha_backup !== null) {
+        $_SESSION['captcha_code'] = $captcha_backup;
+    }
 }
 
 // 設定 session 變數的預設值

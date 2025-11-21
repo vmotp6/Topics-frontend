@@ -121,8 +121,8 @@ $role = $_SESSION['role'] ?? '訪客';
                             <input type="tel" id="phone2" name="phone2">
                         </div>
                         <div class="form-group">
-                            <label for="email">電子郵件信箱:</label>
-                            <input type="email" id="email" name="email">
+                            <label for="email">*電子郵件信箱:</label>
+                            <input type="email" id="email" name="email" required>
                         </div>
                     </div>
 
@@ -208,10 +208,10 @@ $role = $_SESSION['role'] ?? '訪客';
                     <h3 class="section-title"><i class="fas fa-school"></i> 就讀或畢業國中資訊</h3>
 
                     <div class="form-group">
-                        <label for="junior_high">就讀或畢業國中:</label>
+                        <label for="junior_high">*就讀或畢業國中:</label>
                         <div class="modern-search-container">
                             <div class="search-input-wrapper">
-                                <input type="text" id="junior_high" name="junior_high" placeholder="請輸入學校名稱..." autocomplete="off">
+                                <input type="text" id="junior_high" name="junior_high" placeholder="請輸入學校名稱..." autocomplete="off" required>
                                 <div class="search-icon">
                                     <i class="fas fa-search"></i>
                                 </div>
@@ -279,19 +279,19 @@ $role = $_SESSION['role'] ?? '訪客';
                     <div class="captcha-section">
                         <h4>驗證碼 <span class="required">*</span></h4>
                         <div class="captcha-container" style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
-                            <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; text-transform: uppercase;" pattern="[A-Z0-9]{5,6}">
-                            <div id="captchaImageContainer" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; display: inline-block; vertical-align: middle; overflow: hidden;">
-                                <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; cursor: pointer; display: block;" title="點擊刷新驗證碼" onerror="handleCaptchaError(this)">
+                            <input type="text" id="captchaInput" name="captcha" placeholder="請輸入驗證碼" maxlength="4" required autocomplete="off" style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')" title="請輸入驗證碼圖片中顯示的4位字母和數字（不包含0、O、1、I，不區分大小寫）">
+                            <div id="captchaImageContainer" style="height: 50px; width: 180px; border: 2px solid #ddd; border-radius: 5px; display: inline-block; vertical-align: middle; overflow: hidden;">
+                                <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 180px; cursor: pointer; display: block;" title="點擊刷新驗證碼" onerror="handleCaptchaError(this)">
                             </div>
                             <div id="captchaError" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 5px; padding: 5px; background: #ffebee; border-radius: 3px;">
                                 <i class="fas fa-exclamation-triangle"></i> GD 擴展未啟用，已使用文字驗證碼模式
                             </div>
-                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            <button type="button" class="refresh-captcha" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; width:50%;">
                                 <i class="fas fa-sync-alt"></i> 刷新
                             </button>
                         </div>
                         <small style="color: #666; display: block; margin-top: 5px;">
-                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                            <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的4位字母和數字（不包含0、O、1、I，不區分大小寫）
                         </small>
                     </div>
 
@@ -355,9 +355,9 @@ $role = $_SESSION['role'] ?? '訪客';
                 errorDiv.style.display = 'none';
             }
             
-            // 刷新驗證碼圖片（添加時間戳防止緩存）
+            // 刷新驗證碼圖片（添加 refresh=1 參數強制生成新驗證碼，添加時間戳防止緩存）
             if (captchaImage) {
-                captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+                captchaImage.src = 'captcha_image.php?refresh=1&t=' + new Date().getTime();
             }
         }
 
@@ -481,6 +481,85 @@ $role = $_SESSION['role'] ?? '訪客';
             const submitBtn = document.getElementById('submitBtn');
             const messageDiv = document.getElementById('message');
 
+            // 前端驗證
+            const email = document.getElementById('email').value.trim();
+            const juniorHigh = document.getElementById('junior_high').value.trim();
+            const intention1 = document.getElementById('intention1').value;
+            const intention2 = document.getElementById('intention2').value;
+            const intention3 = document.getElementById('intention3').value;
+            
+            // 驗證電子郵件
+            if (!email) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請填寫電子郵件信箱';
+                messageDiv.style.display = 'block';
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            // 驗證電子郵件格式
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailPattern.test(email)) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請輸入有效的電子郵件格式';
+                messageDiv.style.display = 'block';
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            // 驗證至少一個就讀意願（不能全部是「無特定」）
+            const hasIntention = (intention1 && intention1 !== '無特定') || 
+                                 (intention2 && intention2 !== '無特定') || 
+                                 (intention3 && intention3 !== '無特定');
+            if (!hasIntention) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請至少選擇一個就讀意願（不能全部選擇「無特定」）';
+                messageDiv.style.display = 'block';
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            // 驗證就讀或畢業國中
+            if (!juniorHigh) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請填寫就讀或畢業國中資訊';
+                messageDiv.style.display = 'block';
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            // 驗證驗證碼格式（前端額外驗證）
+            const captchaInput = document.getElementById('captchaInput');
+            const captcha = captchaInput.value.trim().toUpperCase();
+            
+            // 驗證碼字符集：ABCDEFGHJKLMNPQRSTUVWXYZ23456789（排除0、O、1、I）
+            // Pattern: A-H, J-N, P-Z, 2-9（排除 I 和 O），固定4位
+            const captchaPattern = /^[A-HJ-NP-Z2-9]{4}$/;
+            
+            if (!captcha || captcha.length !== 4) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請輸入4位驗證碼';
+                messageDiv.style.display = 'block';
+                captchaInput.focus();
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            if (!captchaPattern.test(captcha)) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '驗證碼格式錯誤，請確認輸入的是圖片中顯示的4位字符（不包含0、O、1、I）';
+                messageDiv.style.display = 'block';
+                captchaInput.focus();
+                // 滾動到頂部
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+
             // 禁用提交按鈕
             submitBtn.disabled = true;
             submitBtn.textContent = '提交中...';
@@ -488,8 +567,13 @@ $role = $_SESSION['role'] ?? '訪客';
             // 收集表單數據
             const formData = new FormData(this);
 
-            // 發送AJAX請求
-            fetch('api/submit_enrollment.php', {
+            // 發送AJAX請求（添加調試參數）
+            const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+            if (debugMode) {
+                formData.append('debug', '1');
+            }
+            
+            fetch('api/submit_enrollment.php' + (debugMode ? '?debug=1' : ''), {
                     method: 'POST',
                     body: formData
                 })
@@ -509,6 +593,9 @@ $role = $_SESSION['role'] ?? '訪客';
                         messageDiv.className = 'success';
                         messageDiv.textContent = data.message;
                         messageDiv.style.display = 'block';
+                        
+                        // 滾動到頂部顯示成功訊息
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
 
                         // 清空表單
                         this.reset();
@@ -525,8 +612,27 @@ $role = $_SESSION['role'] ?? '訪客';
                         }, 3000);
                     } else {
                         messageDiv.className = 'error';
-                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
+                        let errorMsg = data.message || '提交失敗，請稍後再試';
+                        
+                        // 如果是調試模式，顯示詳細錯誤信息
+                        if (data.debug) {
+                            errorMsg += '\n\n調試信息:\n';
+                            errorMsg += '輸入: ' + (data.debug.input_original || 'N/A') + '\n';
+                            errorMsg += 'Session: ' + (data.debug.session_original || 'N/A') + '\n';
+                            errorMsg += 'Session ID: ' + (data.debug.session_id || 'N/A');
+                            console.error('驗證碼調試信息:', data.debug);
+                        }
+                        
+                        messageDiv.textContent = errorMsg;
                         messageDiv.style.display = 'block';
+                        
+                        // 滾動到頂部顯示錯誤訊息
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        
+                        // 如果是驗證碼錯誤，刷新驗證碼
+                        if (data.message && data.message.includes('驗證碼')) {
+                            refreshCaptcha();
+                        }
                     }
                 })
                 .catch(error => {
@@ -534,6 +640,9 @@ $role = $_SESSION['role'] ?? '訪客';
                     messageDiv.className = 'error';
                     messageDiv.textContent = '提交失敗，請稍後再試';
                     messageDiv.style.display = 'block';
+                    
+                    // 滾動到頂部顯示錯誤訊息
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 })
                 .finally(() => {
                     // 重新啟用提交按鈕
@@ -542,9 +651,13 @@ $role = $_SESSION['role'] ?? '訪客';
                 });
         });
 
-        // 頁面載入時初始化
+        // 頁面載入時初始化（首次載入時不強制刷新，使用現有驗證碼）
         document.addEventListener('DOMContentLoaded', function() {
-            refreshCaptcha();
+            // 首次載入時，如果驗證碼圖片還沒有載入，則載入它（不強制刷新）
+            const captchaImage = document.getElementById('captchaImage');
+            if (captchaImage && !captchaImage.src.includes('captcha_image.php')) {
+                captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+            }
 
             // 綁定即時搜尋事件
             const searchInput = document.getElementById('junior_high');

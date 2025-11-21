@@ -242,28 +242,41 @@ $(document).ready(function() {
                     type: 'POST',
                     data: 'action=ask_question&question=' + encodeURIComponent(question) + '&use_context=true',
                     dataType: 'json',
-                    timeout: 120000, // 120秒超時
+                    timeout: 30000, // 30秒超時（優化：平衡速度和成功率）
                     success: function(response) {
                         console.log('✅ AI回答響應:', response);
-                        if (response.success) {
+                        // 檢查 response.success 或 response.answer（兼容舊格式）
+                        if (response.success === true || (response.answer && !response.error)) {
                             console.log('🎉 AI回答成功，使用AI回答');
                             resolve({
                                 answer: response.answer,
                                 source_type: 'ollama_ai',
                                 confidence_score: 0.9,
-                                response_time: response.response_time_ms,
-                                model: response.model
+                                response_time: response.response_time_ms || 0,
+                                model: response.model || 'ollama'
                             });
                         } else {
-                            console.warn('⚠️ AI回答失敗，使用回退機制:', response.error);
-                            // AI失敗時回退到關鍵詞匹配
-                            const fallbackAnswer = findFallbackAnswer(question);
-                            resolve({
-                                answer: fallbackAnswer,
-                                source_type: 'fallback',
-                                confidence_score: 0.3,
-                                response_time: 0
-                            });
+                            // AI失敗時，先嘗試使用錯誤訊息，如果沒有則回退到關鍵詞匹配
+                            console.warn('⚠️ AI回答失敗:', response.error || response.message);
+                            const errorMessage = response.message || response.error || 'AI 暫時無法回答';
+                            
+                            // 如果錯誤訊息有意義，使用它；否則回退到關鍵詞匹配
+                            if (errorMessage && errorMessage.length > 10 && !errorMessage.includes('系統暫時無法回應')) {
+                                resolve({
+                                    answer: errorMessage + '\n\n💡 提示：您也可以嘗試使用關鍵詞查詢，或稍後再試。',
+                                    source_type: 'ai_error',
+                                    confidence_score: 0.5,
+                                    response_time: 0
+                                });
+                            } else {
+                                const fallbackAnswer = findFallbackAnswer(question);
+                                resolve({
+                                    answer: fallbackAnswer,
+                                    source_type: 'fallback',
+                                    confidence_score: 0.3,
+                                    response_time: 0
+                                });
+                            }
                         }
                     },
                     error: function(xhr, status, error) {
@@ -273,14 +286,27 @@ $(document).ready(function() {
                             responseText: xhr.responseText,
                             error: error
                         });
-                        // 網路錯誤時回退到關鍵詞匹配
-                        const fallbackAnswer = findFallbackAnswer(question);
-                        resolve({
-                            answer: fallbackAnswer,
-                            source_type: 'fallback',
-                            confidence_score: 0.3,
-                            response_time: 0
-                        });
+                        
+                        // 處理超時情況
+                        if (status === 'timeout' || error === 'timeout') {
+                            console.warn('⏱️ AI 請求超時，使用關鍵詞匹配作為回退');
+                            const fallbackAnswer = findFallbackAnswer(question);
+                            resolve({
+                                answer: '⏱️ AI 回答時間較長，為您提供以下資訊：\n\n' + fallbackAnswer + '\n\n💡 提示：如果問題較複雜，AI 可能需要更長時間處理。您可以稍後再試，或使用更簡短的問題。',
+                                source_type: 'timeout_fallback',
+                                confidence_score: 0.4,
+                                response_time: 0
+                            });
+                        } else {
+                            // 其他網路錯誤時快速回退到關鍵詞匹配
+                            const fallbackAnswer = findFallbackAnswer(question);
+                            resolve({
+                                answer: '❌ AI 服務暫時無法連接，為您提供以下資訊：\n\n' + fallbackAnswer + '\n\n💡 提示：請檢查 Ollama 服務是否正常運行，或稍後再試。',
+                                source_type: 'network_fallback',
+                                confidence_score: 0.3,
+                                response_time: 0
+                            });
+                        }
                     }
                 });
             } else {

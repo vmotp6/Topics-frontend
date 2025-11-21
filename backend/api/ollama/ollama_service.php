@@ -65,15 +65,15 @@ class OllamaService {
             'prompt' => $prompt,
             'stream' => false,
             'options' => [
-                'temperature' => 0.3,  // 降低溫度，提高一致性
-                'top_p' => 0.7,         // 降低多樣性，提高速度
-                'top_k' => 10,          // 減少候選詞，提高速度
-                'repeat_penalty' => 1.05, // 降低重複懲罰，提高速度
-                'num_predict' => 200,   // 減少預測長度，提高速度
-                'num_ctx' => 512,       // 減少上下文長度，提高速度
-                'num_thread' => 4,      // 減少線程數，避免資源競爭
+                'temperature' => 0.7,  // 提高溫度，加快生成速度
+                'top_p' => 0.95,        // 提高多樣性
+                'top_k' => 40,          // 增加候選詞，提高速度
+                'repeat_penalty' => 1.15, // 適中重複懲罰
+                'num_predict' => 80,    // 優化：進一步減少預測長度，提高速度（從100減少到80）
+                'num_ctx' => 1024,      // 優化：減少上下文長度，大幅提高速度（從2048減少到1024）
+                'num_thread' => 4,      // 優化：增加線程數，提高處理速度（從2增加到4）
                 'num_gpu' => 0,         // 禁用GPU，使用CPU加速
-                'num_batch' => 256      // 減少批次大小，提高響應速度
+                'num_batch' => 32       // 優化：進一步減少批次大小，提高響應速度（從64減少到32）
             ]
         ];
         
@@ -86,9 +86,9 @@ class OllamaService {
             'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 300);  // 增加到300秒（5分鐘）
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);  // 增加連接超時到60秒
-        curl_setopt($ch, CURLOPT_TIMEOUT_MS, 300000);  // 毫秒級超時
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);  // 優化：減少到30秒，如果超過則快速失敗
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);  // 優化：連接超時5秒
+        curl_setopt($ch, CURLOPT_TIMEOUT_MS, 30000);  // 優化：毫秒級超時30秒
         curl_setopt($ch, CURLOPT_TCP_KEEPALIVE, 1);  // 啟用TCP keepalive
         curl_setopt($ch, CURLOPT_TCP_KEEPIDLE, 60);  // keepalive idle時間
         curl_setopt($ch, CURLOPT_TCP_KEEPINTVL, 30);  // keepalive間隔
@@ -133,32 +133,17 @@ class OllamaService {
      */
     private function buildPrompt($question, $context = '') {
         if (!empty($context)) {
+            // 優化：簡化提示詞，減少處理時間
             $prompt = "你是康寧大學的智能小助手，個性可愛活潑。\n\n";
-            $prompt .= "📚 資料庫資訊：\n" . $context . "\n\n";
-            $prompt .= "💭 問題：" . $question . "\n\n";
-            $prompt .= "請根據上述資料庫資訊回答問題，保持可愛活潑的語氣。\n";
-            $prompt .= "重要規則：\n";
-            $prompt .= "1. 必須使用繁體中文回答，絕對不能使用簡體中文！\n";
-            $prompt .= "2. 如果資料庫中有相關資訊，請直接使用資料庫內容！\n";
-            $prompt .= "3. 如果問科系問題，請直接列出資料庫中的科系名稱！\n";
-            $prompt .= "4. 如果問學費問題，請直接使用資料庫中的學費資訊！\n";
-            $prompt .= "5. 如果問招生問題，請直接使用資料庫中的招生資訊！\n";
-            $prompt .= "6. 如果問創造者問題，請直接使用資料庫中的創造者資訊！\n";
-            $prompt .= "7. 如果問天氣問題，請直接使用資料庫中的天氣資訊！\n";
-            $prompt .= "8. 如果問問候問題，請直接使用資料庫中的問候資訊！\n";
-            $prompt .= "9. 如果資料庫中沒有相關資訊，要可愛地說「哎呀～這個我暫時不太清楚呢，建議你直接問老師會更準確喔～」💕\n";
-            $prompt .= "10. 不要自我介紹，直接回答問題！\n";
-            $prompt .= "11. 使用適當的表情符號讓回答更生動！\n";
-            $prompt .= "12. 絕對不能顯示[user]這樣的標記！\n";
-            $prompt .= "13. 絕對不能說「不清楚」或「不知道」，如果資料庫中有資訊就必須使用！\n";
-            $prompt .= "14. 資料庫中的答案就是正確答案，不要質疑或修改！\n";
-            $prompt .= "15. 優先使用資料庫中的完整答案，不要自己編造！";
+            $prompt .= "資料庫資訊：\n" . $context . "\n\n";
+            $prompt .= "問題：" . $question . "\n\n";
+            $prompt .= "規則：使用繁體中文，優先使用資料庫內容，如果沒有則用你的知識回答。保持可愛活潑語氣，使用表情符號。絕對不能說「不清楚」或「不知道」！";
         } else {
+            // 優化：簡化提示詞，減少處理時間
             $prompt = "你是康寧大學的智能小助手，個性可愛活潑。\n\n";
             $prompt .= "問題：" . $question . "\n\n";
-            $prompt .= "請用可愛活潑的語氣直接回答問題，不要自我介紹！使用適當的表情符號讓回答更生動。";
-            $prompt .= "必須使用繁體中文回答，絕對不能使用簡體中文！";
-            $prompt .= "絕對不能顯示[user]這樣的標記，直接回答問題即可！";
+            $prompt .= "請用可愛活潑的語氣直接回答問題，使用繁體中文和適當的表情符號。";
+            $prompt .= "絕對不能說「不清楚」或「不知道」，必須用你的知識回答！";
         }
         
         return $prompt;

@@ -10,18 +10,27 @@ if (file_exists(__DIR__ . '/session_config.php')) {
 } else {
     // 如果沒有 session_config.php，直接啟動 session
     if (session_status() === PHP_SESSION_NONE) {
+        // 確保使用相同的 session 名稱
+        session_name('KANGNING_SESSION');
         session_start();
     }
+}
+
+// 確保 session 已啟動
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
 // 調試模式（通過 URL 參數 debug=1 啟用）
 $debug_mode = isset($_GET['debug']) && $_GET['debug'] == '1';
 
-// 生成隨機驗證碼（5-6位，包含字母和數字，增加長度提高難度）
-function generateCaptchaCode($length = 6) {
+// 生成隨機驗證碼（固定4位，確保圖片能完整顯示且用戶容易輸入）
+function generateCaptchaCode($length = 4) {
     // 排除容易混淆的字符：0, O, 1, I, L
     $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     $code = '';
+    // 強制使用4位，確保一致性
+    $length = 4;
     for ($i = 0; $i < $length; $i++) {
         $code .= $characters[rand(0, strlen($characters) - 1)];
     }
@@ -64,7 +73,7 @@ if (!extension_loaded('gd')) {
         
         // 添加隨機噪點
         for ($i = 0; $i < 30; $i++) {
-            $x = rand(5, 145);
+            $x = rand(5, 175);
             $y = rand(5, 45);
             $size = rand(1, 2);
             $opacity = rand(20, 60) / 100;
@@ -73,9 +82,9 @@ if (!extension_loaded('gd')) {
         
         // 添加干擾線
         for ($i = 0; $i < 3; $i++) {
-            $x1 = rand(10, 140);
+            $x1 = rand(10, 170);
             $y1 = rand(10, 40);
-            $x2 = rand(10, 140);
+            $x2 = rand(10, 170);
             $y2 = rand(10, 40);
             $opacity = rand(20, 40) / 100;
             $svg .= '<line x1="' . $x1 . '" y1="' . $y1 . '" x2="' . $x2 . '" y2="' . $y2 . '" stroke="#ccc" stroke-width="1" opacity="' . $opacity . '"/>';
@@ -83,7 +92,7 @@ if (!extension_loaded('gd')) {
         
         // 添加驗證碼文字（每個字符都有隨機變形）
         $char_width = 20;
-        $start_x = (150 - (strlen($captcha_code) * $char_width)) / 2;
+        $start_x = max(10, (180 - (strlen($captcha_code) * $char_width)) / 2);
         $base_y = 32;
         
         for ($i = 0; $i < strlen($captcha_code); $i++) {
@@ -104,12 +113,55 @@ if (!extension_loaded('gd')) {
     exit;
 }
 
-// 生成驗證碼
-$captcha_code = generateCaptchaCode();
-$_SESSION['captcha_code'] = $captcha_code;
+// 生成驗證碼（只有在 session 中沒有驗證碼，或者明確請求刷新時才生成新的）
+$force_refresh = isset($_GET['refresh']) && $_GET['refresh'] == '1';
 
-// 圖片尺寸
-$width = 150;
+// 確保 session 已啟動
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if ($force_refresh || !isset($_SESSION['captcha_code']) || empty($_SESSION['captcha_code'])) {
+    $captcha_code = generateCaptchaCode();
+    // 確保驗證碼長度為4
+    if (strlen($captcha_code) !== 4) {
+        error_log("警告: 生成的驗證碼長度不是4，重新生成");
+        $captcha_code = generateCaptchaCode();
+    }
+    $_SESSION['captcha_code'] = $captcha_code;
+    
+    // 調試信息（僅在調試模式下）
+    if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+        error_log("驗證碼生成: " . $captcha_code . " (長度:" . strlen($captcha_code) . "), Session ID: " . session_id());
+        error_log("Session 所有鍵: " . implode(', ', array_keys($_SESSION)));
+        error_log("驗證碼已保存: " . ($_SESSION['captcha_code'] ?? 'NOT SET') . " (長度:" . strlen($_SESSION['captcha_code'] ?? '') . ")");
+    }
+} else {
+    // 使用現有的驗證碼，但確保長度為4
+    $captcha_code = $_SESSION['captcha_code'];
+    
+    // 如果現有驗證碼長度不是4，重新生成
+    if (strlen($captcha_code) !== 4) {
+        error_log("警告: Session中的驗證碼長度不是4 (" . strlen($captcha_code) . ")，重新生成");
+        $captcha_code = generateCaptchaCode();
+        $_SESSION['captcha_code'] = $captcha_code;
+    }
+    
+    // 調試信息（僅在調試模式下）
+    if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+        error_log("使用現有驗證碼: " . $captcha_code . " (長度:" . strlen($captcha_code) . "), Session ID: " . session_id());
+    }
+}
+
+// 最終確認驗證碼存在且長度為4
+if (empty($captcha_code) || strlen($captcha_code) !== 4) {
+    error_log("錯誤: 驗證碼為空或長度不是4，強制生成");
+    $captcha_code = generateCaptchaCode();
+    $_SESSION['captcha_code'] = $captcha_code;
+}
+
+// 圖片尺寸（增加寬度以確保能完整顯示驗證碼）
+$width = 180;
 $height = 50;
 
 // 創建圖片
@@ -177,13 +229,22 @@ if (function_exists('imagearc')) {
 $font_size = 5;
 $char_width = imagefontwidth($font_size);
 $char_height = imagefontheight($font_size);
-$total_width = strlen($captcha_code) * $char_width;
+$char_spacing = 2; // 字符間距
+$total_width = strlen($captcha_code) * ($char_width + $char_spacing);
 $start_x = ($width - $total_width) / 2;
 $start_y = ($height - $char_height) / 2;
 
+// 確保驗證碼長度為4
+if (strlen($captcha_code) !== 4) {
+    error_log("錯誤: 驗證碼長度不是4，實際長度: " . strlen($captcha_code) . ", 內容: " . $captcha_code);
+    // 只取前4個字符
+    $captcha_code = substr($captcha_code, 0, 4);
+    $_SESSION['captcha_code'] = $captcha_code;
+}
+
 for ($i = 0; $i < strlen($captcha_code); $i++) {
     $char = $captcha_code[$i];
-    $x = $start_x + ($i * $char_width);
+    $x = $start_x + ($i * ($char_width + $char_spacing));
     $y = $start_y;
     
     // 增加旋轉角度範圍（-25到25度，讓機器人更難識別）

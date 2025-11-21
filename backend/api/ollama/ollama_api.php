@@ -127,16 +127,30 @@ function handleAskQuestion($ollama) {
         
         $context = '';
         if ($use_context) {
-            // 從資料庫獲取相關上下文
+            // 從資料庫獲取相關上下文（優化：添加超時機制，減少到1秒）
+            $context_start = microtime(true);
             $context = getRelevantContext($question);
+            $context_elapsed = microtime(true) - $context_start;
+            
+            // 如果上下文查詢超過 1 秒，使用空上下文（讓 AI 直接回答，提高速度）
+            if ($context_elapsed > 1.0) {
+                $context = '';
+                error_log("上下文查詢超時（{$context_elapsed}秒），跳過上下文使用，直接使用 AI 回答");
+            }
         }
         
-        // 檢查是否為科系或學費問題，如果是則直接從資料庫回答
+        // 檢查是否為科系或學費問題，如果是則直接從資料庫回答（優化：添加超時機制，減少到1秒）
         $question_lower = mb_strtolower($question, 'UTF-8');
+        $db_query_timeout = 1.0; // 優化：資料庫查詢超時時間減少到1秒，提高速度
+        $db_query_start = microtime(true);
+        
         if (mb_strpos($question_lower, '科系', 0, 'UTF-8') !== false || mb_strpos($question_lower, '科', 0, 'UTF-8') !== false) {
-            // 直接從資料庫獲取科系資料
+            // 直接從資料庫獲取科系資料（快速查詢，超時則跳過）
             $department_answer = getDepartmentAnswer($question);
-            if (!empty($department_answer)) {
+            $db_query_elapsed = microtime(true) - $db_query_start;
+            
+            // 如果查詢時間超過超時時間或沒有結果，立即跳過資料庫查詢
+            if (!empty($department_answer) && $db_query_elapsed < $db_query_timeout) {
                 $response_time = round((microtime(true) - $start_time) * 1000);
                 
                 // 保存問答歷史
@@ -153,11 +167,15 @@ function handleAskQuestion($ollama) {
             }
         }
         
-        // 檢查是否為學費問題
+        // 檢查是否為學費問題（快速查詢）
         if (mb_strpos($question_lower, '學費', 0, 'UTF-8') !== false || mb_strpos($question_lower, '費用', 0, 'UTF-8') !== false) {
+            $db_query_start = microtime(true);
             // 直接從資料庫獲取學費資料
             $tuition_answer = getTuitionAnswer($question);
-            if (!empty($tuition_answer)) {
+            $db_query_elapsed = microtime(true) - $db_query_start;
+            
+            // 如果查詢時間超過超時時間或沒有結果，立即跳過資料庫查詢
+            if (!empty($tuition_answer) && $db_query_elapsed < $db_query_timeout) {
                 $response_time = round((microtime(true) - $start_time) * 1000);
                 
                 // 保存問答歷史
@@ -174,11 +192,15 @@ function handleAskQuestion($ollama) {
             }
         }
         
-        // 檢查是否為創造者問題
+        // 檢查是否為創造者問題（快速查詢）
         if (mb_strpos($question_lower, '創造者', 0, 'UTF-8') !== false || mb_strpos($question_lower, '創作者', 0, 'UTF-8') !== false) {
+            $db_query_start = microtime(true);
             // 直接從資料庫獲取創造者資料
             $creator_answer = getCreatorAnswer($question);
-            if (!empty($creator_answer)) {
+            $db_query_elapsed = microtime(true) - $db_query_start;
+            
+            // 如果查詢時間超過超時時間或沒有結果，立即跳過資料庫查詢
+            if (!empty($creator_answer) && $db_query_elapsed < $db_query_timeout) {
                 $response_time = round((microtime(true) - $start_time) * 1000);
                 
                 // 保存問答歷史
@@ -211,11 +233,21 @@ function handleAskQuestion($ollama) {
                 'response_time_ms' => $response_time
             ]);
         } else {
-            echo json_encode(['error' => $result['error']]);
+            // 修改：返回 success: false 而不是只有 error，讓前端能正確處理
+            echo json_encode([
+                'success' => false,
+                'error' => $result['error'] ?? 'AI 回答失敗',
+                'message' => 'AI 暫時無法回答，請稍後再試或使用關鍵詞查詢'
+            ]);
         }
         
     } catch (Exception $e) {
-        echo json_encode(['error' => '處理問題時發生錯誤: ' . $e->getMessage()]);
+        // 修改：返回 success: false 而不是只有 error
+        echo json_encode([
+            'success' => false,
+            'error' => '處理問題時發生錯誤: ' . $e->getMessage(),
+            'message' => '系統錯誤，請稍後再試'
+        ]);
     }
 }
 

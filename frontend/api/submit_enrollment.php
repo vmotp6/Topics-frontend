@@ -327,6 +327,75 @@ if (empty($name) || empty($identity) || empty($phone1)) {
     exit;
 }
 
+// 驗證電子郵件（必填）
+if (empty($email)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '請填寫電子郵件信箱'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+// 驗證電子郵件格式
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '請輸入有效的電子郵件格式'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+// 驗證至少一個就讀意願（不能全部是「無特定」）
+$hasIntention = false;
+if (!empty($intention1) && $intention1 !== '無特定') {
+    $hasIntention = true;
+} elseif (!empty($intention2) && $intention2 !== '無特定') {
+    $hasIntention = true;
+} elseif (!empty($intention3) && $intention3 !== '無特定') {
+    $hasIntention = true;
+}
+
+if (!$hasIntention) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '請至少選擇一個就讀意願（不能全部選擇「無特定」）'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
+// 驗證就讀或畢業國中（必填）
+if (empty($junior_high)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '請填寫就讀或畢業國中資訊'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
 // 驗證碼檢查 - 必須與session中的驗證碼匹配
 if (empty($captcha)) {
     if (ob_get_level() > 0) {
@@ -345,13 +414,30 @@ if (empty($captcha)) {
 // 檢查session中的驗證碼
 $captcha_session = $_SESSION['captcha_code'] ?? '';
 
+// 調試信息
+error_log("=== 驗證碼檢查開始 ===");
+error_log("Session ID: " . session_id());
+error_log("Session 狀態: " . session_status());
+error_log("Session 中有驗證碼: " . (!empty($captcha_session) ? 'YES (' . strlen($captcha_session) . ' 字符): ' . $captcha_session : 'NO'));
+error_log("Session 所有數據: " . print_r($_SESSION, true));
+
+// 如果驗證碼長度不是4，記錄警告
+if (!empty($captcha_session) && strlen($captcha_session) !== 4) {
+    error_log("警告: Session中的驗證碼長度不是4，實際長度: " . strlen($captcha_session));
+}
+
 if (empty($captcha_session)) {
+    // 檢查是否是 session 問題
+    $session_keys = array_keys($_SESSION);
+    error_log("Session 中的所有鍵: " . implode(', ', $session_keys));
+    
     if (ob_get_level() > 0) {
         @ob_clean();
     }
     echo json_encode([
         'success' => false,
-        'message' => '驗證碼已過期，請刷新驗證碼後再試'
+        'message' => '驗證碼已過期，請刷新驗證碼後再試',
+        'debug_info' => 'Session ID: ' . session_id() . ', Session keys: ' . implode(', ', $session_keys)
     ]);
     if (ob_get_level() > 0) {
         @ob_end_flush();
@@ -359,21 +445,109 @@ if (empty($captcha_session)) {
     exit;
 }
 
-// 驗證驗證碼是否匹配（不區分大小寫）
-if (strtoupper($captcha) !== strtoupper($captcha_session)) {
-    error_log("驗證碼驗證失敗: 輸入=" . $captcha . ", session=" . $captcha_session);
+// 獲取原始值（用於調試）
+$captcha_raw = $_POST['captcha'] ?? '';
+$session_raw = $_SESSION['captcha_code'] ?? '';
+
+// 最簡單的驗證方式：只轉大寫和去空格（不移除任何字符）
+$captcha_normalized = trim(strtoupper($captcha));
+$session_normalized = trim(strtoupper($captcha_session));
+
+// 調試信息（記錄到日誌和響應）
+$debug_info = [
+    'input_original' => $captcha_raw,
+    'input_normalized' => $captcha_normalized,
+    'session_original' => $session_raw,
+    'session_normalized' => $session_normalized,
+    'input_length' => strlen($captcha_normalized),
+    'session_length' => strlen($session_normalized),
+    'session_id' => session_id(),
+    'session_keys' => array_keys($_SESSION)
+];
+
+error_log("=== 驗證碼驗證開始 ===");
+error_log("原始輸入: '" . $captcha_raw . "' (長度:" . strlen($captcha_raw) . ")");
+error_log("標準化輸入: '" . $captcha_normalized . "' (長度:" . strlen($captcha_normalized) . ")");
+error_log("原始Session: '" . $session_raw . "' (長度:" . strlen($session_raw) . ")");
+error_log("標準化Session: '" . $session_normalized . "' (長度:" . strlen($session_normalized) . ")");
+error_log("Session ID: " . session_id());
+
+// 驗證驗證碼是否匹配（不區分大小寫，只去空格）
+$match = false;
+
+// 方法1: 直接比較標準化後的值
+if ($captcha_normalized === $session_normalized && !empty($captcha_normalized) && !empty($session_normalized)) {
+    $match = true;
+    error_log("驗證碼匹配成功（標準化比較）");
+} else {
+    // 方法2: 移除所有非字母數字字符後比較
+    $captcha_clean = preg_replace('/[^A-Z0-9]/', '', $captcha_normalized);
+    $session_clean = preg_replace('/[^A-Z0-9]/', '', $session_normalized);
+    
+    if ($captcha_clean === $session_clean && !empty($captcha_clean) && !empty($session_clean)) {
+        $match = true;
+        error_log("驗證碼匹配成功（清理後比較）");
+    } else {
+        // 方法3: 逐字符比較（最寬鬆）
+        $captcha_chars = array_values(array_filter(str_split($captcha_normalized), function($c) {
+            return ctype_alnum($c);
+        }));
+        $session_chars = array_values(array_filter(str_split($session_normalized), function($c) {
+            return ctype_alnum($c);
+        }));
+        
+        if (count($captcha_chars) === count($session_chars) && count($captcha_chars) > 0) {
+            $char_match = true;
+            for ($i = 0; $i < count($captcha_chars); $i++) {
+                if (strtoupper($captcha_chars[$i]) !== strtoupper($session_chars[$i])) {
+                    $char_match = false;
+                    break;
+                }
+            }
+            if ($char_match) {
+                $match = true;
+                error_log("驗證碼匹配成功（逐字符比較）");
+            } else {
+                error_log("驗證碼匹配失敗（所有方法都失敗）");
+                error_log("逐字符比較: 輸入=[" . implode(',', $captcha_chars) . "], session=[" . implode(',', $session_chars) . "]");
+            }
+        } else {
+            error_log("驗證碼匹配失敗: 字符數量不匹配 (輸入:" . count($captcha_chars) . ", session:" . count($session_chars) . ")");
+        }
+    }
+}
+
+if (!$match) {
+    error_log("=== 驗證碼驗證失敗 ===");
+    error_log("詳細比較: 輸入標準化='" . $captcha_normalized . "' (長度:" . strlen($captcha_normalized) . "), Session標準化='" . $session_normalized . "' (長度:" . strlen($session_normalized) . ")");
+    error_log("輸入十六進制: " . bin2hex($captcha_normalized));
+    error_log("Session十六進制: " . bin2hex($session_normalized));
+    
     if (ob_get_level() > 0) {
         @ob_clean();
     }
-    echo json_encode([
+    
+    // 在開發環境中返回調試信息，生產環境中隱藏
+    $is_dev = (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
+    $is_debug = isset($_GET['debug']) || isset($_POST['debug']);
+    
+    $response = [
         'success' => false,
-        'message' => '驗證碼錯誤，請重新輸入'
-    ]);
+        'message' => '驗證碼錯誤，請重新輸入。如果確認輸入正確，請刷新驗證碼後再試。'
+    ];
+    
+    if ($is_dev || $is_debug) {
+        $response['debug'] = $debug_info;
+    }
+    
+    echo json_encode($response);
     if (ob_get_level() > 0) {
         @ob_end_flush();
     }
     exit;
 }
+
+error_log("=== 驗證碼驗證成功 ===");
 
 // 驗證成功後，清除session中的驗證碼（防止重複使用）
 unset($_SESSION['captcha_code']);
