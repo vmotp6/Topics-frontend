@@ -959,7 +959,7 @@ function getActiveClass($targetFile) {
                    <div class="avatar-btn" onclick="toggleDropdown()">
              <?php
              // 獲取用戶頭像
-             $avatar_src = './share/EIdROxGXsAE_LSs.jpg'; // 預設頭像
+             $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
              if (isset($_SESSION['username'])) {
                  try {
                      // 使用絕對路徑來避免相對路徑問題
@@ -980,9 +980,11 @@ function getActiveClass($targetFile) {
                              if (!empty($row['profile_picture'])) {
                                  // 檢查是否為完整URL或相對路徑
                                  if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
+                                     // 完整 URL，直接使用
                                      $avatar_src = $row['profile_picture'];
                                  } else {
-                                     $avatar_src = './share/' . $row['profile_picture'];
+                                     // 相對路徑，使用 getResourcePath 函數
+                                     $avatar_src = getResourcePath($row['profile_picture']);
                                  }
                              }
                          }
@@ -994,7 +996,7 @@ function getActiveClass($targetFile) {
                  }
              }
              ?>
-             <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="頭像" class="avatar-img">
+             <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="頭像" class="avatar-img" onerror="this.src='<?php echo htmlspecialchars(getResourcePath('EIdROxGXsAE_LSs.jpg')); ?>';">
         <div class="notification-dot" id="notificationDot"></div>
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
