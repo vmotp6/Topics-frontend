@@ -19,8 +19,8 @@ main {
   min-height: 0;
   overflow: hidden;
   padding: 20px;
-  padding-top: 120px; /* 增加頂部間距以適應 header */
-  padding-bottom: 120px;
+  padding-top: 80px; /* 減少頂部間距 */
+  padding-bottom: 40px; /* 減少底部間距 */
 }
 
 body::before {
@@ -52,6 +52,7 @@ body::before {
   flex: 1;
   max-width: 1200px;
   width: 100%;
+  max-height: 80vh; /* 限制最大高度為視窗高度的80% */
   background: #ffffff;
   border-radius: 20px;
   box-shadow: 
@@ -458,13 +459,14 @@ body::before {
 }
 
 .chat-header {
-  padding: 30px 35px;
+  padding: 20px 35px; /* 減少上下內邊距 */
   background: #ffffff;
   border-bottom: 1px solid #e9ecef;
   display: flex;
   align-items: center;
   position: relative;
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  flex-shrink: 0; /* 防止被壓縮 */
 }
 
 .chat-header::before {
@@ -497,10 +499,11 @@ body::before {
 
 .chat-messages {
   flex: 1;
-  padding: 35px;
+  padding: 20px 35px; /* 減少上下內邊距 */
   overflow-y: auto;
   background: #ffffff;
-  min-height: 300px;
+  min-height: 200px; /* 減少最小高度 */
+  max-height: calc(80vh - 200px); /* 限制最大高度 */
   position: relative;
 }
 
@@ -636,7 +639,7 @@ body::before {
 }
 
 .chat-input {
-  padding: 20px 35px;
+  padding: 15px 35px; /* 減少上下內邊距 */
   background: #ffffff;
   border-top: 1px solid #e9ecef;
   display: flex;
