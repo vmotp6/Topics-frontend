@@ -1,9 +1,36 @@
+<?php
+// 載入 session 配置（如果尚未載入）
+if (!isset($_SESSION)) {
+    require_once dirname(__DIR__) . '/session_config.php';
+}
+
+// 檢查登入狀態和角色
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 根據登入狀態和角色決定首頁連結
+$homePage = '/Topics-frontend/frontend/index.php'; // 預設為訪客首頁
+
+if ($isLoggedIn && isset($_SESSION['role'])) {
+    switch ($_SESSION['role']) {
+        case '學生':
+            $homePage = '/Topics-frontend/frontend/student.php';
+            break;
+        case '老師':
+            $homePage = '/Topics-frontend/frontend/teacher.php';
+            break;
+        default:
+            $homePage = '/Topics-frontend/frontend/index.php';
+            break;
+    }
+}
+?>
 <!-- footer.php -->
 <footer class="footer">
     <nav class="footer-nav" aria-label="Footer navigation">
-        <a href="/Topics-frontend/frontend/index.php" class="footer-link">首頁</a>
+        <a href="<?php echo $homePage; ?>" class="footer-link">首頁</a>
         <a href="/Topics-frontend/frontend/QA.php" class="footer-link">認識招生平台</a>
-        <a href="/Topics-frontend/frontend/AI.php" class="footer-link">AI招生平台</a>
         <a href="/Topics-frontend/frontend/sitemap.php" class="footer-link">網站導覽</a>
     </nav>
     <div class="footer-copy">
