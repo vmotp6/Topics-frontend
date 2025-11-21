@@ -1,272 +1,452 @@
 <?php
-require_once __DIR__ . '/session_config.php';
-require_once __DIR__ . '/config.php';
+// 載入 session 配置
+require_once 'session_config.php';
 
-// 檢查是否為學生且已登入
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
+// 檢查登入狀態
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
+
+// 如果未登入，重定向到首頁
+if (!$isLoggedIn) {
     header("Location: index.php");
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
-$message = '';
-$message_type = '';
-
-// 處理表單提交
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $conn = getDatabaseConnection();
-
-    // 更新姓名
-    if (isset($_POST['update_name'])) {
-        $name = trim($_POST['name']);
-        if (empty($name)) {
-            $message = '姓名不能為空。';
-            $message_type = 'error';
-        } else {
-            $stmt = $conn->prepare("UPDATE user SET name = ? WHERE id = ?");
-            $stmt->bind_param("si", $name, $user_id);
-            if ($stmt->execute()) {
-                $_SESSION['name'] = $name;
-                $message = '姓名更新成功！';
-                $message_type = 'success';
-            } else {
-                $message = '姓名更新失敗，請稍後再試。';
-                $message_type = 'error';
-            }
-            $stmt->close();
-        }
-    }
-
-    // 更新密碼
-    if (isset($_POST['update_password'])) {
-        $current_password = $_POST['current_password'];
-        $new_password = $_POST['new_password'];
-        $confirm_password = $_POST['confirm_password'];
-
-        if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
-            $message = '所有密碼欄位都必須填寫。';
-            $message_type = 'error';
-        } elseif ($new_password !== $confirm_password) {
-            $message = '新密碼與確認密碼不相符。';
-            $message_type = 'error';
-        } else {
-            $stmt = $conn->prepare("SELECT password FROM user WHERE id = ?");
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $user = $result->fetch_assoc();
-            $stmt->close();
-
-            if ($user && password_verify($current_password, $user['password'])) {
-                $new_hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("UPDATE user SET password = ? WHERE id = ?");
-                $stmt->bind_param("si", $new_hashed_password, $user_id);
-                if ($stmt->execute()) {
-                    $message = '密碼更新成功！';
-                    $message_type = 'success';
-                } else {
-                    $message = '密碼更新失敗，請稍後再試。';
-                    $message_type = 'error';
-                }
-                $stmt->close();
-            } else {
-                $message = '目前的密碼不正確。';
-                $message_type = 'error';
-            }
-        }
-    }
-    $conn->close();
+// 檢查是否為學生角色
+$user_role = $_SESSION['role'] ?? '';
+if ($user_role !== '學生') {
+    header("Location: index.php");
+    exit;
 }
 
-// 取得使用者資料
-$conn = getDatabaseConnection();
-$stmt = $conn->prepare("SELECT username, name, email FROM user WHERE id = ?");
-$stmt->bind_param("i", $user_id);
-$stmt->execute();
-$result = $stmt->get_result();
-$current_user = $result->fetch_assoc();
-$stmt->close();
-$conn->close();
+// 獲取用戶姓名（學生）
+$user_name = '';
+$current_department = '';
+$current_phone = '';
+$current_student_id = '';
+$current_grade = '';
+$current_class_name = '';
+$current_email = '';
+$current_username = $_SESSION['username'] ?? '';
 
-$page_title = '個人資料';
+// 使用直接 PDO 連接（與其他頁面一致）
+try {
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 先從 user 表獲取基本資訊（包括 email）
+    $stmt = $pdo->prepare("SELECT name, email FROM user WHERE username = ?");
+    $stmt->execute([$_SESSION['username']]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($result) {
+        if (!empty($result['name'])) {
+            $user_name = $result['name'];
+        }
+        // 如果student表中沒有email，使用user表的email作為預設值
+        if (!empty($result['email'])) {
+            $current_email = $result['email'];
+        }
+    }
+    
+    // 從 student 表獲取所有欄位
+    $stmt = $pdo->prepare("
+        SELECT s.department, s.phone, s.student_id, s.grade, s.class_name, s.email 
+        FROM student s
+        JOIN user u ON s.user_id = u.id
+        WHERE u.username = ?
+    ");
+    $stmt->execute([$_SESSION['username']]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($result) {
+        $current_department = $result['department'] ?? '';
+        $current_phone = $result['phone'] ?? '';
+        $current_student_id = $result['student_id'] ?? '';
+        $current_grade = $result['grade'] ?? '';
+        $current_class_name = $result['class_name'] ?? '';
+        // 如果student表有email，優先使用；否則使用之前從user表獲取的
+        if (!empty($result['email'])) {
+            $current_email = $result['email'];
+        }
+    }
+} catch (PDOException $e) {
+    error_log("無法從資料庫獲取用戶資料: " . $e->getMessage());
+}
 ?>
-
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - 康寧大學招生平台</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
+    <?php include("share/header.php"); ?>
+    <title>學生個人資料</title>
+    <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
-        body.custom-spacing {
-            padding: 0;
-            background: linear-gradient(135deg, #e0e7ff, #f8fafc);
-            font-family: 'Segoe UI', sans-serif;
-        }
-
-        main {
-            max-width: 900px;
-            margin: 150px auto 40px;
-            padding: 30px 40px;
+        .profile-container {
+            width: 80%;
+            max-width: 600px;
+            margin: 120px auto 40px;
+            padding: 40px;
             background: white;
             border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-            animation: fadeIn 0.6s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        h1 {
+        .profile-title {
             text-align: center;
-            color: #4f46e5;
-            font-size: 2rem;
-            font-weight: 700;
+            color: #003366;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .form-group {
             margin-bottom: 25px;
-            letter-spacing: 1px;
         }
-
-        .profile-section {
-            margin-bottom: 35px;
-            padding: 25px;
-            border: none;
-            border-radius: 12px;
-            background: #f9fafb;
-            box-shadow: inset 0 0 0 1px #e5e7eb;
-        }
-
-        .profile-section h2 {
-            font-size: 1.25rem;
-            margin-bottom: 20px;
-            color: #374151;
-            padding-bottom: 8px;
-            border-bottom: 3px solid #4f46e5;
-        }
-
-        .form-group { margin-bottom: 20px; }
 
         .form-group label {
             display: block;
-            font-size: 0.95rem;
-            margin-bottom: 6px;
-            color: #374151;
+            margin-bottom: 8px;
+            color: #003366;
             font-weight: 600;
+            font-size: 16px;
         }
 
+        .form-group select,
         .form-group input {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: 0.2s;
-        }
-
-        .form-group input:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79,70,229,0.2);
-        }
-
-        .form-group input[readonly] {
-            background-color: #f3f4f6;
-            color: #6b7280;
-            cursor: not-allowed;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-            color: white;
-            padding: 12px 18px;
-            border: none;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+            background-color: #ffffff;
+            color: #333;
+            cursor: text;
         }
 
-        .btn:hover {
-            background: linear-gradient(135deg, #4f46e5, #4338ca);
-            transform: translateY(-1px);
+        .form-group select:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #007bff;
+            background-color: #ffffff;
+        }
+        
+        /* 確保字段可編輯，覆蓋可能的只讀樣式 */
+        .form-group input:not([readonly]):not([disabled]),
+        .form-group select:not([readonly]):not([disabled]) {
+            background-color: #ffffff !important;
+            color: #333 !important;
+            cursor: text !important;
+            opacity: 1 !important;
+        }
+
+        .submit-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background: #0056b3;
         }
 
         .message {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
             text-align: center;
             font-weight: 600;
-            animation: fadeIn 0.4s ease;
         }
 
         .message.success {
-            background-color: #dcfce7;
-            color: #065f46;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
         .message.error {
-            background-color: #fee2e2;
-            color: #991b1b;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 20px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .back-btn:hover {
+            color: #0056b3;
+        }
+
+        .credentials-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .credentials-section h2 {
+            color: #003366;
+            font-size: 20px;
+            margin-bottom: 20px;
+            font-weight: 600;
         }
     </style>
 </head>
-<body class="custom-spacing">
 
-<?php include __DIR__ . '/share/header.php'; ?>
-
-<main>
-    <h1><i class="fas fa-user-circle"></i> <?php echo $page_title; ?></h1>
-
-    <?php if ($message): ?>
-        <div class="message <?php echo $message_type; ?>"><?php echo htmlspecialchars($message); ?></div>
-    <?php endif; ?>
-
-    <div class="profile-section">
-        <h2>基本資料</h2>
-        <form method="POST">
+<body>
+    <div class="profile-container">
+        <h1 class="profile-title">個人資料設定</h1>
+        
+        <form id="profileForm">
+            <!-- 學生專用欄位 -->
             <div class="form-group">
-                <label for="username">帳號</label>
-                <input type="text" id="username" value="<?php echo htmlspecialchars($current_user['username']); ?>" readonly>
+                <label for="student_id">學號</label>
+                <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" value="<?php echo htmlspecialchars($current_student_id); ?>">
             </div>
+            
             <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" value="<?php echo htmlspecialchars($current_user['email']); ?>" readonly>
+                <label for="department">科系 <span style="color: #f5222d;">*</span></label>
+                <select id="department" name="department" required>
+                    <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
+                    <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
+                    <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
+                    <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
+                    <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
+                    <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
+                    <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
+                    <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                </select>
             </div>
+            
             <div class="form-group">
-                <label for="name">姓名</label>
-                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($current_user['name']); ?>" required>
+                <label for="grade">年級</label>
+                <select id="grade" name="grade">
+                    <option value="" <?php echo empty($current_grade) ? 'selected' : ''; ?>>請選擇年級</option>
+                    <option value="一年級" <?php echo $current_grade === '一年級' ? 'selected' : ''; ?>>一年級</option>
+                    <option value="二年級" <?php echo $current_grade === '二年級' ? 'selected' : ''; ?>>二年級</option>
+                    <option value="三年級" <?php echo $current_grade === '三年級' ? 'selected' : ''; ?>>三年級</option>
+                    <option value="四年級" <?php echo $current_grade === '四年級' ? 'selected' : ''; ?>>四年級</option>
+                    <option value="五年級" <?php echo $current_grade === '五年級' ? 'selected' : ''; ?>>五年級</option>
+                </select>
             </div>
-            <button type="submit" name="update_name" class="btn"><i class="fas fa-save"></i> 更新姓名</button>
+            
+            <div class="form-group">
+                <label for="class_name">班級</label>
+                <input type="text" id="class_name" name="class_name" placeholder="例如：資管一甲" value="<?php echo htmlspecialchars($current_class_name); ?>">
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">電話 <span style="color: #f5222d;">*</span></label>
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+            </div>
+            
+            <button type="submit" class="submit-btn">保存資料</button>
         </form>
+        
+        <div id="message"></div>
+        
+        <!-- 修改密碼區塊 -->
+        <div class="credentials-section">
+            <h2>修改密碼</h2>
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="current_password">當前密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="current_password" name="current_password" placeholder="請輸入當前密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new_password">新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="new_password" name="new_password" placeholder="請輸入新密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm_password">確認新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="請再次輸入新密碼" required>
+                </div>
+                
+                <button type="submit" class="submit-btn">更新密碼</button>
+            </form>
+            
+            <div id="passwordMessage"></div>
+        </div>
+        
+        <a href="student.php" class="back-btn">← 返回學生頁面</a>
     </div>
 
-    <div class="profile-section">
-        <h2>修改密碼</h2>
-        <form method="POST">
-            <div class="form-group">
-                <label for="current_password">目前的密碼</label>
-                <input type="password" id="current_password" name="current_password" required>
-            </div>
-            <div class="form-group">
-                <label for="new_password">新密碼</label>
-                <input type="password" id="new_password" name="new_password" required>
-            </div>
-            <div class="form-group">
-                <label for="confirm_password">確認新密碼</label>
-                <input type="password" id="confirm_password" name="confirm_password" required>
-            </div>
-            <button type="submit" name="update_password" class="btn"><i class="fas fa-key"></i> 更新密碼</button>
-        </form>
-    </div>
-</main>
+    <script>
+        // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
+        window.addEventListener('load', function() {
+            // 如果 PHP 已經從資料庫載入了資料，直接使用（不需要 API 調用）
+            const currentDept = '<?php echo htmlspecialchars($current_department ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentPhone = '<?php echo htmlspecialchars($current_phone ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            
+            if (currentDept && document.getElementById('department')) {
+                document.getElementById('department').value = currentDept;
+            }
+            if (currentPhone && document.getElementById('phone')) {
+                document.getElementById('phone').value = currentPhone;
+            }
+            
+            // 學生專用欄位
+            const currentStudentId = '<?php echo htmlspecialchars($current_student_id ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentGrade = '<?php echo htmlspecialchars($current_grade ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentClassName = '<?php echo htmlspecialchars($current_class_name ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            
+            if (currentStudentId && document.getElementById('student_id')) {
+                document.getElementById('student_id').value = currentStudentId;
+            }
+            if (currentGrade && document.getElementById('grade')) {
+                document.getElementById('grade').value = currentGrade;
+            }
+            if (currentClassName && document.getElementById('class_name')) {
+                document.getElementById('class_name').value = currentClassName;
+            }
+        });
 
-<?php include __DIR__ . '/share/footer.php'; ?>
+        // 表單提交（學生資料）
+        document.getElementById('profileForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
+            const name = '<?php echo htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
+            const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
+            const department = document.getElementById('department') ? document.getElementById('department').value : '';
+            const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('name', name); // 將姓名加入表單數據
+            formData.append('department', department);
+            formData.append('phone', phone);
+            formData.append('role', role); // 添加角色資訊
+            
+            // 學生專用欄位
+            const studentId = document.getElementById('student_id') ? document.getElementById('student_id').value : '';
+            const grade = document.getElementById('grade') ? document.getElementById('grade').value : '';
+            const className = document.getElementById('class_name') ? document.getElementById('class_name').value : '';
+            
+            formData.append('student_id', studentId);
+            formData.append('grade', grade);
+            formData.append('class_name', className);
+            
+            // 使用 AbortController 來設置超時
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
+            
+            // 學生使用前端 PHP 保存
+            fetch('save_student_profile.php', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            })
+            .then(response => {
+                clearTimeout(timeoutId);
+                return response.json().then(data => {
+                    const messageDiv = document.getElementById('message');
+                    if (response.ok && data.success) {
+                        messageDiv.className = 'message success';
+                        messageDiv.textContent = data.message || '個人資料保存成功';
+                    } else {
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = data.message || '提交失敗，請稍後再試';
+                    }
+                });
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                const messageDiv = document.getElementById('message');
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '保存失敗，請稍後再試。';
+            });
+        });
+
+        // 密碼表單提交
+        const passwordForm = document.getElementById('passwordForm');
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const currentPassword = document.getElementById('current_password').value;
+                const newPassword = document.getElementById('new_password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+                
+                // 驗證密碼確認
+                if (newPassword !== confirmPassword) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '新密碼與確認密碼不一致';
+                    return;
+                }
+                
+                // 驗證密碼長度
+                if (newPassword.length < 6) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼長度至少需要 6 個字元';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('current_password', currentPassword);
+                formData.append('new_password', newPassword);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                fetch('update_student_password.php', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json().then(data => {
+                        const messageDiv = document.getElementById('passwordMessage');
+                        if (response.ok && data.success) {
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = data.message || '密碼更新成功';
+                            // 清空表單
+                            document.getElementById('current_password').value = '';
+                            document.getElementById('new_password').value = '';
+                            document.getElementById('confirm_password').value = '';
+                        } else {
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.message || '更新失敗，請稍後再試';
+                        }
+                    });
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    if (error.name === 'AbortError') {
+                        messageDiv.textContent = '請求超時，請稍後再試';
+                    } else {
+                        messageDiv.textContent = '更新失敗，請稍後再試';
+                    }
+                });
+            });
+        }
+    </script>
+<?php include("share/footer.php"); ?>
+<?php include("share/ai_widget.php"); ?>
 
 </body>
+
 </html>
