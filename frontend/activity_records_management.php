@@ -145,11 +145,20 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
                     // 讀取活動類型選項，將名稱轉換為代碼
                     $activity_type_options_map = [];
                     $activity_type_options_query = "SELECT code, name FROM activity_type_options WHERE is_active = 1";
-                    $activity_type_options_result = $conn->query($activity_type_options_query);
-                    if ($activity_type_options_result) {
-                        while ($row = $activity_type_options_result->fetch_assoc()) {
-                            $activity_type_options_map[$row['code']] = $row['name'];
+                    try {
+                        $activity_type_options_result = $conn->query($activity_type_options_query);
+                        if ($activity_type_options_result && $activity_type_options_result->num_rows > 0) {
+                            while ($row = $activity_type_options_result->fetch_assoc()) {
+                                $activity_type_options_map[$row['code']] = $row['name'];
+                            }
                         }
+                    } catch (Exception $e) {
+                        // 如果表不存在，使用預設選項（向後兼容）
+                        $activity_type_options_map = [
+                            'TYPE_SCHOOL_VISIT' => '來校體驗',
+                            'TYPE_OFF_CAMPUS' => '校外參訪',
+                            'TYPE_LECTURE' => '講座分享'
+                        ];
                     }
                     
                     // 將活動類型轉換為代碼
@@ -426,12 +435,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
 // 讀取活動類型選項，用於編輯表單
 $activity_type_options = [];
 $activity_type_options_query = "SELECT code, name FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
-$activity_type_options_result = $conn->query($activity_type_options_query);
-if ($activity_type_options_result) {
-    while ($row = $activity_type_options_result->fetch_assoc()) {
-        $activity_type_options[] = $row;
+try {
+    $activity_type_options_result = $conn->query($activity_type_options_query);
+    if ($activity_type_options_result && $activity_type_options_result->num_rows > 0) {
+        while ($row = $activity_type_options_result->fetch_assoc()) {
+            $activity_type_options[] = $row;
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
     }
-} else {
+} catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $activity_type_options = [
         ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗'],
