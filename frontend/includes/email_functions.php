@@ -117,7 +117,7 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
         <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
             .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
             .info-box { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #667eea; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
@@ -213,7 +213,7 @@ function sendReminderEmail($email, $studentName, $parentName, $sessionName, $ses
         <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
             .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
             .reminder-box { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; margin: 20px 0; border-radius: 8px; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
@@ -287,7 +287,7 @@ function sendModifyConfirmationEmail($email, $studentName, $parentName, $session
     
     $body = "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px 15px 0 0; text-align: center;'>
+        <div style='background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; border-radius: 15px 15px 0 0; text-align: center;'>
             <h1 style='margin: 0; font-size: 24px;'>康寧大學五專入學說明會</h1>
             <p style='margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;'>報名修改確認通知</p>
         </div>

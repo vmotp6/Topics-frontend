@@ -114,7 +114,7 @@ require_once 'session_config.php';
         .section-icon {
             width: 55px;
             height: 55px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             border-radius: 15px;
             display: flex;
             align-items: center;
@@ -194,7 +194,7 @@ require_once 'session_config.php';
             display: inline-flex;
             align-items: center;
             gap: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 18px 35px;
             border-radius: 30px;

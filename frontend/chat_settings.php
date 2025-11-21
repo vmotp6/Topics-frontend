@@ -18,7 +18,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         
         body {
             font-family: 'Microsoft JhengHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             min-height: 100vh;
             padding: 20px;
             display: flex;
@@ -64,13 +64,13 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         }
         
         .status.hidden {
-            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+            background: linear-gradient(90deg, rgba(122, 201, 199, 0.1) 0%, rgba(149, 109, 189, 0.1) 100%);
             border-color: #e17055;
             color: #2d3436;
         }
         
         .status.visible {
-            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             border-color: #00b894;
             color: white;
         }
@@ -102,7 +102,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         }
         
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -122,7 +122,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         }
         
         .btn.danger {
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
         }
         
@@ -131,7 +131,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         }
         
         .btn.success {
-            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
         }
         
@@ -184,7 +184,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
         }
         
         .back-section .btn {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             box-shadow: 0 4px 15px rgba(116, 185, 255, 0.3);
         }
         
@@ -314,7 +314,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
                 if (data.success) {
                     // 顯示成功訊息
                     button.innerHTML = '<i class="fas fa-check"></i> 已隱藏';
-                    button.style.background = 'linear-gradient(135deg, #00b894 0%, #00a085 100%)';
+                    button.style.background = 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)';
                     
                     setTimeout(() => {
                         location.reload();
@@ -345,7 +345,7 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
                 if (data.success) {
                     // 顯示成功訊息
                     button.innerHTML = '<i class="fas fa-check"></i> 已啟用';
-                    button.style.background = 'linear-gradient(135deg, #00b894 0%, #00a085 100%)';
+                    button.style.background = 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)';
                     
                     setTimeout(() => {
                         location.reload();

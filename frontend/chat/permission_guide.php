@@ -129,7 +129,7 @@
         }
         
         .test-button {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             border: none;
             border-radius: 6px;

@@ -308,7 +308,7 @@ class DraftSystem {
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
                 color: white;
                 padding: 12px 20px;
                 border-radius: 25px;

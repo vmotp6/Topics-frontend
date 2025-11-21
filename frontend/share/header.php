@@ -262,7 +262,7 @@ function getActiveClass($targetFile) {
   .logo-icon {
     width: 50px;
     height: 50px;
-    background: linear-gradient(135deg, #667eea 0%, rgb(168, 186, 221) 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -343,7 +343,7 @@ function getActiveClass($targetFile) {
   }
 
   .btn-auth {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 25px;
     padding: 10px 20px;
     display: inline-flex;
@@ -368,11 +368,11 @@ function getActiveClass($targetFile) {
   }
 
   .btn-register {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   }
 
   .btn-login {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   }
 
   .btn-login:hover {
@@ -487,7 +487,7 @@ function getActiveClass($targetFile) {
   }
 
   button {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     font-weight: 600;
     border: none;
@@ -501,7 +501,7 @@ function getActiveClass($targetFile) {
   }
 
   button:hover {
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   }
@@ -543,7 +543,7 @@ function getActiveClass($targetFile) {
     right: 0px;
     width: 14px;
     height: 14px;
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 50%;
     border: 2px solid white;
     display: none;
@@ -589,7 +589,7 @@ function getActiveClass($targetFile) {
   }
 
   .dropdown-menu a.btn-logout:hover {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     transform: translateY(-1px);
   }
@@ -774,7 +774,7 @@ function getActiveClass($targetFile) {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    background: linear-gradient(90deg, transparent, rgba(149,109,189,0.4), transparent);
     transition: left 0.5s;
   }
 

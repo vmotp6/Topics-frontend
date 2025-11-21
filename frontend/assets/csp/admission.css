@@ -323,7 +323,7 @@ textarea:focus {
 }
 
 .selected-course-item {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     border-radius: 8px;
     padding: 15px;
@@ -409,7 +409,7 @@ textarea:focus {
 }
 
 .submit-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 15px 40px;
     border: none;
@@ -495,7 +495,7 @@ textarea:focus {
 
 /* 搜尋功能樣式 */
 .search-container {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(90deg, rgba(122, 201, 199, 0.05) 0%, rgba(149, 109, 189, 0.05) 100%);
     border-radius: 20px;
     padding: 40px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.1);
@@ -525,7 +525,7 @@ textarea:focus {
 .search-icon {
     width: 60px;
     height: 60px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -599,7 +599,7 @@ textarea:focus {
 
 .search-btn {
     width: 45%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 16px 30px;
     border: none;
@@ -887,7 +887,7 @@ textarea:focus {
 }
 
 .modal-actions .btn-submit {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 10px 20px;
     border: none;
@@ -931,7 +931,7 @@ textarea:focus {
 }
 
 .success-icon {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     padding: 30px;
     color: white;
     font-size: 48px;
@@ -963,7 +963,7 @@ textarea:focus {
 }
 
 .btn-ok {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 12px 30px;
     border: none;

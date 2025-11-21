@@ -32,7 +32,7 @@ body {
 }
 
 .form-header {
-  background: linear-gradient(135deg, #6c7aed 0%, #5a6fd8 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   border-radius: 10px;
   color: white;
   padding: 30px;
@@ -186,7 +186,7 @@ textarea {
 }
 
 .submit-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   padding: 15px 40px;
   border: none;
@@ -308,7 +308,7 @@ textarea {
 }
 
 .selected-choice-item {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   border-radius: 8px;
   padding: 15px;
@@ -379,7 +379,7 @@ textarea {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   padding: 20px 30px;
   border-radius: 12px;
@@ -404,7 +404,7 @@ textarea {
 .drag-indicator {
   position: absolute;
   pointer-events: none;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   padding: 8px 12px;
   border-radius: 8px;
@@ -486,12 +486,12 @@ textarea {
 }
 
 .message.success {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
 }
 
 .message.error {
-  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
 }
 
@@ -612,7 +612,7 @@ textarea {
 
 .query-btn {
   width: 45%;
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -629,7 +629,7 @@ textarea {
 }
 
 .query-btn:hover {
-  background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   transform: translateY(-2px);
 }
 

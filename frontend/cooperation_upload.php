@@ -59,7 +59,7 @@ $role = $_SESSION['role'] ?? '訪客';
     <?php include("share/header.php"); ?>
     <div class="cooperation-page-wrapper">
         <div class="cooperation-container">
-            <div class="cooperation-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;">
+            <div class="cooperation-header" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;">
                 <h1><i class="fas fa-graduation-cap"></i> 康寧大學就讀意願登錄</h1>
                 <p>填寫您的就讀意願，我們將儘快與您聯絡</p>
             </div>

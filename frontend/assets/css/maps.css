@@ -27,7 +27,7 @@ body.custom-spacing {
     right: -10%;
     width: 100%;
     height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(122,201,199,0.1) 0%, transparent 70%);
     animation: float 6s ease-in-out infinite;
 }
 
@@ -125,7 +125,7 @@ body.custom-spacing {
 }
 
 .satellite-toggle-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     border-color: #667eea;
     box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
@@ -218,7 +218,7 @@ body.custom-spacing {
 }
 
 .floating-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     border-color: #667eea;
     box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
@@ -347,14 +347,14 @@ body.custom-spacing {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     border: none;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     transform: translateY(-2px);
 }
@@ -376,7 +376,7 @@ body.custom-spacing {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     transition: left 0.3s ease;
     z-index: -1;
 }
@@ -547,7 +547,7 @@ body.custom-spacing {
 }
 
 .panel-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 24px 28px;
     display: flex;
@@ -601,7 +601,7 @@ body.custom-spacing {
 }
 
 .info-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     color: white;
     padding: 20px;
     text-align: center;
@@ -618,7 +618,7 @@ body.custom-spacing {
 }
 
 .campus-card {
-    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    background: linear-gradient(90deg, rgba(122, 201, 199, 0.02) 0%, rgba(149, 109, 189, 0.02) 100%);
     padding: 24px;
     border-radius: 16px;
     margin-bottom: 20px;
@@ -1566,7 +1566,7 @@ body.custom-spacing {
     transform: translateX(-50%);
     width: 60px;
     height: 3px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 2px;
 }
 
@@ -1614,7 +1614,7 @@ body.custom-spacing {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
 }
 
 .facility-card:hover {
@@ -1626,7 +1626,7 @@ body.custom-spacing {
 .facility-icon {
     width: 60px;
     height: 60px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
