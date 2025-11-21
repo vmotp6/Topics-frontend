@@ -227,3 +227,4 @@ SELECT '   SHOW CREATE TABLE junior_school_recruitment_applications;' AS query;
 
 
 
+
