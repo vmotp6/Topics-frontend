@@ -377,6 +377,31 @@ try {
         
         <div id="message"></div>
         
+        <!-- 修改密碼區塊（所有老師都可以使用） -->
+        <div class="credentials-section">
+            <h2>修改密碼</h2>
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="password_current_password">當前密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="password_current_password" name="current_password" placeholder="請輸入當前密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password_new_password">新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="password_new_password" name="new_password" placeholder="請輸入新密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password_confirm_password">確認新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="password_confirm_password" name="confirm_password" placeholder="請再次輸入新密碼" required>
+                </div>
+                
+                <button type="submit" class="submit-btn">更新密碼</button>
+            </form>
+            
+            <div id="passwordMessage"></div>
+        </div>
+        
         <a href="<?php echo $is_teacher ? 'teacher.php' : 'student.php'; ?>" class="back-btn">← 返回<?php echo $is_teacher ? '老師' : '學生'; ?>頁面</a>
     </div>
 
@@ -594,6 +619,85 @@ try {
                 });
             }
         });
+        
+        // 修改密碼表單提交（所有老師都可以使用）
+        <?php if ($is_teacher): ?>
+        const passwordForm = document.getElementById('passwordForm');
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const currentPassword = document.getElementById('password_current_password').value;
+                const newPassword = document.getElementById('password_new_password').value;
+                const confirmPassword = document.getElementById('password_confirm_password').value;
+                
+                // 驗證密碼確認
+                if (newPassword !== confirmPassword) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '新密碼與確認密碼不一致';
+                    return;
+                }
+                
+                // 驗證密碼長度
+                if (newPassword.length < 6) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼長度至少需要 6 個字元';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('current_password', currentPassword);
+                formData.append('new_password', newPassword);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                fetch('update_teacher_password.php', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json().then(data => {
+                        const messageDiv = document.getElementById('passwordMessage');
+                        if (response.ok && data.success) {
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = data.message || '密碼更新成功';
+                            
+                            // 如果密碼更新成功，自動登出並重定向到首頁
+                            if (data.logout_required) {
+                                setTimeout(() => {
+                                    // 重定向到登出頁面，然後會自動跳轉到首頁
+                                    window.location.href = 'logout.php';
+                                }, 1500); // 1.5秒後登出，讓用戶看到成功訊息
+                            } else {
+                                // 清空表單
+                                document.getElementById('password_current_password').value = '';
+                                document.getElementById('password_new_password').value = '';
+                                document.getElementById('password_confirm_password').value = '';
+                            }
+                        } else {
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.message || '更新失敗，請稍後再試';
+                        }
+                    });
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    if (error.name === 'AbortError') {
+                        messageDiv.textContent = '請求超時，請稍後再試';
+                    } else {
+                        messageDiv.textContent = '更新失敗，請稍後再試';
+                    }
+                });
+            });
+        }
+        <?php endif; ?>
     </script>
 <?php include("share/footer.php"); ?>
 <?php include("share/ai_widget.php"); ?>

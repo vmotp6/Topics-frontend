@@ -1,5 +1,5 @@
 <?php
-// 更新學生密碼
+// 更新老師密碼
 require_once 'session_config.php';
 
 // 設定回應為 JSON
@@ -11,9 +11,9 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
     exit;
 }
 
-// 檢查是否為學生角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
-    echo json_encode(['success' => false, 'message' => '只有學生可以修改密碼']);
+// 檢查是否為老師角色
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+    echo json_encode(['success' => false, 'message' => '只有老師可以修改密碼']);
     exit;
 }
 
@@ -101,10 +101,10 @@ try {
     ]);
     
 } catch (PDOException $e) {
-    error_log("更新學生密碼錯誤: " . $e->getMessage());
+    error_log("更新老師密碼錯誤: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => '資料庫錯誤，請稍後再試']);
 } catch (Exception $e) {
-    error_log("更新學生密碼錯誤: " . $e->getMessage());
+    error_log("更新老師密碼錯誤: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => '系統錯誤，請稍後再試']);
 }
 ?>

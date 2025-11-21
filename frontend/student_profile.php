@@ -421,10 +421,19 @@ try {
                         if (response.ok && data.success) {
                             messageDiv.className = 'message success';
                             messageDiv.textContent = data.message || '密碼更新成功';
-                            // 清空表單
-                            document.getElementById('current_password').value = '';
-                            document.getElementById('new_password').value = '';
-                            document.getElementById('confirm_password').value = '';
+                            
+                            // 如果密碼更新成功，自動登出並重定向到首頁
+                            if (data.logout_required) {
+                                setTimeout(() => {
+                                    // 重定向到登出頁面，然後會自動跳轉到首頁
+                                    window.location.href = 'logout.php';
+                                }, 1500); // 1.5秒後登出，讓用戶看到成功訊息
+                            } else {
+                                // 清空表單
+                                document.getElementById('current_password').value = '';
+                                document.getElementById('new_password').value = '';
+                                document.getElementById('confirm_password').value = '';
+                            }
                         } else {
                             messageDiv.className = 'message error';
                             messageDiv.textContent = data.message || '更新失敗，請稍後再試';
