@@ -25,6 +25,11 @@ $is_student = ($user_role === '學生');
 $user_name = '';
 $current_department = '';
 $current_phone = '';
+// 學生專用欄位
+$current_student_id = '';
+$current_grade = '';
+$current_class_name = '';
+$current_email = '';
 
 // 使用直接 PDO 連接（與其他頁面一致）
 try {
@@ -37,11 +42,17 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 先從 user 表獲取基本資訊
-    $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ?");
+    $stmt = $pdo->prepare("SELECT name, email FROM user WHERE username = ?");
     $stmt->execute([$_SESSION['username']]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($result && !empty($result['name'])) {
-        $user_name = $result['name'];
+    if ($result) {
+        if (!empty($result['name'])) {
+            $user_name = $result['name'];
+        }
+        // 如果student表中沒有email，使用user表的email作為預設值
+        if (!empty($result['email'])) {
+            $current_email = $result['email'];
+        }
     }
     
     // 根據角色從不同表獲取詳細資料
@@ -60,9 +71,9 @@ try {
             $current_phone = $result['phone'] ?? '';
         }
     } elseif ($is_student) {
-        // 從 student 表獲取
+        // 從 student 表獲取所有欄位
         $stmt = $pdo->prepare("
-            SELECT s.department, s.phone 
+            SELECT s.department, s.phone, s.student_id, s.grade, s.class_name, s.email 
             FROM student s
             JOIN user u ON s.user_id = u.id
             WHERE u.username = ?
@@ -72,6 +83,13 @@ try {
         if ($result) {
             $current_department = $result['department'] ?? '';
             $current_phone = $result['phone'] ?? '';
+            $current_student_id = $result['student_id'] ?? '';
+            $current_grade = $result['grade'] ?? '';
+            $current_class_name = $result['class_name'] ?? '';
+            // 如果student表有email，優先使用；否則使用之前從user表獲取的
+            if (!empty($result['email'])) {
+                $current_email = $result['email'];
+            }
         }
     }
 } catch (PDOException $e) {
@@ -126,12 +144,25 @@ try {
             font-size: 16px;
             transition: border-color 0.3s;
             box-sizing: border-box;
+            background-color: #ffffff;
+            color: #333;
+            cursor: text;
         }
 
         .form-group select:focus,
         .form-group input:focus {
             outline: none;
             border-color: #007bff;
+            background-color: #ffffff;
+        }
+        
+        /* 確保字段可編輯，覆蓋可能的只讀樣式 */
+        .form-group input:not([readonly]):not([disabled]),
+        .form-group select:not([readonly]):not([disabled]) {
+            background-color: #ffffff !important;
+            color: #333 !important;
+            cursor: text !important;
+            opacity: 1 !important;
         }
 
         .submit-btn {
@@ -190,24 +221,67 @@ try {
         <h1 class="profile-title">個人資料設定</h1>
         
         <form id="profileForm">
-            <div class="form-group">
-                <label for="department">科系</label>
-                <select id="department" name="department" required>
-                    <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
-                    <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
-                    <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
-                    <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
-                    <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
-                    <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
-                    <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
-                    <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="phone">電話</label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
-            </div>
+            <?php if ($is_teacher): ?>
+                <!-- 老師專用欄位 -->
+                <div class="form-group">
+                    <label for="department">科系</label>
+                    <select id="department" name="department" required>
+                        <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
+                        <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
+                        <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
+                        <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
+                        <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
+                        <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
+                        <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
+                        <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">電話</label>
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+                </div>
+            <?php else: ?>
+                <!-- 學生專用欄位 -->
+                <div class="form-group">
+                    <label for="student_id">學號</label>
+                    <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" value="<?php echo htmlspecialchars($current_student_id); ?>">
+                </div>
+                
+                <div class="form-group">
+                    <label for="department">科系</label>
+                    <select id="department" name="department" required>
+                        <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
+                        <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
+                        <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
+                        <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
+                        <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
+                        <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
+                        <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
+                        <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="grade">年級</label>
+                    <select id="grade" name="grade">
+                        <option value="" <?php echo empty($current_grade) ? 'selected' : ''; ?>>請選擇年級</option>
+                        <option value="一年級" <?php echo $current_grade === '一年級' ? 'selected' : ''; ?>>一年級</option>
+                        <option value="二年級" <?php echo $current_grade === '二年級' ? 'selected' : ''; ?>>二年級</option>
+                        <option value="三年級" <?php echo $current_grade === '三年級' ? 'selected' : ''; ?>>三年級</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="class_name">班級</label>
+                    <input type="text" id="class_name" name="class_name" placeholder="例如：資管一孝" value="<?php echo htmlspecialchars($current_class_name); ?>">
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">電話</label>
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+                </div>
+            <?php endif; ?>
             
             <button type="submit" class="submit-btn">保存資料</button>
         </form>
@@ -224,12 +298,29 @@ try {
             const currentDept = '<?php echo htmlspecialchars($current_department ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             const currentPhone = '<?php echo htmlspecialchars($current_phone ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             
-            if (currentDept) {
+            if (currentDept && document.getElementById('department')) {
                 document.getElementById('department').value = currentDept;
             }
-            if (currentPhone) {
+            if (currentPhone && document.getElementById('phone')) {
                 document.getElementById('phone').value = currentPhone;
             }
+            
+            <?php if ($is_student): ?>
+            // 學生專用欄位
+            const currentStudentId = '<?php echo htmlspecialchars($current_student_id ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentGrade = '<?php echo htmlspecialchars($current_grade ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            const currentClassName = '<?php echo htmlspecialchars($current_class_name ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+            
+            if (currentStudentId && document.getElementById('student_id')) {
+                document.getElementById('student_id').value = currentStudentId;
+            }
+            if (currentGrade && document.getElementById('grade')) {
+                document.getElementById('grade').value = currentGrade;
+            }
+            if (currentClassName && document.getElementById('class_name')) {
+                document.getElementById('class_name').value = currentClassName;
+            }
+            <?php endif; ?>
         });
 
         // 表單提交
@@ -239,8 +330,8 @@ try {
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
             const name = '<?php echo htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
             const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
-            const department = document.getElementById('department').value;
-            const phone = document.getElementById('phone').value;
+            const department = document.getElementById('department') ? document.getElementById('department').value : '';
+            const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
             const formData = new FormData();
             formData.append('username', username);
@@ -248,6 +339,17 @@ try {
             formData.append('department', department);
             formData.append('phone', phone);
             formData.append('role', role); // 添加角色資訊
+            
+            <?php if ($is_student): ?>
+            // 學生專用欄位
+            const studentId = document.getElementById('student_id') ? document.getElementById('student_id').value : '';
+            const grade = document.getElementById('grade') ? document.getElementById('grade').value : '';
+            const className = document.getElementById('class_name') ? document.getElementById('class_name').value : '';
+            
+            formData.append('student_id', studentId);
+            formData.append('grade', grade);
+            formData.append('class_name', className);
+            <?php endif; ?>
             
             // 使用 AbortController 來設置超時
             const controller = new AbortController();

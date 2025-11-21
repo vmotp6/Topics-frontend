@@ -381,12 +381,12 @@ def register():
             # 檢查用戶名是否已存在
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
-                return jsonify({"message": "用戶名已存在"}), 400
+                return jsonify({"message": "用戶名已被使用"}), 400
 
             # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
             cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
             if cursor.fetchone()[0] > 0:
-                return jsonify({"message": "Email 已被使用"}), 400
+                return jsonify({"message": "電子郵件已被使用過"}), 400
 
             # 插入新用戶（角色預設為學生）
             cursor.execute(
@@ -414,7 +414,13 @@ def register():
     except pymysql.err.IntegrityError as e:
         # 可能的唯一鍵衝突（如 username/email）
         print(f"註冊唯一鍵衝突: {e}")
-        return jsonify({"message": "帳號或 Email 已被使用"}), 400
+        error_msg = str(e).lower()
+        if 'username' in error_msg or 'user.username' in error_msg:
+            return jsonify({"message": "用戶名已被使用"}), 400
+        elif 'email' in error_msg or 'user.email' in error_msg:
+            return jsonify({"message": "電子郵件已被使用過"}), 400
+        else:
+            return jsonify({"message": "帳號或電子郵件已被使用"}), 400
     except Exception as e:
         print(f"註冊錯誤: {e}")
         return jsonify({"message": f"註冊失敗，請稍後再試。"}), 500

@@ -471,13 +471,20 @@ def login():
 @app.route('/sign', methods=['POST'])
 def register():
     """註冊功能"""
-    username = request.form.get('username')
-    password = request.form.get('password')
-    email = request.form.get('email')
-    name = request.form.get('name')
+    # 同時支援 form 與 JSON
+    data = request.form if request.form else (request.get_json(silent=True) or {})
+    username = data.get('username')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
+    email = data.get('email')
+    name = data.get('name')
     
     if not all([username, password, email, name]):
         return jsonify({"message": "請填寫所有必填欄位"}), 400
+    if confirm_password is not None and password != confirm_password:
+        return jsonify({"message": "兩次密碼輸入不一致"}), 400
+    if len(password) < 6:
+        return jsonify({"message": "密碼長度至少需 6 碼"}), 400
     
     conn = get_db_connection()
     if not conn:
@@ -488,7 +495,12 @@ def register():
             # 檢查用戶名是否已存在
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
-                return jsonify({"message": "用戶名已存在"}), 400
+                return jsonify({"message": "用戶名已被使用"}), 400
+
+            # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
+            cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({"message": "電子郵件已被使用過"}), 400
             
             # 插入新用戶（角色預設為學生）
             cursor.execute(
@@ -513,6 +525,15 @@ def register():
             
             return jsonify({"message": "註冊成功"}), 200
             
+    except pymysql.err.IntegrityError as e:
+        # 可能的唯一鍵衝突（如 username/email）
+        error_msg = str(e).lower()
+        if 'username' in error_msg or 'user.username' in error_msg:
+            return jsonify({"message": "用戶名已被使用"}), 400
+        elif 'email' in error_msg or 'user.email' in error_msg:
+            return jsonify({"message": "電子郵件已被使用過"}), 400
+        else:
+            return jsonify({"message": "帳號或電子郵件已被使用"}), 400
     except Exception as e:
         print(f"註冊錯誤: {e}")
         return jsonify({"message": "註冊失敗，請稍後再試。"}), 500

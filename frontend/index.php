@@ -381,6 +381,14 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 				<p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
 				<a href="QA.php" class="feature-link">招生QA問答</a>
 			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon">🗺️</div>
+				<h3 class="feature-title">校園地圖</h3>
+				<p class="feature-description">查看校園地圖，了解校園設施和位置。</p>
+				<a href="campus_map.php" class="feature-link">校園地圖</a>
+			</div>
+
 			<div class="feature-card">
 				<div class="feature-icon">🏫</div>
 				<h3 class="feature-title">就讀意願登錄</h3>
@@ -400,6 +408,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 				<h3 class="feature-title">五專入學說明會</h3>
 				<p class="feature-description">查看五專入學說明會情況和進度。</p>
 				<a href="admission.php" class="feature-link">五專入學說明會</a>
+			</div>
+
+			<div class="feature-card">
+				<div class="feature-icon">🎓</div>
+				<h3 class="feature-title">國中生報名網頁</h3>
+				<p class="feature-description">查看國中生報名網頁，了解國中生報名情況和進度。</p>
+				<a href="mobile_junior.php" class="feature-link">國中生報名網頁</a>
 			</div>
 			
 			<div class="feature-card">

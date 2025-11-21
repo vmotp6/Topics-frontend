@@ -8,17 +8,6 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-// 檢查留言權限（只有登入的學生才能發布留言）
-$can_post_message = false;
-if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
-    $auth = new SeniorMessageAuth();
-    $user_email = $_SESSION['username'];
-    $permission_result = $auth->checkPermission($user_email);
-    $can_post_message = $permission_result['has_permission'];
-} else {
-    $permission_result = ['has_permission' => false, 'error' => '請先登入'];
-}
-
 // 資料庫連接 - 使用與現有系統相同的配置
 $host = 'localhost';
 $dbname = 'topics_good';
@@ -32,6 +21,32 @@ try {
     die("資料庫連接失敗: " . $e->getMessage());
 }
 
+// 檢查留言權限（只有登入的學生才能發布留言）
+$can_post_message = false;
+if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
+    $auth = new SeniorMessageAuth();
+    
+    // 從資料庫獲取用戶的email（而不是直接使用username）
+    // 因為一般註冊的帳號，username不是email，只有Google登入的才是
+    $user_email = $_SESSION['username']; // 預設值（Google登入時username就是email）
+    try {
+        $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+        $stmt->execute([$_SESSION['username']]);
+        $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($user_result && !empty($user_result['email'])) {
+            $user_email = $user_result['email']; // 使用資料庫中的email
+        }
+    } catch(PDOException $e) {
+        error_log("獲取用戶email失敗: " . $e->getMessage());
+        // 如果查詢失敗，繼續使用username作為email（兼容Google登入）
+    }
+    
+    $permission_result = $auth->checkPermission($user_email);
+    $can_post_message = $permission_result['has_permission'];
+} else {
+    $permission_result = ['has_permission' => false, 'error' => '請先登入'];
+}
+
 // 獲取留言資料
 $messages = [];
 try {
@@ -41,12 +56,27 @@ try {
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // 為每個留言檢查用戶是否已點讚（只有登入用戶才檢查）
-    $user_email = $isLoggedIn ? ($_SESSION['username'] ?? '') : '';
+    // 獲取用戶email（從資料庫獲取，而不是直接使用username）
+    $user_email_for_likes = '';
+    if ($isLoggedIn) {
+        $user_email_for_likes = $_SESSION['username']; // 預設值
+        try {
+            $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+            $stmt->execute([$_SESSION['username']]);
+            $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($user_result && !empty($user_result['email'])) {
+                $user_email_for_likes = $user_result['email'];
+            }
+        } catch(PDOException $e) {
+            error_log("獲取用戶email失敗: " . $e->getMessage());
+        }
+    }
+    
     foreach ($messages as &$message) {
-        if ($isLoggedIn && !empty($user_email)) {
+        if ($isLoggedIn && !empty($user_email_for_likes)) {
             try {
                 $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
-                $stmt->execute([$message['id'], $user_email]);
+                $stmt->execute([$message['id'], $user_email_for_likes]);
                 $message['user_liked'] = $stmt->fetch() ? true : false;
             } catch(PDOException $e) {
                 // 如果 message_likes 表不存在，設為 false
@@ -67,7 +97,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     $message_id = (int)$_POST['message_id'];
     $is_liked = $_POST['is_liked'] === '1';
-    $user_email = $isLoggedIn ? ($_SESSION['username'] ?? '') : '';
+    
+    // 獲取用戶email（從資料庫獲取，而不是直接使用username）
+    $user_email = '';
+    if ($isLoggedIn) {
+        $user_email = $_SESSION['username']; // 預設值
+        try {
+            $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+            $stmt->execute([$_SESSION['username']]);
+            $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($user_result && !empty($user_result['email'])) {
+                $user_email = $user_result['email'];
+            }
+        } catch(PDOException $e) {
+            error_log("獲取用戶email失敗: " . $e->getMessage());
+        }
+    }
     
     // 檢查用戶是否登入
     if (!$isLoggedIn || empty($user_email)) {

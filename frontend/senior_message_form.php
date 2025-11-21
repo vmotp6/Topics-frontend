@@ -21,7 +21,31 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
 }
 
 $auth = new SeniorMessageAuth();
-$user_email = $_SESSION['username']; // 假設username就是email
+
+// 從資料庫獲取用戶的email（而不是直接使用username）
+// 因為一般註冊的帳號，username不是email，只有Google登入的才是
+$user_email = $_SESSION['username']; // 預設值（Google登入時username就是email）
+try {
+    // 使用直接 PDO 連接（與 senior_messages.php 一致）
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+    $stmt->execute([$_SESSION['username']]);
+    $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($user_result && !empty($user_result['email'])) {
+        $user_email = $user_result['email']; // 使用資料庫中的email
+    }
+} catch(PDOException $e) {
+    error_log("獲取用戶email失敗: " . $e->getMessage());
+    // 如果查詢失敗，繼續使用username作為email（兼容Google登入）
+}
+
 $permission_result = $auth->checkPermission($user_email);
 
 // 從資料庫獲取用戶姓名 - 使用與 senior_messages.php 相同的連接方式

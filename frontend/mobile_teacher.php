@@ -2,6 +2,9 @@
 <?php
 // 手機版老師活動通知頁面：讓老師群發活動信給各國中負責人
 
+// 載入 session 配置
+require_once __DIR__ . '/session_config.php';
+
 // 會用到的設定與工具
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
@@ -12,12 +15,44 @@ require_once __DIR__ . '/PHPMailer/src/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+// 檢查登入狀態和角色
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
+if (!$isLoggedIn || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+	header("Location: index.php");
+	exit;
+}
+
 // 建立 PDO 連線
 try {
 	$pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
 	$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
 	die('資料庫連接失敗: ' . $e->getMessage());
+}
+
+// 獲取登入老師的資訊（用於自動填入發送者資訊）
+$teacher_info = null;
+$default_teacher_name = '';
+$default_teacher_email = '';
+try {
+	// 從 teacher 表和 user 表獲取老師資訊
+	$stmt = $pdo->prepare("
+		SELECT t.name, t.department, u.email 
+		FROM teacher t
+		INNER JOIN user u ON t.user_id = u.id 
+		WHERE u.username = ?
+	");
+	$stmt->execute([$_SESSION['username']]);
+	$teacher_info = $stmt->fetch(PDO::FETCH_ASSOC);
+	
+	if ($teacher_info) {
+		$default_teacher_name = $teacher_info['name'] ?? '';
+		// 優先使用 user 表的 email，如果沒有則使用其他來源
+		$default_teacher_email = $teacher_info['email'] ?? '';
+	}
+} catch (PDOException $e) {
+	error_log("獲取老師資訊失敗: " . $e->getMessage());
+	// 如果查詢失敗，繼續使用空值（不影響主要功能）
 }
 
 // 建表：學校聯絡人、通知主表、收件人記錄表
@@ -412,14 +447,22 @@ if ($schoolsTableExists) {
 					<h3><i class="fas fa-user"></i> 發送者資訊</h3>
 					<div class="form-row">
 						<div class="field-group">
-							<label>老師姓名（可選）</label>
-							<input type="text" name="teacher_name" id="teacher_name" placeholder="周建宇" value="<?php echo isset($_POST['teacher_name']) ? htmlspecialchars($_POST['teacher_name'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
-							<small style="color: #666; font-size: 0.9em;">將作為回覆名稱顯示於郵件中</small>
+							<label>老師姓名（系統自動填入）</label>
+							<input type="text" name="teacher_name" id="teacher_name" placeholder="周建宇" value="<?php 
+								echo isset($_POST['teacher_name']) && $_POST['teacher_name'] !== '' 
+									? htmlspecialchars($_POST['teacher_name'], ENT_QUOTES, 'UTF-8') 
+									: htmlspecialchars($default_teacher_name, ENT_QUOTES, 'UTF-8'); 
+							?>" readonly style="background-color: #f8f9fa; color: #6c757d; cursor: not-allowed;" />
+							<small style="color: #666; font-size: 0.9em;">將作為回覆名稱顯示於郵件中（系統自動填入）</small>
 						</div>
 						<div class="field-group">
-							<label>老師 Email（可選）</label>
-							<input type="email" name="teacher_email" id="teacher_email" placeholder="your.name@example.com" value="<?php echo isset($_POST['teacher_email']) ? htmlspecialchars($_POST['teacher_email'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
-							<small style="color: #666; font-size: 0.9em;">收件人回覆將寄至此信箱</small>
+							<label>老師 Email（系統自動填入）</label>
+							<input type="email" name="teacher_email" id="teacher_email" placeholder="your.name@example.com" value="<?php 
+								echo isset($_POST['teacher_email']) && $_POST['teacher_email'] !== '' 
+									? htmlspecialchars($_POST['teacher_email'], ENT_QUOTES, 'UTF-8') 
+									: htmlspecialchars($default_teacher_email, ENT_QUOTES, 'UTF-8'); 
+							?>" readonly style="background-color: #f8f9fa; color: #6c757d; cursor: not-allowed;" />
+							<small style="color: #666; font-size: 0.9em;">收件人回覆將寄至此信箱（系統自動填入）</small>
 						</div>
 					</div>
 				</div>
@@ -654,13 +697,20 @@ if ($schoolsTableExists) {
 				
 				// 保存表單內容到 localStorage（防止頁面刷新丟失）
 				document.addEventListener('DOMContentLoaded', function() {
-					// 恢復保存的表單內容
+					// 恢復保存的表單內容（但優先使用伺服器端自動填入的值）
 					var savedForm = localStorage.getItem('teacher_notification_form');
 					if (savedForm) {
 						try {
 							var formData = JSON.parse(savedForm);
-							if (formData.teacher_name) document.querySelector('input[name="teacher_name"]').value = formData.teacher_name;
-							if (formData.teacher_email) document.querySelector('input[name="teacher_email"]').value = formData.teacher_email;
+							// 只有在伺服器端沒有自動填入值時，才使用 localStorage 的值
+							var teacherNameInput = document.querySelector('input[name="teacher_name"]');
+							var teacherEmailInput = document.querySelector('input[name="teacher_email"]');
+							if (teacherNameInput && !teacherNameInput.value && formData.teacher_name) {
+								teacherNameInput.value = formData.teacher_name;
+							}
+							if (teacherEmailInput && !teacherEmailInput.value && formData.teacher_email) {
+								teacherEmailInput.value = formData.teacher_email;
+							}
 							if (formData.subject) document.querySelector('input[name="subject"]').value = formData.subject;
 							if (formData.content) document.querySelector('textarea[name="content"]').value = formData.content;
 							if (formData.event_date) document.querySelector('input[name="event_date"]').value = formData.event_date;

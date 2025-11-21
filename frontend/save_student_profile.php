@@ -27,10 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $username = $_POST['username'] ?? '';
 $department = $_POST['department'] ?? '';
 $phone = $_POST['phone'] ?? '';
+$student_id = $_POST['student_id'] ?? '';
+$grade = $_POST['grade'] ?? '';
+$class_name = $_POST['class_name'] ?? '';
 
-// 驗證資料
+// 驗證必填欄位
 if (empty($username) || empty($department) || empty($phone)) {
-    echo json_encode(['success' => false, 'message' => '請填寫所有欄位']);
+    echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（科系、電話）']);
     exit;
 }
 
@@ -62,19 +65,20 @@ try {
     $student_exists = $stmt->fetch();
     
     if ($student_exists) {
-        // 更新現有資料
-        $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ? WHERE user_id = ?");
-        $stmt->execute([$department, $phone, $user_id]);
+        // 更新現有資料（不包含email，email由註冊時設定，不允許修改）
+        $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
+        $stmt->execute([$department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $user_id]);
     } else {
-        // 獲取用戶姓名（如果有的話）
-        $stmt = $pdo->prepare("SELECT name FROM user WHERE id = ?");
+        // 獲取用戶姓名和email（如果有的話）
+        $stmt = $pdo->prepare("SELECT name, email FROM user WHERE id = ?");
         $stmt->execute([$user_id]);
         $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
         $name = $user_data['name'] ?? '';
+        $email = $user_data['email'] ?? null;
         
-        // 插入新資料
-        $stmt = $pdo->prepare("INSERT INTO student (user_id, name, department, phone) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$user_id, $name, $department, $phone]);
+        // 插入新資料（email從user表獲取，不允許修改）
+        $stmt = $pdo->prepare("INSERT INTO student (user_id, name, department, phone, student_id, grade, class_name, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $email]);
     }
     
     echo json_encode(['success' => true, 'message' => '個人資料保存成功']);
