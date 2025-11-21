@@ -391,6 +391,9 @@ class CampusMap {
     }
 
     displayRestaurants(restaurants) {
+        // 保存餐廳列表到實例變數，以便點擊時使用
+        this.restaurants = restaurants;
+        
         const restaurantsContent = document.getElementById('restaurants-content');
         const restaurantsCount = document.getElementById('restaurants-count');
         
@@ -561,15 +564,24 @@ class CampusMap {
         
         const restaurant = this.restaurants[index];
         
-        // 移動地圖到餐廳位置
-        this.map.setCenter(restaurant.geometry.location);
-        this.map.setZoom(17);
+        // 移動地圖到餐廳位置（使用平滑動畫）
+        if (restaurant.geometry && restaurant.geometry.location) {
+            const location = restaurant.geometry.location;
+            // 處理 LatLng 對象或包含 lat/lng 的對象
+            if (location.lat && location.lng) {
+                this.map.panTo(location);
+            } else if (typeof location.lat === 'function') {
+                // Google Maps LatLng 對象
+                this.map.panTo(location);
+            }
+            this.map.setZoom(17);
+        }
         
         // 在側邊面板顯示餐廳詳情和評論
         this.showRestaurantDetails(restaurant, index);
         
         // 打開該餐廳的資訊視窗
-        if (this.restaurantMarkers[index]) {
+        if (this.restaurantMarkers && this.restaurantMarkers[index]) {
             const infoWindow = new google.maps.InfoWindow({
                 content: `
                     <div style="padding: 15px; max-width: 280px;">
@@ -595,7 +607,7 @@ class CampusMap {
         }
     }
     
-    showRestaurantDetails(restaurant, index) {
+    async showRestaurantDetails(restaurant, index) {
         // 顯示側邊面板
         this.showSidePanel();
         
@@ -616,7 +628,6 @@ class CampusMap {
         const isOpen = restaurant.opening_hours && restaurant.opening_hours.open_now;
         const hasDelivery = restaurant.hasDelivery || (restaurant.types && restaurant.types.includes('meal_delivery'));
         const deliveryRating = restaurant.deliveryRating;
-        const reviews = restaurant.reviews || [];
         
         let html = `
             <div class="restaurant-detail">
@@ -694,38 +705,111 @@ class CampusMap {
                     </button>
                 </div>
                 
-                ${reviews.length > 0 ? `
+                <div id="restaurant-reviews-section" style="margin-top: 20px;">
+                    <p style="color: #999; text-align: center; padding: 20px;">
+                        <i class="fas fa-spinner fa-spin"></i> 載入評論中...
+                    </p>
+                </div>
+            </div>
+        `;
+        
+        restaurantsContent.innerHTML = html;
+        
+        // 異步獲取整合的評論
+        await this.loadRestaurantReviews(restaurant, hasDelivery);
+    }
+    
+    async loadRestaurantReviews(restaurant, hasDelivery) {
+        const reviewsSection = document.getElementById('restaurant-reviews-section');
+        if (!reviewsSection) return;
+        
+        try {
+            // 獲取學長姐留言板的評論
+            const params = new URLSearchParams();
+            if (restaurant.recommendation_id) {
+                params.append('message_id', restaurant.recommendation_id);
+            }
+            if (restaurant.place_id) {
+                params.append('place_id', restaurant.place_id);
+            }
+            if (restaurant.name) {
+                params.append('restaurant_name', restaurant.name);
+            }
+            
+            const response = await fetch(`api/get_restaurant_reviews.php?${params.toString()}`);
+            const data = await response.json();
+            
+            // 合併 Google 評論和學長姐留言板評論
+            const googleReviews = (restaurant.reviews || []).map(review => ({
+                source: 'google',
+                author_name: review.author_name,
+                rating: review.rating,
+                text: review.text,
+                time: review.time,
+                isDelivery: false
+            }));
+            
+            const seniorReviews = (data.reviews || []).map(review => ({
+                ...review,
+                source: 'senior'
+            }));
+            
+            // 合併所有評論，優先顯示學長姐留言板的評論
+            const allReviews = [...seniorReviews, ...googleReviews];
+            
+            // 按時間排序（最新的在前）
+            allReviews.sort((a, b) => (b.time || 0) - (a.time || 0));
+            
+            // 顯示評論
+            if (allReviews.length > 0) {
+                const seniorCount = seniorReviews.length;
+                const googleCount = googleReviews.length;
+                
+                reviewsSection.innerHTML = `
                     <div class="restaurant-reviews">
                         <h4 style="margin: 20px 0 12px 0; color: #333; font-size: 16px; font-weight: 600;">
-                            <i class="fas fa-comments"></i> 顧客評論 (${reviews.length})
+                            <i class="fas fa-comments"></i> 顧客評論 (${allReviews.length})
+                            ${seniorCount > 0 ? `<span style="font-size: 12px; color: #ff6b35; font-weight: normal; margin-left: 8px;">學長姐 ${seniorCount} 則</span>` : ''}
+                            ${googleCount > 0 ? `<span style="font-size: 12px; color: #4285f4; font-weight: normal; margin-left: 4px;">Google ${googleCount} 則</span>` : ''}
                             ${hasDelivery ? '<span style="font-size: 13px; color: #ff6b35; font-weight: normal; margin-left: 8px;"><i class="fas fa-motorcycle"></i> 優先顯示外送評論</span>' : ''}
                         </h4>
                         <div class="reviews-list">
-                            ${this.getDeliveryReviews(reviews, hasDelivery).slice(0, 5).map(review => `
-                                <div class="review-item ${review.isDelivery ? 'delivery-review' : ''}">
+                            ${this.getDeliveryReviews(allReviews, hasDelivery).slice(0, 10).map(review => `
+                                <div class="review-item ${review.isDelivery ? 'delivery-review' : ''} ${review.source === 'senior' ? 'senior-review' : ''}">
                                     <div class="review-header">
                                         <div class="review-author">
                                             <div style="display: flex; align-items: center; gap: 6px;">
                                                 <strong>${review.author_name || '匿名用戶'}</strong>
+                                                ${review.source === 'senior' ? '<span style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;"><i class="fas fa-user-graduate"></i> 學長姐</span>' : ''}
                                                 ${review.isDelivery ? '<span class="delivery-review-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                                             </div>
                                             <span class="review-time">${this.formatReviewTime(review.time)}</span>
                                         </div>
                                         <div class="review-rating">
-                                            ${this.getStarRating(review.rating)}
-                                            <span class="review-rating-text">${review.rating}</span>
+                                            ${this.getStarRating(review.rating || 0)}
+                                            <span class="review-rating-text">${review.rating || 0}</span>
                                         </div>
                                     </div>
                                     <p class="review-text">${review.text || '無評論內容'}</p>
+                                    ${review.title ? `<p style="margin-top: 8px; font-weight: 600; color: #ff6b35; font-size: 13px;">${review.title}</p>` : ''}
+                                    ${review.review_id && review.source === 'senior' ? `
+                                        <button onclick="window.location.href='restaurant_reviews.php?message_id=${review.message_id || restaurant.recommendation_id}&restaurant=${encodeURIComponent(restaurant.name)}'" 
+                                                style="margin-top: 8px; padding: 4px 8px; background: #f8f9fa; border: 1px solid #e1e5e9; border-radius: 6px; cursor: pointer; font-size: 11px; color: #666;">
+                                            查看完整評價
+                                        </button>
+                                    ` : ''}
                                 </div>
                             `).join('')}
                         </div>
                     </div>
-                ` : '<p style="color: #999; text-align: center; padding: 20px;">暫無評論</p>'}
-            </div>
-        `;
-        
-        restaurantsContent.innerHTML = html;
+                `;
+            } else {
+                reviewsSection.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暫無評論</p>';
+            }
+        } catch (error) {
+            console.error('載入評論失敗:', error);
+            reviewsSection.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">載入評論時發生錯誤</p>';
+        }
     }
     
     getDeliveryReviews(reviews, hasDelivery) {

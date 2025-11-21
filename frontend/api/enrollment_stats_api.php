@@ -85,6 +85,12 @@ try {
             echo json_encode($stats);
             break;
             
+        case 'school_department':
+            // 國中選擇科系統計（僅限admin1）
+            $stats = getSchoolDepartmentStats($pdo, $department_filter);
+            echo json_encode($stats);
+            break;
+            
         default:
             http_response_code(400);
             echo json_encode(['error' => '無效的操作']);
@@ -377,6 +383,114 @@ function getMonthlyStats($pdo, $department_filter = '') {
             'value' => (int)$row['count']
         ];
     }
+    
+    return $stats;
+}
+
+function getSchoolDepartmentStats($pdo, $department_filter = '') {
+    $filter = buildDepartmentFilter($department_filter);
+    
+    // 統計每個國中選擇的科系（三個志願都計算）
+    $stmt = $pdo->query("
+        SELECT 
+            COALESCE(junior_high, '未填寫') as school_name,
+            COALESCE(intention1, '無特定') as department,
+            COUNT(*) as count,
+            '第一志願' as priority
+        FROM enrollment_intention 
+        WHERE junior_high IS NOT NULL AND junior_high != '' 
+            AND intention1 IS NOT NULL AND intention1 != '' AND intention1 != '無特定'
+            AND $filter
+        GROUP BY junior_high, intention1
+        
+        UNION ALL
+        
+        SELECT 
+            COALESCE(junior_high, '未填寫') as school_name,
+            COALESCE(intention2, '無特定') as department,
+            COUNT(*) as count,
+            '第二志願' as priority
+        FROM enrollment_intention 
+        WHERE junior_high IS NOT NULL AND junior_high != '' 
+            AND intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定'
+            AND $filter
+        GROUP BY junior_high, intention2
+        
+        UNION ALL
+        
+        SELECT 
+            COALESCE(junior_high, '未填寫') as school_name,
+            COALESCE(intention3, '無特定') as department,
+            COUNT(*) as count,
+            '第三志願' as priority
+        FROM enrollment_intention 
+        WHERE junior_high IS NOT NULL AND junior_high != '' 
+            AND intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定'
+            AND $filter
+        GROUP BY junior_high, intention3
+        
+        ORDER BY school_name, department
+    ");
+    
+    $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 按國中分組，統計每個國中選擇的科系
+    $school_stats = [];
+    foreach ($raw_data as $row) {
+        $school = $row['school_name'];
+        $department = $row['department'];
+        $count = (int)$row['count'];
+        $priority = $row['priority'];
+        
+        if (!isset($school_stats[$school])) {
+            $school_stats[$school] = [];
+        }
+        
+        if (!isset($school_stats[$school][$department])) {
+            $school_stats[$school][$department] = [
+                'total' => 0,
+                'priorities' => [
+                    '第一志願' => 0,
+                    '第二志願' => 0,
+                    '第三志願' => 0
+                ]
+            ];
+        }
+        
+        $school_stats[$school][$department]['total'] += $count;
+        $school_stats[$school][$department]['priorities'][$priority] += $count;
+    }
+    
+    // 轉換為前端需要的格式
+    $stats = [];
+    foreach ($school_stats as $school => $departments) {
+        $department_list = [];
+        foreach ($departments as $dept => $data) {
+            $department_list[] = [
+                'name' => $dept,
+                'total' => $data['total'],
+                'first_choice' => $data['priorities']['第一志願'],
+                'second_choice' => $data['priorities']['第二志願'],
+                'third_choice' => $data['priorities']['第三志願']
+            ];
+        }
+        
+        // 按總數排序
+        usort($department_list, function($a, $b) {
+            return $b['total'] - $a['total'];
+        });
+        
+        $stats[] = [
+            'school' => $school,
+            'departments' => $department_list,
+            'total_students' => array_sum(array_column($department_list, 'total'))
+        ];
+    }
+    
+    // 按總學生數排序
+    usort($stats, function($a, $b) {
+        return $b['total_students'] - $a['total_students'];
+    });
     
     return $stats;
 }

@@ -30,6 +30,14 @@ $current_student_id = '';
 $current_grade = '';
 $current_class_name = '';
 $current_email = '';
+$current_username = $_SESSION['username'] ?? '';
+$username_changed = 0;
+$is_auto_generated = false;
+
+// 檢查是否為系統生成的帳號（通過前綴判斷）
+if (preg_match('/^(user_|staff_|admin_)/', $current_username)) {
+    $is_auto_generated = true;
+}
 
 // 使用直接 PDO 連接（與其他頁面一致）
 try {
@@ -41,8 +49,8 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // 先從 user 表獲取基本資訊
-    $stmt = $pdo->prepare("SELECT name, email FROM user WHERE username = ?");
+    // 先從 user 表獲取基本資訊（包括 email 和 username_changed）
+    $stmt = $pdo->prepare("SELECT name, email, username_changed FROM user WHERE username = ?");
     $stmt->execute([$_SESSION['username']]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($result) {
@@ -53,6 +61,8 @@ try {
         if (!empty($result['email'])) {
             $current_email = $result['email'];
         }
+        // 獲取 username_changed 欄位（如果存在）
+        $username_changed = isset($result['username_changed']) ? (int)$result['username_changed'] : 0;
     }
     
     // 根據角色從不同表獲取詳細資料
@@ -213,12 +223,91 @@ try {
         .back-btn:hover {
             color: #0056b3;
         }
+
+        .credentials-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .credentials-section h2 {
+            color: #003366;
+            font-size: 20px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .info-text {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #1890ff;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .info-text.warning {
+            background: #fff7e6;
+            border-color: #ffd591;
+            color: #fa8c16;
+        }
     </style>
 </head>
 
 <body>
     <div class="profile-container">
         <h1 class="profile-title">個人資料設定</h1>
+        
+        <?php if ($is_teacher && $is_auto_generated): ?>
+        <div class="credentials-section">
+            <h2>帳號密碼設定</h2>
+            <?php if ($username_changed == 0): ?>
+                <div class="info-text">
+                    <strong>提示：</strong>這是系統為您自動生成的帳號，建議您首次登入後立即修改為個人專屬帳號和密碼。
+                </div>
+            <?php else: ?>
+                <div class="info-text warning">
+                    <strong>注意：</strong>您已經修改過帳號，現在只能修改密碼。
+                </div>
+            <?php endif; ?>
+            
+            <form id="credentialsForm">
+                <?php if ($username_changed == 0): ?>
+                <div class="form-group">
+                    <label for="new_username">新帳號 <span style="color: #f5222d;">*</span></label>
+                    <input type="text" id="new_username" name="new_username" placeholder="請輸入新帳號" value="" required>
+                    <small style="display:block;margin-top:6px;color:#8c8c8c;">帳號只能修改一次，請謹慎選擇。</small>
+                </div>
+                <?php else: ?>
+                <div class="form-group">
+                    <label>目前帳號</label>
+                    <input type="text" value="<?php echo htmlspecialchars($current_username); ?>" disabled style="background: #f5f5f5;">
+                    <small style="display:block;margin-top:6px;color:#8c8c8c;">帳號已修改過，無法再次修改。</small>
+                </div>
+                <?php endif; ?>
+                
+                <div class="form-group">
+                    <label for="current_password">當前密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="current_password" name="current_password" placeholder="請輸入當前密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new_password">新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="new_password" name="new_password" placeholder="請輸入新密碼" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm_password">確認新密碼 <span style="color: #f5222d;">*</span></label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="請再次輸入新密碼" required>
+                </div>
+                
+                <button type="submit" class="submit-btn">更新帳號密碼</button>
+            </form>
+            
+            <div id="credentialsMessage"></div>
+        </div>
+        <?php endif; ?>
         
         <form id="profileForm">
             <?php if ($is_teacher): ?>
@@ -323,6 +412,101 @@ try {
             <?php endif; ?>
         });
 
+        // 帳號密碼表單提交（僅老師且為系統生成帳號時顯示）
+        <?php if ($is_teacher && $is_auto_generated): ?>
+        const credentialsForm = document.getElementById('credentialsForm');
+        if (credentialsForm) {
+            credentialsForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const oldUsername = '<?php echo htmlspecialchars($current_username, ENT_QUOTES, 'UTF-8'); ?>';
+                const newUsername = document.getElementById('new_username') ? document.getElementById('new_username').value : '';
+                const currentPassword = document.getElementById('current_password').value;
+                const newPassword = document.getElementById('new_password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+                const usernameChanged = <?php echo $username_changed; ?>;
+                
+                // 驗證密碼確認
+                if (newPassword !== confirmPassword) {
+                    const messageDiv = document.getElementById('credentialsMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '新密碼與確認密碼不一致';
+                    return;
+                }
+                
+                // 驗證密碼長度
+                if (newPassword.length < 6) {
+                    const messageDiv = document.getElementById('credentialsMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼長度至少需要 6 個字元';
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('old_username', oldUsername);
+                formData.append('current_password', currentPassword);
+                formData.append('new_password', newPassword);
+                
+                // 只有在尚未修改過帳號時才允許修改帳號
+                if (usernameChanged == 0 && newUsername && newUsername.trim() !== '') {
+                    // 驗證新帳號長度
+                    if (newUsername.length < 3) {
+                        const messageDiv = document.getElementById('credentialsMessage');
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = '帳號長度至少需要 3 個字元';
+                        return;
+                    }
+                    formData.append('new_username', newUsername.trim());
+                }
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                fetch('http://localhost:5000/teacher/update-credentials', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response.json().then(data => {
+                        const messageDiv = document.getElementById('credentialsMessage');
+                        if (response.ok) {
+                            messageDiv.className = 'message success';
+                            messageDiv.textContent = data.message;
+                            
+                            // 如果帳號更新成功，更新 session 並重新載入頁面
+                            if (data.new_username && data.new_username !== oldUsername) {
+                                setTimeout(() => {
+                                    alert('帳號已更新，頁面將重新載入。請使用新帳號登入。');
+                                    window.location.href = 'logout.php';
+                                }, 2000);
+                            } else {
+                                // 只更新密碼，清空表單
+                                document.getElementById('current_password').value = '';
+                                document.getElementById('new_password').value = '';
+                                document.getElementById('confirm_password').value = '';
+                            }
+                        } else {
+                            messageDiv.className = 'message error';
+                            messageDiv.textContent = data.message || '更新失敗，請稍後再試';
+                        }
+                    });
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    const messageDiv = document.getElementById('credentialsMessage');
+                    messageDiv.className = 'message error';
+                    if (error.name === 'AbortError') {
+                        messageDiv.textContent = '請求超時，請稍後再試';
+                    } else {
+                        messageDiv.textContent = '更新失敗，請稍後再試';
+                    }
+                });
+            });
+        }
+        <?php endif; ?>
+        
         // 表單提交
         document.getElementById('profileForm').addEventListener('submit', function(e) {
             e.preventDefault();

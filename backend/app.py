@@ -13,6 +13,12 @@ import json
 import secrets
 import hashlib
 from datetime import datetime
+try:
+    import bcrypt
+    BCrypt_AVAILABLE = True
+except ImportError:
+    BCrypt_AVAILABLE = False
+    print("⚠️  bcrypt 未安裝，將無法驗證雜湊密碼")
 
 # 載入環境變數
 try:
@@ -330,23 +336,47 @@ def login():
     
     try:
         with conn.cursor() as cursor:
-            # 查詢使用者帳號、角色、狀態是否正確
-            sql = "SELECT username, role, status FROM user WHERE username=%s AND password=%s"
-            cursor.execute(sql, (username, password))
+            # 先查詢使用者（不檢查密碼）
+            sql = "SELECT username, role, status, password FROM user WHERE username=%s"
+            cursor.execute(sql, (username,))
             user = cursor.fetchone()
             
-            if user:
-                # 檢查帳號是否被停用
-                if user[2] == 0:  # status = 0 表示停用
-                    return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
-                
-                return jsonify({
-                    "message": "登入成功",
-                    "username": user[0],
-                    "role": user[1]
-                }), 200
-            else:
+            if not user:
                 return jsonify({"message": "帳號或密碼錯誤"}), 401
+            
+            # 驗證密碼（支援雜湊密碼和明文密碼）
+            db_password = user[3] if user[3] else ''
+            password_valid = False
+            
+            # 檢查是否為雜湊密碼（PHP password_hash 格式：$2y$... 或 $2b$...）
+            if db_password.startswith('$2y$') or db_password.startswith('$2b$') or db_password.startswith('$2a$'):
+                # 使用 bcrypt 驗證雜湊密碼
+                if BCrypt_AVAILABLE:
+                    try:
+                        # 將 PHP 的 $2y$ 格式轉換為 bcrypt 可接受的格式（如果需要）
+                        bcrypt_hash = db_password.replace('$2y$', '$2b$') if db_password.startswith('$2y$') else db_password
+                        password_valid = bcrypt.checkpw(password.encode('utf-8'), bcrypt_hash.encode('utf-8'))
+                    except Exception as e:
+                        print(f"bcrypt 驗證錯誤: {e}")
+                        password_valid = False
+                else:
+                    return jsonify({"message": "系統錯誤：bcrypt 模組未安裝"}), 500
+            else:
+                # 明文密碼比較（向後兼容）
+                password_valid = (password == db_password)
+            
+            if not password_valid:
+                return jsonify({"message": "帳號或密碼錯誤"}), 401
+            
+            # 檢查帳號是否被停用
+            if user[2] == 0:  # status = 0 表示停用
+                return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
+            
+            return jsonify({
+                "message": "登入成功",
+                "username": user[0],
+                "role": user[1]
+            }), 200
                 
     except Exception as e:
         print(f"登入錯誤: {e}")
@@ -381,19 +411,23 @@ def register():
             # 檢查用戶名是否已存在
             cursor.execute("SELECT COUNT(*) FROM user WHERE username = %s", (username,))
             if cursor.fetchone()[0] > 0:
+                conn.rollback()
                 return jsonify({"message": "用戶名已被使用"}), 400
 
             # 檢查 Email 是否已存在（若資料表有唯一約束，可避免 500 錯誤）
             cursor.execute("SELECT COUNT(*) FROM user WHERE email = %s", (email,))
             if cursor.fetchone()[0] > 0:
+                conn.rollback()
                 return jsonify({"message": "電子郵件已被使用過"}), 400
 
             # 插入新用戶（角色預設為學生）
+            print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
                 "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
                 (username, password, email, name)
             )
             user_id = cursor.lastrowid
+            print(f"✅ 已插入 user 表: user_id={user_id}")
             
             # 同步插入 student 表
             try:
@@ -407,13 +441,19 @@ def register():
                 # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
                 print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
             
+            # 提交事務
             conn.commit()
+            print(f"✅ 註冊成功並已提交: user_id={user_id}, username={username}")
 
             return jsonify({"message": "註冊成功"}), 200
             
     except pymysql.err.IntegrityError as e:
         # 可能的唯一鍵衝突（如 username/email）
-        print(f"註冊唯一鍵衝突: {e}")
+        if conn:
+            conn.rollback()
+        print(f"❌ 註冊唯一鍵衝突: {e}")
+        import traceback
+        traceback.print_exc()
         error_msg = str(e).lower()
         if 'username' in error_msg or 'user.username' in error_msg:
             return jsonify({"message": "用戶名已被使用"}), 400
@@ -422,10 +462,16 @@ def register():
         else:
             return jsonify({"message": "帳號或電子郵件已被使用"}), 400
     except Exception as e:
-        print(f"註冊錯誤: {e}")
-        return jsonify({"message": f"註冊失敗，請稍後再試。"}), 500
+        # 發生任何異常時都要 rollback
+        if conn:
+            conn.rollback()
+        print(f"❌ 註冊錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"message": f"註冊失敗，請稍後再試。錯誤: {str(e)}"}), 500
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.route('/user/select-role', methods=['POST'])
 def select_role():
