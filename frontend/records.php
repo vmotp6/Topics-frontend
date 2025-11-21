@@ -157,13 +157,18 @@ if ($teacher_id) {
 $participants_options = [];
 $participants_options_map = []; // code => name 映射
 $participants_options_query = "SELECT code, name, category, display_order FROM participant_options WHERE is_active = 1 ORDER BY display_order, id";
-$participants_options_result = $conn->query($participants_options_query);
-if ($participants_options_result) {
-    while ($row = $participants_options_result->fetch_assoc()) {
-        $participants_options[] = $row;
-        $participants_options_map[$row['code']] = $row['name'];
+try {
+    $participants_options_result = $conn->query($participants_options_query);
+    if ($participants_options_result && $participants_options_result->num_rows > 0) {
+        while ($row = $participants_options_result->fetch_assoc()) {
+            $participants_options[] = $row;
+            $participants_options_map[$row['code']] = $row['name'];
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
     }
-} else {
+} catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $participants_options = [
         ['code' => 'JHS_9', 'name' => '國中九年級', 'category' => '國中', 'display_order' => 3],
@@ -185,13 +190,18 @@ if ($participants_options_result) {
 $activity_type_options = [];
 $activity_type_options_map = []; // code => name 映射
 $activity_type_options_query = "SELECT code, name, category, display_order FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
-$activity_type_options_result = $conn->query($activity_type_options_query);
-if ($activity_type_options_result) {
-    while ($row = $activity_type_options_result->fetch_assoc()) {
-        $activity_type_options[] = $row;
-        $activity_type_options_map[$row['code']] = $row['name'];
+try {
+    $activity_type_options_result = $conn->query($activity_type_options_query);
+    if ($activity_type_options_result && $activity_type_options_result->num_rows > 0) {
+        while ($row = $activity_type_options_result->fetch_assoc()) {
+            $activity_type_options[] = $row;
+            $activity_type_options_map[$row['code']] = $row['name'];
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
     }
-} else {
+} catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $activity_type_options = [
         ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗', 'category' => '校內', 'display_order' => 1],
