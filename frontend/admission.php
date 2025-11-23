@@ -38,9 +38,8 @@ if ($grades_result) {
 
 // 取得啟用的體驗課程
 $courses = [];
-$courses_query = "SELECT c.course_name, d.department_name 
+$courses_query = "SELECT c.course_name 
                   FROM admission_courses c 
-                  LEFT JOIN admission_departments d ON c.department_id = d.id 
                   WHERE c.is_active = 1 
                   ORDER BY c.sort_order";
 $courses_result = $conn->query($courses_query);
