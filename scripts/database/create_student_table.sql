@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS student (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 更新 user 表，添加學生角色（如果不存在）
-ALTER TABLE user MODIFY COLUMN role ENUM('老師', '學校行政人員', '學生', '廠商') NOT NULL;
+ALTER TABLE user MODIFY COLUMN role ENUM('老師', '學校行政人員', '學生') NOT NULL;
 
 -- 插入一些測試學生資料
 INSERT IGNORE INTO user (username, password, role) VALUES

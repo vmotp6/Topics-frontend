@@ -888,9 +888,6 @@ function getActiveClass($targetFile) {
         case '老師':
           echo getCorrectPath('teacher.php');
           break;
-        case '廠商':
-          echo getCorrectPath('company.php');
-          break;
         case '學校行政人員':
           echo getCorrectPath('admin.php');
           break;

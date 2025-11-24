@@ -518,7 +518,7 @@ require_once 'session_config.php';
                         <a href="#" id="openModalBtn" class="page-link">
                             <div>
                                 <div>註冊</div>
-                                <div class="page-description">新用戶註冊系統，支援多種身分角色選擇，包括老師、學生、廠商、行政人員等。提供簡潔的註冊流程，填寫基本資料後即可開始使用平台各項服務，享受個人化的使用體驗。</div>
+                                <div class="page-description">新用戶註冊系統，支援多種身分角色選擇，包括老師、學生、行政人員等。提供簡潔的註冊流程，填寫基本資料後即可開始使用平台各項服務，享受個人化的使用體驗。</div>
                             </div>
                             <i class="fas fa-arrow-right page-icon"></i>
                         </a>
