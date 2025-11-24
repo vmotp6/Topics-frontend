@@ -1549,6 +1549,244 @@ try {
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
     
+    // 追加新訊息（用於實時同步，不清空現有訊息）
+    function appendNewMessages(messages) {
+      const chatMessages = document.getElementById('chatMessages');
+      
+      if (!chatMessages) return;
+      
+      // 獲取已存在的訊息ID，避免重複顯示
+      const existingMessageIds = new Set();
+      chatMessages.querySelectorAll('[data-message-id]').forEach(el => {
+        const id = el.dataset.messageId;
+        if (id) existingMessageIds.add(id.toString());
+      });
+      
+      // 移除"沒有訊息"的提示
+      const noMessageDiv = chatMessages.querySelector('div[style*="text-align: center"]');
+      if (noMessageDiv && noMessageDiv.textContent.includes('還沒有任何訊息')) {
+        noMessageDiv.remove();
+      }
+      
+      // 使用 DocumentFragment 優化DOM操作
+      const fragment = document.createDocumentFragment();
+      let hasNewMessages = false;
+      
+      messages.forEach(message => {
+        const messageId = message.id.toString();
+        
+        // 如果訊息已存在，跳過
+        if (existingMessageIds.has(messageId)) {
+          return;
+        }
+        
+        hasNewMessages = true;
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
+        messageDiv.dataset.messageId = messageId;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        // 檢查訊息是否包含圖片URL，並正確處理
+        let messageText = message.message || '';
+        
+        // 如果訊息是圖片URL，檢查並修正路徑
+        if (messageText && (messageText.includes('.jpg') || messageText.includes('.png') || messageText.includes('.gif') || messageText.includes('.jpeg') || messageText.includes('.webp'))) {
+          let imageUrl = messageText.trim();
+          
+          // 處理各種圖片路徑格式（與 displayMessages 相同的邏輯）
+          if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            // 已經是完整 URL
+          } else if (imageUrl.startsWith('/')) {
+            if (imageUrl.includes('/chat/share/')) {
+              imageUrl = imageUrl.replace('/chat/share/', '/share/');
+            } else if (imageUrl.includes('Topics-frontend/frontend/chat/share/')) {
+              imageUrl = imageUrl.replace('Topics-frontend/frontend/chat/share/', 'Topics-frontend/frontend/share/');
+            } else if (imageUrl.includes('/frontend/chat/share/')) {
+              imageUrl = imageUrl.replace('/frontend/chat/share/', '/frontend/share/');
+            }
+          } else {
+            const fileName = imageUrl.split('/').pop();
+            if (imageUrl.includes('chat/share/') || 
+                imageUrl.includes('/frontend/chat/share/') || 
+                imageUrl.includes('Topics-frontend/') ||
+                imageUrl.includes('frontend/chat/share/')) {
+              imageUrl = '../share/' + fileName;
+            } else if (imageUrl.includes('/share/')) {
+              const shareIndex = imageUrl.indexOf('/share/');
+              imageUrl = '../share/' + imageUrl.substring(shareIndex + 7);
+            } else if (imageUrl.startsWith('share/')) {
+              imageUrl = '../share/' + imageUrl.substring(6);
+            } else if (!imageUrl.includes('/')) {
+              imageUrl = '../share/' + imageUrl;
+            } else {
+              imageUrl = '../share/' + fileName;
+            }
+          }
+          
+          const img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = '分享的圖片';
+          img.style.cssText = 'max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; object-fit: contain;';
+          img.onerror = function() {
+            const originalUrl = message.message || messageText;
+            const fileName = originalUrl.split('/').pop();
+            const alternativePaths = [
+              '../share/' + fileName,
+              '/Topics-frontend/frontend/share/' + fileName,
+              '/frontend/share/' + fileName,
+              '/share/' + fileName,
+              '../../share/' + fileName
+            ];
+            
+            let tried = 0;
+            const tryNext = () => {
+              if (tried < alternativePaths.length) {
+                this.src = alternativePaths[tried++];
+              } else {
+                this.style.display = 'none';
+                const errorDiv = document.createElement('div');
+                errorDiv.textContent = '圖片載入失敗';
+                errorDiv.style.cssText = 'color: #999; font-size: 12px; font-style: italic; padding: 5px;';
+                contentDiv.appendChild(errorDiv);
+              }
+            };
+            
+            this.onerror = tryNext;
+            tryNext();
+          };
+          img.onclick = function() {
+            window.open(this.src, '_blank');
+          };
+          contentDiv.appendChild(img);
+        } else {
+          // 普通文字訊息
+          contentDiv.textContent = messageText;
+        }
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = new Date(message.timestamp).toLocaleString();
+        
+        // 添加已讀狀態
+        if (message.from_user === username) {
+          const readStatusDiv = document.createElement('div');
+          readStatusDiv.className = 'read-status';
+          readStatusDiv.style.cssText = `
+            font-size: 11px; 
+            margin-top: 4px; 
+            text-align: right;
+            font-weight: 500;
+          `;
+          
+          if (message.is_read && message.read_at) {
+            readStatusDiv.innerHTML = `
+              <span class="read-indicator read">✓ 已讀</span>
+              <span class="read-time">${new Date(message.read_at).toLocaleTimeString()}</span>
+            `;
+          } else {
+            readStatusDiv.innerHTML = '<span class="read-indicator unread">⏳ 未讀</span>';
+          }
+          
+          contentDiv.appendChild(readStatusDiv);
+        } else {
+          // 接收的訊息，標記為已讀
+          markMessageAsRead(message.id);
+        }
+        
+        contentDiv.appendChild(timeDiv);
+        messageDiv.appendChild(contentDiv);
+        fragment.appendChild(messageDiv);
+      });
+      
+      // 如果有新訊息，追加到DOM並滾動到底部
+      if (hasNewMessages) {
+        chatMessages.appendChild(fragment);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    }
+    
+    // 更新已存在訊息的已讀狀態（用於實時同步已讀狀態）
+    function updateReadStatusForExistingMessages(messages) {
+      if (!messages || messages.length === 0) return;
+      
+      const chatMessages = document.getElementById('chatMessages');
+      if (!chatMessages) return;
+      
+      // 遍歷所有消息，更新已存在消息的已讀狀態
+      messages.forEach(message => {
+        const messageId = message.id.toString();
+        const messageElement = chatMessages.querySelector(`[data-message-id="${messageId}"]`);
+        
+        if (messageElement) {
+          // 只更新自己發送的消息的已讀狀態
+          if (message.from_user === username) {
+            const readStatusDiv = messageElement.querySelector('.read-status');
+            
+            if (readStatusDiv) {
+              // 檢查已讀狀態是否改變
+              const currentReadStatus = readStatusDiv.querySelector('.read-indicator');
+              const isCurrentlyRead = currentReadStatus && currentReadStatus.classList.contains('read');
+              
+              // 檢查消息是否應該顯示為已讀
+              // is_read 可能是 1, true, '1' 等格式
+              const isRead = message.is_read === 1 || message.is_read === true || message.is_read === '1' || message.is_read === 1;
+              const hasReadAt = message.read_at && message.read_at !== null && message.read_at !== '';
+              const shouldBeRead = isRead && hasReadAt;
+              
+              // 如果狀態改變了，更新顯示
+              if (!isCurrentlyRead && shouldBeRead) {
+                readStatusDiv.innerHTML = `
+                  <span class="read-indicator read">✓ 已讀</span>
+                  <span class="read-time">${new Date(message.read_at).toLocaleTimeString()}</span>
+                `;
+                console.log('已更新訊息已讀狀態: 未讀 -> 已讀', messageId);
+              } else if (isCurrentlyRead && !shouldBeRead) {
+                readStatusDiv.innerHTML = '<span class="read-indicator unread">⏳ 未讀</span>';
+                console.log('已更新訊息已讀狀態: 已讀 -> 未讀', messageId);
+              }
+            } else {
+              // 如果沒有已讀狀態元素，但消息應該顯示已讀狀態，則創建它
+              if (message.is_read || message.read_at) {
+                const contentDiv = messageElement.querySelector('.message-content');
+                if (contentDiv) {
+                  const readStatusDiv = document.createElement('div');
+                  readStatusDiv.className = 'read-status';
+                  readStatusDiv.style.cssText = `
+                    font-size: 11px; 
+                    margin-top: 4px; 
+                    text-align: right;
+                    font-weight: 500;
+                  `;
+                  
+                  const isRead = message.is_read === 1 || message.is_read === true || message.is_read === '1' || message.is_read === 1;
+                  const hasReadAt = message.read_at && message.read_at !== null && message.read_at !== '';
+                  
+                  if (isRead && hasReadAt) {
+                    readStatusDiv.innerHTML = `
+                      <span class="read-indicator read">✓ 已讀</span>
+                      <span class="read-time">${new Date(message.read_at).toLocaleTimeString()}</span>
+                    `;
+                  } else {
+                    readStatusDiv.innerHTML = '<span class="read-indicator unread">⏳ 未讀</span>';
+                  }
+                  
+                  // 插入到時間元素之前
+                  const timeDiv = contentDiv.querySelector('.message-time');
+                  if (timeDiv) {
+                    contentDiv.insertBefore(readStatusDiv, timeDiv);
+                  } else {
+                    contentDiv.appendChild(readStatusDiv);
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
     // 發送訊息
     async function sendMessage() {
       const input = document.getElementById('messageInput');
@@ -2505,6 +2743,25 @@ try {
       updateUserActivity();
     }, 30000);
     
+    // 定期檢查已讀狀態（每3秒檢查一次，確保已讀狀態實時更新）
+    setInterval(async () => {
+      if (currentChatType === 'private' && currentUserId) {
+        try {
+          // 獲取當前聊天的最新消息狀態（包括已讀狀態）
+          const url = `load_private_messages.php?from=${encodeURIComponent(username)}&to=${encodeURIComponent(currentUserId)}`;
+          const response = await fetch(url);
+          const result = await response.json();
+          
+          if (result.success && result.messages && result.messages.length > 0) {
+            // 只更新已存在消息的已讀狀態，不添加新消息（新消息由上面的輪詢處理）
+            updateReadStatusForExistingMessages(result.messages);
+          }
+        } catch (error) {
+          console.error('檢查已讀狀態失敗:', error);
+        }
+      }
+    }, 3000); // 每3秒檢查一次已讀狀態
+    
     // 定期清理快取（每5分鐘清理一次）
     setInterval(() => {
       const now = Date.now();
@@ -2538,31 +2795,40 @@ try {
           console.error('檢查群組新訊息失敗:', error);
         }
       } else if (currentChatType === 'private' && currentUserId) {
-        // 檢查私聊新訊息
+        // 檢查私聊新訊息和已讀狀態（只獲取比 lastMessageId 更新的消息）
         try {
-          const response = await fetch('load_private_messages.php?from=' + username + '&to=' + currentUserId);
+          // 使用 lastMessageId 參數只獲取新消息，提高效率
+          const url = `load_private_messages.php?from=${encodeURIComponent(username)}&to=${encodeURIComponent(currentUserId)}&lastMessageId=${lastMessageId}`;
+          const response = await fetch(url);
           
           const result = await response.json();
           
           if (result.success && result.messages) {
-            // 檢查是否有新訊息
-            const currentMaxId = result.messages.length > 0 ? Math.max(...result.messages.map(m => parseInt(m.id) || 0)) : 0;
-            if (currentMaxId > lastMessageId) {
-              // 有新訊息，更新顯示
+            if (result.messages.length > 0) {
+              // 有新訊息，追加顯示
               try {
-              displayMessages(result.messages);
-              lastMessageId = currentMaxId;
-              console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+                // 只追加新消息，不重新載入全部
+                appendNewMessages(result.messages);
+                
+                // 更新 lastMessageId
+                const newMaxId = Math.max(...result.messages.map(m => parseInt(m.id) || 0));
+                if (newMaxId > lastMessageId) {
+                  lastMessageId = newMaxId;
+                  console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+                }
               } catch (displayError) {
                 console.error('顯示新訊息時發生錯誤:', displayError);
               }
             }
+            
+            // 更新已存在訊息的已讀狀態
+            updateReadStatusForExistingMessages(result.messages);
           }
         } catch (error) {
           console.error('檢查新訊息失敗:', error);
         }
       }
-    }, 3000);
+    }, 1500); // 改為1.5秒輪詢一次，提高實時性
     <?php endif; ?>
   </script>
 </main>
