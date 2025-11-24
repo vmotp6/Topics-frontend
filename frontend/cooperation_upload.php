@@ -110,14 +110,18 @@ $role = $_SESSION['role'] ?? '訪客';
                         </div>
                         <div class="form-group">
                             <label for="phone1">*聯絡電話1:</label>
-                            <input type="tel" id="phone1" name="phone1" required>
+                            <input type="tel" id="phone1" name="phone1" 
+                                   pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
+                            <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label for="phone2">聯絡電話2:</label>
-                            <input type="tel" id="phone2" name="phone2">
+                            <input type="tel" id="phone2" name="phone2" 
+                                   pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼（選填）">
+                            <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
                         </div>
                         <div class="form-group">
                             <label for="email">*電子郵件信箱:</label>
@@ -454,10 +458,42 @@ $role = $_SESSION['role'] ?? '訪客';
 
             // 前端驗證
             const email = document.getElementById('email').value.trim();
+            const phone1 = document.getElementById('phone1').value.trim();
+            const phone2 = document.getElementById('phone2').value.trim();
             const juniorHigh = document.getElementById('junior_high').value.trim();
             const intention1 = document.getElementById('intention1').value;
             const intention2 = document.getElementById('intention2').value;
             const intention3 = document.getElementById('intention3').value;
+            
+            // 驗證電話1（必填）
+            if (!phone1) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請填寫聯絡電話1';
+                messageDiv.style.display = 'block';
+                document.getElementById('phone1').focus();
+                document.getElementById('phone1').style.borderColor = '#d32f2f';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            } else if (phone1.length !== 10 || !/^[0-9]{10}$/.test(phone1)) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '聯絡電話1必須為10位數字';
+                messageDiv.style.display = 'block';
+                document.getElementById('phone1').focus();
+                document.getElementById('phone1').style.borderColor = '#d32f2f';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            // 驗證電話2（選填，但如果填寫了必須是10位）
+            if (phone2 && (phone2.length !== 10 || !/^[0-9]{10}$/.test(phone2))) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '聯絡電話2必須為10位數字';
+                messageDiv.style.display = 'block';
+                document.getElementById('phone2').focus();
+                document.getElementById('phone2').style.borderColor = '#d32f2f';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
             
             // 驗證電子郵件
             if (!email) {
@@ -621,6 +657,122 @@ $role = $_SESSION['role'] ?? '訪客';
         });
 
         // 頁面載入時初始化（首次載入時不強制刷新，使用現有驗證碼）
+        // 電話號碼驗證功能
+        document.addEventListener('DOMContentLoaded', function() {
+            // 獲取電話輸入框
+            const phone1 = document.getElementById('phone1');
+            const phone2 = document.getElementById('phone2');
+            
+            // 電話號碼驗證函數
+            function setupPhoneValidation(phoneInput, isRequired = true) {
+                if (!phoneInput) return;
+                
+                const hint = phoneInput.nextElementSibling;
+                
+                // 驗證函數
+                function validatePhone() {
+                    const value = phoneInput.value.trim();
+                    if (value.length > 0 && value.length !== 10) {
+                        // 顯示錯誤狀態
+                        if (hint && hint.classList.contains('phone-hint')) {
+                            hint.style.display = 'block';
+                        }
+                        phoneInput.style.borderColor = '#d32f2f';
+                        phoneInput.style.borderWidth = '2px';
+                        phoneInput.classList.add('phone-error');
+                    } else {
+                        // 清除錯誤狀態
+                        if (hint && hint.classList.contains('phone-hint')) {
+                            hint.style.display = 'none';
+                        }
+                        phoneInput.style.borderColor = '';
+                        phoneInput.style.borderWidth = '';
+                        phoneInput.classList.remove('phone-error');
+                    }
+                }
+                
+                // 只允許輸入數字
+                phoneInput.addEventListener('input', function(e) {
+                    // 移除非數字字符
+                    this.value = this.value.replace(/[^0-9]/g, '');
+                    
+                    // 限制最大長度為10
+                    if (this.value.length > 10) {
+                        this.value = this.value.slice(0, 10);
+                    }
+                    
+                    // 即時驗證
+                    validatePhone();
+                });
+                
+                // 失去焦點時驗證
+                phoneInput.addEventListener('blur', function() {
+                    validatePhone();
+                });
+                
+                // 獲得焦點時也檢查（處理初始值）
+                phoneInput.addEventListener('focus', function() {
+                    validatePhone();
+                });
+                
+                // 頁面載入時檢查初始值
+                validatePhone();
+            }
+            
+            // 設置電話輸入框的驗證
+            setupPhoneValidation(phone1, true); // 必填
+            setupPhoneValidation(phone2, false); // 選填
+            
+            // 表單提交驗證
+            const form = document.getElementById('enrollmentForm');
+            if (form) {
+                const originalSubmit = form.onsubmit;
+                form.addEventListener('submit', function(e) {
+                    // 驗證電話1（必填）
+                    if (phone1) {
+                        const phoneValue = phone1.value.trim();
+                        if (!phoneValue) {
+                            e.preventDefault();
+                            phone1.style.borderColor = '#d32f2f';
+                            phone1.focus();
+                            if (phone1.nextElementSibling && phone1.nextElementSibling.classList.contains('phone-hint')) {
+                                phone1.nextElementSibling.textContent = '請填寫聯絡電話1';
+                                phone1.nextElementSibling.style.display = 'block';
+                            }
+                            alert('請填寫聯絡電話1！');
+                            return false;
+                        } else if (phoneValue.length !== 10 || !/^[0-9]{10}$/.test(phoneValue)) {
+                            e.preventDefault();
+                            phone1.style.borderColor = '#d32f2f';
+                            phone1.focus();
+                            if (phone1.nextElementSibling && phone1.nextElementSibling.classList.contains('phone-hint')) {
+                                phone1.nextElementSibling.textContent = '電話號碼必須為10位數字';
+                                phone1.nextElementSibling.style.display = 'block';
+                            }
+                            alert('聯絡電話1必須為10位數字！');
+                            return false;
+                        }
+                    }
+                    
+                    // 驗證電話2（選填，但如果填寫了必須是10位）
+                    if (phone2 && phone2.value.trim()) {
+                        const phoneValue = phone2.value.trim();
+                        if (phoneValue.length !== 10 || !/^[0-9]{10}$/.test(phoneValue)) {
+                            e.preventDefault();
+                            phone2.style.borderColor = '#d32f2f';
+                            phone2.focus();
+                            if (phone2.nextElementSibling && phone2.nextElementSibling.classList.contains('phone-hint')) {
+                                phone2.nextElementSibling.textContent = '電話號碼必須為10位數字';
+                                phone2.nextElementSibling.style.display = 'block';
+                            }
+                            alert('聯絡電話2必須為10位數字！');
+                            return false;
+                        }
+                    }
+                });
+            }
+        });
+        
         document.addEventListener('DOMContentLoaded', function() {
             // 首次載入時，如果驗證碼圖片還沒有載入，則載入它（不強制刷新）
             const captchaImage = document.getElementById('captchaImage');

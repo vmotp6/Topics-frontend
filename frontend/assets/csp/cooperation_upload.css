@@ -469,6 +469,21 @@
     font-size: 0.95rem;
   }
 }
+
+/* 電話號碼錯誤樣式 */
+.phone-error {
+  border-color: #d32f2f !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1) !important;
+}
+
+.phone-hint {
+  display: block;
+  color: #d32f2f;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
 / *   7_6R�f�e�_�S  * / 
  
  

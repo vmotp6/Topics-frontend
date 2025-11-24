@@ -8,6 +8,7 @@ require_once 'session_config.php';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>康寧大學續招報名表</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 	<link rel="stylesheet" href="assets/csp/continued_admission.css">
 </head>
 <?php include("share/header.php"); ?>
@@ -22,8 +23,8 @@ require_once 'session_config.php';
       <h2>錄取查詢</h2>
       <div class="query-form">
         <div class="form-group">
-          <label>身分證字號</label>
-          <input type="text" id="queryIdNumber" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10">
+          <label>身分證字號 / 護照號碼</label>
+          <input type="text" id="queryIdNumber" placeholder="本國籍：例：A123456789 | 外籍生：例：護照號碼" maxlength="30">
         </div>
         <button type="button" id="queryBtn" class="query-btn">查詢錄取狀態</button>
       </div>
@@ -52,8 +53,29 @@ require_once 'session_config.php';
               <input type="text" id="student_name" name="student_name" required>
             </div>
             <div class="form-group">
+              <label>*是否為外籍生</label>
+              <div class="radio-group">
+                <label><input type="radio" name="is_foreign_student" value="no" checked onchange="toggleIdentityFields()"> 否（本國籍）</label>
+                <label><input type="radio" name="is_foreign_student" value="yes" onchange="toggleIdentityFields()"> 是（外籍生）</label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-row" id="local_student_fields">
+            <div class="form-group">
               <label>*身分證字號</label>
-              <input type="text" name="id" id="id_number_input" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10" required>
+              <input type="text" name="id" id="id_number_input" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10">
+            </div>
+          </div>
+          
+          <div class="form-row" id="foreign_student_fields" style="display: none;">
+            <div class="form-group">
+              <label>*國籍</label>
+              <input type="text" name="nationality" id="nationality_input" placeholder="例：美國、日本、越南等">
+            </div>
+            <div class="form-group">
+              <label>*護照號碼</label>
+              <input type="text" name="passport_number" id="passport_number_input" placeholder="例：A12345678" maxlength="20">
             </div>
           </div>
           
@@ -86,18 +108,57 @@ require_once 'session_config.php';
             </div>
             <div class="form-group">
               <label>*行動電話</label>
-              <input type="tel" name="mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
+              <input type="tel" name="mobile" id="mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
+              <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group medium">
               <label>*就讀縣市</label>
-              <input type="text" name="school_city" placeholder="縣/市" required>
+              <select name="school_city" id="school_city" required>
+                <option value="">請選擇縣市</option>
+                <option value="台北市">台北市</option>
+                <option value="新北市">新北市</option>
+                <option value="桃園市">桃園市</option>
+                <option value="台中市">台中市</option>
+                <option value="台南市">台南市</option>
+                <option value="高雄市">高雄市</option>
+                <option value="基隆市">基隆市</option>
+                <option value="新竹市">新竹市</option>
+                <option value="嘉義市">嘉義市</option>
+                <option value="新竹縣">新竹縣</option>
+                <option value="苗栗縣">苗栗縣</option>
+                <option value="彰化縣">彰化縣</option>
+                <option value="南投縣">南投縣</option>
+                <option value="雲林縣">雲林縣</option>
+                <option value="嘉義縣">嘉義縣</option>
+                <option value="屏東縣">屏東縣</option>
+                <option value="宜蘭縣">宜蘭縣</option>
+                <option value="花蓮縣">花蓮縣</option>
+                <option value="台東縣">台東縣</option>
+                <option value="澎湖縣">澎湖縣</option>
+                <option value="金門縣">金門縣</option>
+                <option value="連江縣">連江縣</option>
+              </select>
             </div>
             <div class="form-group">
               <label>*就讀國中</label>
-              <input type="text" name="school_name" placeholder="國中名稱" required>
+              <div class="modern-search-container">
+                <div class="search-input-wrapper">
+                  <input type="text" name="school_name" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required>
+                  <div class="search-icon">
+                    <i class="fas fa-search"></i>
+                  </div>
+                  <div class="clear-btn" id="clearSchoolSearch" style="display: none;">
+                    <i class="fas fa-times"></i>
+                  </div>
+                </div>
+                <div id="schoolResults" class="modern-search-results"></div>
+              </div>
+              <div class="help-text">
+                <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，支援模糊匹配
+              </div>
             </div>
           </div>
     </fieldset>
@@ -152,7 +213,8 @@ require_once 'session_config.php';
             </div>
             <div class="form-group">
               <label>*監護人行動電話</label>
-              <input type="tel" name="guardian_mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
+              <input type="tel" name="guardian_mobile" id="guardian_mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
+              <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
             </div>
           </div>
     </fieldset>
@@ -625,6 +687,15 @@ require_once 'session_config.php';
       // 初始化查詢功能
       initializeQueryFunction();
       
+      // 初始化外籍生欄位切換
+      toggleIdentityFields();
+      
+      // 初始化學校搜尋功能
+      initializeSchoolSearch();
+      
+      // 初始化電話號碼驗證
+      initializePhoneValidation();
+      
       // 初始化身分證字號欄位為可編輯
       setIdNumberReadOnly(false);
       
@@ -686,10 +757,12 @@ require_once 'session_config.php';
             
             console.log('Preparing form data...');
             
+            // 檢查是否為外籍生
+            const isForeign = document.querySelector('input[name="is_foreign_student"]:checked')?.value === 'yes';
+            
             // 驗證所有必填欄位
             const requiredFields = [
               { name: 'student_name', label: '姓名' },
-              { name: 'id', label: '身分證字號' },
               { name: 'birth_year', label: '出生年' },
               { name: 'birth_month', label: '出生月' },
               { name: 'birth_day', label: '出生日' },
@@ -705,6 +778,16 @@ require_once 'session_config.php';
               { name: 'self_intro', label: '自傳/自我介紹', type: 'textarea' },
               { name: 'skills', label: '興趣/專長', type: 'textarea' }
             ];
+            
+            // 根據是否外籍生添加不同的必填欄位
+            if (isForeign) {
+              requiredFields.push(
+                { name: 'nationality', label: '國籍' },
+                { name: 'passport_number', label: '護照號碼' }
+              );
+            } else {
+              requiredFields.push({ name: 'id', label: '身分證字號' });
+            }
             
             // 檢查必填欄位
             for (let field of requiredFields) {
@@ -748,55 +831,147 @@ require_once 'session_config.php';
               return false;
             }
             
-            // 驗證身分證字號格式
-            const idInput = document.querySelector('input[name="id"]');
-            if (idInput) {
-              const idValue = idInput.value.trim();
-              if (idValue.length !== 10) {
-                showMessage('身分證字號必須為10個字符', 'error');
-                idInput.focus();
-                idInput.style.borderColor = '#d32f2f';
+            // 驗證身分證字號或護照號碼格式
+            if (isForeign) {
+              // 外籍生：驗證護照號碼
+              const passportInput = document.querySelector('input[name="passport_number"]');
+              if (passportInput) {
+                const passportValue = passportInput.value.trim();
+                if (!passportValue) {
+                  showMessage('護照號碼為必填欄位', 'error');
+                  passportInput.focus();
+                  passportInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    passportInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
+                if (passportValue.length < 6 || passportValue.length > 20) {
+                  showMessage('護照號碼長度應為6-20個字符', 'error');
+                  passportInput.focus();
+                  passportInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    passportInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
+              }
+              
+              // 驗證國籍
+              const nationalityInput = document.querySelector('input[name="nationality"]');
+              if (nationalityInput && !nationalityInput.value.trim()) {
+                showMessage('國籍為必填欄位', 'error');
+                nationalityInput.focus();
+                nationalityInput.style.borderColor = '#d32f2f';
                 setTimeout(() => {
-                  idInput.style.borderColor = '';
+                  nationalityInput.style.borderColor = '';
                 }, 3000);
                 return false;
               }
-              if (!/^[A-Za-z][0-9]{9}$/.test(idValue)) {
-                showMessage('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
-                idInput.focus();
-                idInput.style.borderColor = '#d32f2f';
-                setTimeout(() => {
-                  idInput.style.borderColor = '';
-                }, 3000);
-                return false;
+            } else {
+              // 本國籍：驗證身分證字號格式
+              const idInput = document.querySelector('input[name="id"]');
+              if (idInput) {
+                const idValue = idInput.value.trim();
+                if (!idValue) {
+                  showMessage('身分證字號為必填欄位', 'error');
+                  idInput.focus();
+                  idInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    idInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
+                if (idValue.length !== 10) {
+                  showMessage('身分證字號必須為10個字符', 'error');
+                  idInput.focus();
+                  idInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    idInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
+                if (!/^[A-Za-z][0-9]{9}$/.test(idValue)) {
+                  showMessage('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
+                  idInput.focus();
+                  idInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    idInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
               }
             }
             
             // 驗證行動電話格式
-            const mobileInput = document.querySelector('input[name="mobile"]');
+            const mobileInput = document.getElementById('mobile');
             if (mobileInput) {
               const mobileValue = mobileInput.value.trim();
-              if (!/^[0-9]{10}$/.test(mobileValue)) {
+              if (!mobileValue) {
+                showMessage('行動電話為必填欄位，請填寫', 'error');
+                mobileInput.focus();
+                mobileInput.style.borderColor = '#d32f2f';
+                mobileInput.style.borderWidth = '2px';
+                mobileInput.classList.add('phone-error');
+                if (mobileInput.nextElementSibling && mobileInput.nextElementSibling.classList.contains('phone-hint')) {
+                  mobileInput.nextElementSibling.textContent = '請填寫行動電話';
+                  mobileInput.nextElementSibling.style.display = 'block';
+                }
+                setTimeout(() => {
+                  mobileInput.style.borderColor = '';
+                  mobileInput.style.borderWidth = '';
+                }, 3000);
+                return false;
+              } else if (!/^[0-9]{10}$/.test(mobileValue)) {
                 showMessage('行動電話必須為10個數字', 'error');
                 mobileInput.focus();
                 mobileInput.style.borderColor = '#d32f2f';
+                mobileInput.style.borderWidth = '2px';
+                mobileInput.classList.add('phone-error');
+                if (mobileInput.nextElementSibling && mobileInput.nextElementSibling.classList.contains('phone-hint')) {
+                  mobileInput.nextElementSibling.textContent = '電話號碼必須為10位數字';
+                  mobileInput.nextElementSibling.style.display = 'block';
+                }
                 setTimeout(() => {
                   mobileInput.style.borderColor = '';
+                  mobileInput.style.borderWidth = '';
                 }, 3000);
                 return false;
               }
             }
             
             // 驗證監護人行動電話格式
-            const guardianMobileInput = document.querySelector('input[name="guardian_mobile"]');
+            const guardianMobileInput = document.getElementById('guardian_mobile');
             if (guardianMobileInput) {
               const guardianMobileValue = guardianMobileInput.value.trim();
-              if (!/^[0-9]{10}$/.test(guardianMobileValue)) {
+              if (!guardianMobileValue) {
+                showMessage('監護人行動電話為必填欄位，請填寫', 'error');
+                guardianMobileInput.focus();
+                guardianMobileInput.style.borderColor = '#d32f2f';
+                guardianMobileInput.style.borderWidth = '2px';
+                guardianMobileInput.classList.add('phone-error');
+                if (guardianMobileInput.nextElementSibling && guardianMobileInput.nextElementSibling.classList.contains('phone-hint')) {
+                  guardianMobileInput.nextElementSibling.textContent = '請填寫監護人行動電話';
+                  guardianMobileInput.nextElementSibling.style.display = 'block';
+                }
+                setTimeout(() => {
+                  guardianMobileInput.style.borderColor = '';
+                  guardianMobileInput.style.borderWidth = '';
+                }, 3000);
+                return false;
+              } else if (!/^[0-9]{10}$/.test(guardianMobileValue)) {
                 showMessage('監護人行動電話必須為10個數字', 'error');
                 guardianMobileInput.focus();
                 guardianMobileInput.style.borderColor = '#d32f2f';
+                guardianMobileInput.style.borderWidth = '2px';
+                guardianMobileInput.classList.add('phone-error');
+                if (guardianMobileInput.nextElementSibling && guardianMobileInput.nextElementSibling.classList.contains('phone-hint')) {
+                  guardianMobileInput.nextElementSibling.textContent = '電話號碼輸入錯誤';
+                  guardianMobileInput.nextElementSibling.style.display = 'block';
+                }
                 setTimeout(() => {
                   guardianMobileInput.style.borderColor = '';
+                  guardianMobileInput.style.borderWidth = '';
                 }, 3000);
                 return false;
               }
@@ -1076,27 +1251,41 @@ require_once 'session_config.php';
           const idNumber = queryIdNumber.value.trim();
           
           if (!idNumber) {
-            showQueryResult('請輸入身分證字號', 'error');
+            showQueryResult('請輸入身分證字號或護照號碼', 'error');
             return;
           }
           
-          if (idNumber.length !== 10) {
-            showQueryResult('身分證字號必須為10個字符', 'error');
-            return;
-          }
+          // 檢查是否為護照號碼格式（外籍生）
+          const isPassportFormat = idNumber.startsWith('PASSPORT_');
+          let queryValue = idNumber;
           
-          if (!/^[A-Za-z][0-9]{9}$/.test(idNumber)) {
-            showQueryResult('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
-            return;
+          if (!isPassportFormat) {
+            // 本國籍：驗證身分證字號格式
+            if (idNumber.length !== 10) {
+              showQueryResult('身分證字號必須為10個字符', 'error');
+              return;
+            }
+            
+            if (!/^[A-Za-z][0-9]{9}$/.test(idNumber)) {
+              showQueryResult('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
+              return;
+            }
+          } else {
+            // 外籍生：移除PASSPORT_前綴進行查詢
+            queryValue = idNumber.replace(/^PASSPORT_/, '');
+            if (queryValue.length < 6 || queryValue.length > 20) {
+              showQueryResult('護照號碼長度應為6-20個字符', 'error');
+              return;
+            }
           }
           
           // 顯示載入狀態
           queryBtn.textContent = '查詢中...';
           queryBtn.disabled = true;
           
-          // 發送查詢請求
+          // 發送查詢請求（如果是護照號碼，需要加上PASSPORT_前綴）
           const formData = new FormData();
-          formData.append('id_number', idNumber);
+          formData.append('id_number', isPassportFormat ? idNumber : idNumber);
           
           fetch('check_admission_status.php', {
             method: 'POST',
@@ -1234,6 +1423,327 @@ require_once 'session_config.php';
         }
       }
     }
+    
+    // 切換身分證字號/護照號碼欄位顯示
+    function toggleIdentityFields() {
+      const isForeign = document.querySelector('input[name="is_foreign_student"]:checked')?.value === 'yes';
+      const localFields = document.getElementById('local_student_fields');
+      const foreignFields = document.getElementById('foreign_student_fields');
+      const idInput = document.getElementById('id_number_input');
+      const nationalityInput = document.getElementById('nationality_input');
+      const passportInput = document.getElementById('passport_number_input');
+      
+      if (isForeign) {
+        // 顯示外籍生欄位，隱藏本國籍欄位
+        if (localFields) localFields.style.display = 'none';
+        if (foreignFields) foreignFields.style.display = 'flex';
+        
+        // 設定必填屬性
+        if (idInput) {
+          idInput.removeAttribute('required');
+          idInput.value = ''; // 清空身分證字號
+        }
+        if (nationalityInput) nationalityInput.setAttribute('required', 'required');
+        if (passportInput) passportInput.setAttribute('required', 'required');
+      } else {
+        // 顯示本國籍欄位，隱藏外籍生欄位
+        if (localFields) localFields.style.display = 'flex';
+        if (foreignFields) foreignFields.style.display = 'none';
+        
+        // 設定必填屬性
+        if (idInput) idInput.setAttribute('required', 'required');
+        if (nationalityInput) {
+          nationalityInput.removeAttribute('required');
+          nationalityInput.value = ''; // 清空國籍
+        }
+        if (passportInput) {
+          passportInput.removeAttribute('required');
+          passportInput.value = ''; // 清空護照號碼
+        }
+      }
+    }
+    
+    // 頁面載入時初始化欄位顯示狀態
+    window.toggleIdentityFields = toggleIdentityFields;
+    
+    // 初始化電話號碼驗證功能
+    function initializePhoneValidation() {
+      const mobileInput = document.getElementById('mobile');
+      const guardianMobileInput = document.getElementById('guardian_mobile');
+      
+      // 電話號碼驗證函數
+      function setupPhoneValidation(phoneInput) {
+        if (!phoneInput) return;
+        
+        const hint = phoneInput.nextElementSibling;
+        
+        // 驗證函數
+        function validatePhone() {
+          const value = phoneInput.value.trim();
+          if (value.length > 0 && value.length !== 10) {
+            // 顯示錯誤狀態
+            if (hint && hint.classList.contains('phone-hint')) {
+              hint.style.display = 'block';
+            }
+            phoneInput.style.borderColor = '#d32f2f';
+            phoneInput.style.borderWidth = '2px';
+            phoneInput.classList.add('phone-error');
+          } else {
+            // 清除錯誤狀態
+            if (hint && hint.classList.contains('phone-hint')) {
+              hint.style.display = 'none';
+            }
+            phoneInput.style.borderColor = '';
+            phoneInput.style.borderWidth = '';
+            phoneInput.classList.remove('phone-error');
+          }
+        }
+        
+        // 只允許輸入數字
+        phoneInput.addEventListener('input', function(e) {
+          // 移除非數字字符
+          this.value = this.value.replace(/[^0-9]/g, '');
+          
+          // 限制最大長度為10
+          if (this.value.length > 10) {
+            this.value = this.value.slice(0, 10);
+          }
+          
+          // 即時驗證
+          validatePhone();
+        });
+        
+        // 失去焦點時驗證
+        phoneInput.addEventListener('blur', function() {
+          validatePhone();
+        });
+        
+        // 獲得焦點時也檢查（處理初始值）
+        phoneInput.addEventListener('focus', function() {
+          validatePhone();
+        });
+        
+        // 頁面載入時檢查初始值
+        validatePhone();
+      }
+      
+      // 設置兩個電話輸入框的驗證
+      setupPhoneValidation(mobileInput);
+      setupPhoneValidation(guardianMobileInput);
+    }
+    
+    // 初始化電話號碼驗證功能
+    function initializePhoneValidation() {
+      const mobileInput = document.getElementById('mobile');
+      const guardianMobileInput = document.getElementById('guardian_mobile');
+      
+      // 電話號碼驗證函數
+      function setupPhoneValidation(phoneInput) {
+        if (!phoneInput) return;
+        
+        const hint = phoneInput.nextElementSibling;
+        
+        // 驗證函數
+        function validatePhone() {
+          const value = phoneInput.value.trim();
+          if (value.length > 0 && value.length !== 10) {
+            // 顯示錯誤狀態
+            if (hint && hint.classList.contains('phone-hint')) {
+              hint.style.display = 'block';
+            }
+            phoneInput.style.borderColor = '#d32f2f';
+            phoneInput.style.borderWidth = '2px';
+            phoneInput.classList.add('phone-error');
+          } else {
+            // 清除錯誤狀態
+            if (hint && hint.classList.contains('phone-hint')) {
+              hint.style.display = 'none';
+            }
+            phoneInput.style.borderColor = '';
+            phoneInput.style.borderWidth = '';
+            phoneInput.classList.remove('phone-error');
+          }
+        }
+        
+        // 只允許輸入數字
+        phoneInput.addEventListener('input', function(e) {
+          // 移除非數字字符
+          this.value = this.value.replace(/[^0-9]/g, '');
+          
+          // 限制最大長度為10
+          if (this.value.length > 10) {
+            this.value = this.value.slice(0, 10);
+          }
+          
+          // 即時驗證
+          validatePhone();
+        });
+        
+        // 失去焦點時驗證
+        phoneInput.addEventListener('blur', function() {
+          validatePhone();
+        });
+        
+        // 獲得焦點時也檢查（處理初始值）
+        phoneInput.addEventListener('focus', function() {
+          validatePhone();
+        });
+        
+        // 頁面載入時檢查初始值
+        validatePhone();
+      }
+      
+      // 設置兩個電話輸入框的驗證
+      setupPhoneValidation(mobileInput);
+      setupPhoneValidation(guardianMobileInput);
+    }
+    
+    // 初始化學校搜尋功能
+    function initializeSchoolSearch() {
+      const schoolInput = document.getElementById('school_name');
+      const resultsDiv = document.getElementById('schoolResults');
+      const clearBtn = document.getElementById('clearSchoolSearch');
+      
+      if (!schoolInput || !resultsDiv) {
+        console.warn('學校搜尋元素未找到');
+        return;
+      }
+      
+      // 防抖函數
+      let searchTimeout;
+      const debounceSearch = (callback, delay) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(callback, delay);
+      };
+      
+      // 輸入事件監聽
+      schoolInput.addEventListener('input', function() {
+        const keyword = this.value.trim();
+        
+        // 顯示/隱藏清除按鈕
+        if (clearBtn) {
+          clearBtn.style.display = keyword.length > 0 ? 'block' : 'none';
+        }
+        
+        if (keyword.length === 0) {
+          resultsDiv.classList.remove('show');
+          return;
+        }
+        
+        // 防抖搜尋
+        debounceSearch(() => {
+          performSchoolSearch(keyword);
+        }, 300);
+      });
+      
+      // 清除按鈕事件
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          schoolInput.value = '';
+          resultsDiv.classList.remove('show');
+          clearBtn.style.display = 'none';
+          schoolInput.focus();
+        });
+      }
+      
+      // 點擊其他地方隱藏搜尋結果
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.modern-search-container')) {
+          resultsDiv.classList.remove('show');
+        }
+      });
+    }
+    
+    // 執行學校搜尋
+    function performSchoolSearch(keyword) {
+      const resultsDiv = document.getElementById('schoolResults');
+      const schoolInput = document.getElementById('school_name');
+      
+      if (keyword.length < 2) {
+        resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
+        resultsDiv.classList.add('show');
+        return;
+      }
+      
+      // 顯示載入中
+      resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
+      resultsDiv.classList.add('show');
+      
+      // 從API獲取搜尋結果
+      fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
+        .then(response => response.json())
+        .then(data => {
+          console.log('搜尋結果:', data);
+          if (data.schools && data.schools.length > 0) {
+            resultsDiv.innerHTML = data.schools.map(school => {
+              let displayName = school.name;
+              let additionalInfo = '';
+              
+              if (school.all_names && school.all_names.length > 1) {
+                additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
+              }
+              
+              return `<div class="search-result-item" onclick="selectSchool('${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}')">
+                <i class="fas fa-school"></i>
+                <div class="school-info">
+                  <span class="school-name">${displayName}</span>
+                  <span class="school-location">${school.city || ''} ${school.district || ''}</span>
+                  ${additionalInfo}
+                </div>
+              </div>`;
+            }).join('');
+            
+            if (data.total > 20) {
+              resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
+            }
+          } else {
+            resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+          }
+        })
+        .catch(error => {
+          console.error('搜尋錯誤:', error);
+          resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+        });
+    }
+    
+    // 選擇學校
+    function selectSchool(schoolName, city, district) {
+      const schoolInput = document.getElementById('school_name');
+      const schoolCitySelect = document.getElementById('school_city');
+      const resultsDiv = document.getElementById('schoolResults');
+      const clearBtn = document.getElementById('clearSchoolSearch');
+      
+      // 設置學校名稱
+      if (schoolInput) {
+        schoolInput.value = schoolName;
+      }
+      
+      // 自動設置縣市（如果匹配）
+      if (schoolCitySelect && city) {
+        // 嘗試找到匹配的縣市選項
+        const options = schoolCitySelect.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === city || options[i].text.includes(city)) {
+            schoolCitySelect.value = options[i].value;
+            break;
+          }
+        }
+      }
+      
+      // 隱藏搜尋結果
+      if (resultsDiv) {
+        resultsDiv.classList.remove('show');
+      }
+      
+      // 顯示清除按鈕
+      if (clearBtn) {
+        clearBtn.style.display = 'block';
+      }
+    }
+    
+    // 將函數暴露到全局作用域
+    window.selectSchool = selectSchool;
     
     // 填充表單資料
     function fillFormWithData(formData) {

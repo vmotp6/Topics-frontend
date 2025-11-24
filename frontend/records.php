@@ -70,11 +70,13 @@ $conn = getDatabaseConnection();
 $teacher_id = null;
 $teacher_info = null;
 
-// 從 teacher 表獲取教師詳細資訊
+// 從 teacher 表獲取教師詳細資訊（包含帳號）
 if (isset($_SESSION['user_id'])) {
     // 使用 user_id 查詢 (如果 SESSION 中有 user_id)
     $teacher_id = $_SESSION['user_id'];
-    $teacher_sql = "SELECT * FROM teacher WHERE user_id = ?";
+    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
+                    INNER JOIN user u ON t.user_id = u.id 
+                    WHERE t.user_id = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
     if ($teacher_stmt) {
         $teacher_stmt->bind_param("i", $teacher_id);
@@ -82,14 +84,16 @@ if (isset($_SESSION['user_id'])) {
 } elseif (isset($_SESSION['id'])) {
     // 使用 id 查詢 (如果 SESSION 中有 id)
     $teacher_id = $_SESSION['id'];
-    $teacher_sql = "SELECT * FROM teacher WHERE user_id = ?";
+    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
+                    INNER JOIN user u ON t.user_id = u.id 
+                    WHERE t.user_id = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
     if ($teacher_stmt) {
         $teacher_stmt->bind_param("i", $teacher_id);
     }
 } elseif (isset($_SESSION['username'])) {
     // 使用 username 查詢：先從 user 表找到對應的 id，再用這個 id 去 teacher 表找 user_id
-    $teacher_sql = "SELECT t.* FROM teacher t 
+    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
                     INNER JOIN user u ON t.user_id = u.id 
                     WHERE u.username = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
@@ -446,11 +450,11 @@ $conn->close();
                     </h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                         <div>
-                            <strong>教師ID:</strong> <?php echo htmlspecialchars($teacher_info['user_id']); ?>
+                            <strong>帳號:</strong> <?php echo htmlspecialchars($teacher_info['username'] ?? '未設定'); ?>
                         </div>
-                                                 <div>
-                             <strong>教師姓名:</strong> <?php echo htmlspecialchars($teacher_info['name'] ?? '未設定'); ?>
-                         </div>
+                        <div>
+                            <strong>教師姓名:</strong> <?php echo htmlspecialchars($teacher_info['name'] ?? '未設定'); ?>
+                        </div>
                          <div>
                              <strong>教師單位:</strong> <?php echo htmlspecialchars($teacher_info['department'] ?? '未設定'); ?>
                          </div>

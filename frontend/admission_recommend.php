@@ -146,6 +146,23 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             throw new Exception('被推薦學生電子郵件格式不正確');
         }
         
+        // 驗證電話號碼格式（必須為10位數字）
+        if (!empty($_POST['recommender_phone'])) {
+            $phone = preg_replace('/[^0-9]/', '', $_POST['recommender_phone']); // 移除非數字字符
+            if (strlen($phone) !== 10 || !preg_match('/^[0-9]{10}$/', $phone)) {
+                throw new Exception('推薦人聯絡電話必須為10位數字');
+            }
+            $_POST['recommender_phone'] = $phone; // 標準化電話號碼格式
+        }
+        
+        if (!empty($_POST['student_phone'])) {
+            $phone = preg_replace('/[^0-9]/', '', $_POST['student_phone']); // 移除非數字字符
+            if (strlen($phone) !== 10 || !preg_match('/^[0-9]{10}$/', $phone)) {
+                throw new Exception('學生聯絡電話必須為10位數字');
+            }
+            $_POST['student_phone'] = $phone; // 標準化電話號碼格式
+        }
+        
         // 插入資料
         $sql = "INSERT INTO admission_recommendations (
             recommender_name, recommender_student_id, recommender_grade, 
@@ -643,7 +660,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           <div class="form-group">
             <label for="recommender_phone">聯絡電話 <span class="required">*</span></label>
             <input type="tel" id="recommender_phone" name="recommender_phone" 
-                   value="<?php echo isset($_POST['recommender_phone']) ? htmlspecialchars($_POST['recommender_phone']) : ''; ?>" required>
+                   value="<?php echo isset($_POST['recommender_phone']) ? htmlspecialchars($_POST['recommender_phone']) : ''; ?>" 
+                   pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
+            <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼錯誤</small>
           </div>
           
           <div class="form-group">
@@ -677,16 +696,17 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <label for="student_grade">年級（選填）</label>
             <select id="student_grade" name="student_grade">
               <option value="">請選擇年級</option>
-              <option value="七年級" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '七年級') ? 'selected' : ''; ?>>七年級</option>
-              <option value="八年級" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '八年級') ? 'selected' : ''; ?>>八年級</option>
-              <option value="九年級" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '九年級') ? 'selected' : ''; ?>>九年級</option>
+              <option value="國三" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '國三') ? 'selected' : ''; ?>>國三</option>
+              <option value="已畢業" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '已畢業') ? 'selected' : ''; ?>>已畢業</option>
             </select>
           </div>
           
           <div class="form-group">
             <label for="student_phone">聯絡電話 <span class="required">*</span></label>
             <input type="tel" id="student_phone" name="student_phone" 
-                   value="<?php echo isset($_POST['student_phone']) ? htmlspecialchars($_POST['student_phone']) : ''; ?>" required>
+                   value="<?php echo isset($_POST['student_phone']) ? htmlspecialchars($_POST['student_phone']) : ''; ?>" 
+                   pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
+            <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼錯誤</small>
           </div>
         </div>
 
@@ -759,25 +779,187 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 <?php include("share/footer.php"); ?>
 
 <script>
+// 電話號碼驗證功能
+document.addEventListener('DOMContentLoaded', function() {
+    // 獲取兩個電話輸入框
+    const recommenderPhone = document.getElementById('recommender_phone');
+    const studentPhone = document.getElementById('student_phone');
+    
+    // 電話號碼驗證函數
+    function setupPhoneValidation(phoneInput) {
+        if (!phoneInput) return;
+        
+        const hint = phoneInput.nextElementSibling;
+        
+        // 驗證函數
+        function validatePhone() {
+            const value = phoneInput.value.trim();
+            if (value.length > 0 && value.length !== 10) {
+                // 顯示錯誤狀態
+                if (hint && hint.classList.contains('phone-hint')) {
+                    hint.style.display = 'block';
+                }
+                phoneInput.style.borderColor = '#d32f2f';
+                phoneInput.style.borderWidth = '2px';
+                phoneInput.classList.add('phone-error');
+            } else {
+                // 清除錯誤狀態
+                if (hint && hint.classList.contains('phone-hint')) {
+                    hint.style.display = 'none';
+                }
+                phoneInput.style.borderColor = '';
+                phoneInput.style.borderWidth = '';
+                phoneInput.classList.remove('phone-error');
+            }
+        }
+        
+        // 只允許輸入數字
+        phoneInput.addEventListener('input', function(e) {
+            // 移除非數字字符
+            this.value = this.value.replace(/[^0-9]/g, '');
+            
+            // 限制最大長度為10
+            if (this.value.length > 10) {
+                this.value = this.value.slice(0, 10);
+            }
+            
+            // 即時驗證
+            validatePhone();
+        });
+        
+        // 失去焦點時驗證
+        phoneInput.addEventListener('blur', function() {
+            validatePhone();
+        });
+        
+        // 獲得焦點時也檢查（處理初始值）
+        phoneInput.addEventListener('focus', function() {
+            validatePhone();
+        });
+        
+        // 頁面載入時檢查初始值
+        validatePhone();
+    }
+    
+    // 設置兩個電話輸入框的驗證
+    setupPhoneValidation(recommenderPhone);
+    setupPhoneValidation(studentPhone);
+    
+    // 表單提交驗證
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let hasError = false;
+            let firstErrorField = null;
+            
+            // 驗證推薦人電話
+            if (recommenderPhone) {
+                const phoneValue = recommenderPhone.value.trim();
+                if (!phoneValue) {
+                    hasError = true;
+                    if (!firstErrorField) firstErrorField = recommenderPhone;
+                    recommenderPhone.style.borderColor = '#d32f2f';
+                    if (recommenderPhone.nextElementSibling && recommenderPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        recommenderPhone.nextElementSibling.textContent = '請填寫聯絡電話';
+                        recommenderPhone.nextElementSibling.style.display = 'block';
+                    }
+                } else if (phoneValue.length !== 10 || !/^[0-9]{10}$/.test(phoneValue)) {
+                    e.preventDefault();
+                    hasError = true;
+                    if (!firstErrorField) firstErrorField = recommenderPhone;
+                    recommenderPhone.style.borderColor = '#d32f2f';
+                    recommenderPhone.focus();
+                    if (recommenderPhone.nextElementSibling && recommenderPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        recommenderPhone.nextElementSibling.textContent = '電話號碼必須為10位數字';
+                        recommenderPhone.nextElementSibling.style.display = 'block';
+                    }
+                    alert('推薦人聯絡電話必須為10位數字！');
+                    return false;
+                } else {
+                    recommenderPhone.style.borderColor = '';
+                    if (recommenderPhone.nextElementSibling && recommenderPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        recommenderPhone.nextElementSibling.style.display = 'none';
+                    }
+                }
+            }
+            
+            // 驗證學生電話
+            if (studentPhone) {
+                const phoneValue = studentPhone.value.trim();
+                if (!phoneValue) {
+                    hasError = true;
+                    if (!firstErrorField) firstErrorField = studentPhone;
+                    studentPhone.style.borderColor = '#d32f2f';
+                    if (studentPhone.nextElementSibling && studentPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        studentPhone.nextElementSibling.textContent = '請填寫聯絡電話';
+                        studentPhone.nextElementSibling.style.display = 'block';
+                    }
+                } else if (phoneValue.length !== 10 || !/^[0-9]{10}$/.test(phoneValue)) {
+                    e.preventDefault();
+                    hasError = true;
+                    if (!firstErrorField) firstErrorField = studentPhone;
+                    studentPhone.style.borderColor = '#d32f2f';
+                    studentPhone.focus();
+                    if (studentPhone.nextElementSibling && studentPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        studentPhone.nextElementSibling.textContent = '電話號碼必須為10位數字';
+                        studentPhone.nextElementSibling.style.display = 'block';
+                    }
+                    alert('學生聯絡電話必須為10位數字！');
+                    return false;
+                } else {
+                    studentPhone.style.borderColor = '';
+                    if (studentPhone.nextElementSibling && studentPhone.nextElementSibling.classList.contains('phone-hint')) {
+                        studentPhone.nextElementSibling.style.display = 'none';
+                    }
+                }
+            }
+            
+            if (hasError && firstErrorField) {
+                e.preventDefault();
+                firstErrorField.focus();
+                firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+        });
+    }
+});
+
 // 檔案上傳區域互動功能
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('proof_evidence');
     const documentItem = document.querySelector('.document-item');
     
     // 檔案選擇後的視覺反饋
-    fileInput.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            this.style.borderColor = '#28a745';
-            this.style.backgroundColor = '#f8fff9';
-        } else {
-            this.style.borderColor = '#ddd';
-            this.style.backgroundColor = 'white';
-        }
-    });
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                this.style.borderColor = '#28a745';
+                this.style.backgroundColor = '#f8fff9';
+            } else {
+                this.style.borderColor = '#ddd';
+                this.style.backgroundColor = 'white';
+            }
+        });
+    }
 });
 </script>
 
 <style>
+/* 電話號碼錯誤樣式 */
+.phone-error {
+  border-color: #d32f2f !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1) !important;
+}
+
+.phone-hint {
+  display: block;
+  color: #d32f2f;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
 /* 詳細資訊卡片樣式 */
 .detail-card {
   background: #fff;

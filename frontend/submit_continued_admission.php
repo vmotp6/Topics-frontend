@@ -18,7 +18,10 @@ try {
     // 獲取表單數據
     $exam_no = $_POST['exam_no'] ?? '';
     $name = $_POST['name'] ?? $_POST['student_name'] ?? '';
+    $is_foreign_student = $_POST['is_foreign_student'] ?? 'no';
     $id_number = $_POST['id'] ?? '';
+    $nationality = $_POST['nationality'] ?? '';
+    $passport_number = $_POST['passport_number'] ?? '';
     $birth_year = intval($_POST['birth_year'] ?? 0);
     $birth_month = intval($_POST['birth_month'] ?? 0);
     $birth_day = intval($_POST['birth_day'] ?? 0);
@@ -80,9 +83,35 @@ try {
     if (empty($name)) {
         throw new Exception('姓名為必填欄位');
     }
-    if (empty($id_number)) {
-        throw new Exception('身分證字號為必填欄位');
+    
+    // 根據是否外籍生驗證不同的身份識別欄位
+    if ($is_foreign_student === 'yes') {
+        // 外籍生：驗證國籍和護照號碼
+        if (empty($nationality)) {
+            throw new Exception('國籍為必填欄位');
+        }
+        if (empty($passport_number)) {
+            throw new Exception('護照號碼為必填欄位');
+        }
+        if (strlen($passport_number) < 6 || strlen($passport_number) > 20) {
+            throw new Exception('護照號碼長度應為6-20個字符');
+        }
+        // 外籍生使用護照號碼作為唯一識別，將護照號碼存入id_number欄位（或使用passport_number）
+        // 為了兼容現有資料庫結構，我們可以將護照號碼存入id_number欄位，並在資料庫中標記為外籍生
+        $id_number = 'PASSPORT_' . $passport_number; // 加上前綴以區分
+    } else {
+        // 本國籍：驗證身分證字號
+        if (empty($id_number)) {
+            throw new Exception('身分證字號為必填欄位');
+        }
+        if (strlen($id_number) !== 10) {
+            throw new Exception('身分證字號必須為10個字符');
+        }
+        if (!preg_match('/^[A-Za-z][0-9]{9}$/', $id_number)) {
+            throw new Exception('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字');
+        }
     }
+    
     if (empty($mobile) && empty($phone)) {
         throw new Exception('請填寫手機號碼或電話號碼');
     }
@@ -90,14 +119,6 @@ try {
     // 驗證行動電話格式（10個數字）
     if (!empty($mobile) && !preg_match('/^[0-9]{10}$/', $mobile)) {
         throw new Exception('行動電話必須為10個數字');
-    }
-    
-    // 身分證字號格式驗證：第一個是英文，總共10個字符
-    if (strlen($id_number) !== 10) {
-        throw new Exception('身分證字號必須為10個字符');
-    }
-    if (!preg_match('/^[A-Za-z][0-9]{9}$/', $id_number)) {
-        throw new Exception('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字');
     }
     
     // 使用PDO連接資料庫
@@ -164,7 +185,8 @@ try {
     // 將上傳的文件信息轉換為 JSON
     $documents_json = json_encode($uploaded_documents, JSON_UNESCAPED_UNICODE);
     
-    // 檢查是否已存在記錄（根據身分證字號）
+    // 檢查是否已存在記錄（根據身分證字號或護照號碼）
+    // 注意：外籍生的護照號碼會加上PASSPORT_前綴存入id_number欄位
     $check_sql = "SELECT id, name FROM continued_admission WHERE id_number = ?";
     $check_stmt = $pdo->prepare($check_sql);
     $check_stmt->execute([$id_number]);
@@ -172,26 +194,60 @@ try {
     
     if ($existing_record) {
         // 如果已存在記錄，返回錯誤提示
-        throw new Exception('此身分證字號已被使用過，無法重複報名。如有疑問，請聯繫相關單位。');
+        if ($is_foreign_student === 'yes') {
+            throw new Exception('此護照號碼已被使用過，無法重複報名。如有疑問，請聯繫相關單位。');
+        } else {
+            throw new Exception('此身分證字號已被使用過，無法重複報名。如有疑問，請聯繫相關單位。');
+        }
     }
     
-    // 插入新記錄
-    $sql = "INSERT INTO continued_admission (
-        exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
-        school_city, school_name, zip_code, city, district, village, neighbor,
-        road, section, lane, alley, house_no, floor, same_address, contact_address,
-        guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    // 準備外籍生相關數據
+    $is_foreign_int = ($is_foreign_student === 'yes') ? 1 : 0;
     
-    $stmt = $pdo->prepare($sql);
+    // 檢查資料表是否有外籍生相關欄位（動態構建SQL）
+    $columns_check = $pdo->query("SHOW COLUMNS FROM continued_admission LIKE 'is_foreign_student'");
+    $has_foreign_fields = $columns_check->rowCount() > 0;
     
-    // 執行插入
-    $result = $stmt->execute([
-        $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
-        $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
-        $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
-        $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
-    ]);
+    if ($has_foreign_fields) {
+        // 如果資料表有外籍生欄位，使用完整欄位列表
+        $sql = "INSERT INTO continued_admission (
+            exam_no, name, id_number, is_foreign_student, nationality, passport_number,
+            birth_year, birth_month, birth_day, gender, phone, mobile,
+            school_city, school_name, zip_code, city, district, village, neighbor,
+            road, section, lane, alley, house_no, floor, same_address, contact_address,
+            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $pdo->prepare($sql);
+        
+        // 執行插入（包含外籍生欄位）
+        $result = $stmt->execute([
+            $exam_no, $name, $id_number, $is_foreign_int, $nationality, $passport_number,
+            $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
+            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
+            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
+            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+        ]);
+    } else {
+        // 如果資料表沒有外籍生欄位，使用原有欄位列表（向後兼容）
+        // 外籍生的護照號碼會存入id_number欄位（格式：PASSPORT_XXXXX）
+        $sql = "INSERT INTO continued_admission (
+            exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
+            school_city, school_name, zip_code, city, district, village, neighbor,
+            road, section, lane, alley, house_no, floor, same_address, contact_address,
+            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $pdo->prepare($sql);
+        
+        // 執行插入（不包含外籍生欄位，但護照號碼已存入id_number）
+        $result = $stmt->execute([
+            $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
+            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
+            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
+            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+        ]);
+    }
     
     if ($result) {
         $insert_id = $pdo->lastInsertId();
