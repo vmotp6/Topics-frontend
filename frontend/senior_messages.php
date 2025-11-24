@@ -47,11 +47,18 @@ if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
     $permission_result = ['has_permission' => false, 'error' => '請先登入'];
 }
 
+// 獲取排序參數（預設為由新到舊）
+$sort_order = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
+$order_by = ($sort_order === 'oldest') ? 'ASC' : 'DESC';
+
+// 獲取分類篩選參數
+$filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+
 // 獲取留言資料
 $messages = [];
 try {
     // 確保 message_type 不為 NULL，如果為 NULL 則設為 '其他'
-    $stmt = $pdo->prepare("SELECT *, COALESCE(message_type, '其他') as message_type FROM senior_messages WHERE is_published = 1 ORDER BY created_at DESC");
+    $stmt = $pdo->prepare("SELECT *, COALESCE(message_type, '其他') as message_type FROM senior_messages WHERE is_published = 1 ORDER BY created_at $order_by");
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -407,18 +414,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             position: relative;
             flex: 1;
             text-align: center;
+            display: block;
+            text-decoration: none;
         }
         
         .filter-tab:hover {
             background: rgba(29, 155, 240, 0.1);
             color: var(--accent-color);
             transform: translateY(-1px);
+            text-decoration: none;
         }
         
         .filter-tab.active {
             background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+            text-decoration: none;
         }
         
         .messages-feed {
@@ -783,6 +794,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 font-size: 0.9rem;
             }
             
+            .sort-controls {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                margin-top: 15px;
+            }
+            
+            .sort-controls .sort-btn {
+                width: 100%;
+                text-align: center;
+            }
+            
             .messages-feed {
                 gap: 15px;
             }
@@ -823,6 +846,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 padding: 8px 14px;
                 font-size: 0.8rem;
                 white-space: nowrap;
+            }
+            
+            .sort-controls {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                margin-top: 15px;
+            }
+            
+            .sort-controls .sort-btn {
+                width: 100%;
+                text-align: center;
             }
             
             .message-card {
@@ -871,14 +906,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             </div>
         </div>
         
-        <div class="filter-tabs">
-            <div class="filter-tab active" data-type="all">全部留言</div>
-            <div class="filter-tab" data-type="經驗分享">經驗分享</div>
-            <div class="filter-tab" data-type="學習建議">學習建議</div>
-            <div class="filter-tab" data-type="生活指南">生活指南</div>
-            <div class="filter-tab" data-type="就業資訊">就業資訊</div>
-            <div class="filter-tab" data-type="推薦餐廳">推薦餐廳</div>
-            <div class="filter-tab" data-type="其他">其他</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 15px; flex-wrap: wrap;">
+            <div class="filter-tabs" style="flex: 1; min-width: 0;">
+                <a href="?filter=all&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === 'all' ? 'active' : ''; ?>" data-type="all" style="text-decoration: none; color: inherit;">全部留言</a>
+                <a href="?filter=經驗分享&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '經驗分享' ? 'active' : ''; ?>" data-type="經驗分享" style="text-decoration: none; color: inherit;">經驗分享</a>
+                <a href="?filter=學習建議&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '學習建議' ? 'active' : ''; ?>" data-type="學習建議" style="text-decoration: none; color: inherit;">學習建議</a>
+                <a href="?filter=生活指南&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '生活指南' ? 'active' : ''; ?>" data-type="生活指南" style="text-decoration: none; color: inherit;">生活指南</a>
+                <a href="?filter=就業資訊&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '就業資訊' ? 'active' : ''; ?>" data-type="就業資訊" style="text-decoration: none; color: inherit;">就業資訊</a>
+                <a href="?filter=推薦餐廳&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '推薦餐廳' ? 'active' : ''; ?>" data-type="推薦餐廳" style="text-decoration: none; color: inherit;">推薦餐廳</a>
+                <a href="?filter=其他&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '其他' ? 'active' : ''; ?>" data-type="其他" style="text-decoration: none; color: inherit;">其他</a>
+            </div>
+            
+            <div class="sort-controls" style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                <span style="color: var(--secondary-text); font-size: 0.9rem; font-weight: 500;">排序：</span>
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=newest" class="sort-btn <?php echo $sort_order === 'newest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'newest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'newest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    由新到舊
+                </a>
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=oldest" class="sort-btn <?php echo $sort_order === 'oldest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'oldest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'oldest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    由舊到新
+                </a>
+            </div>
         </div>
         
         <?php if (isset($error_message)): ?>
@@ -998,54 +1045,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
     
     <script>
-        // 篩選功能
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                // 更新活動狀態
-                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // 篩選留言
-                const type = this.getAttribute('data-type');
-                const cards = document.querySelectorAll('.message-card');
-                let visibleCount = 0;
-                
-                cards.forEach(card => {
-                    const cardType = card.getAttribute('data-type') || '其他';
-                    if (type === 'all' || cardType === type) {
-                        // 移除隱藏樣式，恢復正常顯示
-                        card.style.display = '';
-                        card.style.visibility = 'visible';
-                        card.style.height = '';
-                        card.style.padding = '';
-                        card.style.margin = '';
-                        visibleCount++;
-                    } else {
-                        // 完全隱藏卡片
-                        card.style.display = 'none';
-                        card.style.visibility = 'hidden';
-                    }
-                });
-                
-                // 如果沒有可見的留言，顯示提示訊息
-                const feed = document.getElementById('messagesFeed');
-                let noMessagesMsg = document.getElementById('noMessagesMsg');
-                
-                if (visibleCount === 0) {
-                    if (!noMessagesMsg) {
-                        noMessagesMsg = document.createElement('div');
-                        noMessagesMsg.id = 'noMessagesMsg';
-                        noMessagesMsg.className = 'no-messages';
-                        noMessagesMsg.innerHTML = '<h3>📝 暫無留言</h3><p>此分類目前還沒有留言。</p>';
-                        feed.appendChild(noMessagesMsg);
-                    }
-                    noMessagesMsg.style.display = 'block';
+        // 頁面載入時根據 URL 參數篩選留言
+        document.addEventListener('DOMContentLoaded', function() {
+            const filterType = '<?php echo htmlspecialchars($filter_type, ENT_QUOTES, 'UTF-8'); ?>';
+            const cards = document.querySelectorAll('.message-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                const cardType = card.getAttribute('data-type') || '其他';
+                if (filterType === 'all' || cardType === filterType) {
+                    card.style.display = '';
+                    card.style.visibility = 'visible';
+                    visibleCount++;
                 } else {
-                    if (noMessagesMsg) {
-                        noMessagesMsg.style.display = 'none';
-                    }
+                    card.style.display = 'none';
+                    card.style.visibility = 'hidden';
                 }
             });
+            
+            // 如果沒有可見的留言，顯示提示訊息
+            const feed = document.getElementById('messagesFeed');
+            let noMessagesMsg = document.getElementById('noMessagesMsg');
+            
+            if (visibleCount === 0 && feed) {
+                if (!noMessagesMsg) {
+                    noMessagesMsg = document.createElement('div');
+                    noMessagesMsg.id = 'noMessagesMsg';
+                    noMessagesMsg.className = 'no-messages';
+                    noMessagesMsg.innerHTML = '<h3>📝 暫無留言</h3><p>此分類目前還沒有留言。</p>';
+                    feed.appendChild(noMessagesMsg);
+                }
+                noMessagesMsg.style.display = 'block';
+            } else {
+                if (noMessagesMsg) {
+                    noMessagesMsg.style.display = 'none';
+                }
+            }
         });
         
         // 展開/收縮內容

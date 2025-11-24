@@ -48,8 +48,9 @@ try {
 
 $permission_result = $auth->checkPermission($user_email);
 
-// 從資料庫獲取用戶姓名 - 使用與 senior_messages.php 相同的連接方式
+// 從資料庫獲取用戶姓名和科系 - 使用與 senior_messages.php 相同的連接方式
 $user_name = '';
+$user_department = '';
 try {
     // 使用直接 PDO 連接（與 senior_messages.php 一致）
     $host = 'localhost';
@@ -60,31 +61,92 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // 優先從 student 表獲取姓名（因為學生資料主要在 student 表）
+    // 優先從 student_normalized 表獲取姓名和科系（正規化後的資料）
+    // 先嘗試用 username 查詢
     $stmt = $pdo->prepare("
-        SELECT s.name 
-        FROM student s
-        JOIN user u ON s.user_id = u.id
-        WHERE u.username = ?
+        SELECT sn.name, d.name as department_name
+        FROM student_normalized sn
+        JOIN user u ON sn.user_id = u.id
+        LEFT JOIN departments d ON sn.department_id = d.id
+        WHERE u.username = ? OR u.email = ?
     ");
-    $stmt->execute([$user_email]);
+    $stmt->execute([$user_email, $user_email]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    if ($result && !empty($result['name'])) {
-        $user_name = $result['name'];
-    } else {
-        // 如果 student 表中沒有，嘗試從 user 表獲取（備用方案）
-        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ?");
-        $stmt->execute([$user_email]);
+    if ($result) {
+        if (!empty($result['name'])) {
+            $user_name = $result['name'];
+        }
+        if (!empty($result['department_name'])) {
+            $user_department = $result['department_name'];
+        }
+    }
+    
+    // 如果還是沒有找到，嘗試用 email 查詢 user 表，然後再查 student_normalized
+    if (empty($user_name) || empty($user_department)) {
+        // 先從 user 表獲取 user_id
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ? OR email = ?");
+        $stmt->execute([$user_email, $user_email]);
+        $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user_result && !empty($user_result['id'])) {
+            $user_id = $user_result['id'];
+            
+            // 用 user_id 查詢 student_normalized
+            $stmt = $pdo->prepare("
+                SELECT sn.name, d.name as department_name
+                FROM student_normalized sn
+                LEFT JOIN departments d ON sn.department_id = d.id
+                WHERE sn.user_id = ?
+            ");
+            $stmt->execute([$user_id]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result) {
+                if (empty($user_name) && !empty($result['name'])) {
+                    $user_name = $result['name'];
+                }
+                if (empty($user_department) && !empty($result['department_name'])) {
+                    $user_department = $result['department_name'];
+                }
+            }
+        }
+    }
+    
+    // 如果 student_normalized 表中沒有，嘗試從 student 表獲取（備用方案）
+    if (empty($user_name) || empty($user_department)) {
+        $stmt = $pdo->prepare("
+            SELECT s.name, s.department 
+            FROM student s
+            JOIN user u ON s.user_id = u.id
+            WHERE u.username = ? OR u.email = ?
+        ");
+        $stmt->execute([$user_email, $user_email]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result) {
+            if (empty($user_name) && !empty($result['name'])) {
+                $user_name = $result['name'];
+            }
+            if (empty($user_department) && !empty($result['department'])) {
+                $user_department = $result['department'];
+            }
+        }
+    }
+    
+    // 如果還是沒有姓名，嘗試從 user 表獲取（最後備用方案）
+    if (empty($user_name)) {
+        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ? OR email = ?");
+        $stmt->execute([$user_email, $user_email]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($result && !empty($result['name'])) {
             $user_name = $result['name'];
         }
     }
 } catch (PDOException $e) {
-    error_log("獲取用戶姓名錯誤: " . $e->getMessage());
+    error_log("獲取用戶資料錯誤: " . $e->getMessage());
 } catch (Exception $e) {
-    error_log("獲取用戶姓名錯誤: " . $e->getMessage());
+    error_log("獲取用戶資料錯誤: " . $e->getMessage());
 }
 
 // 如果沒有權限，顯示錯誤頁面
@@ -106,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     $title = trim($_POST['title'] ?? '');
     $content = trim($_POST['content'] ?? '');
     $author_name = $user_name; // 使用從資料庫獲取的姓名
-    $author_department = trim($_POST['author_department'] ?? '');
+    $author_department = $user_department; // 使用從資料庫獲取的科系（完全鎖定，不允許手動修改）
     $author_contact = trim($_POST['author_contact'] ?? '');
     $message_type = $_POST['message_type'] ?? '經驗分享';
     
@@ -187,8 +249,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             $success_message = $result['message'];
             // 清空表單
             $_POST = [];
+            // 重定向到留言板（可選）
+            // header("Location: senior_messages.php?success=1");
+            // exit;
         } else {
             $form_error = $result['error'];
+            // 記錄詳細錯誤信息以便調試
+            error_log("發布留言失敗: " . ($result['error'] ?? '未知錯誤'));
         }
     }
 }
@@ -649,13 +716,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                             <label>餐廳地址 <span class="required">*</span></label>
                             <input type="text" id="restaurant_address" name="restaurant_address" 
                                    value="<?php echo htmlspecialchars($_POST['restaurant_address'] ?? ''); ?>" 
-                                   placeholder="選擇餐廳後自動填入" required>
+                                   placeholder="選擇餐廳後自動填入">
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <div class="form-group">
                                 <label for="restaurant_rating">餐廳評分 <span class="required">*</span></label>
-                                <select id="restaurant_rating" name="restaurant_rating" required>
+                                <select id="restaurant_rating" name="restaurant_rating">
                                     <option value="">請選擇</option>
                                     <option value="5" <?php echo ($_POST['restaurant_rating'] ?? '') === '5' ? 'selected' : ''; ?>>5 星 - 非常推薦</option>
                                     <option value="4" <?php echo ($_POST['restaurant_rating'] ?? '') === '4' ? 'selected' : ''; ?>>4 星 - 推薦</option>
@@ -708,7 +775,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     
                     <div class="form-group">
                         <label for="author_department">科系</label>
-                        <input type="text" id="author_department" name="author_department" value="<?php echo htmlspecialchars($_POST['author_department'] ?? ''); ?>" placeholder="例如：資訊管理系">
+                        <input type="text" id="author_department" name="author_department" value="<?php echo htmlspecialchars($user_department); ?>" placeholder="例如：資訊管理系" readonly style="background-color: var(--border-color); cursor: not-allowed;">
+                        <small style="color: var(--secondary-text); font-size: 0.9rem;">科系已從您的帳號資料中自動填入，無法修改</small>
                     </div>
                     
                     <div class="form-group">
@@ -755,27 +823,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         });
         
         // 表單驗證
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const title = document.getElementById('title').value.trim();
-            const content = document.getElementById('content').value.trim();
-            
-            if (!title || !content) {
-                e.preventDefault();
-                alert('請填寫標題和留言內容');
-                return false;
-            }
-            
-            if (content.length < 20) {
-                e.preventDefault();
-                alert('留言內容至少需要20個字');
-                return false;
-            }
-            
-            // 提交成功後清除草稿
-            if (draftSystem) {
-                draftSystem.clearDraft();
-            }
-        });
+        const form = document.querySelector('form[method="POST"]');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                const title = document.getElementById('title');
+                const content = document.getElementById('content');
+                const messageType = document.getElementById('message_type');
+                
+                if (!title || !content || !messageType) {
+                    e.preventDefault();
+                    alert('表單欄位載入錯誤，請重新整理頁面');
+                    return false;
+                }
+                
+                const titleValue = title.value.trim();
+                const contentValue = content.value.trim();
+                const messageTypeValue = messageType.value;
+                
+                if (!titleValue || !contentValue) {
+                    e.preventDefault();
+                    alert('請填寫標題和留言內容');
+                    return false;
+                }
+                
+                if (contentValue.length < 20) {
+                    e.preventDefault();
+                    alert('留言內容至少需要20個字（目前：' + contentValue.length + '字）');
+                    return false;
+                }
+                
+                // 如果是推薦餐廳類型，檢查餐廳相關欄位
+                if (messageTypeValue === '推薦餐廳') {
+                    const restaurantName = document.getElementById('restaurant_name');
+                    const restaurantAddress = document.getElementById('restaurant_address');
+                    const restaurantRating = document.getElementById('restaurant_rating');
+                    
+                    if (!restaurantName || !restaurantAddress || !restaurantRating) {
+                        e.preventDefault();
+                        alert('餐廳欄位載入錯誤，請重新整理頁面');
+                        return false;
+                    }
+                    
+                    if (!restaurantName.value.trim()) {
+                        e.preventDefault();
+                        alert('請填寫餐廳名稱');
+                        restaurantName.focus();
+                        return false;
+                    }
+                    
+                    if (!restaurantAddress.value.trim()) {
+                        e.preventDefault();
+                        alert('請填寫餐廳地址');
+                        restaurantAddress.focus();
+                        return false;
+                    }
+                    
+                    if (!restaurantRating.value) {
+                        e.preventDefault();
+                        alert('請選擇餐廳評分');
+                        restaurantRating.focus();
+                        return false;
+                    }
+                }
+                
+                // 提交成功後清除草稿
+                if (draftSystem) {
+                    draftSystem.clearDraft();
+                }
+            });
+        }
         
         // 字數統計
         const contentTextarea = document.getElementById('content');
@@ -803,10 +919,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         function toggleRestaurantFields() {
             const messageType = document.getElementById('message_type').value;
             const restaurantFields = document.getElementById('restaurant-fields');
+            const restaurantAddress = document.getElementById('restaurant_address');
+            const restaurantRating = document.getElementById('restaurant_rating');
+            const restaurantName = document.getElementById('restaurant_name');
+            
             if (messageType === '推薦餐廳') {
                 restaurantFields.style.display = 'block';
+                // 顯示時設置為必填
+                if (restaurantAddress) restaurantAddress.setAttribute('required', 'required');
+                if (restaurantRating) restaurantRating.setAttribute('required', 'required');
+                if (restaurantName) restaurantName.setAttribute('required', 'required');
             } else {
                 restaurantFields.style.display = 'none';
+                // 隱藏時移除必填屬性，避免瀏覽器驗證錯誤
+                if (restaurantAddress) restaurantAddress.removeAttribute('required');
+                if (restaurantRating) restaurantRating.removeAttribute('required');
+                if (restaurantName) restaurantName.removeAttribute('required');
             }
         }
         
