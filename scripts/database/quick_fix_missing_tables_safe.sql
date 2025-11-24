@@ -25,7 +25,6 @@ INSERT IGNORE INTO role_types (code, name) VALUES
 ('STUDENT', '學生'),
 ('ADMIN', '管理員'),
 ('STAFF', '行政人員'),
-('VENDOR', '廠商'),
 ('MEMBER', '成員');
 
 -- =====================================================

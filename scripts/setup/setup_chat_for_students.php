@@ -23,7 +23,7 @@ try {
         
         if (strpos($columnType, '學生') === false) {
             // 更新 user 表，添加學生角色
-            $sql = "ALTER TABLE user MODIFY COLUMN role ENUM('老師', '學校行政人員', '學生', '廠商') NOT NULL";
+            $sql = "ALTER TABLE user MODIFY COLUMN role ENUM('老師', '學校行政人員', '學生') NOT NULL";
             $pdo->exec($sql);
             echo "✅ 用戶表角色欄位已更新，支援學生角色\n";
         } else {
