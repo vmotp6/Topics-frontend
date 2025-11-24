@@ -805,15 +805,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 showStatus: true
             });
             
-            // 添加草稿管理按鈕
+            // 添加清除草稿按鈕
             const form = document.querySelector('form[method="POST"]');
             if (form) {
                 const draftActions = document.createElement('div');
                 draftActions.style.cssText = 'margin-bottom: 20px; padding: 15px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 10px; display: flex; gap: 10px; justify-content: flex-end;';
                 draftActions.innerHTML = `
-                    <button type="button" onclick="draftSystem.loadDraft(true)" style="background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
-                        <i class="fas fa-download"></i> 載入草稿
-                    </button>
                     <button type="button" onclick="if(confirm('確定要清除草稿嗎？')) { draftSystem.clearDraft(); form.reset(); }" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
                         <i class="fas fa-trash"></i> 清除草稿
                     </button>
