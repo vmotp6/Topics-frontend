@@ -32,6 +32,10 @@ require_once 'config.php';
                     <i class="fas fa-route"></i>
                     <span>規劃路線</span>
                 </button>
+                <button id="show-campus-map-btn" class="floating-btn" title="校園平面圖" onclick="console.log('按鈕 onclick 被觸發'); if(window.campusMap){console.log('調用 showCampusMap'); window.campusMap.showCampusMap();} else {console.error('CampusMap 實例不存在，window.campusMap:', window.campusMap);}">
+                    <i class="fas fa-map"></i>
+                    <span>校園平面圖</span>
+                </button>
             </div>
 
             <!-- 地圖容器 - 全寬顯示，類似 Google Maps -->
@@ -228,6 +232,22 @@ require_once 'config.php';
         </div>
     </div>
 
+    <!-- 校園平面圖模態框 -->
+    <div id="campus-map-modal" class="campus-map-modal">
+        <div class="modal-overlay"></div>
+        <img id="campus-map-image" src="assets/images/campus_map.png" alt="校園平面圖" 
+             onerror="console.error('圖片載入失敗:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';" />
+        <div id="image-error-message" style="display: none; position: relative; z-index: 10001; background: white; padding: 40px; border-radius: 8px; text-align: center; max-width: 500px;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #f39c12; margin-bottom: 20px;"></i>
+            <h3>圖片載入失敗</h3>
+            <p>請確認圖片文件已放置在：<br><code>frontend/assets/images/campus_map.png</code></p>
+            <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">或將圖片路徑更新為正確的位置</p>
+        </div>
+        <button id="close-campus-map-modal" class="close-modal-btn">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
     <?php include 'share/footer.php'; ?>
 
     <!-- Google Maps API -->
@@ -277,5 +297,19 @@ require_once 'config.php';
         echo htmlspecialchars($apiKey, ENT_QUOTES, 'UTF-8');
     ?>&libraries=places&language=zh-TW&region=TW&callback=initMap" async defer></script>
     <script src="assets/js/maps.js"></script>
+    <script>
+        // 確保在 DOM 載入後檢查按鈕
+        document.addEventListener('DOMContentLoaded', function() {
+            const btn = document.getElementById('show-campus-map-btn');
+            console.log('DOM 載入完成，檢查校園平面圖按鈕:', btn ? '找到' : '未找到');
+            
+            // 如果 CampusMap 實例已創建，確保事件監聽器已設置
+            if (typeof campusMap !== 'undefined' && campusMap) {
+                console.log('CampusMap 實例存在');
+            } else {
+                console.warn('CampusMap 實例尚未創建');
+            }
+        });
+    </script>
 </body>
 </html>

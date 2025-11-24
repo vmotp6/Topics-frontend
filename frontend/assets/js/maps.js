@@ -34,11 +34,15 @@ class CampusMap {
 
     async init() {
         try {
+            console.log('CampusMap init() 開始執行');
             // 初始化地圖
             this.initMap();
             
-            // 設定事件監聽器
-            this.setupEventListeners();
+            // 延遲設置事件監聽器，確保 DOM 完全準備好
+            setTimeout(() => {
+                console.log('準備設置事件監聽器，readyState:', document.readyState);
+                this.setupEventListeners();
+            }, 100);
             
             // 初始化側邊面板
             this.initSidePanel();
@@ -179,6 +183,13 @@ class CampusMap {
 
 
     setupEventListeners() {
+        console.log('setupEventListeners 被調用');
+        console.log('檢查按鈕是否存在:', {
+            'show-restaurants-btn': !!document.getElementById('show-restaurants-btn'),
+            'show-campus-info-btn': !!document.getElementById('show-campus-info-btn'),
+            'get-directions-btn': !!document.getElementById('get-directions-btn'),
+            'show-campus-map-btn': !!document.getElementById('show-campus-map-btn')
+        });
 
         // 顯示附近餐廳按鈕
         const showRestaurantsBtn = document.getElementById('show-restaurants-btn');
@@ -221,6 +232,47 @@ class CampusMap {
                 this.toggleSidePanel();
             });
         }
+
+        // 校園平面圖按鈕
+        const showCampusMapBtn = document.getElementById('show-campus-map-btn');
+        if (showCampusMapBtn) {
+            console.log('校園平面圖按鈕找到，設置事件監聽器');
+            showCampusMapBtn.addEventListener('click', (e) => {
+                console.log('校園平面圖按鈕被點擊');
+                e.preventDefault();
+                e.stopPropagation();
+                this.showCampusMap();
+                this.updateActiveButton(showCampusMapBtn);
+            });
+        } else {
+            console.warn('校園平面圖按鈕未找到！');
+        }
+
+        // 關閉校園平面圖模態框
+        const closeCampusMapModal = document.getElementById('close-campus-map-modal');
+        if (closeCampusMapModal) {
+            closeCampusMapModal.addEventListener('click', () => {
+                this.closeCampusMapModal();
+            });
+        }
+
+        // 點擊模態框背景關閉
+        const campusMapModal = document.getElementById('campus-map-modal');
+        if (campusMapModal) {
+            const modalOverlay = campusMapModal.querySelector('.modal-overlay');
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', () => {
+                    this.closeCampusMapModal();
+                });
+            }
+        }
+
+        // ESC 鍵關閉模態框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeCampusMapModal();
+            }
+        });
     }
 
 
@@ -877,6 +929,28 @@ class CampusMap {
         // 移動地圖到校園位置
         this.map.setCenter({ lat: this.campusLocation.lat, lng: this.campusLocation.lng });
         this.map.setZoom(16);
+    }
+
+    showCampusMap() {
+        // 顯示校園平面圖模態框
+        console.log('showCampusMap 方法被調用');
+        const modal = document.getElementById('campus-map-modal');
+        if (modal) {
+            console.log('模態框元素找到，添加 visible 類');
+            modal.classList.add('visible');
+            document.body.style.overflow = 'hidden'; // 防止背景滾動
+        } else {
+            console.error('模態框元素未找到！');
+        }
+    }
+
+    closeCampusMapModal() {
+        // 關閉校園平面圖模態框
+        const modal = document.getElementById('campus-map-modal');
+        if (modal) {
+            modal.classList.remove('visible');
+            document.body.style.overflow = ''; // 恢復背景滾動
+        }
     }
 
     promptForDirections() {
@@ -1920,6 +1994,7 @@ class CampusMap {
 
 // 全域變數，供 HTML 中的 onclick 事件使用
 let campusMap;
+window.campusMap = null; // 確保可以在全域訪問
 
 // 全域初始化函數，供 Google Maps API 回調使用
 function initMap() {
@@ -1938,6 +2013,7 @@ function initMap() {
         console.log('開始創建 CampusMap 實例');
         try {
             campusMap = new CampusMap();
+            window.campusMap = campusMap; // 設置到 window 物件上
             console.log('CampusMap 實例創建成功');
             
             // 檢查 URL 參數，如果有餐廳信息，則在地圖上標示
