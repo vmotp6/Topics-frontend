@@ -32,6 +32,7 @@ try {
     // 獲取GET參數
     $from = $_GET['from'] ?? '';
     $to = $_GET['to'] ?? '';
+    $lastMessageId = isset($_GET['lastMessageId']) ? (int)$_GET['lastMessageId'] : 0;
     
     if (empty($from) || empty($to)) {
         echo json_encode(['error' => '缺少必要參數']);
@@ -59,15 +60,30 @@ try {
         }
         
         // 使用 user_id 查詢
-        $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
-                FROM private_chat_history pch
-                LEFT JOIN user u1 ON pch.from_user_id = u1.id
-                LEFT JOIN user u2 ON pch.to_user_id = u2.id
-                WHERE (pch.from_user_id = ? AND pch.to_user_id = ?) 
-                OR (pch.from_user_id = ? AND pch.to_user_id = ?) 
-                ORDER BY pch.timestamp ASC";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId]);
+        if ($lastMessageId > 0) {
+            // 只獲取比 lastMessageId 更新的消息
+            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                    FROM private_chat_history pch
+                    LEFT JOIN user u1 ON pch.from_user_id = u1.id
+                    LEFT JOIN user u2 ON pch.to_user_id = u2.id
+                    WHERE ((pch.from_user_id = ? AND pch.to_user_id = ?) 
+                    OR (pch.from_user_id = ? AND pch.to_user_id = ?))
+                    AND pch.id > ?
+                    ORDER BY pch.timestamp ASC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId, $lastMessageId]);
+        } else {
+            // 獲取所有消息
+            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                    FROM private_chat_history pch
+                    LEFT JOIN user u1 ON pch.from_user_id = u1.id
+                    LEFT JOIN user u2 ON pch.to_user_id = u2.id
+                    WHERE (pch.from_user_id = ? AND pch.to_user_id = ?) 
+                    OR (pch.from_user_id = ? AND pch.to_user_id = ?) 
+                    ORDER BY pch.timestamp ASC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId]);
+        }
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // 轉換為兼容格式
@@ -79,12 +95,24 @@ try {
         
     } elseif ($useUsername) {
         // 使用舊版本：直接使用 username
-        $sql = "SELECT * FROM private_chat_history 
-                WHERE (from_user = ? AND to_user = ?) 
-                OR (from_user = ? AND to_user = ?) 
-                ORDER BY timestamp ASC";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$from, $to, $to, $from]);
+        if ($lastMessageId > 0) {
+            // 只獲取比 lastMessageId 更新的消息
+            $sql = "SELECT * FROM private_chat_history 
+                    WHERE ((from_user = ? AND to_user = ?) 
+                    OR (from_user = ? AND to_user = ?))
+                    AND id > ?
+                    ORDER BY timestamp ASC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$from, $to, $to, $from, $lastMessageId]);
+        } else {
+            // 獲取所有消息
+            $sql = "SELECT * FROM private_chat_history 
+                    WHERE (from_user = ? AND to_user = ?) 
+                    OR (from_user = ? AND to_user = ?) 
+                    ORDER BY timestamp ASC";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$from, $to, $to, $from]);
+        }
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
         echo json_encode([

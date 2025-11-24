@@ -47,11 +47,62 @@ if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
     $permission_result = ['has_permission' => false, 'error' => '請先登入'];
 }
 
+// 獲取排序參數（預設為由新到舊）
+$sort_order = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
+$order_by = ($sort_order === 'oldest') ? 'ASC' : 'DESC';
+
+// 獲取分類篩選參數
+$filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+
+// 分頁設定
+$per_page = 15; // 每頁顯示15則留言
+$current_page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1; // 當前頁碼，最小為1
+$offset = ($current_page - 1) * $per_page; // 計算偏移量
+
 // 獲取留言資料
 $messages = [];
+$total_messages = 0;
+$total_pages = 0;
+
 try {
-    // 確保 message_type 不為 NULL，如果為 NULL 則設為 '其他'
-    $stmt = $pdo->prepare("SELECT *, COALESCE(message_type, '其他') as message_type FROM senior_messages WHERE is_published = 1 ORDER BY created_at DESC");
+    // 先計算總留言數（根據篩選條件）
+    $count_sql = "SELECT COUNT(*) as total FROM senior_messages WHERE is_published = 1";
+    if ($filter_type !== 'all') {
+        $count_sql .= " AND COALESCE(message_type, '其他') = :filter_type";
+    }
+    
+    $stmt = $pdo->prepare($count_sql);
+    if ($filter_type !== 'all') {
+        $stmt->bindValue(':filter_type', $filter_type, PDO::PARAM_STR);
+    }
+    $stmt->execute();
+    $total_result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $total_messages = $total_result['total'] ?? 0;
+    $total_pages = ceil($total_messages / $per_page);
+    
+    // 確保當前頁碼不超過總頁數
+    if ($current_page > $total_pages && $total_pages > 0) {
+        $current_page = $total_pages;
+        $offset = ($current_page - 1) * $per_page;
+    }
+    
+    // 獲取當前頁的留言資料
+    $sql = "SELECT *, COALESCE(message_type, '其他') as message_type 
+            FROM senior_messages 
+            WHERE is_published = 1";
+    
+    if ($filter_type !== 'all') {
+        $sql .= " AND COALESCE(message_type, '其他') = :filter_type";
+    }
+    
+    $sql .= " ORDER BY created_at $order_by LIMIT :limit OFFSET :offset";
+    
+    $stmt = $pdo->prepare($sql);
+    if ($filter_type !== 'all') {
+        $stmt->bindValue(':filter_type', $filter_type, PDO::PARAM_STR);
+    }
+    $stmt->bindValue(':limit', $per_page, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -407,18 +458,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             position: relative;
             flex: 1;
             text-align: center;
+            display: block;
+            text-decoration: none;
         }
         
         .filter-tab:hover {
             background: rgba(29, 155, 240, 0.1);
             color: var(--accent-color);
             transform: translateY(-1px);
+            text-decoration: none;
         }
         
         .filter-tab.active {
             background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+            text-decoration: none;
         }
         
         .messages-feed {
@@ -783,6 +838,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 font-size: 0.9rem;
             }
             
+            .sort-controls {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                margin-top: 15px;
+            }
+            
+            .sort-controls .sort-btn {
+                width: 100%;
+                text-align: center;
+            }
+            
             .messages-feed {
                 gap: 15px;
             }
@@ -825,6 +892,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 white-space: nowrap;
             }
             
+            .sort-controls {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                margin-top: 15px;
+            }
+            
+            .sort-controls .sort-btn {
+                width: 100%;
+                text-align: center;
+            }
+            
             .message-card {
                 padding: 15px;
             }
@@ -837,6 +916,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 width: 30px;
                 height: 30px;
                 font-size: 0.8rem;
+            }
+        }
+        
+        /* 分頁器樣式 */
+        .pagination-container {
+            margin-top: 30px;
+            padding: 20px 0;
+        }
+        
+        .pagination-btn {
+            padding: 10px 16px;
+            background: var(--hover-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-color);
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination-btn:hover:not(.disabled) {
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            color: white;
+            border-color: transparent;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(29, 155, 240, 0.3);
+        }
+        
+        .pagination-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination-number {
+            padding: 8px 12px;
+            background: var(--hover-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            text-decoration: none;
+            color: var(--text-color);
+            font-weight: 500;
+            min-width: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination-number:hover {
+            background: rgba(29, 155, 240, 0.1);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+        
+        .pagination-number.active {
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            border-color: transparent;
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+        }
+        
+        .pagination-info {
+            color: var(--secondary-text);
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .pagination-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .pagination-numbers {
+                order: -1;
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .pagination-info {
+                width: 100%;
+                text-align: center;
+                margin-left: 0 !important;
             }
         }
     </style>
@@ -871,14 +1031,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             </div>
         </div>
         
-        <div class="filter-tabs">
-            <div class="filter-tab active" data-type="all">全部留言</div>
-            <div class="filter-tab" data-type="經驗分享">經驗分享</div>
-            <div class="filter-tab" data-type="學習建議">學習建議</div>
-            <div class="filter-tab" data-type="生活指南">生活指南</div>
-            <div class="filter-tab" data-type="就業資訊">就業資訊</div>
-            <div class="filter-tab" data-type="推薦餐廳">推薦餐廳</div>
-            <div class="filter-tab" data-type="其他">其他</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 15px; flex-wrap: wrap;">
+            <div class="filter-tabs" style="flex: 1; min-width: 0;">
+                <a href="?filter=all&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === 'all' ? 'active' : ''; ?>" data-type="all" style="text-decoration: none; color: inherit;">全部留言</a>
+                <a href="?filter=經驗分享&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '經驗分享' ? 'active' : ''; ?>" data-type="經驗分享" style="text-decoration: none; color: inherit;">經驗分享</a>
+                <a href="?filter=學習建議&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '學習建議' ? 'active' : ''; ?>" data-type="學習建議" style="text-decoration: none; color: inherit;">學習建議</a>
+                <a href="?filter=生活指南&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '生活指南' ? 'active' : ''; ?>" data-type="生活指南" style="text-decoration: none; color: inherit;">生活指南</a>
+                <a href="?filter=就業資訊&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '就業資訊' ? 'active' : ''; ?>" data-type="就業資訊" style="text-decoration: none; color: inherit;">就業資訊</a>
+                <a href="?filter=推薦餐廳&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '推薦餐廳' ? 'active' : ''; ?>" data-type="推薦餐廳" style="text-decoration: none; color: inherit;">推薦餐廳</a>
+                <a href="?filter=其他&sort=<?php echo $sort_order; ?>" class="filter-tab <?php echo $filter_type === '其他' ? 'active' : ''; ?>" data-type="其他" style="text-decoration: none; color: inherit;">其他</a>
+            </div>
+            
+            <div class="sort-controls" style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                <span style="color: var(--secondary-text); font-size: 0.9rem; font-weight: 500;">排序：</span>
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=newest" class="sort-btn <?php echo $sort_order === 'newest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'newest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'newest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    由新到舊
+                </a>
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=oldest" class="sort-btn <?php echo $sort_order === 'oldest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'oldest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'oldest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    由舊到新
+                </a>
+            </div>
         </div>
         
         <?php if (isset($error_message)): ?>
@@ -994,59 +1166,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                 <?php endforeach; ?>
             </div>
+            
+            <!-- 分頁器 -->
+            <?php if ($total_pages > 1): ?>
+                <div class="pagination-container" style="margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <?php
+                    // 構建基礎 URL（保留排序和篩選參數）
+                    $base_url = "?filter=" . urlencode($filter_type) . "&sort=" . urlencode($sort_order);
+                    
+                    // 上一頁按鈕
+                    if ($current_page > 1):
+                    ?>
+                        <a href="<?php echo $base_url; ?>&page=<?php echo $current_page - 1; ?>" class="pagination-btn" style="padding: 10px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; color: var(--text-color); font-weight: 600; transition: all 0.3s ease;">
+                            ← 上一頁
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-btn disabled" style="padding: 10px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--secondary-text); opacity: 0.5; cursor: not-allowed;">
+                            ← 上一頁
+                        </span>
+                    <?php endif; ?>
+                    
+                    <!-- 頁碼 -->
+                    <div class="pagination-numbers" style="display: flex; gap: 5px; align-items: center;">
+                        <?php
+                        // 計算顯示的頁碼範圍
+                        $start_page = max(1, $current_page - 2);
+                        $end_page = min($total_pages, $current_page + 2);
+                        
+                        // 如果當前頁接近開頭，顯示更多後面的頁碼
+                        if ($current_page <= 3) {
+                            $end_page = min($total_pages, 5);
+                        }
+                        
+                        // 如果當前頁接近結尾，顯示更多前面的頁碼
+                        if ($current_page >= $total_pages - 2) {
+                            $start_page = max(1, $total_pages - 4);
+                        }
+                        
+                        // 顯示第一頁（如果不在範圍內）
+                        if ($start_page > 1):
+                        ?>
+                            <a href="<?php echo $base_url; ?>&page=1" class="pagination-number" style="padding: 8px 12px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 6px; text-decoration: none; color: var(--text-color); font-weight: 500; min-width: 40px; text-align: center; transition: all 0.3s ease;">
+                                1
+                            </a>
+                            <?php if ($start_page > 2): ?>
+                                <span style="color: var(--secondary-text); padding: 0 5px;">...</span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        
+                        <!-- 顯示頁碼範圍 -->
+                        <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                            <?php if ($i == $current_page): ?>
+                                <span class="pagination-number active" style="padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); border: 1px solid transparent; border-radius: 6px; color: white; font-weight: 700; min-width: 40px; text-align: center; box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);">
+                                    <?php echo $i; ?>
+                                </span>
+                            <?php else: ?>
+                                <a href="<?php echo $base_url; ?>&page=<?php echo $i; ?>" class="pagination-number" style="padding: 8px 12px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 6px; text-decoration: none; color: var(--text-color); font-weight: 500; min-width: 40px; text-align: center; transition: all 0.3s ease;">
+                                    <?php echo $i; ?>
+                                </a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                        
+                        <!-- 顯示最後一頁（如果不在範圍內） -->
+                        <?php if ($end_page < $total_pages): ?>
+                            <?php if ($end_page < $total_pages - 1): ?>
+                                <span style="color: var(--secondary-text); padding: 0 5px;">...</span>
+                            <?php endif; ?>
+                            <a href="<?php echo $base_url; ?>&page=<?php echo $total_pages; ?>" class="pagination-number" style="padding: 8px 12px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 6px; text-decoration: none; color: var(--text-color); font-weight: 500; min-width: 40px; text-align: center; transition: all 0.3s ease;">
+                                <?php echo $total_pages; ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- 下一頁按鈕 -->
+                    <?php if ($current_page < $total_pages): ?>
+                        <a href="<?php echo $base_url; ?>&page=<?php echo $current_page + 1; ?>" class="pagination-btn" style="padding: 10px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; color: var(--text-color); font-weight: 600; transition: all 0.3s ease;">
+                            下一頁 →
+                        </a>
+                    <?php else: ?>
+                        <span class="pagination-btn disabled" style="padding: 10px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--secondary-text); opacity: 0.5; cursor: not-allowed;">
+                            下一頁 →
+                        </span>
+                    <?php endif; ?>
+                    
+                    <!-- 頁碼資訊 -->
+                    <div class="pagination-info" style="color: var(--secondary-text); font-size: 0.9rem; margin-left: 15px;">
+                        第 <?php echo $current_page; ?> 頁 / 共 <?php echo $total_pages; ?> 頁
+                        <span style="margin-left: 10px;">（共 <?php echo $total_messages; ?> 則留言）</span>
+                    </div>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
     
     <script>
-        // 篩選功能
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                // 更新活動狀態
-                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // 篩選留言
-                const type = this.getAttribute('data-type');
-                const cards = document.querySelectorAll('.message-card');
-                let visibleCount = 0;
-                
-                cards.forEach(card => {
-                    const cardType = card.getAttribute('data-type') || '其他';
-                    if (type === 'all' || cardType === type) {
-                        // 移除隱藏樣式，恢復正常顯示
-                        card.style.display = '';
-                        card.style.visibility = 'visible';
-                        card.style.height = '';
-                        card.style.padding = '';
-                        card.style.margin = '';
-                        visibleCount++;
-                    } else {
-                        // 完全隱藏卡片
-                        card.style.display = 'none';
-                        card.style.visibility = 'hidden';
-                    }
-                });
-                
-                // 如果沒有可見的留言，顯示提示訊息
-                const feed = document.getElementById('messagesFeed');
-                let noMessagesMsg = document.getElementById('noMessagesMsg');
-                
-                if (visibleCount === 0) {
-                    if (!noMessagesMsg) {
-                        noMessagesMsg = document.createElement('div');
-                        noMessagesMsg.id = 'noMessagesMsg';
-                        noMessagesMsg.className = 'no-messages';
-                        noMessagesMsg.innerHTML = '<h3>📝 暫無留言</h3><p>此分類目前還沒有留言。</p>';
-                        feed.appendChild(noMessagesMsg);
-                    }
-                    noMessagesMsg.style.display = 'block';
-                } else {
-                    if (noMessagesMsg) {
-                        noMessagesMsg.style.display = 'none';
-                    }
-                }
-            });
-        });
+        // 注意：篩選現在由後端處理，前端不需要再做篩選
+        // 分頁功能已整合到後端查詢中
         
         // 展開/收縮內容
         function toggleContent(messageId) {
