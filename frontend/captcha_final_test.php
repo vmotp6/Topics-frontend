@@ -26,9 +26,9 @@ echo "<!DOCTYPE html>
         .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
         .captcha-container { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
         .captcha-container input { width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; font-size: 16px; font-weight: bold; letter-spacing: 2px; height: 40px; box-sizing: border-box; }
-        .captcha-display { height: 40px; width: 120px; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: linear-gradient(45deg, #f0f0f0, #e0e0e0); font-size: 20px; font-weight: bold; color: #333; font-family: 'Courier New', monospace; letter-spacing: 3px; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; user-select: none; position: relative; overflow: hidden; }
-        .captcha-display:hover { background: linear-gradient(45deg, #e8e8e8, #d8d8d8); border-color: #999; }
-        .captcha-display::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shine 2s infinite; }
+        .captcha-display { height: 40px; width: 120px; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); font-size: 20px; font-weight: bold; color: #fff; font-family: 'Courier New', monospace; letter-spacing: 3px; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; user-select: none; position: relative; overflow: hidden; }
+        .captcha-display:hover { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); border-color: #0074a9; }
+        .captcha-display::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(0,116,169,0.4), transparent); animation: shine 2s infinite; }
         @keyframes shine { 0% { left: -100%; } 100% { left: 100%; } }
         .captcha-display::after { content: ''; position: absolute; top: 50%; left: 10%; right: 10%; height: 1px; background: rgba(0,0,0,0.1); transform: rotate(-15deg); }
         .refresh-btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; height: 40px; }

@@ -106,7 +106,7 @@ function sendEnrollmentNotification($data) {
         <meta charset='utf-8'>
         <style>
             body { font-family: 'Microsoft JhengHei', Arial, sans-serif; line-height: 1.6; color: #333; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
+            .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 20px; text-align: center; }
             .content { padding: 20px; background: #f8f9fa; }
             .field { margin: 10px 0; padding: 10px; background: white; border-left: 4px solid #667eea; }
             .label { font-weight: bold; color: #667eea; }

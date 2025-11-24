@@ -419,7 +419,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
         }
         
         .submit-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             border: none;
             padding: 15px 40px;
@@ -434,7 +434,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
         
         /* 啟用狀態 - 藍色 */
         .submit-btn:not(:disabled) {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             cursor: pointer;
             opacity: 1;

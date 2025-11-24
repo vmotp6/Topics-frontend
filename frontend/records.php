@@ -157,13 +157,18 @@ if ($teacher_id) {
 $participants_options = [];
 $participants_options_map = []; // code => name 映射
 $participants_options_query = "SELECT code, name, category, display_order FROM participant_options WHERE is_active = 1 ORDER BY display_order, id";
-$participants_options_result = $conn->query($participants_options_query);
-if ($participants_options_result) {
-    while ($row = $participants_options_result->fetch_assoc()) {
-        $participants_options[] = $row;
-        $participants_options_map[$row['code']] = $row['name'];
+try {
+    $participants_options_result = $conn->query($participants_options_query);
+    if ($participants_options_result && $participants_options_result->num_rows > 0) {
+        while ($row = $participants_options_result->fetch_assoc()) {
+            $participants_options[] = $row;
+            $participants_options_map[$row['code']] = $row['name'];
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
     }
-} else {
+} catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $participants_options = [
         ['code' => 'JHS_9', 'name' => '國中九年級', 'category' => '國中', 'display_order' => 3],
@@ -185,13 +190,18 @@ if ($participants_options_result) {
 $activity_type_options = [];
 $activity_type_options_map = []; // code => name 映射
 $activity_type_options_query = "SELECT code, name, category, display_order FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
-$activity_type_options_result = $conn->query($activity_type_options_query);
-if ($activity_type_options_result) {
-    while ($row = $activity_type_options_result->fetch_assoc()) {
-        $activity_type_options[] = $row;
-        $activity_type_options_map[$row['code']] = $row['name'];
+try {
+    $activity_type_options_result = $conn->query($activity_type_options_query);
+    if ($activity_type_options_result && $activity_type_options_result->num_rows > 0) {
+        while ($row = $activity_type_options_result->fetch_assoc()) {
+            $activity_type_options[] = $row;
+            $activity_type_options_map[$row['code']] = $row['name'];
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
     }
-} else {
+} catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $activity_type_options = [
         ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗', 'category' => '校內', 'display_order' => 1],
@@ -430,7 +440,7 @@ $conn->close();
             
             <!-- 登入教師資訊顯示 -->
             <?php if ($teacher_info): ?>
-                <div class="teacher-info-section" style="background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #6c7aed;">
+                <div class="teacher-info-section" style="background: linear-gradient(90deg, rgba(122, 201, 199, 0.05) 0%, rgba(149, 109, 189, 0.05) 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #956dbd;">
                     <h4 style="color: #495057; margin-bottom: 10px;">
                         <i class="fas fa-user-check"></i> 登入教師資訊
                     </h4>
@@ -455,13 +465,13 @@ $conn->close();
             <?php endif; ?>
 
             <!-- 查看記錄按鈕區塊 -->
-            <div class="view-records-section" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #f0ad4e; text-align: center;">
+            <div class="view-records-section" style="background: linear-gradient(90deg, rgba(122, 201, 199, 0.05) 0%, rgba(149, 109, 189, 0.05) 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #956dbd; text-align: center;">
                 <h4 style="color: #856404; margin-bottom: 15px;">
                     <i class="fas fa-database"></i> 活動記錄管理
                 </h4>
 
                 <button type="button" id="toggleRecordsBtn" class="toggle-records-btn" onclick="window.location.href='activity_records_management.php'" 
-                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
+                        style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
                     <i class="fas fa-cogs" id="recordsIcon"></i> 
                     <span id="recordsText">進入活動記錄管理</span>
                     <?php if (!empty($activity_records)): ?>
@@ -757,7 +767,7 @@ $conn->close();
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 12px 20px;
             border-radius: 25px;
@@ -776,10 +786,10 @@ $conn->close();
             transform: translateY(0);
         }
         .ric-status-bar.saving {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
         }
         .ric-status-bar.saved {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
         }
         .form-progress {
             position: sticky;

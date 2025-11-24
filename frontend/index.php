@@ -207,7 +207,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 
 		.slide-btn {
 			display: inline-block;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
 			color: white;
 			padding: 15px 30px;
 			border-radius: 30px;
@@ -284,7 +284,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
+			background: linear-gradient(90deg, rgba(122, 201, 199, 0.4) 0%, rgba(149, 109, 189, 0.2) 100%);
 			z-index: 1;
 		}
 
@@ -294,7 +294,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
 			display: flex;
 			align-items: center;
 			justify-content: center;
@@ -476,7 +476,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
       
       container.innerHTML = items.map((item, index) => `
         <div class="carousel-slide ${index === 0 ? 'active' : ''}" 
-             style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('${item.image_url}');">
+             style="background-image: linear-gradient(90deg, rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('${item.image_url}');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>${item.title}</h2>
@@ -522,7 +522,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
     function showDefaultCarousel() {
       const container = document.getElementById('carouselSlides');
       container.innerHTML = `
-        <div class="carousel-slide active" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
+        <div class="carousel-slide active" style="background-image: linear-gradient(90deg, rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>歡迎來到康寧大學招生平台</h2>
@@ -530,7 +530,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
             <a href="QA.php" class="slide-btn">了解更多</a>
           </div>
         </div>
-        <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+        <div class="carousel-slide" style="background-image: linear-gradient(90deg, rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>產學合作新契機</h2>
@@ -538,7 +538,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
             <a href="admission_recommend.php" class="slide-btn">推薦報名</a>
           </div>
         </div>
-        <div class="carousel-slide" style="background-image: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+        <div class="carousel-slide" style="background-image: linear-gradient(90deg, rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>五專入學說明會</h2>

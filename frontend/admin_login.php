@@ -42,7 +42,7 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -79,7 +79,7 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
             box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
         .btn-login {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             border: none;
             border-radius: 10px;
             padding: 0.75rem 2rem;

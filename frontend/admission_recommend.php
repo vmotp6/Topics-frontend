@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .detail-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   padding: 20px 24px;
   display: flex;

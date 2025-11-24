@@ -112,7 +112,7 @@ body::before {
   right: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(122,201,199,0.1) 0%, transparent 70%);
   animation: float 6s ease-in-out infinite;
   pointer-events: none; /* 確保不阻擋按鈕點擊 */
   z-index: 0; /* 放在最底層 */
@@ -274,7 +274,7 @@ body::before {
   /* user-item padding-top: 20px, 頭像高度 60px，讓徽章在頭像的右上角區域 */
   /* 將徽章放在頭像的右上角，往上移動一點避免遮擋 */
   top: 20px !important; /* 再往上移動一點，讓徽章更靠近頭像頂部，避免遮擋名稱 */
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff4757 100%) !important;
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
   color: white !important;
   border-radius: 10px;
   min-width: 20px; /* 稍微增大尺寸，更容易看到 */
@@ -397,7 +397,7 @@ body::before {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(149,109,189,0.2) 0%, transparent 70%);
   opacity: 0;
   transition: opacity 0.3s ease;
   z-index: -1 !important; /* 強制確保 ::before 在徽章下方 */
@@ -695,7 +695,7 @@ body::before {
 .chat-input button,
 #voiceRecordBtn {
   padding: 10px 16px !important;
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
   color: white !important;
   border: none !important;
   border-radius: 20px !important;
@@ -727,7 +727,7 @@ body::before {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(149,109,189,0.2), transparent);
   transition: left 0.5s ease;
 }
 
@@ -754,14 +754,14 @@ body::before {
 }
 
 .chat-input button:not(:disabled) {
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
   color: white !important;
   cursor: pointer !important;
   opacity: 1 !important;
 }
 
 .chat-input button:not(:disabled):hover {
-  background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
   transform: translateY(-2px) !important;
   box-shadow: 
     0 6px 20px rgba(0, 123, 255, 0.4),
@@ -779,7 +779,7 @@ body::before {
   font-size: 18px;
   font-weight: 500;
   text-align: center;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  background: linear-gradient(90deg, rgba(122, 201, 199, 0.05) 0%, rgba(149, 109, 189, 0.05) 100%);
   border-radius: 20px;
   margin: 20px;
   padding: 40px;

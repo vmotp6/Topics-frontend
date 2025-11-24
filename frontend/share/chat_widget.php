@@ -67,7 +67,7 @@ $isLoggedIn = isset($_SESSION['username']);
   right: 30px;
   width: 60px;
   height: 60px;
-  background: linear-gradient(135deg, #00bcd4, #0097a7);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   border-radius: 50%;
   display: none !important;
@@ -161,7 +161,7 @@ $isLoggedIn = isset($_SESSION['username']);
 }
 
 #chat-header {
-  background: linear-gradient(135deg, #00bcd4, #0097a7);
+  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
   color: white;
   padding: 15px 20px;
   border-radius: 12px 12px 0 0;

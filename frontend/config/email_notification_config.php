@@ -53,7 +53,7 @@ function getEmailTemplate($template_name, $data = []) {
                 <style>
                     body { font-family: "Microsoft JhengHei", Arial, sans-serif; line-height: 1.6; color: #333; }
                     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
                     .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
                     .highlight { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin: 20px 0; }
                     .info-box { background: white; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin: 15px 0; }
@@ -113,7 +113,7 @@ function getEmailTemplate($template_name, $data = []) {
                 <style>
                     body { font-family: "Microsoft JhengHei", Arial, sans-serif; line-height: 1.6; color: #333; }
                     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
                     .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
                     .highlight { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin: 20px 0; }
                     .info-box { background: white; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin: 15px 0; }
@@ -173,7 +173,7 @@ function getEmailTemplate($template_name, $data = []) {
                 <style>
                     body { font-family: "Microsoft JhengHei", Arial, sans-serif; line-height: 1.6; color: #333; }
                     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
                     .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
                     .highlight { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 5px; margin: 20px 0; }
                     .info-box { background: white; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin: 15px 0; }

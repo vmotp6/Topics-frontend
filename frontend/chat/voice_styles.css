@@ -4,7 +4,7 @@
 
 /* 語音按鈕樣式 - 與網頁色系一致 */
 #voiceRecordBtn {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     color: white !important;
     border: none !important;
     border-radius: 20px !important;
@@ -47,7 +47,7 @@
     box-shadow: 
         0 4px 12px rgba(40, 167, 69, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
 }
 
 #voiceRecordBtn:hover::before {
@@ -69,7 +69,7 @@
 
 /* 錄製中狀態 - 與網頁色系一致 */
 #voiceRecordBtn.recording {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     animation: pulse 1.5s infinite !important;
     box-shadow: 
         0 2px 8px rgba(220, 53, 69, 0.4),
@@ -91,7 +91,7 @@
 
 /* 錄製指示器 - 與網頁色系一致 */
 #recordingIndicator {
-    background: linear-gradient(135deg, rgba(220, 53, 69, 0.95) 0%, rgba(200, 35, 51, 0.95) 100%);
+    background: linear-gradient(90deg, rgba(122, 201, 199, 0.95) 0%, rgba(149, 109, 189, 0.95) 100%);
     border: 2px solid rgba(255, 255, 255, 0.3);
     backdrop-filter: blur(15px);
     box-shadow: 0 8px 32px rgba(220, 53, 69, 0.4);
@@ -110,7 +110,7 @@
 
 /* 處理中指示器 - 與網頁色系一致 */
 #processingIndicator {
-    background: linear-gradient(135deg, rgba(0, 123, 255, 0.95) 0%, rgba(0, 86, 179, 0.95) 100%);
+    background: linear-gradient(90deg, rgba(122, 201, 199, 0.95) 0%, rgba(149, 109, 189, 0.95) 100%);
     border: 2px solid rgba(255, 255, 255, 0.3);
     backdrop-filter: blur(15px);
     box-shadow: 0 8px 32px rgba(0, 123, 255, 0.4);
@@ -204,7 +204,7 @@
 
 .chat-input button {
     padding: 10px 16px !important;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     color: white !important;
     border: none !important;
     border-radius: 20px !important;
@@ -245,7 +245,7 @@
     box-shadow: 
         0 4px 12px rgba(0, 123, 255, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
 }
 
 .chat-input button:hover::before {
@@ -324,7 +324,7 @@
     width: 50px !important;
     height: 50px !important;
     border-radius: 50% !important;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     color: white !important;
     display: flex !important;
     align-items: center !important;
@@ -362,7 +362,7 @@
 }
 
 .user-item.active .user-avatar {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     box-shadow: 
         0 4px 12px rgba(40, 167, 69, 0.4),
         0 0 0 3px rgba(255, 255, 255, 0.4) !important;
@@ -403,7 +403,7 @@
     font-size: 20px !important;
     font-weight: 700 !important;
     color: white !important;
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
     border-radius: 50% !important;
     font-family: 'Microsoft JhengHei', 'PingFang TC', 'Hiragino Sans GB', sans-serif !important;
 }

@@ -62,7 +62,7 @@ $conn->close();
     <link rel="stylesheet" href="assets/csp/records.css">
     <style>
         .stats-container {
-            background: linear-gradient(135deg, #6c7aed 0%, #5a6fd8 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 25px;
             border-radius: 15px;
@@ -101,7 +101,7 @@ $conn->close();
         }
         
         .action-btn {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             text-decoration: none;
             padding: 12px 25px;

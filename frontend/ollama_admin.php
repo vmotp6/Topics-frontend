@@ -75,11 +75,11 @@ if (!checkAdminPermission()) {
             text-align: center;
         }
         .status-healthy {
-            background: linear-gradient(135deg, #28a745, #20c997);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
         }
         .status-unhealthy {
-            background: linear-gradient(135deg, #dc3545, #fd7e14);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
         }
         .model-card {

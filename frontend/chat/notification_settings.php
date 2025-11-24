@@ -105,7 +105,7 @@ try {
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -120,7 +120,7 @@ try {
         }
         
         .header {
-            background: linear-gradient(135deg, #5865F2 0%, #7289DA 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 30px;
             text-align: center;
@@ -269,7 +269,7 @@ try {
         }
         
         .save-button {
-            background: linear-gradient(135deg, #5865F2 0%, #7289DA 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 15px 40px;
             border: none;

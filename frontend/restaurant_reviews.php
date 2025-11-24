@@ -270,7 +270,7 @@ try {
             gap: 8px;
             margin-top: 16px;
             padding: 12px 24px;
-            background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             border-radius: 12px;
             text-decoration: none;
@@ -398,7 +398,7 @@ try {
         }
         
         .submit-btn {
-            background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             border: none;
             padding: 14px 32px;
@@ -589,7 +589,7 @@ try {
         .login-btn {
             display: inline-block;
             padding: 14px 32px;
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             text-decoration: none;
             border-radius: 12px;

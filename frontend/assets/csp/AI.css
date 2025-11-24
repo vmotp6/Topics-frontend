@@ -53,7 +53,7 @@ button#submitBtn {
     font-size: 16px;
     font-weight: bold;
     color: white;
-    background: linear-gradient(to right, #6a9cff, #a07cff);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -61,5 +61,5 @@ button#submitBtn {
 }
 
 button#submitBtn:hover {
-    background: linear-gradient(to right, #5a8eff, #936bff);
+    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
 }

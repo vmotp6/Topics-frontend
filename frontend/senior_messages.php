@@ -261,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .header {
             margin-bottom: 30px; /* 減少底部間距 */
             padding: 20px 20px; /* 減少內部 padding */
-            background: linear-gradient(135deg, rgba(29, 155, 240, 0.1) 0%, rgba(29, 155, 240, 0.05) 100%);
+            background: linear-gradient(90deg, rgba(122, 201, 199, 0.1) 0%, rgba(149, 109, 189, 0.05) 100%);
             border-radius: 20px;
             border: 1px solid var(--border-color);
             position: relative;
@@ -294,7 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(90deg, var(--accent-color), #1a8cd8, var(--accent-color));
+            background: linear-gradient(90deg, #000000 0%, #0074a9 50%, #000000 100%);
         }
         
         .header h1 {
@@ -302,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-size: 2rem;
             margin-bottom: 10px;
             font-weight: 800;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -316,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .permission-notice {
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 15px 20px;
             border-radius: 12px;
@@ -337,7 +337,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             text-decoration: none;
             padding: 10px 20px;
@@ -358,7 +358,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background: linear-gradient(90deg, transparent, rgba(149,109,189,0.2), transparent);
             transition: left 0.5s;
         }
         
@@ -416,7 +416,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .filter-tab.active {
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
         }
@@ -462,7 +462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: 0;
             width: 4px;
             height: 100%;
-            background: linear-gradient(180deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             opacity: 0;
             transition: opacity 0.3s ease;
         }
@@ -488,7 +488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             width: 45px;
             height: 45px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -526,7 +526,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .message-type {
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 4px 12px;
             border-radius: 15px;
@@ -647,7 +647,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         .back-btn {
             display: inline-block;
-            background: linear-gradient(135deg, var(--accent-color), #1a8cd8);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
             padding: 15px 30px;
             border-radius: 25px;
@@ -662,7 +662,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .back-btn:hover {
-            background: linear-gradient(135deg, #1a8cd8, var(--accent-color));
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
         }
@@ -707,12 +707,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         ::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
             border-radius: 10px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
         }
         
         /* 響應式設計 */
@@ -911,7 +911,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <div class="message-title"><?php echo htmlspecialchars($message['title']); ?></div>
                         
                         <?php if (($message['message_type'] ?? '') === '推薦餐廳' && !empty($message['restaurant_name'])): ?>
-                            <div class="restaurant-info-card" style="background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05)); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
+                            <div class="restaurant-info-card" style="background: linear-gradient(90deg, rgba(122, 201, 199, 0.1), rgba(149, 109, 189, 0.05)); border: 1px solid rgba(149, 109, 189, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
                                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                                     <div style="font-size: 24px;">🍽️</div>
                                     <div style="flex: 1;">
@@ -961,7 +961,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 <?php if (!empty($message['restaurant_lat']) && !empty($message['restaurant_lng'])): ?>
                                     <button type="button" 
                                             onclick="showRestaurantOnMap('<?php echo htmlspecialchars($message['restaurant_name'] ?? ''); ?>', <?php echo htmlspecialchars($message['restaurant_lat']); ?>, <?php echo htmlspecialchars($message['restaurant_lng']); ?>, '<?php echo htmlspecialchars($message['restaurant_address'] ?? ''); ?>')"
-                                            style="padding: 8px 16px; background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; font-weight: 600;">
+                                            style="padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; font-weight: 600;">
                                         <i class="fas fa-map-marker-alt"></i> 在地圖上查看
                                     </button>
                                 <?php endif; ?>

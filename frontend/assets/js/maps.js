@@ -423,7 +423,7 @@ class CampusMap {
                     <div class="restaurant-header">
                         <h5>${restaurant.name || '未命名餐廳'}</h5>
                         <div class="restaurant-badges">
-                            ${isRecommended ? '<span class="recommended-badge" style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                            ${isRecommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                             ${isOpen ? '<span class="open-badge">營業中</span>' : '<span class="closed-badge">已打烊</span>'}
                             ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                         </div>
@@ -520,7 +520,7 @@ class CampusMap {
                     <div style="padding: 12px; max-width: 250px;">
                         <h4 style="margin: 0 0 8px 0; color: #333; font-size: 16px;">
                             ${restaurant.name || '未命名餐廳'}
-                            ${isRecommended ? '<span style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                            ${isRecommended ? '<span style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                         </h4>
                         <p style="margin: 0 0 5px 0; color: #666; font-size: 13px;">
                             <i class="fas fa-map-marker-alt" style="color: #27ae60;"></i> ${restaurant.vicinity || restaurant.formatted_address || '地址未知'}
@@ -638,14 +638,14 @@ class CampusMap {
                 <div class="restaurant-detail-header">
                     <h3>${restaurant.name || '未命名餐廳'}</h3>
                     <div class="restaurant-badges">
-                        ${restaurant.is_recommended ? '<span class="recommended-badge" style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                        ${restaurant.is_recommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                         ${isOpen ? '<span class="open-badge">營業中</span>' : '<span class="closed-badge">已打烊</span>'}
                         ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                     </div>
                 </div>
                 
                 ${restaurant.is_recommended && restaurant.recommendation_title ? `
-                    <div style="background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05)); border: 1px solid rgba(255, 107, 53, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="background: linear-gradient(90deg, rgba(122, 201, 199, 0.1), rgba(149, 109, 189, 0.05)); border: 1px solid rgba(149, 109, 189, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                             <i class="fas fa-user-circle" style="color: #ff6b35; font-size: 18px;"></i>
                             <strong style="color: var(--text-color, #333);">${restaurant.recommendation_author || '學長姐'}</strong>
@@ -657,7 +657,7 @@ class CampusMap {
                         </p>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="window.location.href='restaurant_reviews.php?message_id=${restaurant.recommendation_id}&restaurant=${encodeURIComponent(restaurant.name)}'" 
-                                    style="padding: 8px 16px; background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                    style="padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
                                 <i class="fas fa-comments"></i> 查看完整推薦與評價
                             </button>
                             <button onclick="campusMap.startDirectionsToDestination('${restaurant.vicinity || restaurant.formatted_address || restaurant.name}')" 
@@ -780,7 +780,7 @@ class CampusMap {
                                         <div class="review-author">
                                             <div style="display: flex; align-items: center; gap: 6px;">
                                                 <strong>${review.author_name || '匿名用戶'}</strong>
-                                                ${review.source === 'senior' ? '<span style="background: linear-gradient(135deg, #ff6b35, #f7931e); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;"><i class="fas fa-user-graduate"></i> 學長姐</span>' : ''}
+                                                ${review.source === 'senior' ? '<span style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;"><i class="fas fa-user-graduate"></i> 學長姐</span>' : ''}
                                                 ${review.isDelivery ? '<span class="delivery-review-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                                             </div>
                                             <span class="review-time">${this.formatReviewTime(review.time)}</span>
