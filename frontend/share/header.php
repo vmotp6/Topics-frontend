@@ -910,7 +910,9 @@ function getActiveClass($targetFile) {
 
   <div class="navbar-links">
     <!-- 共同可見的連結 -->
-    <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
+    <?php if (!($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師')): ?>
+      <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
+    <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
     
     <?php if (!$isLoggedIn): ?>
@@ -1032,7 +1034,9 @@ function getActiveClass($targetFile) {
 <div class="mobile-menu" id="mobileMenu">
   <div class="mobile-nav-links">
     <!-- 共同可見的連結 -->
-    <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
+    <?php if (!($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師')): ?>
+      <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
+    <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
     
     <?php if (!$isLoggedIn): ?>

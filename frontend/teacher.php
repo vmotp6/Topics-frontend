@@ -225,7 +225,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 
 		.slide-btn {
 			display: inline-block;
-			background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+			background: #6c757d;
 			color: white;
 			padding: 15px 30px;
 			border-radius: 30px;
@@ -233,12 +233,13 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			font-weight: 600;
 			font-size: 1.1rem;
 			transition: all 0.3s ease;
-			box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+			box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 		}
 
 		.slide-btn:hover {
 			transform: translateY(-3px);
-			box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+			box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+			background: #5a6268;
 			color: white;
 		}
 
@@ -302,7 +303,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background: linear-gradient(90deg, rgba(122, 201, 199, 0.4) 0%, rgba(149, 109, 189, 0.2) 100%);
+			background: rgba(0, 0, 0, 0.3);
 			z-index: 1;
 		}
 
@@ -312,7 +313,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			left: 0;
 			width: 100%;
 			height: 100%;
-			background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+			background: #6c757d;
 			display: flex;
 			align-items: center;
 			justify-content: center;
@@ -719,7 +720,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
       
       container.innerHTML = items.map((item, index) => `
         <div class="carousel-slide ${index === 0 ? 'active' : ''}" 
-             style="background-image: linear-gradient(rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('${item.image_url}');">
+             style="background-image: url('${item.image_url}');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>${item.title}</h2>
@@ -765,7 +766,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
     function showDefaultCarousel() {
       const container = document.getElementById('carouselSlides');
       container.innerHTML = `
-        <div class="carousel-slide active" style="background-image: linear-gradient(rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
+        <div class="carousel-slide active" style="background-image: url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2071&q=80');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>歡迎來到康寧大學招生平台</h2>
@@ -773,7 +774,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
             <a href="QA.php" class="slide-btn">了解更多</a>
           </div>
         </div>
-        <div class="carousel-slide" style="background-image: linear-gradient(rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+        <div class="carousel-slide" style="background-image: url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
           <div class="slide-overlay"></div>
           <div class="slide-content">
             <h2>產學合作新契機</h2>
@@ -781,7 +782,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
             <a href="admission_recommend.php" class="slide-btn">推薦報名</a>
           </div>
         </div>
-        <div class="carousel-slide" style="background-image: linear-gradient(rgba(122,201,199,0.3) 0%, rgba(149,109,189,0.3) 100%), url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
+        <div class="carousel-slide" style="background-image: url('https://images.unsplash.com/photo-1523240798034-6c2165d05d14?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80');">
           <div class="slide-overlay"></div>
           
         </div>
