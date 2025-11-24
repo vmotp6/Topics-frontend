@@ -165,81 +165,46 @@ try {
     $documents_json = json_encode($uploaded_documents, JSON_UNESCAPED_UNICODE);
     
     // 檢查是否已存在記錄（根據身分證字號）
-    $check_sql = "SELECT id FROM continued_admission WHERE id_number = ?";
+    $check_sql = "SELECT id, name FROM continued_admission WHERE id_number = ?";
     $check_stmt = $pdo->prepare($check_sql);
     $check_stmt->execute([$id_number]);
     $existing_record = $check_stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($existing_record) {
-        // 更新現有記錄
-        $sql = "UPDATE continued_admission SET 
-            exam_no = ?, name = ?, birth_year = ?, birth_month = ?, birth_day = ?, gender = ?, 
-            phone = ?, mobile = ?, school_city = ?, school_name = ?, zip_code = ?, city = ?, 
-            district = ?, village = ?, neighbor = ?, road = ?, section = ?, lane = ?, alley = ?, 
-            house_no = ?, floor = ?, same_address = ?, contact_address = ?, guardian_name = ?, 
-            guardian_phone = ?, guardian_mobile = ?, documents = ?, self_intro = ?, skills = ?, 
-            choices = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id_number = ?";
-        
-        $stmt = $pdo->prepare($sql);
-        
-        // 執行更新
-        $result = $stmt->execute([
-            $exam_no, $name, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
-            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
-            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
-            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json,
-            $id_number
-        ]);
-        
-        if ($result) {
-            error_log("Successfully updated record with ID: " . $existing_record['id'] . " for name: " . $name);
-            $operation = "更新";
-        }
-    } else {
-        // 插入新記錄
-        $sql = "INSERT INTO continued_admission (
-            exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
-            school_city, school_name, zip_code, city, district, village, neighbor,
-            road, section, lane, alley, house_no, floor, same_address, contact_address,
-            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $pdo->prepare($sql);
-        
-        // 執行插入
-        $result = $stmt->execute([
-            $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
-            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
-            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
-            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
-        ]);
-        
-        if ($result) {
-            $insert_id = $pdo->lastInsertId();
-            error_log("Successfully inserted record with ID: " . $insert_id . " for name: " . $name);
-            $operation = "新增";
-        }
+        // 如果已存在記錄，返回錯誤提示
+        throw new Exception('此身分證字號已被使用過，無法重複報名。如有疑問，請聯繫相關單位。');
     }
     
+    // 插入新記錄
+    $sql = "INSERT INTO continued_admission (
+        exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
+        school_city, school_name, zip_code, city, district, village, neighbor,
+        road, section, lane, alley, house_no, floor, same_address, contact_address,
+        guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    $stmt = $pdo->prepare($sql);
+    
+    // 執行插入
+    $result = $stmt->execute([
+        $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
+        $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
+        $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
+        $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+    ]);
+    
     if ($result) {
-        if ($operation === "更新") {
-            echo json_encode([
-                'success' => true,
-                'message' => '資料更新成功！',
-                'operation' => 'update',
-                'record_id' => $existing_record['id']
-            ], JSON_UNESCAPED_UNICODE);
-        } else {
-            echo json_encode([
-                'success' => true,
-                'message' => '報名成功！您的報名編號是: ' . $insert_id,
-                'operation' => 'insert',
-                'insert_id' => $insert_id
-            ], JSON_UNESCAPED_UNICODE);
-        }
+        $insert_id = $pdo->lastInsertId();
+        error_log("Successfully inserted record with ID: " . $insert_id . " for name: " . $name);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => '報名成功！您的報名編號是: ' . $insert_id,
+            'operation' => 'insert',
+            'insert_id' => $insert_id
+        ], JSON_UNESCAPED_UNICODE);
     } else {
-        throw new Exception('插入失敗');
+        throw new Exception('報名失敗，請稍後再試');
     }
     
 } catch (PDOException $e) {

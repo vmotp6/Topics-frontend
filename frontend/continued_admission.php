@@ -109,7 +109,7 @@ require_once 'session_config.php';
             <div class="form-group">
               <label>戶籍地址 <small style="color: #d32f2f;">(*為必填)</small></label>
               <div class="address-group">
-                <input type="text" name="zip" placeholder="郵遞區號" maxlength="5">
+                <input type="text" name="zip" placeholder="郵遞區號" maxlength="6">
                 <input type="text" name="city" placeholder="*縣/市" required>
                 <input type="text" name="district" placeholder="*市/區/鄉/鎮" required>
                 <input type="text" name="village" placeholder="村/里">
@@ -298,7 +298,6 @@ require_once 'session_config.php';
     // 全域變數
     let selectedChoices = [];
     const maxChoices = 7; // 最多7個科系
-    
     function toggleContactAddress(checkbox) {
       const contactAddress = document.getElementById('contact_address');
       if (checkbox.checked) {
@@ -310,6 +309,84 @@ require_once 'session_config.php';
         contactAddress.placeholder = '若與戶籍地址不同，請填寫完整通訊地址';
       }
     }
+    
+    // 郵遞區號自動填充功能（簡化版本：只查詢縣市和鄉鎮）
+    function initializeZipCodeAutoFill() {
+      const zipInput = document.querySelector('input[name="zip"]');
+      const cityInput = document.querySelector('input[name="city"]');
+      const districtInput = document.querySelector('input[name="district"]');
+      
+      if (!zipInput || !cityInput || !districtInput) {
+        return;
+      }
+      
+      let zipDebounceTimer = null;
+      
+      // 監聽郵遞區號輸入 → 查詢縣市和鄉鎮
+      zipInput.addEventListener('input', function() {
+        const zip = this.value.trim();
+        
+        // 清除之前的計時器
+        if (zipDebounceTimer) {
+          clearTimeout(zipDebounceTimer);
+        }
+        
+        // 當輸入3-6位數字時，通過API查詢對應的縣市和鄉鎮
+        if (zip.length >= 3 && zip.length <= 6 && /^\d+$/.test(zip)) {
+          // 如果是6碼（完整郵遞區號），立即查詢；否則防抖500ms
+          if (zip.length === 6) {
+            fetchZipCodeByCode(zip, cityInput, districtInput);
+          } else {
+            // 防抖：等待用戶停止輸入500ms後再查詢
+            zipDebounceTimer = setTimeout(() => {
+              fetchZipCodeByCode(zip, cityInput, districtInput);
+            }, 500);
+          }
+        }
+      });
+    }
+    
+    // 從API獲取郵遞區號資料（根據郵遞區號查詢縣市鄉鎮）
+    function fetchZipCodeByCode(zipcode, cityInput, districtInput) {
+      const originalCityValue = cityInput.value;
+      const originalDistrictValue = districtInput.value;
+      
+      // 發送API請求
+      fetch(`api/zipcode_api.php?zipcode=${encodeURIComponent(zipcode)}`)
+        .then(response => response.json())
+        .then(data => {
+          console.log('API回應:', data);
+          
+          if (data.success && data.data) {
+            const addressInfo = data.data;
+            console.log('地址資訊:', addressInfo);
+            
+            // 只自動填充縣市和鄉鎮，不填充路名和路段
+            if (!originalCityValue || originalCityValue === '') {
+              cityInput.value = addressInfo.city || '';
+            }
+            if (!originalDistrictValue || originalDistrictValue === '') {
+              districtInput.value = addressInfo.district || '';
+            }
+            
+            // 添加視覺提示
+            cityInput.style.borderColor = '#4facfe';
+            districtInput.style.borderColor = '#4facfe';
+            
+            // 1秒後恢復正常顏色
+            setTimeout(() => {
+              cityInput.style.borderColor = '';
+              districtInput.style.borderColor = '';
+            }, 1000);
+          } else {
+            console.log('❌ 找不到郵遞區號資料:', data.message || '');
+          }
+        })
+        .catch(error => {
+          console.error('❌ 查詢郵遞區號失敗:', error);
+        });
+    }
+    
 
     // 拖曳式科系選擇功能 - 與admission.php的體驗課程選擇一致
     function initializeCharCount() {
@@ -551,6 +628,9 @@ require_once 'session_config.php';
       // 初始化身分證字號欄位為可編輯
       setIdNumberReadOnly(false);
       
+      // 初始化郵遞區號自動填充功能
+      initializeZipCodeAutoFill();
+      
       // 初始化表單提交 - 直接使用 submit-btn 來找到表單
       const submitBtn = document.querySelector('.submit-btn');
       let form = null;
@@ -606,38 +686,213 @@ require_once 'session_config.php';
             
             console.log('Preparing form data...');
             
+            // 驗證所有必填欄位
+            const requiredFields = [
+              { name: 'student_name', label: '姓名' },
+              { name: 'id', label: '身分證字號' },
+              { name: 'birth_year', label: '出生年' },
+              { name: 'birth_month', label: '出生月' },
+              { name: 'birth_day', label: '出生日' },
+              { name: 'mobile', label: '行動電話' },
+              { name: 'school_city', label: '就讀縣市' },
+              { name: 'school_name', label: '就讀國中' },
+              { name: 'city', label: '戶籍地址縣/市' },
+              { name: 'district', label: '戶籍地址市/區/鄉/鎮' },
+              { name: 'road', label: '戶籍地址路(街)' },
+              { name: 'no', label: '戶籍地址號' },
+              { name: 'guardian', label: '監護人姓名' },
+              { name: 'guardian_mobile', label: '監護人行動電話' },
+              { name: 'self_intro', label: '自傳/自我介紹', type: 'textarea' },
+              { name: 'skills', label: '興趣/專長', type: 'textarea' }
+            ];
+            
+            // 檢查必填欄位
+            for (let field of requiredFields) {
+              let element;
+              if (field.type === 'textarea') {
+                element = document.querySelector(`textarea[name="${field.name}"]`);
+              } else {
+                element = document.querySelector(`input[name="${field.name}"]`);
+              }
+              
+              if (!element) {
+                console.warn(`找不到欄位: ${field.name}`);
+                continue;
+              }
+              
+              const value = element.value.trim();
+              if (!value) {
+                showMessage(`${field.label}為必填欄位，請填寫`, 'error');
+                element.focus();
+                element.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  element.style.borderColor = '';
+                }, 3000);
+                return false;
+              }
+            }
+            
+            // 驗證性別（radio）
+            const genderInputs = document.querySelectorAll('input[name="gender"]');
+            let genderSelected = false;
+            genderInputs.forEach(input => {
+              if (input.checked) {
+                genderSelected = true;
+              }
+            });
+            if (!genderSelected) {
+              showMessage('性別為必填欄位，請選擇', 'error');
+              if (genderInputs.length > 0) {
+                genderInputs[0].focus();
+              }
+              return false;
+            }
+            
             // 驗證身分證字號格式
             const idInput = document.querySelector('input[name="id"]');
             if (idInput) {
               const idValue = idInput.value.trim();
               if (idValue.length !== 10) {
                 showMessage('身分證字號必須為10個字符', 'error');
+                idInput.focus();
+                idInput.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  idInput.style.borderColor = '';
+                }, 3000);
                 return false;
               }
               if (!/^[A-Za-z][0-9]{9}$/.test(idValue)) {
                 showMessage('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
+                idInput.focus();
+                idInput.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  idInput.style.borderColor = '';
+                }, 3000);
                 return false;
               }
             }
             
             // 驗證行動電話格式
             const mobileInput = document.querySelector('input[name="mobile"]');
-            if (mobileInput && mobileInput.value.trim()) {
+            if (mobileInput) {
               const mobileValue = mobileInput.value.trim();
               if (!/^[0-9]{10}$/.test(mobileValue)) {
                 showMessage('行動電話必須為10個數字', 'error');
+                mobileInput.focus();
+                mobileInput.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  mobileInput.style.borderColor = '';
+                }, 3000);
                 return false;
               }
             }
             
             // 驗證監護人行動電話格式
             const guardianMobileInput = document.querySelector('input[name="guardian_mobile"]');
-            if (guardianMobileInput && guardianMobileInput.value.trim()) {
+            if (guardianMobileInput) {
               const guardianMobileValue = guardianMobileInput.value.trim();
               if (!/^[0-9]{10}$/.test(guardianMobileValue)) {
                 showMessage('監護人行動電話必須為10個數字', 'error');
+                guardianMobileInput.focus();
+                guardianMobileInput.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  guardianMobileInput.style.borderColor = '';
+                }, 3000);
                 return false;
               }
+            }
+            
+            // 驗證出生日期合理性
+            const birthYear = parseInt(document.querySelector('input[name="birth_year"]').value);
+            const birthMonth = parseInt(document.querySelector('input[name="birth_month"]').value);
+            const birthDay = parseInt(document.querySelector('input[name="birth_day"]').value);
+            
+            if (birthYear && birthMonth && birthDay) {
+              const date = new Date(birthYear, birthMonth - 1, birthDay);
+              if (date.getFullYear() !== birthYear || date.getMonth() !== birthMonth - 1 || date.getDate() !== birthDay) {
+                showMessage('出生日期不正確，請檢查年月日', 'error');
+                return false;
+              }
+            }
+            
+            // 驗證必填文件（114 年國中教育會考成績單）
+            const examDocCheckbox = document.querySelector('input[name="docs[]"][value="exam"]');
+            const examDocFile = document.querySelector('input[name="doc_exam"]');
+            
+            if (!examDocCheckbox || !examDocCheckbox.checked) {
+              showMessage('請勾選「114 年國中教育會考成績單（必填）」', 'error');
+              if (examDocCheckbox) {
+                examDocCheckbox.focus();
+              }
+              return false;
+            }
+            
+            // 驗證是否已上傳檔案
+            if (!examDocFile || !examDocFile.files || examDocFile.files.length === 0) {
+              showMessage('請上傳「114 年國中教育會考成績單」檔案', 'error');
+              if (examDocFile) {
+                examDocFile.focus();
+                examDocFile.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  examDocFile.style.borderColor = '';
+                }, 3000);
+              }
+              return false;
+            }
+            
+            // 驗證檔案大小（例如：限制為10MB）
+            const maxFileSize = 10 * 1024 * 1024; // 10MB
+            if (examDocFile.files[0].size > maxFileSize) {
+              showMessage('「114 年國中教育會考成績單」檔案大小不能超過10MB', 'error');
+              examDocFile.focus();
+              examDocFile.style.borderColor = '#d32f2f';
+              setTimeout(() => {
+                examDocFile.style.borderColor = '';
+              }, 3000);
+              return false;
+            }
+            
+            // 驗證檔案格式
+            const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+            const fileName = examDocFile.files[0].name.toLowerCase();
+            const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+            if (!allowedExtensions.includes(fileExtension)) {
+              showMessage('「114 年國中教育會考成績單」檔案格式不正確，請上傳 PDF、JPG、JPEG 或 PNG 格式', 'error');
+              examDocFile.focus();
+              examDocFile.style.borderColor = '#d32f2f';
+              setTimeout(() => {
+                examDocFile.style.borderColor = '';
+              }, 3000);
+              return false;
+            }
+            
+            // 驗證通訊地址（如果未勾選「同戶籍地址」，則通訊地址必填）
+            const sameAddressCheckbox = document.querySelector('input[name="same_address"]');
+            const contactAddressInput = document.querySelector('input[name="contact_address"]');
+            if (sameAddressCheckbox && !sameAddressCheckbox.checked && contactAddressInput) {
+              const contactAddress = contactAddressInput.value.trim();
+              if (!contactAddress) {
+                showMessage('通訊地址為必填欄位，請填寫完整通訊地址或勾選「同戶籍地址」', 'error');
+                contactAddressInput.focus();
+                contactAddressInput.style.borderColor = '#d32f2f';
+                setTimeout(() => {
+                  contactAddressInput.style.borderColor = '';
+                }, 3000);
+                return false;
+              }
+            }
+            
+            // 驗證志願序（至少需選擇一個志願）
+            if (selectedChoices.length === 0) {
+              showMessage('志願序為必填欄位，請至少選擇一個志願', 'error');
+              const selectedChoicesZone = document.getElementById('selectedChoices');
+              if (selectedChoicesZone) {
+                selectedChoicesZone.style.border = '2px solid #d32f2f';
+                setTimeout(() => {
+                  selectedChoicesZone.style.border = '';
+                }, 3000);
+              }
+              return false;
             }
             
             console.log('All validations passed, submitting form...');
@@ -781,7 +1036,10 @@ require_once 'session_config.php';
         // 創建新訊息
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
+        
+        // 創建文本節點
+        const messageText = document.createTextNode(message);
+        messageDiv.appendChild(messageText);
         
         // 如果是錯誤訊息，添加關閉按鈕
         if (type === 'error') {
