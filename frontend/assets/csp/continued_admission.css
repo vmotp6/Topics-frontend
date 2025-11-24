@@ -81,7 +81,7 @@ legend {
   flex-wrap: wrap;
   gap: 15px;
   margin-bottom: 15px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .form-group {
@@ -89,6 +89,13 @@ legend {
   flex-direction: column;
   min-width: 200px;
   flex: 1;
+  justify-content: flex-start;
+}
+
+.form-group.gender-group {
+  min-width: 150px;
+  flex: 0 1 auto;
+  justify-content: flex-start;
 }
 
 
@@ -144,12 +151,14 @@ input:read-only {
 }
 
 .radio-group {
-  margin: 10px 0;
+  margin: 0;
   display: flex;
   flex-direction: row;
   gap: 20px;
   align-items: center;
   flex-wrap: nowrap;
+  height: 48px;
+  align-items: center;
 }
 
 .radio-group label {

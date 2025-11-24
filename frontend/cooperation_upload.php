@@ -52,7 +52,6 @@ $role = $_SESSION['role'] ?? '訪客';
     <title>康寧大學就讀意願登錄</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/csp/cooperation_upload.css?v=20241014-3">
-    <script src="assets/js/draft-system.js"></script>
 </head>
 
 <body>
@@ -84,7 +83,7 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label>*身分別:</label>
                             <div class="radio-group">
                                 <label>
-                                    <input type="radio" name="identity" value="學生" required>
+                                    <input type="radio" name="identity" value="學生" required checked>
                                     學生
                                 </label>
                                 <label>
@@ -446,34 +445,6 @@ $role = $_SESSION['role'] ?? '訪客';
             }
         });
 
-        // 草稿系統
-        let draftSystem;
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('enrollmentForm');
-            if (form) {
-                draftSystem = new DraftSystem({
-                    storageKey: 'enrollment_form_draft',
-                    formSelector: form,
-                    excludeFields: ['captcha'],
-                    autoLoad: true,
-                    showStatus: true
-                });
-                
-                // 添加草稿管理按鈕
-                const draftActions = document.createElement('div');
-                draftActions.style.cssText = 'margin-bottom: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px; display: flex; gap: 10px; justify-content: flex-end;';
-                draftActions.innerHTML = `
-                    <button type="button" onclick="draftSystem.loadDraft(true)" style="background: #17a2b8; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
-                        <i class="fas fa-download"></i> 載入草稿
-                    </button>
-                    <button type="button" onclick="if(confirm('確定要清除草稿嗎？')) { draftSystem.clearDraft(); form.reset(); }" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
-                        <i class="fas fa-trash"></i> 清除草稿
-                    </button>
-                `;
-                form.insertBefore(draftActions, form.firstChild);
-            }
-        });
-        
         // 表單提交處理
         document.getElementById('enrollmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -601,10 +572,8 @@ $role = $_SESSION['role'] ?? '訪客';
                         this.reset();
                         refreshCaptcha();
                         
-                        // 清除草稿
-                        if (draftSystem) {
-                            draftSystem.clearDraft();
-                        }
+                        // 重置身份預設為學生
+                        document.querySelector('input[name="identity"][value="學生"]').checked = true;
 
                         // 3秒後隱藏訊息
                         setTimeout(() => {

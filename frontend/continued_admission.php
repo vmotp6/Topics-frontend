@@ -48,30 +48,30 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
-              <label for="student_name">姓名</label>
+              <label for="student_name">*姓名</label>
               <input type="text" id="student_name" name="student_name" required>
             </div>
             <div class="form-group">
-              <label>身分證字號</label>
+              <label>*身分證字號</label>
               <input type="text" name="id" id="id_number_input" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10" required>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group small">
-              <label>出生年</label>
+              <label>*出生年</label>
               <input type="number" name="birth_year" placeholder="年" min="1990" max="2010" required>
             </div>
             <div class="form-group small">
-              <label>出生月</label>
+              <label>*出生月</label>
               <input type="number" name="birth_month" placeholder="月" min="1" max="12" required>
             </div>
             <div class="form-group small">
-              <label>出生日</label>
+              <label>*出生日</label>
               <input type="number" name="birth_day" placeholder="日" min="1" max="31" required>
             </div>
-            <div class="form-group">
-              <label>性別</label>
+            <div class="form-group gender-group">
+              <label>*性別</label>
               <div class="radio-group">
                 <label><input type="radio" name="gender" value="male" required> 男</label>
                 <label><input type="radio" name="gender" value="female" required> 女</label>
@@ -85,18 +85,18 @@ require_once 'session_config.php';
               <input type="tel" name="phone" placeholder="例：02-12345678">
             </div>
             <div class="form-group">
-              <label>行動電話</label>
+              <label>*行動電話</label>
               <input type="tel" name="mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group medium">
-              <label>就讀縣市</label>
+              <label>*就讀縣市</label>
               <input type="text" name="school_city" placeholder="縣/市" required>
             </div>
             <div class="form-group">
-              <label>就讀國中</label>
+              <label>*就讀國中</label>
               <input type="text" name="school_name" placeholder="國中名稱" required>
             </div>
           </div>
@@ -107,18 +107,18 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
-              <label>戶籍地址</label>
+              <label>戶籍地址 <small style="color: #d32f2f;">(*為必填)</small></label>
               <div class="address-group">
                 <input type="text" name="zip" placeholder="郵遞區號" maxlength="5">
-                <input type="text" name="city" placeholder="縣/市" required>
-                <input type="text" name="district" placeholder="市/區/鄉/鎮" required>
+                <input type="text" name="city" placeholder="*縣/市" required>
+                <input type="text" name="district" placeholder="*市/區/鄉/鎮" required>
                 <input type="text" name="village" placeholder="村/里">
                 <input type="text" name="neighbor" placeholder="鄰">
-                <input type="text" name="road" placeholder="路(街)" required>
+                <input type="text" name="road" placeholder="*路(街)" required>
                 <input type="text" name="section" placeholder="段">
                 <input type="text" name="lane" placeholder="巷">
                 <input type="text" name="alley" placeholder="弄">
-                <input type="text" name="no" placeholder="號" required>
+                <input type="text" name="no" placeholder="*號" required>
                 <input type="text" name="floor" placeholder="樓之">
               </div>
             </div>
@@ -140,7 +140,7 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
-              <label>監護人姓名</label>
+              <label>*監護人姓名</label>
               <input type="text" name="guardian" required>
             </div>
           </div>
@@ -151,7 +151,7 @@ require_once 'session_config.php';
               <input type="tel" name="guardian_phone" placeholder="例：02-12345678">
             </div>
             <div class="form-group">
-              <label>監護人行動電話</label>
+              <label>*監護人行動電話</label>
               <input type="tel" name="guardian_mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
             </div>
           </div>
@@ -201,6 +201,7 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
+              <label>*自傳 / 自我介紹</label>
               <textarea name="self_intro" id="self_intro" rows="8" placeholder="請簡述個人學習經歷、興趣愛好、未來規劃等。表格若不敷使用，請自行以 A4 紙書寫。" maxlength="1000" required></textarea>
               <div class="char-count">字數：<span id="self_intro_count">0</span>/1000</div>
             </div>
@@ -212,6 +213,7 @@ require_once 'session_config.php';
           
           <div class="form-row">
             <div class="form-group">
+              <label>*興趣 / 專長</label>
               <textarea name="skills" id="skills" rows="6" placeholder="請詳述個人興趣、專長、特殊才能、社團經驗、競賽成果等。" maxlength="500" required></textarea>
               <div class="char-count">字數：<span id="skills_count">0</span>/500</div>
             </div>
@@ -219,7 +221,7 @@ require_once 'session_config.php';
     </fieldset>
 
     <fieldset>
-      <legend>志願序</legend>
+      <legend>志願序 <span style="color: #d32f2f;">*</span></legend>
           
           <div class="note">
             ※ 請從下方科系中拖曳到右側框框中，並可調整優先順序。至少需選擇一個志願。
