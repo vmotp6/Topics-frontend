@@ -313,6 +313,12 @@ try {
         </div>
         
         <form id="profileForm" enctype="multipart/form-data">
+            <!-- 基本資料 -->
+            <div class="form-group">
+                <label for="name">姓名 <span style="color: #f5222d;">*</span></label>
+                <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name); ?>" required>
+            </div>
+            
             <!-- 學生專用欄位 -->
             <div class="form-group">
                 <label for="student_id">學號</label>
@@ -403,9 +409,13 @@ try {
         // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
         window.addEventListener('load', function() {
             // 如果 PHP 已經從資料庫載入了資料，直接使用（不需要 API 調用）
+            const currentName = '<?php echo htmlspecialchars($user_name ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             const currentDept = '<?php echo htmlspecialchars($current_department ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             const currentPhone = '<?php echo htmlspecialchars($current_phone ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             
+            if (currentName && document.getElementById('name')) {
+                document.getElementById('name').value = currentName;
+            }
             if (currentDept && document.getElementById('department')) {
                 document.getElementById('department').value = currentDept;
             }
@@ -434,14 +444,22 @@ try {
             e.preventDefault();
             
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
-            const name = '<?php echo htmlspecialchars($user_name, ENT_QUOTES, 'UTF-8'); ?>'; // 從PHP變數獲取姓名
             const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
+            const name = document.getElementById('name') ? document.getElementById('name').value : '';
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
+            // 驗證必填欄位
+            if (!name || !department || !phone) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '請填寫所有必填欄位（姓名、科系、電話）';
+                return;
+            }
+            
             const formData = new FormData();
             formData.append('username', username);
-            formData.append('name', name); // 將姓名加入表單數據
+            formData.append('name', name); // 從表單獲取姓名
             formData.append('department', department);
             formData.append('phone', phone);
             formData.append('role', role); // 添加角色資訊

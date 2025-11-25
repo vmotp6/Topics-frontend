@@ -207,13 +207,32 @@ def google_callback():
                 existing_user = cursor.fetchone()
                 
                 if existing_user:
-                    # 更新現有用戶資訊
+                    # 檢查現有頭像是否為本地上傳的
                     cursor.execute(
-                        "UPDATE user SET google_id = %s, profile_picture = %s, email = %s WHERE id = %s",
-                        (google_id, picture, email, existing_user[0])
+                        "SELECT profile_picture FROM user WHERE id = %s",
+                        (existing_user[0],)
                     )
+                    current_picture = cursor.fetchone()
+                    current_picture_path = current_picture[0] if current_picture and current_picture[0] else None
+                    
+                    # 如果已經有本地上傳的頭像（以 uploads/ 開頭），不要覆蓋
+                    # 只有在沒有頭像或頭像是 Google URL 的情況下，才更新為新的 Google 頭像
+                    if current_picture_path and current_picture_path.startswith('uploads/'):
+                        # 保留本地上傳的頭像，只更新其他資訊
+                        cursor.execute(
+                            "UPDATE user SET google_id = %s, email = %s WHERE id = %s",
+                            (google_id, email, existing_user[0])
+                        )
+                        print(f"更新現有用戶（保留本地上傳頭像）: {existing_user[1]}")
+                    else:
+                        # 沒有頭像或頭像是 Google URL，更新為新的 Google 頭像
+                        cursor.execute(
+                            "UPDATE user SET google_id = %s, profile_picture = %s, email = %s WHERE id = %s",
+                            (google_id, picture, email, existing_user[0])
+                        )
+                        print(f"更新現有用戶（更新 Google 頭像）: {existing_user[1]}")
+                    
                     user_id, username, role = existing_user
-                    print(f"更新現有用戶: {username}")
                 else:
                     # 創建新用戶
                     username = name or email.split('@')[0]

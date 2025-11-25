@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // 獲取表單資料
 $username = $_POST['username'] ?? '';
+$name = $_POST['name'] ?? '';
 $department = $_POST['department'] ?? '';
 $phone = $_POST['phone'] ?? '';
 $student_id = $_POST['student_id'] ?? '';
@@ -32,8 +33,8 @@ $grade = $_POST['grade'] ?? '';
 $class_name = $_POST['class_name'] ?? '';
 
 // 驗證必填欄位
-if (empty($username) || empty($department) || empty($phone)) {
-    echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（科系、電話）']);
+if (empty($username) || empty($name) || empty($department) || empty($phone)) {
+    echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（姓名、科系、電話）']);
     exit;
 }
 
@@ -141,6 +142,11 @@ try {
     
     $user_id = $user_result['id'];
     
+    // 更新 user 表的 name
+    $stmt = $pdo->prepare("UPDATE user SET name = ? WHERE id = ?");
+    $stmt->execute([$name, $user_id]);
+    error_log("資料庫更新姓名: username={$username}, name={$name}");
+    
     // 檢查 student 表是否存在該用戶的記錄
     $stmt = $pdo->prepare("SELECT id FROM student WHERE user_id = ?");
     $stmt->execute([$user_id]);
@@ -160,18 +166,17 @@ try {
     }
     
     if ($student_exists) {
-        // 更新現有資料（不包含email，email由註冊時設定，不允許修改）
-        $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
-        $stmt->execute([$department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $user_id]);
+        // 更新現有資料（包含姓名，不包含email，email由註冊時設定，不允許修改）
+        $stmt = $pdo->prepare("UPDATE student SET name = ?, department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
+        $stmt->execute([$name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $user_id]);
     } else {
-        // 獲取用戶姓名和email（如果有的話）
-        $stmt = $pdo->prepare("SELECT name, email FROM user WHERE id = ?");
+        // 獲取email（如果有的話）
+        $stmt = $pdo->prepare("SELECT email FROM user WHERE id = ?");
         $stmt->execute([$user_id]);
         $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
-        $name = $user_data['name'] ?? '';
         $email = $user_data['email'] ?? null;
         
-        // 插入新資料（email從user表獲取，不允許修改）
+        // 插入新資料（使用表單提交的姓名，email從user表獲取，不允許修改）
         $stmt = $pdo->prepare("INSERT INTO student (user_id, name, department, phone, student_id, grade, class_name, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$user_id, $name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $email]);
     }
