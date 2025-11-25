@@ -2472,11 +2472,8 @@ try {
           // 預設頭像
           avatarSrc = '../share/EIdROxGXsAE_LSs.jpg';
         }
-        const firstChar = contact.name ? contact.name.charAt(0) : '?';
-        
         avatarHtml = `
-          <img src="${avatarSrc}" alt="${escapeHtml(contact.name)}" class="avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
-          <span class="avatar-text" style="display:none;">${escapeHtml(firstChar)}</span>
+          <img src="${avatarSrc}" alt="${escapeHtml(contact.name)}" class="avatar-img">
         `;
         
         li.innerHTML = `

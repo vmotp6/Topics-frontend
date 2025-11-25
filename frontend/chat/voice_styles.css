@@ -394,16 +394,3 @@
     display: block !important;
 }
 
-.user-avatar .avatar-text {
-    width: 100% !important;
-    height: 100% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: 20px !important;
-    font-weight: 700 !important;
-    color: white !important;
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
-    border-radius: 50% !important;
-    font-family: 'Microsoft JhengHei', 'PingFang TC', 'Hiragino Sans GB', sans-serif !important;
-}
