@@ -38,10 +38,11 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // 先從 user 表獲取基本資訊（包括 email）
-    $stmt = $pdo->prepare("SELECT name, email FROM user WHERE username = ?");
+    // 先從 user 表獲取基本資訊（包括 email 和頭像）
+    $stmt = $pdo->prepare("SELECT name, email, profile_picture FROM user WHERE username = ?");
     $stmt->execute([$_SESSION['username']]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $current_profile_picture = '';
     if ($result) {
         if (!empty($result['name'])) {
             $user_name = $result['name'];
@@ -49,6 +50,10 @@ try {
         // 如果student表中沒有email，使用user表的email作為預設值
         if (!empty($result['email'])) {
             $current_email = $result['email'];
+        }
+        // 獲取當前頭像
+        if (!empty($result['profile_picture'])) {
+            $current_profile_picture = $result['profile_picture'];
         }
     }
     
@@ -206,6 +211,53 @@ try {
             margin-bottom: 20px;
             font-weight: 600;
         }
+
+        /* 頭像上傳區域 */
+        .avatar-section {
+            margin-bottom: 30px;
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #007bff;
+            margin: 0 auto 15px;
+            display: block;
+            background: #e0e0e0;
+        }
+
+        .avatar-upload-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        .avatar-upload-btn:hover {
+            background: #0056b3;
+        }
+
+        .avatar-upload-btn input[type="file"] {
+            display: none;
+        }
+
+        .avatar-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 
@@ -213,7 +265,54 @@ try {
     <div class="profile-container">
         <h1 class="profile-title">個人資料設定</h1>
         
-        <form id="profileForm">
+        <!-- 頭像上傳區域 -->
+        <div class="avatar-section">
+            <img id="avatarPreview" class="avatar-preview" 
+                 src="<?php 
+                    if (!empty($current_profile_picture)) {
+                        if (filter_var($current_profile_picture, FILTER_VALIDATE_URL)) {
+                            // Google 頭像 URL，直接使用
+                            echo htmlspecialchars($current_profile_picture);
+                        } else {
+                            // 本地上傳的頭像
+                            if (strpos($current_profile_picture, 'uploads/') === 0) {
+                                // 檢查檔案是否存在
+                                $file_path = __DIR__ . '/' . $current_profile_picture;
+                                if (file_exists($file_path)) {
+                                    // 檔案存在，使用相對路徑
+                                    $avatar_url = htmlspecialchars($current_profile_picture);
+                                    // 添加時間戳避免快取
+                                    $avatar_url .= '?v=' . filemtime($file_path);
+                                    echo $avatar_url;
+                                } else {
+                                    // 檔案不存在，記錄錯誤並使用預設頭像
+                                    error_log("頭像檔案不存在: {$file_path}, 資料庫路徑: {$current_profile_picture}");
+                                    echo 'share/EIdROxGXsAE_LSs.jpg';
+                                }
+                            } else {
+                                // 可能是 share 目錄的檔案
+                                $share_path = __DIR__ . '/share/' . basename($current_profile_picture);
+                                if (file_exists($share_path)) {
+                                    echo htmlspecialchars('share/' . basename($current_profile_picture));
+                                } else {
+                                    echo 'share/EIdROxGXsAE_LSs.jpg';
+                                }
+                            }
+                        }
+                    } else {
+                        echo 'share/EIdROxGXsAE_LSs.jpg';
+                    }
+                 ?>" 
+                 alt="頭像預覽"
+                 onerror="this.src='share/EIdROxGXsAE_LSs.jpg';">
+            <label class="avatar-upload-btn">
+                <input type="file" id="avatarInput" accept="image/*" onchange="previewAvatar(this)">
+                選擇頭像
+            </label>
+            <div class="avatar-info">支援 JPG、PNG 格式，建議大小 200x200 像素</div>
+        </div>
+        
+        <form id="profileForm" enctype="multipart/form-data">
             <!-- 學生專用欄位 -->
             <div class="form-group">
                 <label for="student_id">學號</label>
@@ -290,6 +389,17 @@ try {
     </div>
 
     <script>
+        // 頭像預覽功能
+        function previewAvatar(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('avatarPreview').src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
         // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
         window.addEventListener('load', function() {
             // 如果 PHP 已經從資料庫載入了資料，直接使用（不需要 API 調用）
@@ -345,6 +455,12 @@ try {
             formData.append('grade', grade);
             formData.append('class_name', className);
             
+            // 如果有選擇新的頭像，加入表單
+            const avatarInput = document.getElementById('avatarInput');
+            if (avatarInput && avatarInput.files && avatarInput.files[0]) {
+                formData.append('avatar', avatarInput.files[0]);
+            }
+            
             // 使用 AbortController 來設置超時
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
@@ -362,6 +478,35 @@ try {
                     if (response.ok && data.success) {
                         messageDiv.className = 'message success';
                         messageDiv.textContent = data.message || '個人資料保存成功';
+                        
+                         // 如果頭像已更新，更新預覽
+                         if (data.avatar_updated && data.avatar_path) {
+                             console.log('頭像已更新，新路徑:', data.avatar_path);
+                             // 立即更新預覽圖片
+                             const avatarPreview = document.getElementById('avatarPreview');
+                             if (avatarPreview) {
+                                 // 添加時間戳避免快取問題
+                                 const newSrc = data.avatar_path + '?t=' + new Date().getTime();
+                                 console.log('更新頭像預覽，新 src:', newSrc);
+                                 avatarPreview.src = newSrc;
+                                 
+                                 // 監聽圖片載入錯誤
+                                 avatarPreview.onerror = function() {
+                                     console.error('頭像載入失敗，路徑:', newSrc);
+                                     this.src = 'share/EIdROxGXsAE_LSs.jpg';
+                                 };
+                                 
+                                 // 監聽圖片載入成功
+                                 avatarPreview.onload = function() {
+                                     console.log('頭像載入成功');
+                                 };
+                             }
+                             // 1.5秒後重新載入頁面以確保所有地方都更新
+                             setTimeout(() => {
+                                 console.log('重新載入頁面以顯示新頭像');
+                                 window.location.reload();
+                             }, 1500);
+                         }
                     } else {
                         messageDiv.className = 'message error';
                         messageDiv.textContent = data.message || '提交失敗，請稍後再試';

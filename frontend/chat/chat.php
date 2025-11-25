@@ -2455,17 +2455,20 @@ try {
         
         // 頭像處理
         let avatarHtml = '';
-        // 修復路徑：chat.php 在 frontend/chat/ 目錄，所以使用 ../share/
+        // 修復路徑：chat.php 在 frontend/chat/ 目錄
         let avatarSrc = '';
         if (contact.profile_picture) {
           if (contact.profile_picture.startsWith('http://') || contact.profile_picture.startsWith('https://')) {
-            // 完整 URL
+            // 完整 URL（如 Google 頭像）
             avatarSrc = contact.profile_picture;
           } else if (contact.profile_picture.startsWith('/')) {
             // 絕對路徑
             avatarSrc = contact.profile_picture;
+          } else if (contact.profile_picture.startsWith('uploads/')) {
+            // 上傳的頭像，使用 ../uploads/
+            avatarSrc = '../' + contact.profile_picture;
           } else {
-            // 相對路徑，使用 ../share/
+            // share 目錄的檔案，使用 ../share/
             avatarSrc = '../share/' + contact.profile_picture;
           }
         } else {

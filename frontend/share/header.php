@@ -979,11 +979,17 @@ function getActiveClass($targetFile) {
                              if (!empty($row['profile_picture'])) {
                                  // 檢查是否為完整URL或相對路徑
                                  if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
-                                     // 完整 URL，直接使用
+                                     // 完整 URL（如 Google 頭像），直接使用
                                      $avatar_src = $row['profile_picture'];
                                  } else {
-                                     // 相對路徑，使用 getResourcePath 函數
-                                     $avatar_src = getResourcePath($row['profile_picture']);
+                                     // 相對路徑
+                                     if (strpos($row['profile_picture'], 'uploads/') === 0) {
+                                         // 上傳的頭像，使用 getCorrectPath 而不是 getResourcePath
+                                         $avatar_src = getCorrectPath($row['profile_picture']);
+                                     } else {
+                                         // share 目錄的檔案，使用 getResourcePath
+                                         $avatar_src = getResourcePath($row['profile_picture']);
+                                     }
                                  }
                              }
                          }

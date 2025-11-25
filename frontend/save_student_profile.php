@@ -37,6 +37,88 @@ if (empty($username) || empty($department) || empty($phone)) {
     exit;
 }
 
+// 處理頭像上傳
+$profile_picture_path = null;
+if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
+    $file = $_FILES['avatar'];
+    $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    $max_size = 5 * 1024 * 1024; // 5MB
+    
+    // 驗證檔案類型
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
+        echo json_encode(['success' => false, 'message' => '不支援的檔案格式，請上傳 JPG、PNG 或 GIF 圖片']);
+        exit;
+    }
+    
+    // 驗證檔案大小
+    if ($file['size'] > $max_size) {
+        echo json_encode(['success' => false, 'message' => '檔案大小超過 5MB，請上傳較小的圖片']);
+        exit;
+    }
+    
+    // 創建上傳目錄（如果不存在）
+    $upload_dir = __DIR__ . '/uploads/avatars/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+    
+    // 生成唯一檔名（使用安全的檔名，避免中文字符問題）
+    $file_extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    // 使用用戶ID或時間戳+隨機數來生成檔名，避免中文字符
+    $safe_username = preg_replace('/[^a-zA-Z0-9_]/', '_', $username); // 移除特殊字符
+    $new_filename = time() . '_' . uniqid() . '_' . $safe_username . '.' . $file_extension;
+    $upload_path = $upload_dir . $new_filename;
+    
+    // 移動上傳的檔案
+    if (move_uploaded_file($file['tmp_name'], $upload_path)) {
+        // 確認檔案真的存在
+        if (file_exists($upload_path)) {
+            // 儲存相對路徑（相對於 frontend 目錄）
+            $profile_picture_path = 'uploads/avatars/' . $new_filename;
+            
+            // 記錄上傳成功
+            error_log("頭像上傳成功: {$upload_path}, 相對路徑: {$profile_picture_path}");
+            
+            // 如果有舊的頭像（非 Google URL），刪除舊檔案
+            try {
+                $pdo_temp = new PDO("mysql:host=localhost;dbname=topics_good;charset=utf8mb4", "root", "");
+                $pdo_temp->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $stmt_temp = $pdo_temp->prepare("SELECT profile_picture FROM user WHERE username = ?");
+                $stmt_temp->execute([$username]);
+                $old_picture = $stmt_temp->fetchColumn();
+                
+                if ($old_picture && !filter_var($old_picture, FILTER_VALIDATE_URL)) {
+                    // 舊頭像是本地檔案，嘗試刪除
+                    $old_path = __DIR__ . '/' . $old_picture;
+                    if (file_exists($old_path) && strpos($old_picture, 'uploads/avatars/') !== false) {
+                        @unlink($old_path);
+                        error_log("已刪除舊頭像: {$old_path}");
+                    }
+                }
+            } catch (Exception $e) {
+                // 忽略刪除舊檔案的錯誤
+                error_log("刪除舊頭像錯誤: " . $e->getMessage());
+            }
+        } else {
+            error_log("頭像檔案上傳後驗證失敗: {$upload_path} 不存在");
+            echo json_encode(['success' => false, 'message' => '頭像檔案上傳後驗證失敗，請稍後再試']);
+            exit;
+        }
+    } else {
+        $error_msg = '頭像上傳失敗';
+        if (!is_writable($upload_dir)) {
+            $error_msg .= '（上傳目錄沒有寫入權限）';
+        }
+        error_log("頭像上傳失敗: 目錄={$upload_dir}, 可寫=" . (is_writable($upload_dir) ? '是' : '否'));
+        echo json_encode(['success' => false, 'message' => $error_msg . '，請稍後再試']);
+        exit;
+    }
+}
+
 try {
     // 資料庫連接
     $host = 'localhost';
@@ -64,6 +146,19 @@ try {
     $stmt->execute([$user_id]);
     $student_exists = $stmt->fetch();
     
+    // 如果有上傳新頭像，更新 user 表的 profile_picture
+    if ($profile_picture_path !== null) {
+        $stmt = $pdo->prepare("UPDATE user SET profile_picture = ? WHERE id = ?");
+        $stmt->execute([$profile_picture_path, $user_id]);
+        error_log("資料庫更新頭像: username={$username}, path={$profile_picture_path}");
+        
+        // 驗證更新是否成功
+        $stmt_check = $pdo->prepare("SELECT profile_picture FROM user WHERE id = ?");
+        $stmt_check->execute([$user_id]);
+        $updated_path = $stmt_check->fetchColumn();
+        error_log("資料庫驗證: 更新後的頭像路徑={$updated_path}");
+    }
+    
     if ($student_exists) {
         // 更新現有資料（不包含email，email由註冊時設定，不允許修改）
         $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
@@ -81,7 +176,16 @@ try {
         $stmt->execute([$user_id, $name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $email]);
     }
     
-    echo json_encode(['success' => true, 'message' => '個人資料保存成功']);
+    $message = '個人資料保存成功';
+    if ($profile_picture_path !== null) {
+        $message .= '，頭像已更新';
+    }
+    echo json_encode([
+        'success' => true, 
+        'message' => $message, 
+        'avatar_updated' => $profile_picture_path !== null,
+        'avatar_path' => $profile_picture_path
+    ]);
     
 } catch (PDOException $e) {
     error_log("保存學生個人資料錯誤: " . $e->getMessage());
