@@ -957,8 +957,9 @@ function getActiveClass($targetFile) {
   <div class="user-dropdown">
                    <div class="avatar-btn" onclick="toggleDropdown()">
              <?php
-             // 獲取用戶頭像
+             // 獲取用戶頭像和姓名
              $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+             $user_display_name = $isLoggedIn ? ($_SESSION['username'] ?? '未知用戶') : '未知用戶';
              if (isset($_SESSION['username'])) {
                  try {
                      // 使用絕對路徑來避免相對路徑問題
@@ -971,19 +972,30 @@ function getActiveClass($targetFile) {
                          $conn = null;
                      }
                      if ($conn) {
-                         $stmt = $conn->prepare("SELECT profile_picture FROM user WHERE username = ?");
+                         $stmt = $conn->prepare("SELECT profile_picture, name FROM user WHERE username = ?");
                          $stmt->bind_param("s", $_SESSION['username']);
                          $stmt->execute();
                          $result = $stmt->get_result();
                          if ($row = $result->fetch_assoc()) {
+                             // 獲取姓名，如果沒有則使用 username
+                             if (!empty($row['name'])) {
+                                 $user_display_name = $row['name'];
+                             }
+                             
                              if (!empty($row['profile_picture'])) {
                                  // 檢查是否為完整URL或相對路徑
                                  if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
-                                     // 完整 URL，直接使用
+                                     // 完整 URL（如 Google 頭像），直接使用
                                      $avatar_src = $row['profile_picture'];
                                  } else {
-                                     // 相對路徑，使用 getResourcePath 函數
-                                     $avatar_src = getResourcePath($row['profile_picture']);
+                                     // 相對路徑
+                                     if (strpos($row['profile_picture'], 'uploads/') === 0) {
+                                         // 上傳的頭像，使用 getCorrectPath 而不是 getResourcePath
+                                         $avatar_src = getCorrectPath($row['profile_picture']);
+                                     } else {
+                                         // share 目錄的檔案，使用 getResourcePath
+                                         $avatar_src = getResourcePath($row['profile_picture']);
+                                     }
                                  }
                              }
                          }
@@ -999,7 +1011,7 @@ function getActiveClass($targetFile) {
         <div class="notification-dot" id="notificationDot"></div>
       </div>
                                      <div class="dropdown-menu" id="dropdownMenu">
-         <span class="username"><?php echo $isLoggedIn ? htmlspecialchars($_SESSION['username']) : '未知用戶'; ?></span>
+         <span class="username"><?php echo htmlspecialchars($user_display_name); ?></span>
          <?php if ($isLoggedIn && isset($_SESSION['role'])): ?>
             <?php if ($_SESSION['role'] === '老師'): ?>
                 <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>

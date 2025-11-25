@@ -878,7 +878,7 @@ function checkRequiredFields() {
     
     // 獲取所有必填欄位
     const requiredFields = [
-        document.querySelector('input[name="school_name"]'),
+        document.getElementById('school_name'),
         document.querySelector('input[name="city"]'),
         document.querySelector('input[name="district"]'),
         document.querySelector('input[name="contact_name"]'),
@@ -913,8 +913,46 @@ function checkRequiredFields() {
     }
 }
 
-// 頁面載入時初始化輸入框視覺效果
+// 頁面載入時初始化輸入框視覺效果和學校搜尋
 document.addEventListener('DOMContentLoaded', function() {
+    // 綁定學校搜尋事件
+    const schoolSearchInput = document.getElementById('school_name');
+    const clearSchoolBtn = document.getElementById('clearSchoolSearch');
+
+    if (schoolSearchInput) {
+        // 輸入事件（即時搜尋）
+        schoolSearchInput.addEventListener('input', performSchoolSearch);
+
+        // 清除按鈕事件
+        if (clearSchoolBtn) {
+            clearSchoolBtn.addEventListener('click', clearSchoolSearch);
+        }
+
+        // 鍵盤事件
+        schoolSearchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                clearSchoolSearch();
+            }
+        });
+        
+        // 如果有初始值，顯示清除按鈕
+        if (schoolSearchInput.value) {
+            if (clearSchoolBtn) {
+                clearSchoolBtn.style.display = 'block';
+            }
+        }
+    }
+
+    // 點擊其他地方隱藏搜尋結果
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.modern-search-container')) {
+            const resultsDiv = document.getElementById('schoolResults');
+            if (resultsDiv) {
+                resultsDiv.classList.remove('show');
+            }
+        }
+    });
+    
     // 為驗證碼輸入框添加視覺反饋
     const captchaInput = document.getElementById('captchaInput');
     if (captchaInput) {
@@ -961,6 +999,92 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 初始檢查一次
         checkRequiredFields();
+    }
+    
+    // 處理更新成功後的顯示，5秒後清除URL參數避免重新整理時重複顯示
+    if (window.location.search.includes('updated=1')) {
+        setTimeout(function() {
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }, 5000);
+    }
+    
+    // 處理表單提交
+    let isSubmitting = false;
+    const formAction = document.getElementById('form_action');
+    const submitBtnText = document.getElementById('submit_btn_text');
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // 防止重複提交
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // 驗證日期不能是過去的日期
+            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
+            if (preferredDateInput && preferredDateInput.value) {
+                const selectedDate = new Date(preferredDateInput.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
+                selectedDate.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < today) {
+                    e.preventDefault();
+                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
+                    preferredDateInput.focus();
+                    isSubmitting = false;
+                    return false;
+                }
+            }
+            
+            if (formAction) {
+                const action = formAction.value;
+                if (action === 'update') {
+                    if (!confirm('確定要更新申請資料嗎？')) {
+                        e.preventDefault();
+                        isSubmitting = false;
+                        return false;
+                    }
+                }
+            }
+            
+            // 設定提交狀態
+            isSubmitting = true;
+            
+            // 更新按鈕狀態
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.6';
+                submitBtn.style.cursor = 'not-allowed';
+                if (submitBtnText) {
+                    const originalText = submitBtnText.textContent;
+                    submitBtnText.textContent = '處理中...';
+                    
+                    // 如果5秒後仍在提交，恢復按鈕狀態
+                    setTimeout(function() {
+                        if (isSubmitting) {
+                            isSubmitting = false;
+                            submitBtn.disabled = false;
+                            submitBtn.style.opacity = '1';
+                            submitBtn.style.cursor = 'pointer';
+                            submitBtnText.textContent = originalText;
+                        }
+                    }, 5000);
+                }
+            }
+        });
+    }
+    
+    // 處理表單初始化
+    if (formAction && formAction.value === 'update') {
+        if (submitBtnText) {
+            submitBtnText.textContent = '更新申請資料';
+        }
+        // 如果是更新模式，檢查必填欄位並更新按鈕狀態
+        setTimeout(checkRequiredFields, 100);
     }
 });
 
@@ -1134,129 +1258,6 @@ function loadApplicationData() {
     alert('申請資料已載入到表單，您可以修改後重新提交。');
     <?php endif; ?>
 }
-
-// 處理表單初始化
-document.addEventListener('DOMContentLoaded', function() {
-    // 綁定學校搜尋事件
-    const schoolSearchInput = document.getElementById('school_name');
-    const clearSchoolBtn = document.getElementById('clearSchoolSearch');
-
-    if (schoolSearchInput) {
-        // 輸入事件（即時搜尋）
-        schoolSearchInput.addEventListener('input', performSchoolSearch);
-
-        // 清除按鈕事件
-        if (clearSchoolBtn) {
-            clearSchoolBtn.addEventListener('click', clearSchoolSearch);
-        }
-
-        // 鍵盤事件
-        schoolSearchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                clearSchoolSearch();
-            }
-        });
-        
-        // 如果有初始值，顯示清除按鈕
-        if (schoolSearchInput.value) {
-            if (clearSchoolBtn) {
-                clearSchoolBtn.style.display = 'block';
-            }
-        }
-    }
-
-    // 點擊其他地方隱藏搜尋結果
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.modern-search-container')) {
-            const resultsDiv = document.getElementById('schoolResults');
-            if (resultsDiv) {
-                resultsDiv.classList.remove('show');
-            }
-        }
-    });
-    
-    const form = document.getElementById('recruitmentForm');
-    const formAction = document.getElementById('form_action');
-    const submitBtnText = document.getElementById('submit_btn_text');
-    
-    if (formAction && formAction.value === 'update') {
-        submitBtnText.textContent = '更新申請資料';
-        // 如果是更新模式，檢查必填欄位並更新按鈕狀態
-        setTimeout(checkRequiredFields, 100);
-    }
-    
-    // 處理更新成功後的顯示，5秒後清除URL參數避免重新整理時重複顯示
-    if (window.location.search.includes('updated=1')) {
-        setTimeout(function() {
-            if (window.history && window.history.replaceState) {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        }, 5000);
-    }
-    
-    // 處理表單提交
-    const submitBtn = document.getElementById('submit_btn');
-    let isSubmitting = false;
-    
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            // 防止重複提交
-            if (isSubmitting) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // 驗證日期不能是過去的日期
-            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
-            if (preferredDateInput && preferredDateInput.value) {
-                const selectedDate = new Date(preferredDateInput.value);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
-                selectedDate.setHours(0, 0, 0, 0);
-                
-                if (selectedDate < today) {
-                    e.preventDefault();
-                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
-                    preferredDateInput.focus();
-                    isSubmitting = false;
-                    return false;
-                }
-            }
-            
-            const action = formAction.value;
-            if (action === 'update') {
-                if (!confirm('確定要更新申請資料嗎？')) {
-                    e.preventDefault();
-                    isSubmitting = false;
-                    return false;
-                }
-            }
-            
-            // 設定提交狀態
-            isSubmitting = true;
-            
-            // 更新按鈕狀態
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.style.opacity = '0.6';
-                submitBtn.style.cursor = 'not-allowed';
-                const originalText = submitBtnText.textContent;
-                submitBtnText.textContent = '處理中...';
-                
-                // 如果5秒後仍在提交，恢復按鈕狀態
-                setTimeout(function() {
-                    if (isSubmitting) {
-                        isSubmitting = false;
-                        submitBtn.disabled = false;
-                        submitBtn.style.opacity = '1';
-                        submitBtn.style.cursor = 'pointer';
-                        submitBtnText.textContent = originalText;
-                    }
-                }, 5000);
-            }
-        });
-    }
-});
 
 // 驗證碼刷新功能
 function refreshCaptcha() {
