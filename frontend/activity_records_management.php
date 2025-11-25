@@ -382,13 +382,33 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === '學校行政人員') {
             t.department AS teacher_department_display
         FROM activity_records ar
         LEFT JOIN teacher t ON ar.teacher_id = t.user_id
-        WHERE ar.teacher_id = ?
-        ORDER BY ar.activity_date DESC, ar.id DESC
-    ";
+        WHERE ar.teacher_id = ?";
+    
+    // 添加搜索功能
+    $params = [];
+    $types = 'i';
+    $params[] = $teacher_id;
+    
+    // 搜索功能：对于一般老师，搜索学校名称
+    if (!empty($_GET['teacher_name'])) {
+        $records_sql .= " AND ar.school_name LIKE ?";
+        $params[] = "%" . $_GET['teacher_name'] . "%";
+        $types .= 's';
+    }
+    
+    if (!empty($_GET['department'])) {
+        $records_sql .= " AND t.department = ?";
+        $params[] = $_GET['department'];
+        $types .= 's';
+    }
+    
+    $records_sql .= " ORDER BY ar.activity_date DESC, ar.id DESC";
 
     $records_stmt = $conn->prepare($records_sql);
     if ($records_stmt) {
-        $records_stmt->bind_param("i", $teacher_id);
+        if (!empty($params)) {
+            $records_stmt->bind_param($types, ...$params);
+        }
         $records_stmt->execute();
         $records_result = $records_stmt->get_result();
         
@@ -948,29 +968,18 @@ $conn->close();
         <!-- 記錄列表 -->
         <div class="records-table-container">
             <h3><i class="fas fa-table"></i> 活動記錄列表</h3>
-            <div class="filter-bar" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
-    <form method="GET" action="activity_records_management.php" style="display: flex; gap: 10px;">
-        <input type="text" name="teacher_name" placeholder="搜尋教師姓名"
+            <div class="filter-bar" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: nowrap;">
+    <form method="GET" action="activity_records_management.php" style="display: flex; gap: 10px; align-items: center; flex-wrap: nowrap;">
+        <input type="text" name="teacher_name" placeholder="搜尋教師姓名或學校名稱"
                value="<?php echo htmlspecialchars($_GET['teacher_name'] ?? ''); ?>"
                style="padding: 5px 10px; border-radius: 6px; border: 1px solid #ccc;">
-
-        <select name="department" style="padding: 5px 10px; border-radius: 6px; border: 1px solid #ccc;">
-            <option value="">全部科系</option>
-            <option value="資訊管理科" <?php if(($_GET['department'] ?? '') == '資訊管理科') echo 'selected'; ?>>資訊管理科</option>
-            <option value="企業管理科" <?php if(($_GET['department'] ?? '') == '企業管理科') echo 'selected'; ?>>企業管理科</option>
-            <option value="應用外語科" <?php if(($_GET['department'] ?? '') == '應用外語科') echo 'selected'; ?>>應用外語科</option>
-            <!-- 可依實際資料庫科系補上更多選項 -->
-        </select>
-
-        <button type="submit" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #4CAF50; color: white; cursor: pointer;">
+        <button type="submit" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #4CAF50; color: white; cursor: pointer; white-space: nowrap;">
             🔍 篩選
         </button>
-        <a href="activity_records_management.php" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #888; color: white; text-decoration: none;">
+        <a href="activity_records_management.php" style="padding: 5px 25px; border: none; border-radius: 6px; background-color: #888; color: white; text-decoration: none; display: inline-block; white-space: nowrap; align-self: flex-start; margin-top: 0px;">
             重置
         </a>
     </form>
-
-    
 </div>
             <?php if (!empty($activity_records)): ?>
                 <table class="records-table">
