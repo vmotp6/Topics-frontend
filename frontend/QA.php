@@ -248,12 +248,25 @@ $(document).ready(function() {
                         // 檢查 response.success 或 response.answer（兼容舊格式）
                         if (response.success === true || (response.answer && !response.error)) {
                             console.log('🎉 AI回答成功，使用AI回答');
+                            
+                            // 檢查是否沒有資料庫資料
+                            let finalAnswer = response.answer;
+                            if (response.no_database_data === true) {
+                                // 資料庫沒有相關資料，顯示特定訊息
+                                finalAnswer = '此內容沒有準確的資料可以回答您\n\n';
+                                finalAnswer += '📞 招生中心聯絡資訊：\n';
+                                finalAnswer += '• 電話：02-2632-1181\n';
+                                finalAnswer += '• 如有任何疑問，歡迎直接聯繫招生中心，我們將為您提供最準確的資訊\n\n';
+                                finalAnswer += '超出AI資訊範';
+                            }
+                            
                             resolve({
-                                answer: response.answer,
+                                answer: finalAnswer,
                                 source_type: 'ollama_ai',
                                 confidence_score: 0.9,
                                 response_time: response.response_time_ms || 0,
-                                model: response.model || 'ollama'
+                                model: response.model || 'ollama',
+                                no_database_data: response.no_database_data || false
                             });
                         } else {
                             // AI失敗時，先嘗試使用錯誤訊息，如果沒有則回退到關鍵詞匹配
@@ -287,22 +300,63 @@ $(document).ready(function() {
                             error: error
                         });
                         
+                        // 嘗試解析響應，看是否有 no_database_data 標記
+                        let noDatabaseData = false;
+                        try {
+                            if (xhr.responseText) {
+                                const errorResponse = JSON.parse(xhr.responseText);
+                                if (errorResponse.no_database_data === true) {
+                                    noDatabaseData = true;
+                                }
+                            }
+                        } catch (e) {
+                            // 無法解析響應，繼續使用回退邏輯
+                        }
+                        
+                        // 如果資料庫沒有相關資料，顯示特定訊息
+                        if (noDatabaseData) {
+                            const noDataAnswer = '此內容沒有準確的資料可以回答您\n\n' +
+                                '📞 招生中心聯絡資訊：\n' +
+                                '• 電話：02-2632-1181\n' +
+                                '• 如有任何疑問，歡迎直接聯繫招生中心，我們將為您提供最準確的資訊\n\n' +
+                                '超出AI資訊範';
+                            
+                            resolve({
+                                answer: noDataAnswer,
+                                source_type: 'no_database_data',
+                                confidence_score: 0.5,
+                                response_time: 0
+                            });
+                            return;
+                        }
+                        
                         // 處理超時情況
                         if (status === 'timeout' || error === 'timeout') {
-                            console.warn('⏱️ AI 請求超時，使用關鍵詞匹配作為回退');
-                            const fallbackAnswer = findFallbackAnswer(question);
+                            console.warn('⏱️ AI 請求超時，檢查資料庫是否有相關資料');
+                            // 超時時，假設資料庫沒有相關資料，顯示特定訊息
+                            const noDataAnswer = '此內容沒有準確的資料可以回答您\n\n' +
+                                '📞 招生中心聯絡資訊：\n' +
+                                '• 電話：02-2632-1181\n' +
+                                '• 如有任何疑問，歡迎直接聯繫招生中心，我們將為您提供最準確的資訊\n\n' +
+                                '超出AI資訊範';
+                            
                             resolve({
-                                answer: '⏱️ AI 回答時間較長，為您提供以下資訊：\n\n' + fallbackAnswer + '\n\n💡 提示：如果問題較複雜，AI 可能需要更長時間處理。您可以稍後再試，或使用更簡短的問題。',
-                                source_type: 'timeout_fallback',
+                                answer: noDataAnswer,
+                                source_type: 'timeout_no_data',
                                 confidence_score: 0.4,
                                 response_time: 0
                             });
                         } else {
-                            // 其他網路錯誤時快速回退到關鍵詞匹配
-                            const fallbackAnswer = findFallbackAnswer(question);
+                            // 其他網路錯誤時，也顯示資料庫無資料的訊息
+                            const noDataAnswer = '此內容沒有準確的資料可以回答您\n\n' +
+                                '📞 招生中心聯絡資訊：\n' +
+                                '• 電話：02-2632-1181\n' +
+                                '• 如有任何疑問，歡迎直接聯繫招生中心，我們將為您提供最準確的資訊\n\n' +
+                                '超出AI資訊範';
+                            
                             resolve({
-                                answer: '❌ AI 服務暫時無法連接，為您提供以下資訊：\n\n' + fallbackAnswer + '\n\n💡 提示：請檢查 Ollama 服務是否正常運行，或稍後再試。',
-                                source_type: 'network_fallback',
+                                answer: noDataAnswer,
+                                source_type: 'network_error_no_data',
                                 confidence_score: 0.3,
                                 response_time: 0
                             });

@@ -217,28 +217,77 @@ function handleAskQuestion($ollama) {
             }
         }
         
+        // 檢查資料庫是否有相關內容
+        // 先檢查是否有上下文資料
+        $has_database_data = !empty($context);
+        
+        // 如果沒有上下文資料，檢查是否有其他資料庫資料（科系、學費、創造者等）
+        if (!$has_database_data) {
+            // 檢查是否有科系、學費、創造者等特定資料
+            $question_lower_check = mb_strtolower($question, 'UTF-8');
+            if (mb_strpos($question_lower_check, '科系', 0, 'UTF-8') !== false || mb_strpos($question_lower_check, '科', 0, 'UTF-8') !== false) {
+                $test_dept = getDepartmentAnswer($question);
+                $has_database_data = !empty($test_dept);
+            } elseif (mb_strpos($question_lower_check, '學費', 0, 'UTF-8') !== false || mb_strpos($question_lower_check, '費用', 0, 'UTF-8') !== false) {
+                $test_tuition = getTuitionAnswer($question);
+                $has_database_data = !empty($test_tuition);
+            } elseif (mb_strpos($question_lower_check, '創造者', 0, 'UTF-8') !== false || mb_strpos($question_lower_check, '創作者', 0, 'UTF-8') !== false) {
+                $test_creator = getCreatorAnswer($question);
+                $has_database_data = !empty($test_creator);
+            } else {
+                // 對於其他問題，檢查是否有任何相關的訓練資料
+                $relevant_data = getRelevantTrainingData($question);
+                $has_database_data = !empty($relevant_data);
+            }
+        }
+        
         $result = $ollama->askQuestion($question, $context, $model);
         
         if ($result['success']) {
             $response_time = round((microtime(true) - $start_time) * 1000);
             
-            // 記錄問答歷史
-            saveQAHistory($question, $result['answer'], $model, $response_time);
-            
-            echo json_encode([
-                'success' => true,
-                'answer' => $result['answer'],
-                'model' => $result['model'],
-                'context_used' => $result['context_used'],
-                'response_time_ms' => $response_time
-            ]);
+            // 如果資料庫沒有相關資料，標記為無資料庫資料
+            if (!$has_database_data) {
+                // 記錄問答歷史（標記為無資料庫資料）
+                saveQAHistory($question, $result['answer'], $model . '_no_db', $response_time);
+                
+                echo json_encode([
+                    'success' => true,
+                    'answer' => $result['answer'],
+                    'model' => $result['model'],
+                    'context_used' => $result['context_used'],
+                    'response_time_ms' => $response_time,
+                    'no_database_data' => true
+                ]);
+            } else {
+                // 記錄問答歷史
+                saveQAHistory($question, $result['answer'], $model, $response_time);
+                
+                echo json_encode([
+                    'success' => true,
+                    'answer' => $result['answer'],
+                    'model' => $result['model'],
+                    'context_used' => $result['context_used'],
+                    'response_time_ms' => $response_time
+                ]);
+            }
         } else {
-            // 修改：返回 success: false 而不是只有 error，讓前端能正確處理
-            echo json_encode([
-                'success' => false,
-                'error' => $result['error'] ?? 'AI 回答失敗',
-                'message' => 'AI 暫時無法回答，請稍後再試或使用關鍵詞查詢'
-            ]);
+            // AI回答失敗時，如果資料庫沒有相關資料，也標記為無資料庫資料
+            if (!$has_database_data) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => $result['error'] ?? 'AI 回答失敗',
+                    'message' => 'AI 暫時無法回答，請稍後再試或使用關鍵詞查詢',
+                    'no_database_data' => true
+                ]);
+            } else {
+                // 修改：返回 success: false 而不是只有 error，讓前端能正確處理
+                echo json_encode([
+                    'success' => false,
+                    'error' => $result['error'] ?? 'AI 回答失敗',
+                    'message' => 'AI 暫時無法回答，請稍後再試或使用關鍵詞查詢'
+                ]);
+            }
         }
         
     } catch (Exception $e) {

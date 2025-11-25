@@ -597,17 +597,31 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <h3><i class="fas fa-building"></i> 學校基本資料</h3>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> 學校名稱</label>
-                            <input type="text" name="school_name" placeholder="請輸入學校全名" required 
-                                   value="<?php 
-                                   $school_name_value = '';
-                                   if ($application_data) {
-                                       $school_name_value = htmlspecialchars($application_data['school_name'], ENT_QUOTES, 'UTF-8');
-                                   } elseif (isset($_POST['school_name'])) {
-                                       $school_name_value = htmlspecialchars($_POST['school_name'], ENT_QUOTES, 'UTF-8');
-                                   }
-                                   echo $school_name_value;
-                                   ?>" />
+                            <label><span class="required">*</span> 學校名稱：</label>
+                            <div class="modern-search-container">
+                                <div class="search-input-wrapper">
+                                    <input type="text" id="school_name" name="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required 
+                                           value="<?php 
+                                           $school_name_value = '';
+                                           if ($application_data) {
+                                               $school_name_value = htmlspecialchars($application_data['school_name'], ENT_QUOTES, 'UTF-8');
+                                           } elseif (isset($_POST['school_name'])) {
+                                               $school_name_value = htmlspecialchars($_POST['school_name'], ENT_QUOTES, 'UTF-8');
+                                           }
+                                           echo $school_name_value;
+                                           ?>" />
+                                    <div class="search-icon">
+                                        <i class="fas fa-search"></i>
+                                    </div>
+                                    <div class="clear-btn" id="clearSchoolSearch" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </div>
+                                </div>
+                                <div id="schoolResults" class="modern-search-results"></div>
+                            </div>
+                            <div class="help-text">
+                                <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，支援模糊匹配
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -864,7 +878,7 @@ function checkRequiredFields() {
     
     // 獲取所有必填欄位
     const requiredFields = [
-        document.querySelector('input[name="school_name"]'),
+        document.getElementById('school_name'),
         document.querySelector('input[name="city"]'),
         document.querySelector('input[name="district"]'),
         document.querySelector('input[name="contact_name"]'),
@@ -899,8 +913,46 @@ function checkRequiredFields() {
     }
 }
 
-// 頁面載入時初始化輸入框視覺效果
+// 頁面載入時初始化輸入框視覺效果和學校搜尋
 document.addEventListener('DOMContentLoaded', function() {
+    // 綁定學校搜尋事件
+    const schoolSearchInput = document.getElementById('school_name');
+    const clearSchoolBtn = document.getElementById('clearSchoolSearch');
+
+    if (schoolSearchInput) {
+        // 輸入事件（即時搜尋）
+        schoolSearchInput.addEventListener('input', performSchoolSearch);
+
+        // 清除按鈕事件
+        if (clearSchoolBtn) {
+            clearSchoolBtn.addEventListener('click', clearSchoolSearch);
+        }
+
+        // 鍵盤事件
+        schoolSearchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                clearSchoolSearch();
+            }
+        });
+        
+        // 如果有初始值，顯示清除按鈕
+        if (schoolSearchInput.value) {
+            if (clearSchoolBtn) {
+                clearSchoolBtn.style.display = 'block';
+            }
+        }
+    }
+
+    // 點擊其他地方隱藏搜尋結果
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.modern-search-container')) {
+            const resultsDiv = document.getElementById('schoolResults');
+            if (resultsDiv) {
+                resultsDiv.classList.remove('show');
+            }
+        }
+    });
+    
     // 為驗證碼輸入框添加視覺反饋
     const captchaInput = document.getElementById('captchaInput');
     if (captchaInput) {
@@ -948,6 +1000,92 @@ document.addEventListener('DOMContentLoaded', function() {
         // 初始檢查一次
         checkRequiredFields();
     }
+    
+    // 處理更新成功後的顯示，5秒後清除URL參數避免重新整理時重複顯示
+    if (window.location.search.includes('updated=1')) {
+        setTimeout(function() {
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }, 5000);
+    }
+    
+    // 處理表單提交
+    let isSubmitting = false;
+    const formAction = document.getElementById('form_action');
+    const submitBtnText = document.getElementById('submit_btn_text');
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // 防止重複提交
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // 驗證日期不能是過去的日期
+            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
+            if (preferredDateInput && preferredDateInput.value) {
+                const selectedDate = new Date(preferredDateInput.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
+                selectedDate.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < today) {
+                    e.preventDefault();
+                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
+                    preferredDateInput.focus();
+                    isSubmitting = false;
+                    return false;
+                }
+            }
+            
+            if (formAction) {
+                const action = formAction.value;
+                if (action === 'update') {
+                    if (!confirm('確定要更新申請資料嗎？')) {
+                        e.preventDefault();
+                        isSubmitting = false;
+                        return false;
+                    }
+                }
+            }
+            
+            // 設定提交狀態
+            isSubmitting = true;
+            
+            // 更新按鈕狀態
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.6';
+                submitBtn.style.cursor = 'not-allowed';
+                if (submitBtnText) {
+                    const originalText = submitBtnText.textContent;
+                    submitBtnText.textContent = '處理中...';
+                    
+                    // 如果5秒後仍在提交，恢復按鈕狀態
+                    setTimeout(function() {
+                        if (isSubmitting) {
+                            isSubmitting = false;
+                            submitBtn.disabled = false;
+                            submitBtn.style.opacity = '1';
+                            submitBtn.style.cursor = 'pointer';
+                            submitBtnText.textContent = originalText;
+                        }
+                    }, 5000);
+                }
+            }
+        });
+    }
+    
+    // 處理表單初始化
+    if (formAction && formAction.value === 'update') {
+        if (submitBtnText) {
+            submitBtnText.textContent = '更新申請資料';
+        }
+        // 如果是更新模式，檢查必填欄位並更新按鈕狀態
+        setTimeout(checkRequiredFields, 100);
+    }
 });
 
 // 選取申請資料
@@ -982,13 +1120,106 @@ function selectApplication(applicationId) {
     }
 }
 
+// 學校搜尋功能
+function performSchoolSearch() {
+    const keyword = document.getElementById('school_name').value.trim();
+    const resultsDiv = document.getElementById('schoolResults');
+    const clearBtn = document.getElementById('clearSchoolSearch');
+
+    // 顯示/隱藏清除按鈕
+    if (keyword.length > 0) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+        resultsDiv.classList.remove('show');
+        return;
+    }
+
+    if (keyword.length < 2) {
+        resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
+        resultsDiv.classList.add('show');
+        return;
+    }
+
+    // 顯示載入中
+    resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
+    resultsDiv.classList.add('show');
+
+    // 從API獲取搜尋結果
+    fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('搜尋結果:', data);
+            if (data.schools && data.schools.length > 0) {
+                resultsDiv.innerHTML = data.schools.map(school => {
+                    let displayName = school.name;
+                    let additionalInfo = '';
+                    
+                    if (school.all_names && school.all_names.length > 1) {
+                        additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
+                    }
+                    
+                    return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                        <i class="fas fa-school"></i>
+                        <div class="school-info">
+                            <span class="school-name">${displayName}</span>
+                            <span class="school-location">${school.city} ${school.district}</span>
+                            ${additionalInfo}
+                        </div>
+                    </div>`;
+                }).join('');
+
+                if (data.total > 20) {
+                    resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
+                }
+            } else {
+                resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+            }
+        })
+        .catch(error => {
+            console.error('搜尋錯誤:', error);
+            resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+        });
+}
+
+// 清除搜尋
+function clearSchoolSearch() {
+    document.getElementById('school_name').value = '';
+    document.getElementById('schoolResults').classList.remove('show');
+    document.getElementById('clearSchoolSearch').style.display = 'none';
+}
+
+// 選擇學校
+function selectSchool(schoolName, city, district) {
+    const fullSchoolName = `${schoolName} (${city}${district})`;
+    const schoolInput = document.getElementById('school_name');
+    schoolInput.value = fullSchoolName;
+    
+    // 自動填入縣市和區/鄉鎮市
+    const cityInput = document.querySelector('input[name="city"]');
+    const districtInput = document.querySelector('input[name="district"]');
+    if (cityInput) cityInput.value = city;
+    if (districtInput) districtInput.value = district;
+    
+    document.getElementById('schoolResults').classList.remove('show');
+    document.getElementById('clearSchoolSearch').style.display = 'block';
+    
+    // 觸發必填欄位檢查
+    if (typeof checkRequiredFields === 'function') {
+        checkRequiredFields();
+    }
+}
+
 // 載入申請資料到表單
 function loadApplicationData() {
     <?php if ($application_data): ?>
     const data = <?php echo json_encode($application_data); ?>;
     
     // 填入表單資料
-    document.querySelector('input[name="school_name"]').value = data.school_name || '';
+    const schoolNameInput = document.getElementById('school_name');
+    if (schoolNameInput) {
+        schoolNameInput.value = data.school_name || '';
+    }
     document.querySelector('input[name="city"]').value = data.city || '';
     document.querySelector('input[name="district"]').value = data.district || '';
     document.querySelector('input[name="school_address"]').value = data.school_address || '';
@@ -1003,6 +1234,14 @@ function loadApplicationData() {
     document.querySelector('select[name="venue_type"]').value = data.venue_type || '';
     document.querySelector('textarea[name="special_requirements"]').value = data.special_requirements || '';
     document.querySelector('textarea[name="remarks"]').value = data.remarks || '';
+    
+    // 如果有學校名稱，顯示清除按鈕
+    if (schoolNameInput && schoolNameInput.value) {
+        const clearBtn = document.getElementById('clearSchoolSearch');
+        if (clearBtn) {
+            clearBtn.style.display = 'block';
+        }
+    }
     
     // 設定為更新模式
     document.getElementById('form_action').value = 'update';
@@ -1019,91 +1258,6 @@ function loadApplicationData() {
     alert('申請資料已載入到表單，您可以修改後重新提交。');
     <?php endif; ?>
 }
-
-// 處理表單初始化
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('recruitmentForm');
-    const formAction = document.getElementById('form_action');
-    const submitBtnText = document.getElementById('submit_btn_text');
-    
-    if (formAction && formAction.value === 'update') {
-        submitBtnText.textContent = '更新申請資料';
-        // 如果是更新模式，檢查必填欄位並更新按鈕狀態
-        setTimeout(checkRequiredFields, 100);
-    }
-    
-    // 處理更新成功後的顯示，5秒後清除URL參數避免重新整理時重複顯示
-    if (window.location.search.includes('updated=1')) {
-        setTimeout(function() {
-            if (window.history && window.history.replaceState) {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        }, 5000);
-    }
-    
-    // 處理表單提交
-    const submitBtn = document.getElementById('submit_btn');
-    let isSubmitting = false;
-    
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            // 防止重複提交
-            if (isSubmitting) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // 驗證日期不能是過去的日期
-            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
-            if (preferredDateInput && preferredDateInput.value) {
-                const selectedDate = new Date(preferredDateInput.value);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
-                selectedDate.setHours(0, 0, 0, 0);
-                
-                if (selectedDate < today) {
-                    e.preventDefault();
-                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
-                    preferredDateInput.focus();
-                    isSubmitting = false;
-                    return false;
-                }
-            }
-            
-            const action = formAction.value;
-            if (action === 'update') {
-                if (!confirm('確定要更新申請資料嗎？')) {
-                    e.preventDefault();
-                    isSubmitting = false;
-                    return false;
-                }
-            }
-            
-            // 設定提交狀態
-            isSubmitting = true;
-            
-            // 更新按鈕狀態
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.style.opacity = '0.6';
-                submitBtn.style.cursor = 'not-allowed';
-                const originalText = submitBtnText.textContent;
-                submitBtnText.textContent = '處理中...';
-                
-                // 如果5秒後仍在提交，恢復按鈕狀態
-                setTimeout(function() {
-                    if (isSubmitting) {
-                        isSubmitting = false;
-                        submitBtn.disabled = false;
-                        submitBtn.style.opacity = '1';
-                        submitBtn.style.cursor = 'pointer';
-                        submitBtnText.textContent = originalText;
-                    }
-                }, 5000);
-            }
-        });
-    }
-});
 
 // 驗證碼刷新功能
 function refreshCaptcha() {
