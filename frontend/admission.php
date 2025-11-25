@@ -607,9 +607,6 @@ $conn->close();
         <!-- 搜尋報名記錄區域 -->
         <div class="search-container">
             <div class="search-header">
-                <div class="search-icon">
-                    <i class="fas fa-search"></i>
-                </div>
                 <div class="search-title">
                     <h2>查詢我的報名記錄</h2>
                     <p>輸入您的電子郵件地址，即可查看、取消或修改您的報名場次</p>
@@ -716,7 +713,21 @@ $conn->close();
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 學校名稱：</label>
-                            <input type="text" name="school_name" value="<?php echo isset($_POST['school_name']) ? htmlspecialchars($_POST['school_name']) : ''; ?>" required>
+                            <div class="modern-search-container">
+                                <div class="search-input-wrapper">
+                                    <input type="text" id="school_name" name="school_name" placeholder="請輸入學校名稱..." autocomplete="off" value="<?php echo isset($_POST['school_name']) ? htmlspecialchars($_POST['school_name']) : ''; ?>" required>
+                                    <div class="search-icon">
+                                        <i class="fas fa-search"></i>
+                                    </div>
+                                    <div class="clear-btn" id="clearSchoolSearch" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </div>
+                                </div>
+                                <div id="schoolResults" class="modern-search-results"></div>
+                            </div>
+                            <div class="help-text">
+                                <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，支援模糊匹配
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -1070,9 +1081,117 @@ $conn->close();
         });
 
         // 頁面載入完成後初始化
+        // 學校搜尋功能
+        function performSchoolSearch() {
+            const keyword = document.getElementById('school_name').value.trim();
+            const resultsDiv = document.getElementById('schoolResults');
+            const clearBtn = document.getElementById('clearSchoolSearch');
+
+            // 顯示/隱藏清除按鈕
+            if (keyword.length > 0) {
+                clearBtn.style.display = 'block';
+            } else {
+                clearBtn.style.display = 'none';
+                resultsDiv.classList.remove('show');
+                return;
+            }
+
+            if (keyword.length < 2) {
+                resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
+                resultsDiv.classList.add('show');
+                return;
+            }
+
+            // 顯示載入中
+            resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
+            resultsDiv.classList.add('show');
+
+            // 從API獲取搜尋結果
+            fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('搜尋結果:', data);
+                    if (data.schools && data.schools.length > 0) {
+                        resultsDiv.innerHTML = data.schools.map(school => {
+                            let displayName = school.name;
+                            let additionalInfo = '';
+                            
+                            if (school.all_names && school.all_names.length > 1) {
+                                additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
+                            }
+                            
+                            return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                                <i class="fas fa-school"></i>
+                                <div class="school-info">
+                                    <span class="school-name">${displayName}</span>
+                                    <span class="school-location">${school.city} ${school.district}</span>
+                                    ${additionalInfo}
+                                </div>
+                            </div>`;
+                        }).join('');
+
+                        if (data.total > 20) {
+                            resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
+                        }
+                    } else {
+                        resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('搜尋錯誤:', error);
+                    resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+                });
+        }
+
+        // 清除搜尋
+        function clearSchoolSearch() {
+            document.getElementById('school_name').value = '';
+            document.getElementById('schoolResults').classList.remove('show');
+            document.getElementById('clearSchoolSearch').style.display = 'none';
+        }
+
+        // 選擇學校
+        function selectSchool(schoolName, city, district) {
+            const fullSchoolName = `${schoolName} (${city}${district})`;
+            document.getElementById('school_name').value = fullSchoolName;
+            document.getElementById('schoolResults').classList.remove('show');
+            document.getElementById('clearSchoolSearch').style.display = 'block';
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded, checking for success message...');
             initializeDragAndDrop();
+            
+            // 綁定學校搜尋事件
+            const schoolSearchInput = document.getElementById('school_name');
+            const clearSchoolBtn = document.getElementById('clearSchoolSearch');
+
+            if (schoolSearchInput) {
+                // 輸入事件（即時搜尋）
+                schoolSearchInput.addEventListener('input', performSchoolSearch);
+
+                // 清除按鈕事件
+                if (clearSchoolBtn) {
+                    clearSchoolBtn.addEventListener('click', clearSchoolSearch);
+                }
+
+                // 鍵盤事件
+                schoolSearchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        clearSchoolSearch();
+                    }
+                });
+            }
+
+            // 點擊其他地方隱藏搜尋結果
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.modern-search-container')) {
+                    const resultsDiv = document.getElementById('schoolResults');
+                    if (resultsDiv) {
+                        resultsDiv.classList.remove('show');
+                    }
+                }
+            });
             
             // 檢查是否有成功訊息需要顯示
             if (window.successMessage) {

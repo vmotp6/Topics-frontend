@@ -113,6 +113,10 @@ main {
     flex-direction: column;
 }
 
+.field-group .modern-search-container {
+    width: 100%;
+}
+
 .field-group label {
     font-weight: 600;
     margin-bottom: 8px;
@@ -522,18 +526,7 @@ textarea:focus {
     margin-bottom: 30px;
 }
 
-.search-icon {
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 24px;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
+
 
 .search-title h2 {
     color: #333;
@@ -1068,4 +1061,164 @@ textarea:focus {
         width: 100%;
         justify-content: center;
     }
+}
+
+/* 學校搜尋相關樣式 */
+.modern-search-container {
+    position: relative;
+    width: 100%;
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input-wrapper input {
+    width: 100%;
+    padding: 12px 45px 12px 15px;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.search-input-wrapper input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-icon {
+    position: absolute;
+    right: 15px;
+    color: #6c757d;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.clear-btn {
+    position: absolute;
+    right: 40px;
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    z-index: 2;
+}
+
+.clear-btn:hover {
+    background: #f8f9fa;
+    color: #dc3545;
+}
+
+.modern-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    margin-top: 2px;
+}
+
+.modern-search-results.show {
+    display: block;
+}
+
+.search-result-item {
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.2s ease;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background-color: #f8f9fa;
+}
+
+.search-result-item i {
+    color: #667eea;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.school-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.school-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.95rem;
+}
+
+.school-location {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.school-alternative-names {
+    font-size: 0.75rem;
+    color: #667eea;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.search-result-item.more-results {
+    background: #e9ecef;
+    color: #6c757d;
+    font-style: italic;
+    cursor: default;
+    justify-content: center;
+}
+
+.search-result-item.more-results:hover {
+    background: #e9ecef;
+}
+
+.help-text {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.help-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+.help-text i {
+    color: #667eea;
 }

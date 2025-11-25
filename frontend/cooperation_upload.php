@@ -25,9 +25,15 @@ try {
                           ORDER BY t.department, t.name");
     $stmt->execute();
     $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 獲取年級選項
+    $grades_stmt = $pdo->prepare("SELECT grade_name FROM admission_grades WHERE is_active = 1 ORDER BY sort_order, id");
+    $grades_stmt->execute();
+    $grades = $grades_stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     $teachers = [];
-    error_log("獲取老師資料失敗: " . $e->getMessage());
+    $grades = ['國一', '國二', '國三']; // 預設值
+    error_log("獲取資料失敗: " . $e->getMessage());
 }
 
 // 權限檢查已移除 - 任何人都可以訪問此頁面
@@ -233,10 +239,11 @@ $role = $_SESSION['role'] ?? '訪客';
                         <label for="current_grade">請選擇目前年級....</label>
                         <select id="current_grade" name="current_grade">
                             <option value="">請選擇年級</option>
-                            <option value="國一">國一</option>
-                            <option value="國二">國二</option>
-                            <option value="國三">國三</option>
-                            <option value="已畢業">已畢業</option>
+                            <?php foreach ($grades as $grade): ?>
+                                <option value="<?php echo htmlspecialchars($grade); ?>">
+                                    <?php echo htmlspecialchars($grade); ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
 
