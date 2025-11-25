@@ -24,50 +24,33 @@ $isLoggedIn = isset($_SESSION['username']);
 		<div id="ai-header-right">
 			<span id="ai-close">✖</span>
 		</div>
-		<div id="ai-resize-hint" title="拖拽AI框邊緣可調整大小">⤡</div>
 	</div>
 	<div id="ai-messages">
-		<?php if ($isLoggedIn): ?>
-			<div class="chat-message bot-message">
-				<div class="message-content">
-					🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
-					🤖 我擁有超強的 AI 大腦，專門為您解答所有招生疑問！<br>
-					💡 想知道科系資訊？學費多少？申請流程？通通問我就對了！<br>
-					🎯 我會用最準確的資料庫資訊為您服務，讓您的升學之路更順利～<br>
-					💝 快來和我聊天吧！我已經準備好為您解答囉～ 😊
-				</div>
-				<div class="message-time"></div>
+		<div class="chat-message bot-message">
+			<div class="message-content">
+				🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
+				🤖 我擁有超強的 AI 大腦，專門為您解答所有招生疑問！<br>
+				💡 想知道科系資訊？學費多少？申請流程？通通問我就對了！<br>
+				🎯 我會用最準確的資料庫資訊為您服務，讓您的升學之路更順利～<br>
+				💝 快來和我聊天吧！我已經準備好為您解答囉～ 😊
 			</div>
-		<?php else: ?>
-			<div class="ai-login-prompt">
-				<p>🔒 請先登入才能使用康寧大學可愛小助手</p>
-				<p>登入後您可以：</p>
-				<ul style="text-align: left; display: inline-block;">
-					<li>使用 AI 智能問答功能</li>
-					<li>獲得招生相關問題的專業解答</li>
-					<li>了解科系、學費、申請流程等資訊</li>
-					<li>獲得個人化的升學建議</li>
-				</ul>
-				<p><a href="#" onclick="openLoginModal()">點擊這裡登入</a></p>
-			</div>
-		<?php endif; ?>
+			<div class="message-time"></div>
+		</div>
 	</div>
-	<?php if ($isLoggedIn): ?>
-		<div id="ai-input">
-			<input type="text" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" id="ai-input-field" maxlength="500" style="pointer-events: auto !important; cursor: text !important;">
-			<button id="ai-send-msg">🚀 發送</button>
+	<div id="ai-input">
+		<input type="text" placeholder="💭 有什麼想問我的嗎？我很樂意為您解答～" id="ai-input-field" maxlength="500" style="pointer-events: auto !important; cursor: text !important;">
+		<button id="ai-send-msg">🚀 發送</button>
+	</div>
+	<div id="ai-controls">
+		<div id="ai-controls-tip">
+			<small class="text-muted">💡 小提示：可以問我科系、學費、招生、校園生活等任何問題喔～</small>
 		</div>
-		<div id="ai-controls">
-			<div id="ai-controls-tip">
-				<small class="text-muted">💡 小提示：可以問我科系、學費、招生、校園生活等任何問題喔～</small>
-			</div>
-			<div id="ai-controls-buttons">
-				<button type="button" id="ai-test-btn" onclick="testAIConnection()">
-					🔧 測試AI
-				</button>
-			</div>
+		<div id="ai-controls-buttons">
+			<button type="button" id="ai-test-btn" onclick="testAIConnection()">
+				🔧 測試AI
+			</button>
 		</div>
-	<?php endif; ?>
+	</div>
 </div>
 
 <!-- AI功能樣式 -->
@@ -327,25 +310,6 @@ $isLoggedIn = isset($_SESSION['username']);
 }
 
 
-#ai-resize-hint {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  font-size: 12px;
-  opacity: 0.6;
-  pointer-events: none;
-  animation: ai-pulse 2s infinite;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 2px 5px;
-  z-index: 5;
-}
-
-@keyframes ai-pulse {
-  0% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 0.8; transform: scale(1); }
-}
 
 #ai-messages {
   flex: 1;
@@ -832,15 +796,6 @@ $(document).ready(function() {
 			$('#ai-box').show();
 			$('#ai-float-btn').hide();
 			
-			// 顯示調整大小提示
-			setTimeout(function() {
-				$('#ai-resize-hint').css('opacity', '1');
-				$('#ai-resize-hint').css('transform', 'scale(1.2)');
-				setTimeout(function() {
-					$('#ai-resize-hint').css('opacity', '0.8');
-					$('#ai-resize-hint').css('transform', 'scale(1)');
-				}, 2000);
-			}, 500);
 		}
 	});
 
@@ -852,7 +807,7 @@ $(document).ready(function() {
 	});
 
 
-	// 發送AI訊息（只有登入用戶才能使用）
+	// 發送AI訊息（所有用戶都可以使用）
 	function sendQuestion() {
 		const question = $('#ai-input-field').val().trim();
 		
@@ -1024,7 +979,8 @@ $(document).ready(function() {
 			}
 		});
 		<?php else: ?>
-		console.log('用戶未登入，跳過保存');
+		// 未登入用戶不保存到資料庫，但功能仍可使用
+		console.log('用戶未登入，跳過保存到資料庫');
 		<?php endif; ?>
 	}
 	
@@ -1069,16 +1025,14 @@ $(document).ready(function() {
 		});
 		<?php else: ?>
 		console.log('用戶未登入，載入歡迎訊息');
-		// 未登入用戶載入歡迎訊息
+		// 未登入用戶也載入歡迎訊息，但功能仍可使用
 		loadAIWelcomeMessage();
 		<?php endif; ?>
 	}
 	
 	// 載入AI歡迎訊息
 	function loadAIWelcomeMessage() {
-		let aiWelcomeMessage;
-		<?php if ($isLoggedIn): ?>
-		aiWelcomeMessage = `
+		let aiWelcomeMessage = `
 			<div class="chat-message bot-message">
 				<div class="message-content">
 					🌟 哈囉！我是康寧大學的可愛小助手～✨<br>
@@ -1090,21 +1044,6 @@ $(document).ready(function() {
 				<div class="message-time"></div>
 			</div>
 		`;
-		<?php else: ?>
-		aiWelcomeMessage = `
-			<div class="ai-login-prompt">
-				<p>🔒 請先登入才能使用康寧大學可愛小助手</p>
-				<p>登入後您可以：</p>
-				<ul style="text-align: left; display: inline-block;">
-					<li>使用 AI 智能問答功能</li>
-					<li>獲得招生相關問題的專業解答</li>
-					<li>了解科系、學費、申請流程等資訊</li>
-					<li>獲得個人化的升學建議</li>
-				</ul>
-				<p><a href="#" onclick="openLoginModal()">點擊這裡登入</a></p>
-			</div>
-		`;
-		<?php endif; ?>
 		
 		$('#ai-messages').html(aiWelcomeMessage);
 		// 不保存歡迎訊息到localStorage
