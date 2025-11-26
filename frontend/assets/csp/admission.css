@@ -40,7 +40,7 @@ main {
     margin-bottom: 30px !important;
     color: white !important;
     background: #667eea !important;
-    padding: 40px !important;
+    padding:  35px !important;
     border-radius: 10px !important;
     box-shadow: none !important;
 }
@@ -429,7 +429,7 @@ textarea:focus {
 }
 
 .submit-btn {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #956dbd 100%;
     color: white;
     padding: 15px 40px;
     border: none;

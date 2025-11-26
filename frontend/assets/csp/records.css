@@ -115,7 +115,7 @@ body.page-body {
 /* 表單內容區域 */
 .form-content {
     padding: 50px 40px;
-    background: linear-gradient(90deg, rgba(122, 201, 199, 0.02) 0%, rgba(149, 109, 189, 0.02) 100%);
+    background: #e3e3ef69;
 }
 
 /* 訊息提示 */
@@ -366,8 +366,7 @@ textarea {
 
 .file-upload-area i {
     font-size: 3em;
-    color: #4facfe;
-    margin-bottom: 15px;
+    color: #000000;
 }
 
 .file-inputs {
@@ -429,7 +428,7 @@ textarea {
 }
 
 .remove-file-btn {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #ef1616;
     color: white;
     border: none;
     padding: 8px 12px;
@@ -450,7 +449,7 @@ textarea {
 }
 
 .remove-file-btn:hover {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #c90b0b;
     transform: translateY(-1px) scale(1.05);
     box-shadow: 0 4px 12px rgba(238, 90, 82, 0.4);
 }

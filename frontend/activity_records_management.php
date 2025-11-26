@@ -968,9 +968,9 @@ $conn->close();
         <!-- 記錄列表 -->
         <div class="records-table-container">
             <h3><i class="fas fa-table"></i> 活動記錄列表</h3>
-            <div class="filter-bar" style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: nowrap;">
-    <form method="GET" action="activity_records_management.php" style="display: flex; gap: 10px; align-items: center; flex-wrap: nowrap;">
-        <input type="text" name="teacher_name" placeholder="搜尋教師姓名或學校名稱"
+            <div class="filter-bar" style="margin-bottom: 20px; display: flex1; gap: 10px; align-items: center; flex-wrap: nowrap;">
+    <form method="GET" action="activity_records_management.php" style="display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; width: 48%;">
+        <input type="text" name="teacher_name" placeholder="輸入學校名稱或活動類型..."
                value="<?php echo htmlspecialchars($_GET['teacher_name'] ?? ''); ?>"
                style="padding: 5px 10px; border-radius: 6px; border: 1px solid #ccc;">
         <button type="submit" style="padding: 5px 15px; border: none; border-radius: 6px; background-color: #4CAF50; color: white; cursor: pointer; white-space: nowrap;">
