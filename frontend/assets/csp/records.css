@@ -76,7 +76,7 @@ body.page-body {
 
 /* 表單 Header */
 .form-header {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #667eea;
     color: white;
     padding: 30px;
     text-align: center;
