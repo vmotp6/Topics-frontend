@@ -17,10 +17,12 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
 }
 
 // 路徑配置
-$config = [
-    'base_url' => '/Topics-frontend/frontend/',
-    'share_url' => '/Topics-frontend/frontend/share/'
-];
+if (!isset($config)) {
+    $config = [
+        'base_url' => '/Topics-frontend/frontend/',
+        'share_url' => '/Topics-frontend/frontend/share/'
+    ];
+}
 
 // 獲取當前域名和端口
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
@@ -28,15 +30,19 @@ $host = $_SERVER['HTTP_HOST'];
 $base_url = $protocol . '://' . $host;
 
 // 路徑生成函數
-function getCorrectPath($targetFile) {
-    global $config;
-    return $config['base_url'] . $targetFile;
+if (!function_exists('getCorrectPath')) {
+    function getCorrectPath($targetFile) {
+        global $config;
+        return $config['base_url'] . $targetFile;
+    }
 }
 
 // 資源路徑生成函數
-function getResourcePath($resourceFile) {
-    global $config;
-    return $config['share_url'] . $resourceFile;
+if (!function_exists('getResourcePath')) {
+    function getResourcePath($resourceFile) {
+        global $config;
+        return $config['share_url'] . $resourceFile;
+    }
 }
 
 // 檢查當前頁面並返回 active 類別

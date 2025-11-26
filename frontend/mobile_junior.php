@@ -479,15 +479,45 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             border: 1px solid #f5c6cb;
         }
         
+        .recruitment-container .header {
+            background: #667eea !important;
+            border-radius: 10px !important;
+            color: white !important;
+            padding: 40px !important;
+            text-align: center !important;
+            margin-bottom: 30px !important;
+            box-shadow: none !important;
+        }
+        
+        .recruitment-container .header h1 {
+            margin: 0 !important;
+            font-size: 2.5rem !important;
+            font-weight: 700 !important;
+            color: white !important;
+            text-shadow: none !important;
+        }
+        
+        .recruitment-container .header h1 i {
+            margin-right: 10px !important;
+            color: white !important;
+        }
+        
+        .recruitment-container .header .subtitle {
+            margin: 10px 0 0 0 !important;
+            font-size: 1.1rem !important;
+            opacity: 0.9 !important;
+            color: white !important;
+        }
+        
     </style>
 </head>
 <body>
 	<?php include("share/header.php"); ?>
 <main>
     <div class="recruitment-container">
-        <div class="header">
-            <h1><i class="fas fa-school"></i> 國中學校招生申請</h1>
-            <div class="subtitle">歡迎各國中學校申請康寧大學招生服務</div>
+        <div class="header" style="background: #667eea !important; color: white !important; padding: 40px !important; border-radius: 10px !important; text-align: center !important; margin-bottom: 30px !important;">
+            <h1 style="color: white !important; font-size: 2.5rem !important; font-weight: 700 !important; margin: 0 !important;"><i class="fas fa-graduation-cap" style="color: white !important; margin-right: 10px !important;"></i> 康寧大學就讀意願登錄</h1>
+            <div class="subtitle" style="color: white !important; font-size: 1.1rem !important; margin: 10px 0 0 0 !important; opacity: 0.9 !important;">填寫您的就讀意願，我們將儘快與您聯絡</div>
         </div>
 
         <div class="info-box">

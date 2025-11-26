@@ -18,7 +18,7 @@
 }
 
 .cooperation-page-wrapper .cooperation-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: #667eea !important;
   border-radius: 10px;
   color: white;
   padding: 40px;
@@ -268,13 +268,6 @@
   color: #6c757d;
 }
 
-.cooperation-page-wrapper .school-alternative-names {
-  font-size: 0.75rem;
-  color: #667eea;
-  font-style: italic;
-  margin-top: 2px;
-}
-
 .cooperation-page-wrapper .search-result-item.more-results {
   background: #e9ecef;
   color: #6c757d;
@@ -468,21 +461,6 @@
     padding: 10px 12px;
     font-size: 0.95rem;
   }
-}
-
-/* 電話號碼錯誤樣式 */
-.phone-error {
-  border-color: #d32f2f !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1) !important;
-}
-
-.phone-hint {
-  display: block;
-  color: #d32f2f;
-  font-size: 12px;
-  margin-top: 4px;
-  font-weight: 500;
 }
 / *   7_6R�f�e�_�S  * / 
  

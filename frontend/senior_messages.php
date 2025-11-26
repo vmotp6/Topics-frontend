@@ -3,6 +3,28 @@
 require_once 'session_config.php';
 require_once 'senior_message_auth.php';
 
+// 提前載入 header.php 中的路徑函數（但只執行函數定義部分，不輸出 HTML）
+// 由於 header.php 會檢查函數是否已定義，我們需要先定義 $config
+$config = [
+    'base_url' => '/Topics-frontend/frontend/',
+    'share_url' => '/Topics-frontend/frontend/share/'
+];
+
+// 如果函數未定義，則定義它們（避免與 header.php 衝突）
+if (!function_exists('getCorrectPath')) {
+    function getCorrectPath($targetFile) {
+        global $config;
+        return $config['base_url'] . $targetFile;
+    }
+}
+
+if (!function_exists('getResourcePath')) {
+    function getResourcePath($resourceFile) {
+        global $config;
+        return $config['share_url'] . $resourceFile;
+    }
+}
+
 // 檢查登入狀態（允許未登入用戶查看，但只有登入用戶才能發布留言）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
@@ -136,6 +158,36 @@ try {
         } else {
             $message['user_liked'] = false;
         }
+        
+        // 獲取作者頭像
+        $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+        if (!empty($message['author_email'])) {
+            try {
+                // 使用 email 查詢用戶頭像
+                $stmt = $pdo->prepare("SELECT profile_picture FROM user WHERE email = ? OR username = ? LIMIT 1");
+                $stmt->execute([$message['author_email'], $message['author_email']]);
+                $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($user_result && !empty($user_result['profile_picture'])) {
+                    // 檢查是否為完整URL或相對路徑
+                    if (filter_var($user_result['profile_picture'], FILTER_VALIDATE_URL)) {
+                        // 完整 URL（如 Google 頭像），直接使用
+                        $avatar_src = $user_result['profile_picture'];
+                    } else {
+                        // 相對路徑
+                        if (strpos($user_result['profile_picture'], 'uploads/') === 0) {
+                            // 上傳的頭像，使用 getCorrectPath
+                            $avatar_src = getCorrectPath($user_result['profile_picture']);
+                        } else {
+                            // share 目錄的檔案，使用 getResourcePath
+                            $avatar_src = getResourcePath($user_result['profile_picture']);
+                        }
+                    }
+                }
+            } catch(PDOException $e) {
+                error_log("獲取留言作者頭像失敗: " . $e->getMessage());
+            }
+        }
+        $message['author_avatar'] = $avatar_src;
     }
 } catch(PDOException $e) {
     $error_message = "載入留言失敗: " . $e->getMessage();
@@ -553,6 +605,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             margin-right: 15px;
             flex-shrink: 0;
             box-shadow: 0 3px 10px rgba(29, 155, 240, 0.3);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .user-avatar .avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
         
         .user-info {
@@ -1069,7 +1130,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <?php foreach ($messages as $message): ?>
                     <div class="message-card" data-type="<?php echo htmlspecialchars($message['message_type'] ?? '其他'); ?>" data-message-id="<?php echo $message['id']; ?>">
                         <div class="message-header">
-                            <div class="user-avatar"><?php echo mb_substr(htmlspecialchars($message['author_name']), 0, 1); ?></div>
+                            <div class="user-avatar">
+                                <img src="<?php echo htmlspecialchars($message['author_avatar'] ?? getResourcePath('EIdROxGXsAE_LSs.jpg')); ?>" 
+                                     alt="<?php echo htmlspecialchars($message['author_name']); ?>" 
+                                     class="avatar-img"
+                                     onerror="this.onerror=null; this.src='<?php echo htmlspecialchars(getResourcePath('EIdROxGXsAE_LSs.jpg')); ?>'; this.style.display='none'; this.parentElement.innerHTML='<?php echo mb_substr(htmlspecialchars($message['author_name']), 0, 1); ?>';">
+                            </div>
                             <div class="user-info">
                                 <div class="user-name"><?php echo htmlspecialchars($message['author_name']); ?></div>
                                 <div class="user-details"><?php echo htmlspecialchars($message['author_department'] ?? '未知科系'); ?> · <?php echo htmlspecialchars($message['author_grade'] ?? '未知年級'); ?></div>
