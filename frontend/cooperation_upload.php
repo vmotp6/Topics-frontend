@@ -825,12 +825,18 @@ $role = $_SESSION['role'] ?? '訪客';
             systemSelect.innerHTML = '<option value="">請選擇</option>';
 
             if (department && departmentSystems[department]) {
-                departmentSystems[department].forEach(system => {
+                const systems = departmentSystems[department];
+                systems.forEach(system => {
                     const option = document.createElement("option");
                     option.value = system;
                     option.textContent = system;
                     systemSelect.appendChild(option);
                 });
+                
+                // 如果只有一個學制，自動選取
+                if (systems.length === 1) {
+                    systemSelect.value = systems[0];
+                }
             }
         }
 
