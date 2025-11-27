@@ -167,7 +167,7 @@
 }
 
 .recommend-page-wrapper .submit-btn {
-  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+  background: #956dbd 100%;
   color: white;
   padding: 15px 40px;
   border: none;
@@ -182,6 +182,7 @@
 }
 
 .recommend-page-wrapper .submit-btn:hover {
+  background: #71bdbbe0 0% 0%;
   transform: translateY(-2px);
   box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
 }
@@ -242,7 +243,7 @@
 }
 
 .recommend-page-wrapper .search-btn {
-  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+  background: #956dbd 100%;
   width:45%;
   color: white;
   padding: 10px 20px;
@@ -256,6 +257,7 @@
 }
 
 .recommend-page-wrapper .search-btn:hover {
+  background: #71bdbbe0 0% 0%;
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
 }

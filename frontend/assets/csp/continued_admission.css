@@ -865,3 +865,9 @@ input[readonly]:focus {
   margin-top: 4px;
   font-weight: 500;
 }
+
+/* 必填欄位標記樣式 */
+.required {
+  color: #d32f2f;
+  font-weight: bold;
+}

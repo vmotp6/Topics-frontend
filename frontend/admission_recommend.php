@@ -337,7 +337,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         <div class="search-row">
           <input type="text" name="search_student_id" placeholder="請輸入推薦人學號或教師編號" 
                  value="<?php echo htmlspecialchars($search_student_id); ?>" required>
-          <button type="submit" name="search_action" value="search" class="search-btn">
+          <button type="submit" name="search_action" value="search" class="search-btn" style="margin-bottom: 1px">
             <i class="fas fa-search"></i> 查詢
           </button>
         </div>

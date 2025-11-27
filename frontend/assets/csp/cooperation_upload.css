@@ -462,6 +462,12 @@
     font-size: 0.95rem;
   }
 }
+
+/* 必填欄位標記樣式 */
+.required {
+  color: #d32f2f;
+  font-weight: bold;
+}
 / *   7_6R�f�e�_�S  * / 
  
  

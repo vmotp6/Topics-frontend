@@ -51,7 +51,7 @@ foreach ($courses as $course) {
           <label>身分證字號 / 護照號碼</label>
           <input type="text" id="queryIdNumber" placeholder="本國籍：例：A123456789 | 外籍生：例：護照號碼" maxlength="30">
         </div>
-        <button type="button" id="queryBtn" class="query-btn">查詢錄取狀態</button>
+        <button type="button" id="queryBtn" class="query-btn" style="margin-bottom: 1px">查詢錄取狀態</button>
       </div>
       <div id="queryResult" class="query-result" style="display: none;"></div>
     </div>
@@ -74,11 +74,11 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="student_name">*姓名</label>
+              <label for="student_name"><span class="required">*</span>姓名</label>
               <input type="text" id="student_name" name="student_name" required>
             </div>
             <div class="form-group">
-              <label>*是否為外籍生</label>
+              <label><span class="required">*</span>是否為外籍生</label>
               <div class="radio-group">
                 <label><input type="radio" name="is_foreign_student" value="no" checked onchange="toggleIdentityFields()"> 否（本國籍）</label>
                 <label><input type="radio" name="is_foreign_student" value="yes" onchange="toggleIdentityFields()"> 是（外籍生）</label>
@@ -88,37 +88,37 @@ foreach ($courses as $course) {
           
           <div class="form-row" id="local_student_fields">
             <div class="form-group">
-              <label>*身分證字號</label>
+              <label><span class="required">*</span>身分證字號</label>
               <input type="text" name="id" id="id_number_input" placeholder="例：A123456789" pattern="[A-Za-z][0-9]{9}" maxlength="10">
             </div>
           </div>
           
           <div class="form-row" id="foreign_student_fields" style="display: none;">
             <div class="form-group">
-              <label>*國籍</label>
+              <label><span class="required">*</span>國籍</label>
               <input type="text" name="nationality" id="nationality_input" placeholder="例：美國、日本、越南等">
             </div>
             <div class="form-group">
-              <label>*護照號碼</label>
+              <label><span class="required">*</span>護照號碼</label>
               <input type="text" name="passport_number" id="passport_number_input" placeholder="例：A12345678" maxlength="20">
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group small">
-              <label>*出生年</label>
+              <label><span class="required">*</span>出生年</label>
               <input type="number" name="birth_year" placeholder="年" min="1990" max="2010" required>
             </div>
             <div class="form-group small">
-              <label>*出生月</label>
+              <label><span class="required">*</span>出生月</label>
               <input type="number" name="birth_month" placeholder="月" min="1" max="12" required>
             </div>
             <div class="form-group small">
-              <label>*出生日</label>
+              <label><span class="required">*</span>出生日</label>
               <input type="number" name="birth_day" placeholder="日" min="1" max="31" required>
             </div>
             <div class="form-group gender-group">
-              <label>*性別</label>
+              <label><span class="required">*</span>性別</label>
               <div class="radio-group">
                 <label><input type="radio" name="gender" value="male" required> 男</label>
                 <label><input type="radio" name="gender" value="female" required> 女</label>
@@ -132,7 +132,7 @@ foreach ($courses as $course) {
               <input type="tel" name="phone" placeholder="例：02-12345678">
             </div>
             <div class="form-group">
-              <label>*行動電話</label>
+              <label><span class="required">*</span>行動電話</label>
               <input type="tel" name="mobile" id="mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
               <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
             </div>
@@ -140,7 +140,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group medium">
-              <label>*就讀縣市</label>
+              <label><span class="required">*</span>就讀縣市</label>
               <select name="school_city" id="school_city" required>
                 <option value="">請選擇縣市</option>
                 <option value="台北市">台北市</option>
@@ -168,7 +168,7 @@ foreach ($courses as $course) {
               </select>
             </div>
             <div class="form-group">
-              <label>*就讀國中</label>
+              <label><span class="required">*</span>就讀國中</label>
               <div class="modern-search-container">
                 <div class="search-input-wrapper">
                   <input type="text" name="school_name" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required>
@@ -193,7 +193,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>戶籍地址 <small style="color: #d32f2f;">(*為必填)</small></label>
+              <label>戶籍地址 <small style="color: #d32f2f;">(<span class="required">*</span>為必填)</small></label>
               <div class="address-group">
                 <input type="text" name="zip" placeholder="郵遞區號" maxlength="6">
                 <input type="text" name="city" placeholder="*縣/市" required>
@@ -226,7 +226,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>*監護人姓名</label>
+              <label><span class="required">*</span>監護人姓名</label>
               <input type="text" name="guardian" required>
             </div>
           </div>
@@ -237,7 +237,7 @@ foreach ($courses as $course) {
               <input type="tel" name="guardian_phone" placeholder="例：02-12345678">
             </div>
             <div class="form-group">
-              <label>*監護人行動電話</label>
+              <label><span class="required">*</span>監護人行動電話</label>
               <input type="tel" name="guardian_mobile" id="guardian_mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
               <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
             </div>
@@ -288,7 +288,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>*自傳 / 自我介紹</label>
+              <label><span class="required">*</span>自傳 / 自我介紹</label>
               <textarea name="self_intro" id="self_intro" rows="8" placeholder="請簡述個人學習經歷、興趣愛好、未來規劃等。表格若不敷使用，請自行以 A4 紙書寫。" maxlength="1000" required></textarea>
               <div class="char-count">字數：<span id="self_intro_count">0</span>/1000</div>
             </div>
@@ -300,7 +300,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>*興趣 / 專長</label>
+              <label><span class="required">*</span>興趣 / 專長</label>
               <textarea name="skills" id="skills" rows="6" placeholder="請詳述個人興趣、專長、特殊才能、社團經驗、競賽成果等。" maxlength="500" required></textarea>
               <div class="char-count">字數：<span id="skills_count">0</span>/500</div>
             </div>
@@ -308,7 +308,7 @@ foreach ($courses as $course) {
     </fieldset>
 
     <fieldset>
-      <legend>志願序 <span style="color: #d32f2f;">*</span></legend>
+      <legend>志願序 <span class="required">*</span></legend>
           
           <div class="note">
             ※ 請從下方科系中拖曳到右側框框中，並可調整優先順序。至少需選擇一個志願。

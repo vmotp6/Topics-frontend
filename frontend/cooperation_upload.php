@@ -88,11 +88,11 @@ $role = $_SESSION['role'] ?? '訪客';
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="name">*姓名:</label>
+                            <label for="name"><span class="required">*</span>姓名:</label>
                             <input type="text" id="name" name="name" required>
                         </div>
                         <div class="form-group">
-                            <label>*身分別:</label>
+                            <label><span class="required">*</span>身分別:</label>
                             <div class="radio-group">
                                 <label>
                                     <input type="radio" name="identity" value="學生" required checked>
@@ -121,7 +121,7 @@ $role = $_SESSION['role'] ?? '訪客';
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="phone1">*聯絡電話1:</label>
+                            <label for="phone1"><span class="required">*</span>聯絡電話1:</label>
                             <input type="tel" id="phone1" name="phone1" 
                                    pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
                             <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
@@ -136,7 +136,7 @@ $role = $_SESSION['role'] ?? '訪客';
                             <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
                         </div>
                         <div class="form-group">
-                            <label for="email">*電子郵件信箱:</label>
+                            <label for="email"><span class="required">*</span>電子郵件信箱:</label>
                             <input type="email" id="email" name="email" required>
                         </div>
                     </div>
@@ -214,7 +214,7 @@ $role = $_SESSION['role'] ?? '訪客';
                     <h3 class="section-title"><i class="fas fa-school"></i> 就讀或畢業國中資訊</h3>
 
                     <div class="form-group">
-                        <label for="junior_high">*就讀或畢業國中:</label>
+                        <label for="junior_high"><span class="required">*</span>就讀或畢業國中:</label>
                         <div class="modern-search-container">
                             <div class="search-input-wrapper">
                                 <input type="text" id="junior_high" name="junior_high" placeholder="請輸入學校名稱..." autocomplete="off" required>

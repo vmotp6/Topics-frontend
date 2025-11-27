@@ -374,11 +374,11 @@ function getActiveClass($targetFile) {
   }
 
   .btn-register {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #956dbd 100%;
   }
 
   .btn-login {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #956dbd 100%;
   }
 
   .btn-login:hover {
@@ -493,7 +493,7 @@ function getActiveClass($targetFile) {
   }
 
   button {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #4e7d7cad 0%;
     color: white;
     font-weight: 600;
     border: none;
@@ -507,7 +507,7 @@ function getActiveClass($targetFile) {
   }
 
   button:hover {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #4e7d7cad 0%;
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   }

@@ -536,7 +536,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         <input type="email" name="email" placeholder="請輸入您申請時使用的 Email" 
                                value="<?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?>" required>
                     </div>
-                    <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%;">
+                    <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%; margin-bottom: 1px">
                         <i class="fas fa-search"></i> 搜尋
                     </button>
                 </form>
@@ -880,7 +880,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                 <div class="form-section">
                     <h3><i class="fas fa-shield-alt"></i> 驗證碼 <span class="required">*</span></h3>
                     <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
-                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; background-color: #ffffff; color: #333; transition: all 0.3s;">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; background-color: #ffffff; color: #333; transition: all 0.3s; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
                         <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer;" title="點擊刷新驗證碼" onerror="this.onerror=null; this.src='captcha_image.php?t='+Date.now();">
                         <button type="button" onclick="refreshCaptcha()" style="padding: 12px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                             <i class="fas fa-sync-alt"></i> 刷新
@@ -901,45 +901,13 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
     <?php include("share/footer.php"); ?>
     
 <script>
-// 檢查必填欄位並更新提交按鈕狀態
+// 檢查必填欄位並更新提交按鈕狀態（不再禁用按鈕）
 function checkRequiredFields() {
+    // 此函數保留用於其他用途，但不再禁用提交按鈕
+    // 提交按鈕將始終保持可用狀態
     const submitBtn = document.getElementById('submit_btn');
-    if (!submitBtn) return;
-    
-    // 獲取所有必填欄位
-    const requiredFields = [
-        document.getElementById('school_name'),
-        document.querySelector('input[name="city"]'),
-        document.querySelector('input[name="district"]'),
-        document.querySelector('input[name="contact_name"]'),
-        document.querySelector('input[name="contact_phone"]'),
-        document.querySelector('input[name="contact_email"]'),
-        document.querySelector('input[name="preferred_date"]'),
-        document.querySelector('select[name="preferred_time"]'),
-        document.querySelector('input[name="target_grades"]'),
-        document.querySelector('input[name="expected_students"]'),
-        document.getElementById('captchaInput')
-    ];
-    
-    // 檢查所有必填欄位是否都有值
-    let allFilled = true;
-    for (let field of requiredFields) {
-        if (!field) {
-            allFilled = false;
-            break;
-        }
-        const value = field.value ? field.value.trim() : '';
-        if (value === '') {
-            allFilled = false;
-            break;
-        }
-    }
-    
-    // 更新按鈕狀態
-    if (allFilled) {
+    if (submitBtn) {
         submitBtn.disabled = false;
-    } else {
-        submitBtn.disabled = true;
     }
 }
 
@@ -1014,13 +982,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 初始狀態：禁用提交按鈕
+    // 確保提交按鈕始終可用（不再禁用）
     const submitBtn = document.getElementById('submit_btn');
     if (submitBtn) {
-        submitBtn.disabled = true;
+        submitBtn.disabled = false;
     }
     
-    // 監聽所有必填欄位的變化
+    // 監聽所有必填欄位的變化（保留用於其他用途，但不再禁用按鈕）
     const form = document.getElementById('recruitmentForm');
     if (form) {
         // 監聽 input、select 和 textarea 的變化
@@ -1084,26 +1052,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // 設定提交狀態
             isSubmitting = true;
             
-            // 更新按鈕狀態
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.style.opacity = '0.6';
-                submitBtn.style.cursor = 'not-allowed';
-                if (submitBtnText) {
-                    const originalText = submitBtnText.textContent;
-                    submitBtnText.textContent = '處理中...';
-                    
-                    // 如果5秒後仍在提交，恢復按鈕狀態
-                    setTimeout(function() {
-                        if (isSubmitting) {
-                            isSubmitting = false;
-                            submitBtn.disabled = false;
-                            submitBtn.style.opacity = '1';
-                            submitBtn.style.cursor = 'pointer';
-                            submitBtnText.textContent = originalText;
-                        }
-                    }, 5000);
-                }
+            // 更新按鈕文字（但不禁用按鈕）
+            if (submitBtn && submitBtnText) {
+                const originalText = submitBtnText.textContent;
+                submitBtnText.textContent = '處理中...';
+                
+                // 如果5秒後仍在提交，恢復按鈕文字
+                setTimeout(function() {
+                    if (isSubmitting) {
+                        isSubmitting = false;
+                        submitBtnText.textContent = originalText;
+                    }
+                }, 5000);
             }
         });
     }
