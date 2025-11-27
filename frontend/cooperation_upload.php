@@ -30,9 +30,15 @@ try {
     $grades_stmt = $pdo->prepare("SELECT grade_name FROM admission_grades WHERE is_active = 1 ORDER BY sort_order, id");
     $grades_stmt->execute();
     $grades = $grades_stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    // 獲取啟用的科系選項（從 admission_courses 表）
+    $courses_stmt = $pdo->prepare("SELECT course_name FROM admission_courses WHERE is_active = 1 ORDER BY sort_order, id");
+    $courses_stmt->execute();
+    $courses = $courses_stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (PDOException $e) {
     $teachers = [];
     $grades = ['國一', '國二', '國三']; // 預設值
+    $courses = ['護理科', '嬰幼兒保育科', '視光科', '數位影視動畫科', '資訊管理科', '企業管理科', '應用外語科', '長期照護學系']; // 預設值
     error_log("獲取資料失敗: " . $e->getMessage());
 }
 
@@ -143,14 +149,11 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention1">就讀意願一:</label>
                             <select id="intention1" name="intention1">
                                 <option value="無特定">無特定</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
+                                <?php foreach ($courses as $course): ?>
+                                    <option value="<?php echo htmlspecialchars($course); ?>">
+                                        <?php echo htmlspecialchars($course); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
@@ -168,14 +171,11 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention2">就讀意願二:</label>
                             <select id="intention2" name="intention2">
                                 <option value="無特定">無特定</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
+                                <?php foreach ($courses as $course): ?>
+                                    <option value="<?php echo htmlspecialchars($course); ?>">
+                                        <?php echo htmlspecialchars($course); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
@@ -193,14 +193,11 @@ $role = $_SESSION['role'] ?? '訪客';
                             <label for="intention3">就讀意願三:</label>
                             <select id="intention3" name="intention3">
                                 <option value="無特定">無特定</option>
-                                <option value="護理科">護理科</option>
-                                <option value="嬰幼兒保育科">嬰幼兒保育科</option>
-                                <option value="視光科">視光科</option>
-                                <option value="數位影視動畫科">數位影視動畫科</option>
-                                <option value="資訊管理科">資訊管理科</option>
-                                <option value="企業管理科">企業管理科</option>
-                                <option value="應用外語科">應用外語科</option>
-                                <option value="長期照護學系">長期照護學系</option>
+                                <?php foreach ($courses as $course): ?>
+                                    <option value="<?php echo htmlspecialchars($course); ?>">
+                                        <?php echo htmlspecialchars($course); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="form-group">
