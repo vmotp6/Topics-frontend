@@ -608,7 +608,7 @@ textarea:focus {
 
 .search-btn {
     width: 45%;
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #956dbd 100%;
     color: white;
     padding: 16px 30px;
     border: none;
@@ -626,6 +626,7 @@ textarea:focus {
 }
 
 .search-btn:hover {
+    background: #71bdbbe0 0% 0%;
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }

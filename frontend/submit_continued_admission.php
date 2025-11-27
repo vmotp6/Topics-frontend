@@ -48,20 +48,31 @@ try {
     $guardian_mobile = $_POST['guardian_mobile'] ?? '';
     $self_intro = $_POST['self_intro'] ?? '';
     $skills = $_POST['skills'] ?? '';
-    // 處理志願序 - 從隱藏字段中獲取
+    
+    // 處理志願序 - 從資料庫讀取科系映射
+    $conn = getDatabaseConnection();
     $choices = [];
-    $choice_fields = [
-        'choice_nursing' => '護理科',
-        'choice_optometry' => '視光科',
-        'choice_childcare' => '幼保科',
-        'choice_language' => '應用外語科',
-        'choice_im' => '資訊管理科',
-        'choice_ba' => '企業管理科',
-        'choice_animation' => '動畫科'
-    ];
+    
+    // 從資料庫取得所有啟用的科系
+    $courses_query = "SELECT course_name FROM admission_courses WHERE is_active = 1 ORDER BY sort_order, course_name";
+    $courses_result = $conn->query($courses_query);
+    $all_courses = [];
+    if ($courses_result) {
+        while ($row = $courses_result->fetch_assoc()) {
+            $all_courses[] = $row['course_name'];
+        }
+    }
+    
+    // 建立欄位名稱到科系名稱的映射（反向映射）
+    $field_to_course_map = [];
+    foreach ($all_courses as $course_name) {
+        // 將科系名稱轉換為欄位名稱（與前端一致）
+        $field_name = 'choice_' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $course_name));
+        $field_to_course_map[$field_name] = $course_name;
+    }
     
     // 收集所有選擇的志願序
-    foreach ($choice_fields as $field_name => $choice_name) {
+    foreach ($field_to_course_map as $field_name => $choice_name) {
         if (isset($_POST[$field_name]) && !empty($_POST[$field_name])) {
             $priority = intval($_POST[$field_name]);
             $choices[$priority] = $choice_name;

@@ -1,6 +1,31 @@
 <?php
 // 載入 session 配置
 require_once 'session_config.php';
+require_once 'config.php';
+
+// 建立資料庫連接
+$conn = getDatabaseConnection();
+
+// 取得啟用的科系
+$courses = [];
+$courses_query = "SELECT c.id, c.course_name 
+                  FROM admission_courses c 
+                  WHERE c.is_active = 1 
+                  ORDER BY c.sort_order, c.course_name";
+$courses_result = $conn->query($courses_query);
+if ($courses_result) {
+    while ($row = $courses_result->fetch_assoc()) {
+        $courses[] = $row;
+    }
+}
+
+// 建立科系名稱到隱藏欄位名稱的映射（用於 JavaScript）
+$courseNameToFieldMap = [];
+foreach ($courses as $course) {
+    // 將科系名稱轉換為欄位名稱（例如：護理科 -> choice_nursing）
+    $fieldName = 'choice_' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $course['course_name']));
+    $courseNameToFieldMap[$course['course_name']] = $fieldName;
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -294,34 +319,12 @@ require_once 'session_config.php';
             <div class="available-choices">
               <h4><i class="fas fa-list"></i> 可選科系</h4>
               <div class="choice-list" id="availableChoices">
-                <div class="choice-item" draggable="true" data-choice="護理科">
+                <?php foreach ($courses as $course): ?>
+                <div class="choice-item" draggable="true" data-choice="<?php echo htmlspecialchars($course['course_name']); ?>">
                   <i class="fas fa-grip-vertical"></i>
-                  <span>護理科</span>
+                  <span><?php echo htmlspecialchars($course['course_name']); ?></span>
                 </div>
-                <div class="choice-item" draggable="true" data-choice="視光科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>視光科</span>
-                </div>
-                <div class="choice-item" draggable="true" data-choice="幼保科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>幼保科</span>
-                </div>
-                <div class="choice-item" draggable="true" data-choice="應用外語科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>應用外語科</span>
-                </div>
-                <div class="choice-item" draggable="true" data-choice="資訊管理科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>資訊管理科</span>
-                </div>
-                <div class="choice-item" draggable="true" data-choice="企業管理科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>企業管理科</span>
-                </div>
-                <div class="choice-item" draggable="true" data-choice="動畫科">
-                  <i class="fas fa-grip-vertical"></i>
-                  <span>動畫科</span>
-                </div>
+                <?php endforeach; ?>
               </div>
             </div>
             
@@ -342,13 +345,9 @@ require_once 'session_config.php';
           </div>
           
           <!-- 隱藏欄位用於表單提交 -->
-          <input type="hidden" name="choice_nursing" id="hidden_choice_nursing">
-          <input type="hidden" name="choice_optometry" id="hidden_choice_optometry">
-          <input type="hidden" name="choice_childcare" id="hidden_choice_childcare">
-          <input type="hidden" name="choice_language" id="hidden_choice_language">
-          <input type="hidden" name="choice_im" id="hidden_choice_im">
-          <input type="hidden" name="choice_ba" id="hidden_choice_ba">
-          <input type="hidden" name="choice_animation" id="hidden_choice_animation">
+          <?php foreach ($courseNameToFieldMap as $courseName => $fieldName): ?>
+          <input type="hidden" name="<?php echo htmlspecialchars($fieldName); ?>" id="hidden_<?php echo htmlspecialchars($fieldName); ?>">
+          <?php endforeach; ?>
     </fieldset>
 
         <button type="submit" class="submit-btn">送出報名表</button>
@@ -359,7 +358,10 @@ require_once 'session_config.php';
   <script>
     // 全域變數
     let selectedChoices = [];
-    const maxChoices = 7; // 最多7個科系
+    const maxChoices = <?php echo count($courses); ?>; // 最多選擇的科系數量
+    
+    // 科系名稱到隱藏欄位名稱的映射（從 PHP 傳遞）
+    const choiceMap = <?php echo json_encode($courseNameToFieldMap, JSON_UNESCAPED_UNICODE); ?>;
     function toggleContactAddress(checkbox) {
       const contactAddress = document.getElementById('contact_address');
       if (checkbox.checked) {
@@ -643,16 +645,6 @@ require_once 'session_config.php';
         
         // 設定新的值
         selectedChoices.forEach((choice, index) => {
-          const choiceMap = {
-            '護理科': 'choice_nursing',
-            '視光科': 'choice_optometry', 
-            '幼保科': 'choice_childcare',
-            '應用外語科': 'choice_language',
-            '資訊管理科': 'choice_im',
-            '企業管理科': 'choice_ba',
-            '動畫科': 'choice_animation'
-          };
-          
           const inputName = choiceMap[choice];
           if (inputName) {
             const input = document.getElementById(`hidden_${inputName}`);
@@ -1127,7 +1119,7 @@ require_once 'session_config.php';
         
         // 調試：檢查志願序隱藏字段
         console.log('志願序隱藏字段檢查:');
-        const choiceFields = ['choice_nursing', 'choice_optometry', 'choice_childcare', 'choice_language', 'choice_im', 'choice_ba', 'choice_animation'];
+        const choiceFields = Object.values(choiceMap); // 使用動態生成的映射
         choiceFields.forEach(field => {
           const input = document.getElementById(`hidden_${field}`);
           if (input) {
