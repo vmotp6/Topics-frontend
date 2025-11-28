@@ -396,6 +396,22 @@ if (empty($junior_high)) {
     exit;
 }
 
+// 驗證是否從系統選項中選擇學校（格式應為：學校名稱 (縣市區)）
+// 如果用戶只是打字而沒有選擇，格式不會包含括號和縣市區信息
+if (!preg_match('/^.+ \(.+\)$/', $junior_high)) {
+    if (ob_get_level() > 0) {
+        @ob_clean();
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => '請從系統提供的選項中選擇學校，不能自行輸入'
+    ]);
+    if (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    exit;
+}
+
 // 驗證碼檢查 - 必須與session中的驗證碼匹配
 if (empty($captcha)) {
     if (ob_get_level() > 0) {

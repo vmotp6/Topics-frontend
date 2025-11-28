@@ -151,6 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $preferred_time === '' || $target_grades === '' || $expected_students === '') {
         $result_message = '請填寫所有必填欄位。';
         $result_type = 'error';
+    } elseif (!empty($school_name) && !preg_match('/^.+ \(.+\)$/', $school_name)) {
+        // 驗證就讀國中格式（必須從系統選項中選擇）
+        $result_message = '請從系統提供的選項中選擇學校，不能自行輸入';
+        $result_type = 'error';
     } elseif ($captcha === '') {
         $result_message = '請輸入驗證碼。';
         $result_type = 'error';
@@ -329,8 +333,61 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>國中學校招生申請 - 康寧大學</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/csp/admission.css">
+    <link rel="stylesheet" href="assets/csp/mobile_junior.css">
     <link rel="stylesheet" href="assets/css/maps.css">
+    <style>
+        /* 錯誤提示動畫 */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 學校地址相關欄位樣式 - 與 admission_recommend.php 一致 */
+        .field-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .field-group input[name="city"],
+        .field-group input[name="district"],
+        .field-group input[name="school_address"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ecf0f1;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            background: white;
+            font-family: 'Microsoft JhengHei', sans-serif;
+        }
+        
+        .field-group input[name="city"]:focus,
+        .field-group input[name="district"]:focus,
+        .field-group input[name="school_address"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .field-error {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .field-error i {
+            font-size: 14px;
+        }
+    </style>
     <style>
         .recruitment-container {
             max-width: 900px;
@@ -618,7 +675,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
         <?php endif; ?>
 
         <div class="form-container">
-            <form method="post" id="recruitmentForm">
+            <form method="post" id="recruitmentForm" onsubmit="return validateFormBeforeSubmit(event)">
                 <input type="hidden" name="action" id="form_action" value="submit">
                 <input type="hidden" name="application_id" id="application_id" value="<?php echo $application_data ? $application_data['id'] : '0'; ?>">
                 
@@ -650,7 +707,10 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                 <div id="schoolResults" class="modern-search-results"></div>
                             </div>
                             <div class="help-text">
-                                <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，支援模糊匹配
+                                <i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，請從搜尋結果中選擇學校（不能自行輸入）
+                            </div>
+                            <div id="school_name_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                                <i class="fas fa-exclamation-circle"></i> <span id="school_name_error_text">請從系統提供的選項中選擇學校，不能自行輸入</span>
                             </div>
                         </div>
                     </div>
@@ -919,11 +979,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (schoolSearchInput) {
         // 輸入事件（即時搜尋）
-        schoolSearchInput.addEventListener('input', performSchoolSearch);
+        schoolSearchInput.addEventListener('input', function() {
+            performSchoolSearch();
+            // 當下拉選單顯示時，不進行驗證（用戶還在輸入和選擇中）
+        });
+
+        // 失去焦點時立即驗證
+        schoolSearchInput.addEventListener('blur', function() {
+            clearTimeout(schoolSearchInput.validationTimeout);
+            // 延遲一點驗證，讓點擊下拉選單項目的時間完成
+            schoolSearchInput.validationTimeout = setTimeout(validateSchoolInputImmediate, 200);
+        });
+        
+        // 當輸入框獲得焦點時，如果已有錯誤且下拉選單未顯示，保持顯示
+        schoolSearchInput.addEventListener('focus', function() {
+            const resultsDiv = document.getElementById('schoolResults');
+            const value = this.value.trim();
+            // 只有在下拉選單未顯示時才檢查錯誤
+            if (value && !/^.+ \(.+\)$/.test(value) && 
+                (!resultsDiv || !resultsDiv.classList.contains('show'))) {
+                validateSchoolInput();
+            }
+        });
 
         // 清除按鈕事件
         if (clearSchoolBtn) {
-            clearSchoolBtn.addEventListener('click', clearSchoolSearch);
+            clearSchoolBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                clearSchoolSearch();
+            });
         }
 
         // 鍵盤事件
@@ -945,11 +1029,33 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.modern-search-container')) {
             const resultsDiv = document.getElementById('schoolResults');
-            if (resultsDiv) {
+            if (resultsDiv && resultsDiv.classList.contains('show')) {
                 resultsDiv.classList.remove('show');
+                // 當下拉選單隱藏時，驗證輸入
+                setTimeout(validateSchoolInput, 100);
             }
         }
     });
+    
+    // 表單提交前驗證
+    function validateFormBeforeSubmit(e) {
+        const schoolNameInput = document.getElementById('school_name');
+        if (schoolNameInput) {
+            const schoolName = schoolNameInput.value.trim();
+            if (schoolName) {
+                // 檢查格式是否為：學校名稱 (縣市區)
+                const schoolFormatPattern = /^.+ \(.+\)$/;
+                if (!schoolFormatPattern.test(schoolName)) {
+                    e.preventDefault();
+                    showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+                    schoolNameInput.focus();
+                    schoolNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
     
     // 為驗證碼輸入框添加視覺反饋
     const captchaInput = document.getElementById('captchaInput');
@@ -1122,18 +1228,24 @@ function performSchoolSearch() {
     } else {
         clearBtn.style.display = 'none';
         resultsDiv.classList.remove('show');
+        // 當搜尋結果隱藏時，清除錯誤提示
+        clearSchoolError();
         return;
     }
 
     if (keyword.length < 2) {
         resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
         resultsDiv.classList.add('show');
+        // 當下拉選單顯示時，清除錯誤提示（用戶還在輸入中）
+        clearSchoolError();
         return;
     }
 
     // 顯示載入中
     resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
     resultsDiv.classList.add('show');
+    // 當下拉選單顯示時，清除錯誤提示（用戶還在選擇中）
+    clearSchoolError();
 
     // 從API獲取搜尋結果
     fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
@@ -1162,14 +1274,92 @@ function performSchoolSearch() {
                 if (data.total > 20) {
                     resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
                 }
+                // 當下拉選單顯示時，清除錯誤提示
+                clearSchoolError();
             } else {
                 resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+                // 即使找不到結果，下拉選單仍然顯示，所以清除錯誤提示
+                clearSchoolError();
             }
         })
         .catch(error => {
             console.error('搜尋錯誤:', error);
             resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+            // 即使搜尋失敗，下拉選單仍然顯示，所以清除錯誤提示
+            clearSchoolError();
         });
+}
+
+// 清除學校輸入錯誤提示
+function clearSchoolError() {
+    const errorDiv = document.getElementById('school_name_error');
+    const input = document.getElementById('school_name');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    if (input) {
+        input.style.borderColor = '';
+        input.style.borderWidth = '';
+        input.style.boxShadow = '';
+    }
+}
+
+// 顯示學校輸入錯誤提示
+function showSchoolError(message) {
+    const errorDiv = document.getElementById('school_name_error');
+    const errorText = document.getElementById('school_name_error_text');
+    const input = document.getElementById('school_name');
+    
+    if (errorDiv && errorText) {
+        errorText.textContent = message || '請從系統提供的選項中選擇學校，不能自行輸入';
+        errorDiv.style.display = 'block';
+        // 添加動畫效果
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+            errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+    }
+    
+    if (input) {
+        input.style.borderColor = '#d32f2f';
+        input.style.borderWidth = '2px';
+        input.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+    }
+}
+
+// 驗證學校輸入格式
+function validateSchoolInput() {
+    const input = document.getElementById('school_name');
+    if (!input) return;
+    
+    const value = input.value.trim();
+    const resultsDiv = document.getElementById('schoolResults');
+    
+    // 如果為空，不顯示錯誤（由required屬性處理）
+    if (!value) {
+        clearSchoolError();
+        return;
+    }
+    
+    // 如果下拉選單正在顯示，表示用戶還在選擇中，不顯示錯誤
+    if (resultsDiv && resultsDiv.classList.contains('show')) {
+        clearSchoolError();
+        return;
+    }
+    
+    // 檢查格式是否為：學校名稱 (縣市區)
+    const schoolFormatPattern = /^.+ \(.+\)$/;
+    if (!schoolFormatPattern.test(value)) {
+        // 只有在下拉選單隱藏時才顯示錯誤
+        showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+    } else {
+        clearSchoolError();
+    }
+}
+
+// 立即驗證（不延遲）- 用於失去焦點時
+function validateSchoolInputImmediate() {
+    validateSchoolInput();
 }
 
 // 清除搜尋
@@ -1177,6 +1367,7 @@ function clearSchoolSearch() {
     document.getElementById('school_name').value = '';
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'none';
+    clearSchoolError();
 }
 
 // 選擇學校
@@ -1193,6 +1384,9 @@ function selectSchool(schoolName, city, district) {
     
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'block';
+    
+    // 清除錯誤提示（因為用戶已從系統選項中選擇）
+    clearSchoolError();
     
     // 觸發必填欄位檢查
     if (typeof checkRequiredFields === 'function') {

@@ -339,6 +339,30 @@
   font-weight: 500;
 }
 
+.clear-btn {
+  top: 8px ;
+  position: absolute;
+  right: 30px ;
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  z-index: 2;
+}
+
+.clear-btn:hover {
+  background: #f8f9fa ;
+  color: #dc3545;
+}
+
 .recommend-page-wrapper .enrollment-未入學 {
   background: #e2e3e5;
   color: #383d41;

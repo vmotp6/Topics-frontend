@@ -132,6 +132,14 @@ try {
         throw new Exception('行動電話必須為10個數字');
     }
     
+    // 驗證就讀國中格式（必須從系統選項中選擇）
+    if (!empty($school_name)) {
+        // 檢查格式是否為：學校名稱 (縣市區)
+        if (!preg_match('/^.+ \(.+\)$/', $school_name)) {
+            throw new Exception('請從系統提供的選項中選擇學校，不能自行輸入');
+        }
+    }
+    
     // 使用PDO連接資料庫
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $pdo = new PDO($dsn, DB_USERNAME, DB_PASSWORD);

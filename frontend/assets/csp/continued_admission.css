@@ -729,7 +729,7 @@ input[readonly]:focus {
 
 .search-icon {
   position: absolute;
-  right: 45px;
+  right: 25px;
   color: #999;
   pointer-events: none;
   z-index: 1;
@@ -737,24 +737,26 @@ input[readonly]:focus {
 
 .clear-btn {
   position: absolute;
-  right: 10px;
-  background: #f0f0f0;
+  top: 5px;
+  right: 50px;
+  background: none;
   border: none;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 5px;
   border-radius: 50%;
-  width: 28px;
-  height: 28px;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  color: #666;
-  transition: all 0.3s ease;
+  width: 20px;
+  height: 20px;
   z-index: 2;
 }
 
 .clear-btn:hover {
-  background: #e0e0e0;
-  color: #333;
+  background: #f8f9fa;
+  color: #dc3545;
 }
 
 .modern-search-results {

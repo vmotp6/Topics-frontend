@@ -1119,7 +1119,7 @@ textarea:focus {
 .clear-btn {
     top: 5px;
     position: absolute;
-    right: 40px;
+    right: 50px;
     background: none;
     border: none;
     color: #6c757d;
