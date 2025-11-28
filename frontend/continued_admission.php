@@ -143,7 +143,7 @@ foreach ($courses as $course) {
             <div class="form-group gender-group">
               <label><span class="required">*</span>性別</label>
               <div class="radio-group">
-                <label><input type="radio" name="gender" value="male" required> 男</label>
+                <label><input type="radio" name="gender" value="male" required checked> 男</label>
                 <label><input type="radio" name="gender" value="female" required> 女</label>
               </div>
             </div>
@@ -219,9 +219,14 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>戶籍地址 <small style="color: #d32f2f;">(<span class="required">*</span>為必填)</small></label>
+              <label> <small style="color: #d32f2f;">(<span class="required">*</span>為必填)</small> 戶籍地址 </label>
               <div class="address-group">
-                <input type="text" name="zip" placeholder="郵遞區號" maxlength="6">
+                <div class="zip-input-wrapper">
+                  <input type="text" name="zip" placeholder="郵遞區號" maxlength="6">
+                    <span class="zip-info-icon" data-tooltip="郵遞區號(相容三碼)">
+                      <i class="fas fa-info-circle"></i>
+                    </span>
+                </div>
                 <input type="text" name="city" placeholder="*縣/市" required>
                 <input type="text" name="district" placeholder="*市/區/鄉/鎮" required>
                 <input type="text" name="village" placeholder="村/里">

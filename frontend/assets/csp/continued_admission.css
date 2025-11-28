@@ -228,6 +228,64 @@ textarea {
   margin-top: 10px;
 }
 
+/* 郵遞區號欄位包裝器 */
+.zip-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* 確保郵遞區號欄位寬度與其他欄位一致 */
+.zip-input-wrapper input[name="zip"] {
+  width: 100%;
+  padding-right: 28px; /* 為圖標留出空間 */
+}
+
+/* Info 圖標樣式 */
+.zip-info-icon {
+  position: absolute;
+  right: 8px;
+  color: #999;
+  font-size: 14px;
+  cursor: help;
+  z-index: 1;
+  transition: color 0.2s ease;
+  pointer-events: auto; /* 確保可以點擊和 hover */
+}
+
+.zip-info-icon:hover {
+  color: #667eea;
+}
+
+/* Tooltip 樣式（可選，如果 title 不夠明顯） */
+.zip-info-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 5px;
+  padding: 6px 10px;
+  background: #333;
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+}
+
+.zip-info-icon:hover::after {
+  opacity: 1;
+}
+
+/* 確保 tooltip 不會被截斷 */
+.address-group {
+  overflow: visible;
+}
+
 /* 拖曳式科系選擇樣式 - 與admission.php的體驗課程選擇一致 */
 .choice-selection-container {
   display: grid;

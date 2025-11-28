@@ -270,7 +270,7 @@ body::before {
   /* user-item padding-top: 20px, 頭像高度 60px，讓徽章在頭像的右上角區域 */
   /* 將徽章放在頭像的右上角，往上移動一點避免遮擋 */
   top: 20px !important; /* 再往上移動一點，讓徽章更靠近頭像頂部，避免遮擋名稱 */
-  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%) !important;
+  background: red !important;
   color: white !important;
   border-radius: 10px;
   min-width: 20px; /* 稍微增大尺寸，更容易看到 */

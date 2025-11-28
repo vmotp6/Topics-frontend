@@ -818,7 +818,7 @@ $conn->close();
 
                 <!-- 活動選擇 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-calendar-alt"></i> 參加場次 <span class="required">*</span></h3>
+                    <h3> <span class="required">*</span> <i class="fas fa-calendar-alt"></i> 參加場次 </h3>
                     <div class="radio-group">
                         <?php if (empty($sessions)): ?>
                             <p style="color: #e74c3c; font-weight: bold;">目前沒有開放報名的場次，請稍後再試。</p>
@@ -847,7 +847,7 @@ $conn->close();
 
                 <!-- 體驗課程 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-book-open"></i> 體驗課程選擇 <span class="required">*</span></h3>
+                    <h3><span class="required">*</span> <i class="fas fa-book-open"></i>  體驗課程選擇 </h3>
                     <p style="margin-bottom: 15px; color: #666;">請從下方課程中拖曳最多兩個課程到右側框框中，並可調整優先順序</p>
                     
                     <div class="course-selection-container">
@@ -887,7 +887,7 @@ $conn->close();
 
                 <!-- 資訊接收 -->
                 <div class="form-section">
-                    <h3><i class="fas fa-envelope"></i> 資訊接收 <span class="required">*</span></h3>
+                    <h3> <span class="required">*</span> <i class="fas fa-envelope"></i> 資訊接收 </h3>
                     <p style="margin-bottom: 15px; color: #666;">活動結束後，是否願意收到其他相關五專升學訊息</p>
                     <div class="radio-group">
                         <label class="radio-item">
@@ -903,7 +903,7 @@ $conn->close();
 
                 <!-- 驗證碼 -->
                 <div class="captcha-section">
-                    <h3><i class="fas fa-shield-alt"></i> 安全驗證 <span class="required">*</span></h3>
+                    <h3> <span class="required">*</span> <i class="fas fa-shield-alt"></i> 安全驗證 </h3>
                     <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
                         <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" required maxlength="6" autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
                         <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">

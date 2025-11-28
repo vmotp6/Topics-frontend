@@ -779,13 +779,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         
         <div class="form-row">
           <div class="form-group">
-            <label for="recommender_name">姓名 <span class="required">*</span></label>
+            <label for="recommender_name"><span class="required">*</span> 姓名</label>
             <input type="text" id="recommender_name" name="recommender_name" 
                    value="<?php echo isset($_POST['recommender_name']) ? htmlspecialchars($_POST['recommender_name']) : ''; ?>" required>
           </div>
           
           <div class="form-group">
-            <label for="recommender_student_id">學號或教師編號 <span class="required">*</span></label>
+            <label for="recommender_student_id"><span class="required">*</span> 學號或教師編號 </label>
             <input type="text" id="recommender_student_id" name="recommender_student_id" 
                    value="<?php echo isset($_POST['recommender_student_id']) ? htmlspecialchars($_POST['recommender_student_id']) : ''; ?>" required>
           </div>
@@ -793,7 +793,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
         <div class="form-row">
           <div class="form-group">
-            <label for="recommender_grade">年級 <span class="required">*</span></label>
+            <label for="recommender_grade"> <span class="required">*</span> 年級</label>
             <select id="recommender_grade" name="recommender_grade" required>
               <option value="">請選擇年級</option>
               <option value="一年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '一年級') ? 'selected' : ''; ?>>一年級</option>
@@ -805,7 +805,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </div>
           
           <div class="form-group">
-            <label for="recommender_department">科系 <span class="required">*</span></label>
+            <label for="recommender_department"> <span class="required">*</span> 科系 </label>
             <select id="recommender_department" name="recommender_department" required>
               <option value="">請選擇科系</option>
               <?php foreach ($courses as $course): ?>
@@ -819,8 +819,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
 
         <div class="form-row">
-          <div class="form-group">
-            <label for="recommender_phone">聯絡電話 <span class="required">*</span></label>
+          <div class="form-group"><span class="required">*</span> 聯絡電話 </label>
             <input type="tel" id="recommender_phone" name="recommender_phone" 
                    value="<?php echo isset($_POST['recommender_phone']) ? htmlspecialchars($_POST['recommender_phone']) : ''; ?>" 
                    pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
@@ -828,7 +827,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </div>
           
           <div class="form-group">
-            <label for="recommender_email">電子郵件 <span class="required">*</span></label>
+            <label for="recommender_email"> <span class="required">*</span> 電子郵件 </label>
             <input type="email" id="recommender_email" name="recommender_email" 
                    value="<?php echo isset($_POST['recommender_email']) ? htmlspecialchars($_POST['recommender_email']) : ''; ?>" required>
           </div>
@@ -841,13 +840,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         
         <div class="form-row">
           <div class="form-group">
-            <label for="student_name">學生姓名 <span class="required">*</span></label>
+            <label for="student_name"> <span class="required">*</span> 學生姓名 </label>
             <input type="text" id="student_name" name="student_name" 
                    value="<?php echo isset($_POST['student_name']) ? htmlspecialchars($_POST['student_name']) : ''; ?>" required>
           </div>
           
           <div class="form-group">
-            <label for="student_school">就讀學校 <span class="required">*</span></label>
+            <label for="student_school"> <span class="required">*</span> 就讀學校 </label>
             <div class="modern-search-container">
               <div class="search-input-wrapper">
                 <input type="text" id="student_school" name="student_school" placeholder="請輸入學校名稱..." autocomplete="off" required 
@@ -881,7 +880,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </div>
           
           <div class="form-group">
-            <label for="student_phone">聯絡電話 <span class="required">*</span></label>
+            <label for="student_phone"> <span class="required">*</span> 聯絡電話 </label>
             <input type="tel" id="student_phone" name="student_phone" 
                    value="<?php echo isset($_POST['student_phone']) ? htmlspecialchars($_POST['student_phone']) : ''; ?>" 
                    pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
@@ -909,7 +908,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         <h3><i class="fas fa-heart"></i> 推薦資訊</h3>
         
         <div class="form-group full-width">
-          <label for="recommendation_reason">推薦理由 <span class="required">*</span></label>
+          <label for="recommendation_reason"> <span class="required">*</span> 推薦理由 </label>
           <textarea id="recommendation_reason" name="recommendation_reason" 
                     placeholder="請詳細說明推薦這位學生的理由，例如：學習態度、特殊才能、品格表現等..." required><?php echo isset($_POST['recommendation_reason']) ? htmlspecialchars($_POST['recommendation_reason']) : ''; ?></textarea>
         </div>
