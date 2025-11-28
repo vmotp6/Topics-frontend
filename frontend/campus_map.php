@@ -20,21 +20,21 @@ require_once 'config.php';
 
             <!-- 浮動控制按鈕 -->
             <div class="floating-controls">
-                <button id="show-restaurants-btn" class="floating-btn" title="附近餐廳">
-                    <i class="fas fa-utensils"></i>
-                    <span>附近餐廳</span>
-                </button>
                 <button id="show-campus-info-btn" class="floating-btn active" title="校園資訊">
                     <i class="fas fa-info-circle"></i>
                     <span>校園資訊</span>
                 </button>
-                <button id="get-directions-btn" class="floating-btn" title="規劃路線">
-                    <i class="fas fa-route"></i>
-                    <span>規劃路線</span>
-                </button>
                 <button id="show-campus-map-btn" class="floating-btn" title="校園平面圖" onclick="console.log('按鈕 onclick 被觸發'); if(window.campusMap){console.log('調用 showCampusMap'); window.campusMap.showCampusMap();} else {console.error('CampusMap 實例不存在，window.campusMap:', window.campusMap);}">
                     <i class="fas fa-map"></i>
                     <span>校園平面圖</span>
+                </button>
+                <button id="show-restaurants-btn" class="floating-btn" title="附近餐廳">
+                    <i class="fas fa-utensils"></i>
+                    <span>附近餐廳</span>
+                </button>
+                <button id="get-directions-btn" class="floating-btn" title="規劃路線">
+                    <i class="fas fa-route"></i>
+                    <span>規劃路線</span>
                 </button>
             </div>
 
@@ -50,9 +50,9 @@ require_once 'config.php';
                     <div class="static-map-content">
                         <h3><i class="fas fa-map-marker-alt"></i> 康寧大學台北校區</h3>
                         <p><strong>地址：</strong>台北市內湖區康寧路三段75巷137號</p>
-                        <p><strong>座標：</strong>25.07575358359577, 121.60949282881778</p>
+                        <p><strong>座標：</strong>25.076132980674792, 121.61012050007541</p>
                         <div class="static-map-image">
-                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=25.07575358359577,121.60949282881778&zoom=15&size=600x400&markers=color:red%7C25.07575358359577,121.60949282881778&key=<?php 
+                            <img src="https://maps.googleapis.com/maps/api/staticmap?center=25.076132980674792,121.61012050007541&zoom=16&size=600x400&markers=color:red%7Clabel:C%7C25.076132980674792,121.61012050007541&key=<?php 
                                 // 確保載入 config.php
                                 if (!defined('GOOGLE_MAPS_API_KEY')) {
                                     require_once __DIR__ . '/config.php';
@@ -93,6 +93,69 @@ require_once 'config.php';
                                 <span class="feature-tag"><i class="fas fa-dumbbell"></i> 體育館</span>
                                 <span class="feature-tag"><i class="fas fa-utensils"></i> 餐廳</span>
                                 <span class="feature-tag"><i class="fas fa-car"></i> 停車場</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 校園建築物列表 -->
+                        <div class="buildings-section">
+                            <h4 style="margin: 24px 0 16px 0; color: #333; font-size: 1.1rem; font-weight: 600;">
+                                <i class="fas fa-building" style="color: #667eea; margin-right: 8px;"></i>校園建築物
+                            </h4>
+                            <div class="buildings-list">
+                                <div class="building-item" onclick="if(window.campusMap) window.campusMap.focusOnBuilding('firstTeachingBuilding')">
+                                    <div class="building-icon" style="background: #EA4335;">
+                                        <span style="color: white; font-weight: bold;">C</span>
+                                    </div>
+                                    <div class="building-info">
+                                        <div class="building-name">第一教學大樓 (C棟)</div>
+                                        <div class="building-coords">25.076132980674792, 121.61012050007541</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right building-arrow"></i>
+                                </div>
+                                
+                                <div class="building-item" onclick="if(window.campusMap) window.campusMap.focusOnBuilding('secondTeachingBuilding')">
+                                    <div class="building-icon" style="background: #EA4335;">
+                                        <span style="color: white; font-weight: bold;">E</span>
+                                    </div>
+                                    <div class="building-info">
+                                        <div class="building-name">第二教學大樓 (E棟)</div>
+                                        <div class="building-coords">25.075602118954585, 121.61005748369553</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right building-arrow"></i>
+                                </div>
+                                
+                                <div class="building-item" onclick="if(window.campusMap) window.campusMap.focusOnBuilding('administrativeBuilding')">
+                                    <div class="building-icon" style="background: #EA4335;">
+                                        <span style="color: white; font-weight: bold;">A</span>
+                                    </div>
+                                    <div class="building-info">
+                                        <div class="building-name">行政大樓 (A棟)</div>
+                                        <div class="building-coords">25.075479266366344, 121.60968101654407</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right building-arrow"></i>
+                                </div>
+                                
+                                <div class="building-item" onclick="if(window.campusMap) window.campusMap.focusOnBuilding('yeshengHall')">
+                                    <div class="building-icon" style="background: #EA4335;">
+                                        <span style="color: white; font-weight: bold; font-size: 0.9rem;">野</span>
+                                    </div>
+                                    <div class="building-info">
+                                        <div class="building-name">野聲館</div>
+                                        <div class="building-coords">25.076506287137924, 121.61032460516375</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right building-arrow"></i>
+                                </div>
+                                
+                                <div class="building-item" onclick="if(window.campusMap) window.campusMap.focusOnBuilding('cihuiBuilding')">
+                                    <div class="building-icon" style="background: #EA4335;">
+                                        <span style="color: white; font-weight: bold; font-size: 0.9rem;">慈</span>
+                                    </div>
+                                    <div class="building-info">
+                                        <div class="building-name">慈暉樓</div>
+                                        <div class="building-coords">25.076098148747832, 121.60976402349822</div>
+                                    </div>
+                                    <i class="fas fa-chevron-right building-arrow"></i>
+                                </div>
                             </div>
                         </div>
                     </div>

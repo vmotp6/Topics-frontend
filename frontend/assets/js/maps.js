@@ -22,6 +22,36 @@ class CampusMap {
             'lng': 121.60949282881778,
             'description': '康寧大學台北校區'
         };
+        // 第一教學大樓 (C棟) 位置
+        this.firstTeachingBuildingLocation = {
+            'lat': 25.076132980674792,
+            'lng': 121.61012050007541,
+            'name': '第一教學大樓 (C棟)'
+        };
+        // 第二教學大樓 (E棟) 位置
+        this.secondTeachingBuildingLocation = {
+            'lat': 25.075602118954585,
+            'lng': 121.61005748369553,
+            'name': '第二教學大樓 (E棟)'
+        };
+        // 行政大樓 (A棟) 位置
+        this.administrativeBuildingLocation = {
+            'lat': 25.075479266366344,
+            'lng': 121.60968101654407,
+            'name': '行政大樓 (A棟)'
+        };
+        // 野聲館 位置
+        this.yeshengHallLocation = {
+            'lat': 25.076506287137924,
+            'lng': 121.61032460516375,
+            'name': '野聲館'
+        };
+        // 慈暉樓 位置
+        this.cihuiBuildingLocation = {
+            'lat': 25.076098148747832,
+            'lng': 121.60976402349822,
+            'name': '慈暉樓'
+        };
         this.sidePanelVisible = true;
         this.restaurants = [];
         this.originAutocomplete = null;
@@ -79,10 +109,10 @@ class CampusMap {
         console.log('開始初始化地圖，位置:', this.campusLocation);
 
         try {
-            // 創建地圖，使用更現代的樣式
+            // 創建地圖，使用更現代的樣式，中心設為第一教學大樓位置
             this.map = new google.maps.Map(document.getElementById('map'), {
-                center: { lat: this.campusLocation.lat, lng: this.campusLocation.lng },
-                zoom: 16,
+                center: { lat: this.firstTeachingBuildingLocation.lat, lng: this.firstTeachingBuildingLocation.lng },
+                zoom: 18,
                 mapTypeId: google.maps.MapTypeId.ROADMAP,
                 streetViewControl: true,
                 mapTypeControl: true,
@@ -134,6 +164,21 @@ class CampusMap {
         // 添加校園標記
         this.addCampusMarker();
         
+        // 添加第一教學大樓 (C棟) 標記
+        this.addFirstTeachingBuildingMarker();
+        
+        // 添加第二教學大樓 (E棟) 標記
+        this.addSecondTeachingBuildingMarker();
+        
+        // 添加行政大樓 (A棟) 標記
+        this.addAdministrativeBuildingMarker();
+        
+        // 添加野聲館 標記
+        this.addYeshengHallMarker();
+        
+        // 添加慈暉樓 標記
+        this.addCihuiBuildingMarker();
+        
         console.log('地圖初始化完成');
     }
 
@@ -170,6 +215,211 @@ class CampusMap {
                             <i class="fas fa-route"></i> 規劃路線
                         </button>
                     </div>
+                </div>
+            `
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open(this.map, marker);
+        });
+
+        this.markers.push(marker);
+    }
+
+    addFirstTeachingBuildingMarker() {
+        const buildingLocation = this.firstTeachingBuildingLocation;
+
+        // 使用 Google Maps 風格的紅色標記（標準水滴形狀）
+        const marker = new google.maps.Marker({
+            position: { lat: buildingLocation.lat, lng: buildingLocation.lng },
+            map: this.map,
+            title: buildingLocation.name,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 0 C7.163 0, 0 7.163, 0 16 C0 24.837, 16 40, 16 40 C16 40, 32 24.837, 32 16 C32 7.163, 24.837 0, 16 0 Z" fill="#EA4335" stroke="white" stroke-width="1.5"/>
+                        <circle cx="16" cy="16" r="6" fill="white"/>
+                        <text x="16" y="20" text-anchor="middle" fill="#EA4335" font-size="11" font-weight="bold" font-family="Arial, sans-serif">C</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40)
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="padding: 15px; max-width: 280px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        <i class="fas fa-building" style="color: #EA4335; margin-right: 8px;"></i>${buildingLocation.name}
+                    </h3>
+                    <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
+                        <i class="fas fa-map-marker-alt" style="color: #667eea;"></i> 座標：${buildingLocation.lat}, ${buildingLocation.lng}
+                    </p>
+                </div>
+            `
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open(this.map, marker);
+        });
+
+        this.markers.push(marker);
+    }
+
+    addSecondTeachingBuildingMarker() {
+        const buildingLocation = this.secondTeachingBuildingLocation;
+
+        // 使用 Google Maps 風格的紅色標記（標準水滴形狀）
+        const marker = new google.maps.Marker({
+            position: { lat: buildingLocation.lat, lng: buildingLocation.lng },
+            map: this.map,
+            title: buildingLocation.name,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 0 C7.163 0, 0 7.163, 0 16 C0 24.837, 16 40, 16 40 C16 40, 32 24.837, 32 16 C32 7.163, 24.837 0, 16 0 Z" fill="#EA4335" stroke="white" stroke-width="1.5"/>
+                        <circle cx="16" cy="16" r="6" fill="white"/>
+                        <text x="16" y="20" text-anchor="middle" fill="#EA4335" font-size="11" font-weight="bold" font-family="Arial, sans-serif">E</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40)
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="padding: 15px; max-width: 280px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        <i class="fas fa-building" style="color: #EA4335; margin-right: 8px;"></i>${buildingLocation.name}
+                    </h3>
+                    <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
+                        <i class="fas fa-map-marker-alt" style="color: #667eea;"></i> 座標：${buildingLocation.lat}, ${buildingLocation.lng}
+                    </p>
+                </div>
+            `
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open(this.map, marker);
+        });
+
+        this.markers.push(marker);
+    }
+
+    addAdministrativeBuildingMarker() {
+        const buildingLocation = this.administrativeBuildingLocation;
+
+        // 使用 Google Maps 風格的紅色標記（標準水滴形狀）
+        const marker = new google.maps.Marker({
+            position: { lat: buildingLocation.lat, lng: buildingLocation.lng },
+            map: this.map,
+            title: buildingLocation.name,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 0 C7.163 0, 0 7.163, 0 16 C0 24.837, 16 40, 16 40 C16 40, 32 24.837, 32 16 C32 7.163, 24.837 0, 16 0 Z" fill="#EA4335" stroke="white" stroke-width="1.5"/>
+                        <circle cx="16" cy="16" r="6" fill="white"/>
+                        <text x="16" y="20" text-anchor="middle" fill="#EA4335" font-size="11" font-weight="bold" font-family="Arial, sans-serif">A</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40)
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="padding: 15px; max-width: 280px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        <i class="fas fa-building" style="color: #EA4335; margin-right: 8px;"></i>${buildingLocation.name}
+                    </h3>
+                    <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
+                        <i class="fas fa-map-marker-alt" style="color: #667eea;"></i> 座標：${buildingLocation.lat}, ${buildingLocation.lng}
+                    </p>
+                </div>
+            `
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open(this.map, marker);
+        });
+
+        this.markers.push(marker);
+    }
+
+    addYeshengHallMarker() {
+        const buildingLocation = this.yeshengHallLocation;
+
+        // 使用 Google Maps 風格的紅色標記（標準水滴形狀）
+        const marker = new google.maps.Marker({
+            position: { lat: buildingLocation.lat, lng: buildingLocation.lng },
+            map: this.map,
+            title: buildingLocation.name,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 0 C7.163 0, 0 7.163, 0 16 C0 24.837, 16 40, 16 40 C16 40, 32 24.837, 32 16 C32 7.163, 24.837 0, 16 0 Z" fill="#EA4335" stroke="white" stroke-width="1.5"/>
+                        <circle cx="16" cy="16" r="6" fill="white"/>
+                        <text x="16" y="20" text-anchor="middle" fill="#EA4335" font-size="10" font-weight="bold" font-family="Arial, sans-serif">野</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40)
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="padding: 15px; max-width: 280px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        <i class="fas fa-building" style="color: #EA4335; margin-right: 8px;"></i>${buildingLocation.name}
+                    </h3>
+                    <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
+                        <i class="fas fa-map-marker-alt" style="color: #667eea;"></i> 座標：${buildingLocation.lat}, ${buildingLocation.lng}
+                    </p>
+                </div>
+            `
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open(this.map, marker);
+        });
+
+        this.markers.push(marker);
+    }
+
+    addCihuiBuildingMarker() {
+        const buildingLocation = this.cihuiBuildingLocation;
+
+        // 使用 Google Maps 風格的紅色標記（標準水滴形狀）
+        const marker = new google.maps.Marker({
+            position: { lat: buildingLocation.lat, lng: buildingLocation.lng },
+            map: this.map,
+            title: buildingLocation.name,
+            icon: {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16 0 C7.163 0, 0 7.163, 0 16 C0 24.837, 16 40, 16 40 C16 40, 32 24.837, 32 16 C32 7.163, 24.837 0, 16 0 Z" fill="#EA4335" stroke="white" stroke-width="1.5"/>
+                        <circle cx="16" cy="16" r="6" fill="white"/>
+                        <text x="16" y="20" text-anchor="middle" fill="#EA4335" font-size="10" font-weight="bold" font-family="Arial, sans-serif">慈</text>
+                    </svg>
+                `),
+                scaledSize: new google.maps.Size(32, 40),
+                anchor: new google.maps.Point(16, 40)
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="padding: 15px; max-width: 280px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px; font-weight: 600;">
+                        <i class="fas fa-building" style="color: #EA4335; margin-right: 8px;"></i>${buildingLocation.name}
+                    </h3>
+                    <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
+                        <i class="fas fa-map-marker-alt" style="color: #667eea;"></i> 座標：${buildingLocation.lat}, ${buildingLocation.lng}
+                    </p>
                 </div>
             `
         });
@@ -929,6 +1179,53 @@ class CampusMap {
         // 移動地圖到校園位置
         this.map.setCenter({ lat: this.campusLocation.lat, lng: this.campusLocation.lng });
         this.map.setZoom(16);
+    }
+
+    focusOnBuilding(buildingType) {
+        let location = null;
+        
+        switch(buildingType) {
+            case 'firstTeachingBuilding':
+                location = this.firstTeachingBuildingLocation;
+                break;
+            case 'secondTeachingBuilding':
+                location = this.secondTeachingBuildingLocation;
+                break;
+            case 'administrativeBuilding':
+                location = this.administrativeBuildingLocation;
+                break;
+            case 'yeshengHall':
+                location = this.yeshengHallLocation;
+                break;
+            case 'cihuiBuilding':
+                location = this.cihuiBuildingLocation;
+                break;
+            default:
+                console.error('未知的建築物類型:', buildingType);
+                return;
+        }
+        
+        if (location) {
+            // 移動地圖到建築物位置
+            this.map.setCenter({ lat: location.lat, lng: location.lng });
+            this.map.setZoom(19);
+            
+            // 找到對應的標記點並打開信息窗口
+            const marker = this.markers.find(m => {
+                if (m.getPosition) {
+                    const pos = m.getPosition();
+                    return pos && 
+                           Math.abs(pos.lat() - location.lat) < 0.0001 && 
+                           Math.abs(pos.lng() - location.lng) < 0.0001;
+                }
+                return false;
+            });
+            
+            if (marker) {
+                // 觸發標記點的點擊事件來顯示信息窗口
+                google.maps.event.trigger(marker, 'click');
+            }
+        }
     }
 
     showCampusMap() {

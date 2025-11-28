@@ -670,6 +670,77 @@ body.custom-spacing {
     margin: 2px;
 }
 
+/* 校園建築物列表樣式 */
+.buildings-section {
+    margin-top: 8px;
+}
+
+.buildings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.building-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    gap: 12px;
+}
+
+.building-item:hover {
+    background: #e3f2fd;
+    border-color: #667eea;
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.building-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.building-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.building-name {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.building-coords {
+    font-size: 0.75rem;
+    color: #999;
+    font-family: 'Courier New', monospace;
+}
+
+.building-arrow {
+    color: #999;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.building-item:hover .building-arrow {
+    transform: translateX(4px);
+    color: #667eea;
+}
+
 .directions-info {
     padding: 0;
     border-top: 1px solid #e1e5e9;
