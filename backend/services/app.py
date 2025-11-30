@@ -261,13 +261,18 @@ def google_callback():
                         )
                         print(f"更新現有用戶（更新 Google 頭像）: {existing_user[1]}")
                     
-                    user_id, username, role = existing_user
+                    user_id, username, role_code = existing_user
+                    
+                    # 從 role_types 表查詢角色名稱
+                    cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
+                    role_result = cursor.fetchone()
+                    role = role_result[0] if role_result else role_code  # 如果查不到，使用代碼作為後備
                 else:
                     # 創建新用戶
                     username = name or email.split('@')[0]
                     
-                    # 所有新註冊用戶都設為學生（老師身分由後端管理員手動設定）
-                    role = '學生'
+                    # 所有新註冊用戶都設為學生（使用角色代碼 'STU'）
+                    role_code = 'STU'
                     print(f"新用戶預設設為學生: {email}")
                     
                     # 確保用戶名唯一
@@ -283,22 +288,27 @@ def google_callback():
                     cursor.execute(
                         """INSERT INTO user (username, name, email, google_id, role, password, profile_picture) 
                            VALUES (%s, %s, %s, %s, %s, '', %s)""",
-                        (username, name, email, google_id, role, picture)
+                        (username, name, email, google_id, role_code, picture)
                     )
                     user_id = cursor.lastrowid
                     print(f"創建新用戶: {username}, ID: {user_id}")
                     
-                    # 同步插入 student 表
+                    # 同步插入 student 表（根據正規化結構）
                     try:
                         cursor.execute(
-                            """INSERT INTO student (user_id, name, email) 
-                               VALUES (%s, %s, %s)""",
-                            (user_id, name, email)
+                            """INSERT INTO student (user_id, email) 
+                               VALUES (%s, %s)""",
+                            (user_id, email)
                         )
-                        print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+                        print(f"✅ 已同步創建學生資料: user_id={user_id}")
                     except Exception as student_error:
                         # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
                         print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
+                    
+                    # 獲取角色名稱以便重定向（從 role_types 表查詢）
+                    cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
+                    role_result = cursor.fetchone()
+                    role = role_result[0] if role_result else '學生'
                 
                 conn.commit()
                 print(f"用戶資料保存成功: {username}")
@@ -554,23 +564,32 @@ def register():
                 conn.rollback()
                 return jsonify({"message": "電子郵件已被使用過"}), 400
             
-            # 插入新用戶（角色預設為學生）
+            # 雜湊密碼
+            hashed_password = password
+            if BCrypt_AVAILABLE:
+                hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            else:
+                # 如果沒有 bcrypt，至少使用簡單的雜湊（不推薦，但向後兼容）
+                import hashlib
+                hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            
+            # 插入新用戶（角色預設為學生，使用角色代碼 'STU'）
             print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
-                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
-                (username, password, email, name)
+                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STU')",
+                (username, hashed_password, email, name)
             )
             user_id = cursor.lastrowid
             print(f"✅ 已插入 user 表: user_id={user_id}")
             
-            # 同步插入 student 表
+            # 同步插入 student 表（根據正規化結構，student 表只有 user_id, student_id, department, grade, class_name, email, phone）
             try:
                 cursor.execute(
-                    """INSERT INTO student (user_id, name, email) 
-                       VALUES (%s, %s, %s)""",
-                    (user_id, name, email)
+                    """INSERT INTO student (user_id, email) 
+                       VALUES (%s, %s)""",
+                    (user_id, email)
                 )
-                print(f"✅ 已同步創建學生資料: user_id={user_id}, name={name}")
+                print(f"✅ 已同步創建學生資料: user_id={user_id}")
             except Exception as student_error:
                 # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
                 print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
@@ -582,10 +601,10 @@ def register():
             return jsonify({"message": "註冊成功"}), 200
             
     except pymysql.err.IntegrityError as e:
-        # 可能的唯一鍵衝突（如 username/email）
+        # 可能的唯一鍵衝突或外鍵約束失敗
         if conn:
             conn.rollback()
-        print(f"❌ 註冊唯一鍵衝突: {e}")
+        print(f"❌ 註冊資料庫約束錯誤: {e}")
         import traceback
         traceback.print_exc()
         error_msg = str(e).lower()
@@ -593,6 +612,8 @@ def register():
             return jsonify({"message": "用戶名已被使用"}), 400
         elif 'email' in error_msg or 'user.email' in error_msg:
             return jsonify({"message": "電子郵件已被使用過"}), 400
+        elif 'foreign key' in error_msg or 'role_types' in error_msg:
+            return jsonify({"message": "註冊失敗：無效的角色設定"}), 400
         else:
             return jsonify({"message": "帳號或電子郵件已被使用"}), 400
     except Exception as e:
@@ -821,8 +842,16 @@ def get_teacher_profile(username):
             profile = cursor.fetchone()
             
             if profile:
+                # 如果有科系代碼，從 departments 表查詢科系名稱
+                department_name = None
+                if profile[0]:  # department code
+                    cursor.execute("SELECT name FROM departments WHERE code = %s", (profile[0],))
+                    dept_result = cursor.fetchone()
+                    department_name = dept_result[0] if dept_result else profile[0]
+                
                 return jsonify({
-                    "department": profile[0],
+                    "department": profile[0],  # 返回代碼
+                    "department_name": department_name if department_name else '',  # 返回名稱
                     "phone": profile[1]
                 }), 200
             else:
@@ -862,19 +891,40 @@ def save_teacher_profile():
             
             user_id = user_result[0]
             
+            # 更新 user 表的 name（如果提供）
+            if name:
+                cursor.execute("UPDATE user SET name = %s WHERE id = %s", (name, user_id))
+            
+            # 如果 department 是中文名稱，轉換為代碼
+            department_code = None
+            if department:
+                # 先檢查是否已經是代碼
+                cursor.execute("SELECT code FROM departments WHERE code = %s", (department,))
+                dept_result = cursor.fetchone()
+                if dept_result:
+                    department_code = dept_result[0]
+                else:
+                    # 如果不是代碼，嘗試用名稱查詢
+                    cursor.execute("SELECT code FROM departments WHERE name = %s", (department,))
+                    dept_result = cursor.fetchone()
+                    if dept_result:
+                        department_code = dept_result[0]
+                    else:
+                        return jsonify({"message": f"無效的科系：{department}"}), 400
+            
             # 檢查是否已有個人資料
             sql_check = "SELECT COUNT(*) FROM teacher WHERE user_id = %s"
             cursor.execute(sql_check, (user_id,))
             exists = cursor.fetchone()[0] > 0
             
             if exists:
-                # 更新現有資料
-                sql_update = "UPDATE teacher SET name = %s, department = %s, phone = %s WHERE user_id = %s"
-                cursor.execute(sql_update, (name, department, phone, user_id))
+                # 更新現有資料（teacher 表沒有 name 欄位，name 在 user 表中）
+                sql_update = "UPDATE teacher SET department = %s, phone = %s WHERE user_id = %s"
+                cursor.execute(sql_update, (department_code if department_code else None, phone, user_id))
             else:
-                # 新增資料
-                sql_insert = "INSERT INTO teacher (user_id, name, department, phone) VALUES (%s, %s, %s, %s)"
-                cursor.execute(sql_insert, (user_id, name, department, phone))
+                # 新增資料（teacher 表沒有 name 欄位）
+                sql_insert = "INSERT INTO teacher (user_id, department, phone) VALUES (%s, %s, %s)"
+                cursor.execute(sql_insert, (user_id, department_code if department_code else None, phone))
             
             conn.commit()
             return jsonify({"message": "個人資料保存成功"}), 200
@@ -997,6 +1047,247 @@ def update_teacher_credentials():
             conn.rollback()
         print(f"未知錯誤：{e}")
         return jsonify({"message": "更新失敗，發生未知錯誤。"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ✅ 獲取學生個人資料
+@app.route('/student/profile/<username>', methods=['GET'])
+def get_student_profile(username):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+            
+        with conn.cursor() as cursor:
+            # 先獲取user的id和基本資訊
+            sql_get_user = "SELECT id, name, email FROM user WHERE username = %s"
+            cursor.execute(sql_get_user, (username,))
+            user_result = cursor.fetchone()
+            
+            if not user_result:
+                return jsonify({"message": "使用者不存在"}), 404
+            
+            user_id = user_result[0]
+            user_name = user_result[1] if user_result[1] else ''
+            user_email = user_result[2] if user_result[2] else ''
+            
+            # 查詢學生個人資料
+            sql_get_profile = """
+                SELECT student_id, department, grade, class_name, email, phone 
+                FROM student 
+                WHERE user_id = %s
+            """
+            cursor.execute(sql_get_profile, (user_id,))
+            profile = cursor.fetchone()
+            
+            if profile:
+                # 如果有科系代碼，從 departments 表查詢科系名稱
+                department_name = None
+                if profile[1]:  # department code
+                    cursor.execute("SELECT name FROM departments WHERE code = %s", (profile[1],))
+                    dept_result = cursor.fetchone()
+                    department_name = dept_result[0] if dept_result else profile[1]
+                
+                # 如果有年級代碼，從 identity_options 表查詢年級名稱
+                grade_name = None
+                if profile[2]:  # grade code
+                    cursor.execute("SELECT name FROM identity_options WHERE code = %s", (profile[2],))
+                    grade_result = cursor.fetchone()
+                    grade_name_from_db = grade_result[0] if grade_result else profile[2]
+                    # 將代碼轉換為顯示名稱（直接使用資料庫中的名稱：專一、專二、專三、專四、專五、國一、國二、國三）
+                    grade_display_mapping = {
+                        'F1': '專一', 'F2': '專二', 'F3': '專三', 'F4': '專四', 'F5': '專五',
+                        'J1': '國一', 'J2': '國二', 'J3': '國三',
+                        'H1': '高一', 'H2': '高二', 'H3': '高三'
+                    }
+                    # 優先使用代碼映射，如果沒有則使用資料庫中的名稱
+                    grade_name = grade_display_mapping.get(profile[2], grade_name_from_db)
+                
+                return jsonify({
+                    "name": user_name,
+                    "email": profile[4] if profile[4] else user_email,  # 優先使用 student 表的 email
+                    "student_id": profile[0] if profile[0] else '',
+                    "department": profile[1] if profile[1] else '',  # 返回代碼
+                    "department_name": department_name if department_name else '',  # 返回名稱
+                    "grade": profile[2] if profile[2] else '',  # 返回代碼
+                    "grade_name": grade_name if grade_name else '',  # 返回名稱
+                    "class_name": profile[3] if profile[3] else '',
+                    "phone": profile[5] if profile[5] else ''
+                }), 200
+            else:
+                # 如果沒有學生資料，返回基本資訊
+                return jsonify({
+                    "name": user_name,
+                    "email": user_email,
+                    "student_id": '',
+                    "department": '',
+                    "department_name": '',
+                    "grade": '',
+                    "grade_name": '',
+                    "class_name": '',
+                    "phone": ''
+                }), 200
+
+    except pymysql.Error as e:
+        print(f"資料庫查詢錯誤：{e}")
+        return jsonify({"message": "獲取個人資料失敗，請稍後再試。"}), 500
+    except Exception as e:
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "獲取個人資料失敗，發生未知錯誤。"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ✅ 保存學生個人資料
+@app.route('/student/profile', methods=['POST'])
+def save_student_profile():
+    """保存學生個人資料"""
+    # 同時支援 form 與 JSON
+    data = request.form if request.form else (request.get_json(silent=True) or {})
+    username = data.get('username')
+    name = data.get('name')
+    department = data.get('department')  # 可以是代碼或名稱
+    phone = data.get('phone')
+    student_id = data.get('student_id')
+    grade = data.get('grade')
+    class_name = data.get('class_name')
+    email = data.get('email')  # 可選，如果不提供則使用 user 表的 email
+    
+    if not username:
+        return jsonify({"message": "缺少必要參數：username"}), 400
+    
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+            
+        with conn.cursor() as cursor:
+            # 先獲取user的id
+            sql_get_user_id = "SELECT id, email FROM user WHERE username = %s"
+            cursor.execute(sql_get_user_id, (username,))
+            user_result = cursor.fetchone()
+            
+            if not user_result:
+                return jsonify({"message": "使用者不存在"}), 404
+            
+            user_id = user_result[0]
+            user_email = user_result[1] if user_result[1] else ''
+            
+            # 如果 department 是中文名稱，轉換為代碼
+            department_code = department
+            if department:
+                # 先檢查是否已經是代碼（嘗試查詢是否存在）
+                cursor.execute("SELECT code FROM departments WHERE code = %s", (department,))
+                dept_result = cursor.fetchone()
+                if dept_result:
+                    department_code = dept_result[0]
+                else:
+                    # 如果不是代碼，嘗試用名稱查詢
+                    cursor.execute("SELECT code FROM departments WHERE name = %s", (department,))
+                    dept_result = cursor.fetchone()
+                    if dept_result:
+                        department_code = dept_result[0]
+                    else:
+                        return jsonify({"message": f"無效的科系：{department}"}), 400
+            
+            # 如果 grade 是中文名稱，轉換為代碼（grade 也有外鍵約束到 identity_options）
+            grade_code = grade
+            if grade:
+                # 創建年級映射（前端使用「專一」到「專五」和「國一」到「國三」）
+                grade_mapping = {
+                    # 五專
+                    '專一': 'F1', '專二': 'F2', '專三': 'F3',
+                    '專四': 'F4', '專五': 'F5',
+                    # 國中
+                    '國一': 'J1', '國二': 'J2', '國三': 'J3',
+                    # 高中
+                    '高一': 'H1', '高二': 'H2', '高三': 'H3',
+                    # 舊格式（向後兼容）
+                    '一年級': 'F1', '二年級': 'F2', '三年級': 'F3',
+                    '四年級': 'F4', '五年級': 'F5'
+                }
+                
+                # 先檢查是否已經是代碼
+                cursor.execute("SELECT code FROM identity_options WHERE code = %s", (grade,))
+                grade_result = cursor.fetchone()
+                if grade_result:
+                    grade_code = grade_result[0]
+                elif grade in grade_mapping:
+                    # 使用映射轉換
+                    grade_code = grade_mapping[grade]
+                    # 驗證映射後的代碼是否存在
+                    cursor.execute("SELECT code FROM identity_options WHERE code = %s", (grade_code,))
+                    if not cursor.fetchone():
+                        grade_code = None  # 如果映射的代碼不存在，設為 None
+                else:
+                    # 既不是代碼也不是映射值，嘗試直接查詢名稱
+                    cursor.execute("SELECT code FROM identity_options WHERE name = %s", (grade,))
+                    grade_result = cursor.fetchone()
+                    if grade_result:
+                        grade_code = grade_result[0]
+                    else:
+                        # 如果找不到對應的代碼，設為 None（允許為空）
+                        grade_code = None
+            
+            # 更新 user 表的 name（如果提供）
+            if name:
+                cursor.execute("UPDATE user SET name = %s WHERE id = %s", (name, user_id))
+            
+            # 使用 email（如果提供），否則使用 user 表的 email
+            final_email = email if email else user_email
+            
+            # 檢查是否已有個人資料
+            sql_check = "SELECT COUNT(*) FROM student WHERE user_id = %s"
+            cursor.execute(sql_check, (user_id,))
+            exists = cursor.fetchone()[0] > 0
+            
+            if exists:
+                # 更新現有資料
+                sql_update = """
+                    UPDATE student 
+                    SET student_id = %s, department = %s, grade = %s, 
+                        class_name = %s, email = %s, phone = %s 
+                    WHERE user_id = %s
+                """
+                cursor.execute(sql_update, (
+                    student_id if student_id else None,
+                    department_code if department_code else None,
+                    grade_code if grade_code else None,
+                    class_name if class_name else None,
+                    final_email if final_email else None,
+                    phone if phone else None,
+                    user_id
+                ))
+            else:
+                # 新增資料
+                sql_insert = """
+                    INSERT INTO student (user_id, student_id, department, grade, class_name, email, phone) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_insert, (
+                    user_id,
+                    student_id if student_id else None,
+                    department_code if department_code else None,
+                    grade_code if grade_code else None,
+                    class_name if class_name else None,
+                    final_email if final_email else None,
+                    phone if phone else None
+                ))
+            
+            conn.commit()
+            return jsonify({"message": "個人資料保存成功"}), 200
+
+    except pymysql.Error as e:
+        if conn:
+            conn.rollback()
+        print(f"資料庫寫入錯誤：{e}")
+        return jsonify({"message": "保存失敗，請稍後再試。原因：資料庫錯誤"}), 500
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"未知錯誤：{e}")
+        return jsonify({"message": "保存失敗，發生未知錯誤。"}), 500
     finally:
         if conn:
             conn.close()

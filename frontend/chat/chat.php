@@ -19,75 +19,39 @@ $role = $_SESSION['role'];
 // 載入資料庫配置
 require_once '../config.php';
 
+// 初始化聯絡人陣列，確保無論什麼角色都有此變數
+$contacts = [];
+
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
+    // 檢查角色（支援代碼和中文名稱）
+    $isStudent = ($role === 'STU' || $role === '學生' || $role === 'student');
+    $isTeacher = ($role === 'TEA' || $role === '老師' || $role === 'teacher');
+    $isStaff = ($role === 'STA' || $role === '學校行政人員' || $role === '行政人員');
+    
     // 根據角色獲取不同的資料
-    if ($role === '學生' || $role === 'student') {
-        // 學生：獲取所有教師和學生列表
+    if ($isStudent) {
+        // 學生：只獲取所有老師（不顯示其他學生）
         $contacts = [];
         
-        // 獲取所有老師（包含頭像）
-        $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, u.profile_picture, '老師' as contact_type
+        // 獲取所有老師（包含頭像）- 支援代碼和中文角色名稱
+        $stmt = $pdo->prepare("SELECT t.user_id, COALESCE(u.name, u.username) as name, t.department, u.username, u.profile_picture, '老師' as contact_type
                               FROM teacher t 
                               JOIN user u ON t.user_id = u.id 
-                              WHERE u.role = '老師'
-                              ORDER BY t.name");
+                              WHERE (u.role = 'TEA' OR u.role = '老師')
+                              ORDER BY u.name, u.username");
         $stmt->execute();
         $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $contacts = array_merge($contacts, $allTeachers);
-        
-        // 獲取所有學生（包含頭像）- 從 student 表和 user 表獲取
-        $studentUsernames = [];
-        
-        // 先從 student 表獲取學生
-        try {
-            $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, u.profile_picture, '學生' as contact_type, s.grade, s.class_name
-                                  FROM student s 
-                                  JOIN user u ON s.user_id = u.id 
-                                  WHERE u.role = '學生' AND u.username != ?
-                                  ORDER BY s.department, s.grade, s.name");
-            $stmt->execute([$username]);
-            $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $allStudents);
-            // 記錄已獲取的學生 username
-            foreach ($allStudents as $student) {
-                $studentUsernames[] = $student['username'];
-            }
-        } catch (PDOException $e) {
-            // 如果學生表不存在，跳過
-        }
-        
-        // 從 user 表獲取所有學生（包括 student 表中沒有的）
-        $stmt = $pdo->prepare("SELECT u.id as user_id, 
-                                      COALESCE(s.name, u.username) as name, 
-                                      COALESCE(s.department, '未設定') as department, 
-                                      u.username, 
-                                      u.profile_picture, 
-                                      '學生' as contact_type, 
-                                      COALESCE(s.grade, '未設定') as grade, 
-                                      COALESCE(s.class_name, '未設定') as class_name
-                               FROM user u 
-                               LEFT JOIN student s ON u.id = s.user_id
-                               WHERE u.role = '學生' AND u.username != ?
-                               ORDER BY COALESCE(s.department, '未設定'), COALESCE(s.grade, '未設定'), COALESCE(s.name, u.username)");
-        $stmt->execute([$username]);
-        $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // 合併所有用戶（避免重複）
-        foreach ($allUsers as $user) {
-            if (!in_array($user['username'], $studentUsernames)) {
-                $contacts[] = $user;
-            }
-        }
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
             $contacts = [];
         }
         
-        // 學生角色也需要獲取有未讀消息的聯絡人
+        // 獲取有未讀消息的老師（補充到列表中）
         try {
             // 檢查表結構
             $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
@@ -96,7 +60,6 @@ try {
                                 AND COLUMN_NAME IN ('from_user_id', 'to_user_id', 'is_read')");
             $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
             $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
-            $hasIsRead = in_array('is_read', $columns);
             
             // 獲取當前用戶ID
             $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
@@ -107,7 +70,7 @@ try {
             if ($currentUserId) {
                 if ($useUserId) {
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(t.name, u.username) as name,
+                                COALESCE(u.name, u.username) as name,
                                 COALESCE(t.department, '未設定') as department,
                                 u.username,
                                 u.profile_picture,
@@ -116,16 +79,14 @@ try {
                          JOIN user u ON pch.from_user_id = u.id
                          LEFT JOIN teacher t ON u.id = t.user_id
                          WHERE pch.to_user_id = ?
-                           AND u.id != ?";
-                    if ($hasIsRead) {
-                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
-                    }
-                    $sql .= " GROUP BY u.id, u.username";
+                           AND u.id != ?
+                           AND (u.role = 'TEA' OR u.role = '老師')
+                         GROUP BY u.id, u.username";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute([$currentUserId, $currentUserId]);
                 } else {
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(t.name, u.username) as name,
+                                COALESCE(u.name, u.username) as name,
                                 COALESCE(t.department, '未設定') as department,
                                 u.username,
                                 u.profile_picture,
@@ -134,11 +95,9 @@ try {
                          JOIN user u ON pch.from_user = u.username
                          LEFT JOIN teacher t ON u.id = t.user_id
                          WHERE pch.to_user = ?
-                           AND u.username != ?";
-                    if ($hasIsRead) {
-                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
-                    }
-                    $sql .= " GROUP BY u.id, u.username";
+                           AND u.username != ?
+                           AND (u.role = 'TEA' OR u.role = '老師')
+                         GROUP BY u.id, u.username";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute([$username, $username]);
                 }
@@ -158,78 +117,18 @@ try {
         } catch (PDOException $e) {
             error_log("獲取未讀消息聯絡人失敗: " . $e->getMessage());
         }
-    } elseif ($role === '老師' || $role === 'teacher') {
-        // 老師：獲取同科系老師和所有學生
+    } elseif ($isTeacher || $isStaff) {
+        // 老師和學校行政人員：只能看到傳過消息給他們的人（不直接顯示所有學生）
         $contacts = [];
         
-        // 先獲取當前老師的科系
-        $stmt = $pdo->prepare("SELECT t.department FROM teacher t 
-                              JOIN user u ON t.user_id = u.id 
-                              WHERE u.username = ? AND u.role = '老師'");
-        $stmt->execute([$username]);
-        $currentTeacher = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($currentTeacher) {
-            $department = $currentTeacher['department'];
+        try {
+            // 獲取當前用戶ID
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+            $stmt->execute([$username]);
+            $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $currentUserId = $currentUser ? $currentUser['id'] : null;
             
-            // 獲取同科系的老師（包含頭像）
-            $stmt = $pdo->prepare("SELECT t.user_id, t.name, t.department, u.username, u.profile_picture, '老師' as contact_type
-                                  FROM teacher t 
-                                  JOIN user u ON t.user_id = u.id 
-                                  WHERE u.role = '老師' AND t.department = ? AND u.username != ?
-                                  ORDER BY t.name");
-            $stmt->execute([$department, $username]);
-            $sameDeptTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $contacts = array_merge($contacts, $sameDeptTeachers);
-            
-            // 獲取所有學生（包含頭像）- 從 student 表和 user 表獲取
-            $studentUsernames = [];
-            
-            // 先從 student 表獲取學生
-            try {
-                $stmt = $pdo->prepare("SELECT s.user_id, s.name, s.department, u.username, u.profile_picture, '學生' as contact_type, s.grade, s.class_name
-                                      FROM student s 
-                                      JOIN user u ON s.user_id = u.id 
-                                      WHERE u.role = '學生'
-                                      ORDER BY s.department, s.grade, s.name");
-                $stmt->execute();
-                $allStudents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $contacts = array_merge($contacts, $allStudents);
-                // 記錄已獲取的學生 username
-                foreach ($allStudents as $student) {
-                    $studentUsernames[] = $student['username'];
-                }
-            } catch (PDOException $e) {
-                // 如果學生表不存在，跳過
-            }
-            
-            // 從 user 表獲取所有學生（包括 student 表中沒有的）
-            // 這樣可以確保所有有未讀消息的用戶都會顯示
-            $stmt = $pdo->prepare("SELECT u.id as user_id, 
-                                          COALESCE(s.name, u.username) as name, 
-                                          COALESCE(s.department, '未設定') as department, 
-                                          u.username, 
-                                          u.profile_picture, 
-                                          '學生' as contact_type, 
-                                          COALESCE(s.grade, '未設定') as grade, 
-                                          COALESCE(s.class_name, '未設定') as class_name
-                                   FROM user u 
-                                   LEFT JOIN student s ON u.id = s.user_id
-                                   WHERE u.role = '學生'
-                                   ORDER BY COALESCE(s.department, '未設定'), COALESCE(s.grade, '未設定'), COALESCE(s.name, u.username)");
-            $stmt->execute();
-            $allUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // 合併所有用戶（避免重複）
-            foreach ($allUsers as $user) {
-                if (!in_array($user['username'], $studentUsernames)) {
-                    $contacts[] = $user;
-                }
-            }
-            
-            // 獲取所有有未讀消息的用戶（包括不在 student 或 teacher 表中的）
-            // 這樣可以確保所有有未讀消息的用戶都會顯示在聯絡人列表中
-            try {
+            if ($currentUserId) {
                 // 檢查表結構，判斷使用哪種查詢方式
                 $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
                                     WHERE TABLE_SCHEMA = 'topics_good' 
@@ -238,58 +137,40 @@ try {
                 $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
                 
-                // 檢查是否有 is_read 欄位
-                $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
-                                    WHERE TABLE_SCHEMA = 'topics_good' 
-                                    AND TABLE_NAME = 'private_chat_history' 
-                                    AND COLUMN_NAME = 'is_read'");
-                $hasIsRead = $stmt->rowCount() > 0;
-                
                 if ($useUserId) {
-                    // 使用正規化版本（user_id）
-                    $stmt = $pdo->prepare("SELECT u.id FROM user WHERE username = ?");
-                    $stmt->execute([$username]);
-                    $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
-                    $currentUserId = $currentUser ? $currentUser['id'] : null;
-                    
-                    if ($currentUserId) {
-                        $sql = "SELECT DISTINCT u.id as user_id,
-                                    COALESCE(s.name, t.name, u.username) as name,
-                                    COALESCE(s.department, t.department, '未設定') as department,
-                                    u.username,
-                                    u.profile_picture,
-                                    CASE 
-                                        WHEN u.role = '學生' THEN '學生'
-                                        WHEN u.role = '老師' THEN '老師'
-                                        ELSE '其他'
-                                    END as contact_type,
-                                    COALESCE(s.grade, '未設定') as grade,
-                                    COALESCE(s.class_name, '未設定') as class_name
-                             FROM private_chat_history pch
-                             JOIN user u ON pch.from_user_id = u.id
-                             LEFT JOIN student s ON u.id = s.user_id
-                             LEFT JOIN teacher t ON u.id = t.user_id
-                             WHERE pch.to_user_id = ?
-                               AND u.id != ?";
-                        if ($hasIsRead) {
-                            $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
-                        }
-                        $sql .= " GROUP BY u.id, u.username";
-                        $stmt = $pdo->prepare($sql);
-                        $stmt->execute([$currentUserId, $currentUserId]);
-                    } else {
-                        $stmt = null;
-                    }
-                } else {
-                    // 使用舊版本（username）
+                    // 使用正規化版本（user_id）- 獲取所有傳過消息給當前用戶的人
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(s.name, t.name, u.username) as name,
+                                COALESCE(s.name, u.name, u.username) as name,
                                 COALESCE(s.department, t.department, '未設定') as department,
                                 u.username,
                                 u.profile_picture,
                                 CASE 
-                                    WHEN u.role = '學生' THEN '學生'
-                                    WHEN u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                COALESCE(s.grade, '未設定') as grade,
+                                COALESCE(s.class_name, '未設定') as class_name
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user_id = u.id
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user_id = ?
+                           AND u.id != ?
+                         GROUP BY u.id, u.username
+                         ORDER BY MAX(pch.timestamp) DESC";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$currentUserId, $currentUserId]);
+                } else {
+                    // 使用舊版本（username）- 獲取所有傳過消息給當前用戶的人
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(s.name, u.name, u.username) as name,
+                                COALESCE(s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 COALESCE(s.grade, '未設定') as grade,
@@ -299,30 +180,101 @@ try {
                          LEFT JOIN student s ON u.id = s.user_id
                          LEFT JOIN teacher t ON u.id = t.user_id
                          WHERE pch.to_user = ?
-                           AND u.username != ?";
-                    if ($hasIsRead) {
-                        $sql .= " AND (pch.is_read = 0 OR pch.is_read IS NULL)";
-                    }
-                    $sql .= " GROUP BY u.id, u.username";
+                           AND u.username != ?
+                         GROUP BY u.id, u.username
+                         ORDER BY MAX(pch.timestamp) DESC";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute([$username, $username]);
                 }
                 
                 if ($stmt) {
-                    $unreadContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                    
-                    // 合併到聯絡人列表（避免重複）
-                    $existingUsernames = array_column($contacts, 'username');
-                    foreach ($unreadContacts as $contact) {
-                        if (!in_array($contact['username'], $existingUsernames)) {
-                            $contacts[] = $contact;
-                        }
-                    }
+                    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 }
-            } catch (PDOException $e) {
-                // 如果查詢失敗，記錄錯誤但不中斷
-                error_log("獲取未讀消息聯絡人失敗: " . $e->getMessage());
             }
+        } catch (PDOException $e) {
+            error_log("獲取聯絡人失敗: " . $e->getMessage());
+        }
+        
+        // 如果沒有聯絡人，顯示空陣列
+        if (empty($contacts)) {
+            $contacts = [];
+        }
+    } else {
+        // 其他角色：只顯示傳過消息給他們的人
+        $contacts = [];
+        
+        try {
+            // 獲取當前用戶ID
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+            $stmt->execute([$username]);
+            $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $currentUserId = $currentUser ? $currentUser['id'] : null;
+            
+            if ($currentUserId) {
+                // 檢查表結構，判斷使用哪種查詢方式
+                $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                    WHERE TABLE_SCHEMA = 'topics_good' 
+                                    AND TABLE_NAME = 'private_chat_history' 
+                                    AND COLUMN_NAME IN ('from_user', 'to_user', 'from_user_id', 'to_user_id')");
+                $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
+                
+                if ($useUserId) {
+                    // 使用正規化版本（user_id）- 獲取所有傳過消息給當前用戶的人
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(s.name, u.name, u.username) as name,
+                                COALESCE(s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                COALESCE(s.grade, '未設定') as grade,
+                                COALESCE(s.class_name, '未設定') as class_name
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user_id = u.id
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user_id = ?
+                           AND u.id != ?
+                         GROUP BY u.id, u.username
+                         ORDER BY MAX(pch.timestamp) DESC";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$currentUserId, $currentUserId]);
+                } else {
+                    // 使用舊版本（username）- 獲取所有傳過消息給當前用戶的人
+                    $sql = "SELECT DISTINCT u.id as user_id,
+                                COALESCE(s.name, u.name, u.username) as name,
+                                COALESCE(s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                COALESCE(s.grade, '未設定') as grade,
+                                COALESCE(s.class_name, '未設定') as class_name
+                         FROM private_chat_history pch
+                         JOIN user u ON pch.from_user = u.username
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE pch.to_user = ?
+                           AND u.username != ?
+                         GROUP BY u.id, u.username
+                         ORDER BY MAX(pch.timestamp) DESC";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$username, $username]);
+                }
+                
+                if ($stmt) {
+                    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("獲取聯絡人失敗: " . $e->getMessage());
         }
         
         // 如果沒有聯絡人，顯示空陣列
@@ -333,13 +285,18 @@ try {
     
     // 為每個聯絡人添加未讀消息數量，並按未讀消息數量排序
     try {
+        // 確保 $contacts 是陣列
+        if (!is_array($contacts)) {
+            $contacts = [];
+        }
+        
         // 獲取當前用戶ID
         $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
         $stmt->execute([$username]);
         $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
         $currentUserId = $currentUser ? $currentUser['id'] : null;
         
-        if ($currentUserId) {
+        if ($currentUserId && !empty($contacts)) {
             // 檢查表結構
             $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
                                 WHERE TABLE_SCHEMA = 'topics_good' 
@@ -391,14 +348,16 @@ try {
             unset($contact); // 釋放引用
             
             // 按未讀消息數量排序（有未讀消息的排在前面，未讀消息多的排在更前面）
-            usort($contacts, function($a, $b) {
-                // 先按未讀消息數量排序（降序）
-                if ($b['unread_count'] != $a['unread_count']) {
-                    return $b['unread_count'] - $a['unread_count'];
-                }
-                // 如果未讀消息數量相同，按名稱排序（升序）
-                return strcmp($a['name'] ?? '', $b['name'] ?? '');
-            });
+            if (is_array($contacts) && !empty($contacts)) {
+                usort($contacts, function($a, $b) {
+                    // 先按未讀消息數量排序（降序）
+                    if ($b['unread_count'] != $a['unread_count']) {
+                        return $b['unread_count'] - $a['unread_count'];
+                    }
+                    // 如果未讀消息數量相同，按名稱排序（升序）
+                    return strcmp($a['name'] ?? '', $b['name'] ?? '');
+                });
+            }
         }
     } catch (PDOException $e) {
         // 如果獲取未讀消息數量失敗，不影響聯絡人列表顯示
@@ -427,7 +386,7 @@ try {
 <body>
 <?php include("../share/header.php"); ?>
 <main>
-  <?php if ($role === '學生' || $role === 'student'): ?>
+  <?php if ($role === 'STU' || $role === '學生' || $role === 'student'): ?>
     <!-- 學生聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
@@ -491,7 +450,7 @@ try {
       </div>
     </div>
 
-  <?php elseif ($role === '老師' || $role === 'teacher' || $role === '學生' || $role === 'student'): ?>
+  <?php elseif ($role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STU' || $role === '學生' || $role === 'student' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'): ?>
     <!-- 老師和學生聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
@@ -573,12 +532,84 @@ try {
     </div>
 
   <?php else: ?>
-    <!-- 群聊介面 -->
-    <div class="group-chat">
-      <h2>群聊聊天室</h2>
-      <div id="groupChat"></div>
-  <input type="text" id="msg" placeholder="輸入訊息">
-  <button onclick="sendMsg()">送出</button>
+    <!-- 其他角色的完整聊天介面（如學校行政人員） -->
+    <div class="chat-container">
+      <!-- 左側聯絡人列表 -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
+          <div style="margin-top: 10px;">
+            <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+            <button id="notificationSettingsBtn" style="margin-right: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔔 通知設定</button>
+            <button id="colorPickerBtn" style="padding: 8px 16px; background: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎨 配色方案</button>
+          </div>
+        </div>
+        
+        <!-- 搜尋框 -->
+        <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
+          <input type="text" id="contactSearch" placeholder="搜尋聯絡人姓名、科系或班級..." 
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+        </div>
+        
+        <!-- 群組列表 -->
+        <div id="groupList" style="margin-bottom: 20px;">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
+          <div id="groupsContainer"></div>
+        </div>
+        
+        <!-- 聯絡人列表 -->
+        <div id="contactList">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人 <span id="contactCount"></span></h3>
+          <ul class="user-list" id="contactListItems">
+            <!-- 聯絡人項目將通過 JavaScript 動態生成 -->
+          </ul>
+          <!-- 分頁控制 -->
+          <div id="contactPagination" style="padding: 10px; text-align: center; border-top: 1px solid #eee; display: none;">
+            <button id="prevPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">上一頁</button>
+            <span id="pageInfo" style="margin: 0 10px; color: #666;"></span>
+            <button id="nextPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">下一頁</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右側聊天區域 -->
+      <div class="chat-main">
+        <div class="chat-header">
+          <div class="current-chat-info">
+            <div class="current-chat-name">選擇聯絡人開始聊天</div>
+            <div class="current-chat-role"></div>
+          </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+          <div class="no-chat-selected">
+            請從左側選擇一位聯絡人開始聊天
+          </div>
+        </div>
+        
+        <div class="chat-input">
+          <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
+          <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
+          <button onclick="sendMessage()" disabled>發送</button>
+        </div>
+        
+        <!-- 語音錄製指示器 -->
+        <div id="recordingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+          <div style="text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 10px;">🎤</div>
+            <div>正在錄製語音...</div>
+            <div id="recordingTimer" style="font-size: 18px; margin-top: 5px;"></div>
+          </div>
+        </div>
+        
+        <!-- 處理中指示器 -->
+        <div id="processingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+          <div style="text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+            <div>正在轉換語音為文字...</div>
+          </div>
+        </div>
+      </div>
     </div>
   <?php endif; ?>
 
@@ -648,7 +679,7 @@ try {
         console.log('清除所有聊天記錄快取');
     }
     
-    <?php if ($role === '學生' || $role === 'student' || $role === '老師' || $role === 'teacher'): ?>
+    <?php if ($role === 'STU' || $role === '學生' || $role === 'student' || $role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'): ?>
     // 載入群組列表
     async function loadGroups() {
       try {
@@ -828,8 +859,13 @@ try {
           
           if (result.messages && result.messages.length > 0) {
             displayGroupMessages(result.messages, append);
-            lastMessageId = Math.max(...result.messages.map(m => parseInt(m.id) || 0));
-            console.log('最後訊息ID:', lastMessageId);
+            // 注意：由於 group_chat_messages 表沒有 id 欄位，id 是組合字符串
+            // 使用最後一條訊息的時間戳作為 lastMessageId
+            if (result.messages.length > 0) {
+              const lastMsg = result.messages[result.messages.length - 1];
+              lastMessageId = lastMsg.timestamp ? new Date(lastMsg.timestamp).getTime() : Date.now();
+            }
+            console.log('最後訊息時間戳:', lastMessageId);
           } else {
             console.log('沒有訊息或訊息陣列為空');
             // 即使沒有訊息，也調用 displayGroupMessages 以顯示空狀態
@@ -1860,8 +1896,8 @@ try {
               // 滾動到底部
               chatMessages.scrollTop = chatMessages.scrollHeight;
               
-              // 更新 lastMessageId
-              lastMessageId = Math.max(lastMessageId, parseInt(result.id) || 0);
+              // 更新 lastMessageId（使用當前時間戳，因為消息表沒有 id 欄位）
+              lastMessageId = Date.now();
               console.log('已更新 lastMessageId:', lastMessageId);
             }
             
@@ -2712,15 +2748,17 @@ try {
     // 初始化聯絡人列表和分頁
     // 使用 setTimeout 確保 DOM 完全載入
     setTimeout(function() {
-      if (role === '老師' || role === 'teacher' || role === '學生' || role === 'student') {
-        // 檢查是否存在聯絡人列表容器
-        const contactListItems = document.getElementById('contactListItems');
-        if (contactListItems) {
-          console.log('初始化聯絡人列表，聯絡人數量:', allContacts.length);
-          initializeContactList();
-        } else {
-          console.warn('找不到聯絡人列表容器 contactListItems');
-        }
+      // 檢查是否存在聯絡人列表容器（所有角色都可以使用完整聊天界面）
+      const contactListItems = document.getElementById('contactListItems');
+      if (contactListItems) {
+        console.log('初始化聯絡人列表，聯絡人數量:', allContacts.length);
+        initializeContactList();
+      } else {
+        console.warn('找不到聯絡人列表容器 contactListItems');
+      }
+      
+      // 如果角色是老師或學生，載入群組列表
+      if (role === 'TEA' || role === '老師' || role === 'teacher' || role === 'STU' || role === '學生' || role === 'student' || role === 'STA' || role === '學校行政人員' || role === '行政人員') {
         loadGroups();
       }
     }, 100);
@@ -2835,3 +2873,4 @@ try {
 <?php include("../share/footer.php"); ?>
 </body>
 </html>
+

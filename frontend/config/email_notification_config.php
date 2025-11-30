@@ -303,66 +303,12 @@ function sendNotificationEmail($to_email, $to_name, $template_name, $data = []) 
     }
 }
 
-// 記錄通知發送記錄
+// 記錄通知發送記錄（已移除 notification_logs，改用 enrollment_contact_logs）
+// 此函數已廢棄，聯絡紀錄應使用 enrollment_contact_logs 表
 function logNotification($recommendation_id, $notification_type, $email, $status) {
-    try {
-        $conn = getDatabaseConnection();
-        
-        // 檢查資料庫連接
-        if (!$conn) {
-            error_log("資料庫連接失敗");
-            return false;
-        }
-        
-        // 檢查表是否存在，如果不存在則創建
-        $check_table = "SHOW TABLES LIKE 'notification_logs'";
-        $result = $conn->query($check_table);
-        
-        if ($result->num_rows == 0) {
-            // 創建 notification_logs 表
-            $create_table = "CREATE TABLE notification_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                recommendation_id INT,
-                notification_type VARCHAR(100),
-                email VARCHAR(255),
-                status VARCHAR(50),
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )";
-            
-            if (!$conn->query($create_table)) {
-                error_log("創建 notification_logs 表失敗: " . $conn->error);
-                $conn->close();
-                return false;
-            }
-        }
-        
-        $sql = "INSERT INTO notification_logs (recommendation_id, notification_type, email, status, sent_at) VALUES (?, ?, ?, ?, NOW())";
-        $stmt = $conn->prepare($sql);
-        
-        // 檢查 prepare 是否成功
-        if (!$stmt) {
-            error_log("SQL 準備失敗: " . $conn->error);
-            $conn->close();
-            return false;
-        }
-        
-        $stmt->bind_param("isss", $recommendation_id, $notification_type, $email, $status);
-        
-        if (!$stmt->execute()) {
-            error_log("SQL 執行失敗: " . $stmt->error);
-            $stmt->close();
-            $conn->close();
-            return false;
-        }
-        
-        $stmt->close();
-        $conn->close();
-        return true;
-        
-    } catch (Exception $e) {
-        error_log("記錄通知日誌失敗: " . $e->getMessage());
-        return false;
-    }
+    // 已移除 notification_logs 資料表建立程式
+    // 聯絡紀錄應使用 enrollment_contact_logs 表
+    error_log("logNotification 函數已廢棄，請使用 enrollment_contact_logs 表記錄聯絡紀錄");
+    return false;
 }
 ?>

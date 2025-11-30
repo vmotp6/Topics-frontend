@@ -11,8 +11,8 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
     exit;
 }
 
-// 檢查是否為老師角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查是否為老師角色（支援角色代碼 'TEA' 和中文名稱 '老師'）
+if (!isset($_SESSION['role']) || ($_SESSION['role'] !== '老師' && $_SESSION['role'] !== 'TEA')) {
     echo json_encode(['success' => false, 'message' => '只有老師可以保存個人資料']);
     exit;
 }
@@ -139,10 +139,36 @@ try {
     
     $user_id = $user_result['id'];
     
-    // 更新 user 表的 name
-    $stmt = $pdo->prepare("UPDATE user SET name = ? WHERE id = ?");
-    $stmt->execute([$name, $user_id]);
-    error_log("資料庫更新姓名: username={$username}, name={$name}");
+    // 更新 user 表的 name（如果提供）
+    if (!empty($name)) {
+        $stmt = $pdo->prepare("UPDATE user SET name = ? WHERE id = ?");
+        $stmt->execute([$name, $user_id]);
+        error_log("資料庫更新姓名: username={$username}, name={$name}");
+    }
+    
+    // 將科系名稱轉換為代碼
+    $department_code = null;
+    if (!empty($department)) {
+        // 先檢查是否已經是代碼
+        $stmt_dept = $pdo->prepare("SELECT code FROM departments WHERE code = ?");
+        $stmt_dept->execute([$department]);
+        $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+        if ($dept_result) {
+            $department_code = $dept_result['code'];
+        } else {
+            // 如果不是代碼，嘗試用名稱查詢
+            $stmt_dept = $pdo->prepare("SELECT code FROM departments WHERE name = ?");
+            $stmt_dept->execute([$department]);
+            $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+            if ($dept_result) {
+                $department_code = $dept_result['code'];
+            } else {
+                error_log("無法找到科系代碼: {$department}");
+                echo json_encode(['success' => false, 'message' => '無效的科系']);
+                exit;
+            }
+        }
+    }
     
     // 如果有上傳新頭像，更新 user 表的 profile_picture
     if ($profile_picture_path !== null) {
@@ -158,18 +184,18 @@ try {
     }
     
     // 檢查 teacher 表是否存在該用戶的記錄
-    $stmt = $pdo->prepare("SELECT id FROM teacher WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT user_id FROM teacher WHERE user_id = ?");
     $stmt->execute([$user_id]);
     $teacher_exists = $stmt->fetch();
     
     if ($teacher_exists) {
-        // 更新現有資料
-        $stmt = $pdo->prepare("UPDATE teacher SET name = ?, department = ?, phone = ? WHERE user_id = ?");
-        $stmt->execute([$name, $department, $phone, $user_id]);
+        // 更新現有資料（teacher 表沒有 name 欄位，name 在 user 表中）
+        $stmt = $pdo->prepare("UPDATE teacher SET department = ?, phone = ? WHERE user_id = ?");
+        $stmt->execute([$department_code, $phone, $user_id]);
     } else {
-        // 插入新資料
-        $stmt = $pdo->prepare("INSERT INTO teacher (user_id, name, department, phone) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$user_id, $name, $department, $phone]);
+        // 插入新資料（teacher 表沒有 name 欄位）
+        $stmt = $pdo->prepare("INSERT INTO teacher (user_id, department, phone) VALUES (?, ?, ?)");
+        $stmt->execute([$user_id, $department_code, $phone]);
     }
     
     $message = '個人資料保存成功';

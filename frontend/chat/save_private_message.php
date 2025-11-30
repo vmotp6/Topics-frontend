@@ -30,52 +30,71 @@ try {
     $input = file_get_contents('php://input');
     $data = json_decode($input, true);
     
+    // 添加調試日誌
+    error_log("收到消息保存請求: " . json_encode($data));
+    
     if (!$data || !isset($data['from']) || !isset($data['to']) || !isset($data['message'])) {
+        error_log("消息格式錯誤: " . json_encode($data));
         echo json_encode(['error' => '無效的資料格式']);
         exit;
     }
     
-    // 檢查表結構，自動適配正規化或非正規化版本
+    // 根據實際表結構：from_user 和 to_user 是 INT 類型（外鍵到 user.id），沒有 role 欄位
+    // 先將 username 轉換為 user.id
+    $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+    $stmt->execute([$data['from']]);
+    $fromUser = $stmt->fetch(PDO::FETCH_ASSOC);
+    $fromUserId = $fromUser ? $fromUser['id'] : null;
+    
+    $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+    $stmt->execute([$data['to']]);
+    $toUser = $stmt->fetch(PDO::FETCH_ASSOC);
+    $toUserId = $toUser ? $toUser['id'] : null;
+    
+    if (!$fromUserId || !$toUserId) {
+        error_log("找不到用戶: from={$data['from']} (id={$fromUserId}), to={$data['to']} (id={$toUserId})");
+        echo json_encode(['error' => '找不到指定的用戶', 'debug' => [
+            'from' => $data['from'],
+            'fromUserId' => $fromUserId,
+            'to' => $data['to'],
+            'toUserId' => $toUserId
+        ]]);
+        exit;
+    }
+    
+    error_log("用戶ID轉換成功: from={$data['from']} -> {$fromUserId}, to={$data['to']} -> {$toUserId}");
+    
+    // 檢查表是否有 from_user_id, to_user_id 或 from_user, to_user
     $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
                         WHERE TABLE_SCHEMA = 'topics_good' 
                         AND TABLE_NAME = 'private_chat_history' 
                         AND COLUMN_NAME IN ('from_user', 'to_user', 'from_user_id', 'to_user_id')");
     $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
-    $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
-    $useUsername = in_array('from_user', $columns) && in_array('to_user', $columns);
+    $hasFromUserId = in_array('from_user_id', $columns);
+    $hasFromUser = in_array('from_user', $columns);
     
-    if ($useUserId) {
-        // 使用正規化版本：先將 username 轉換為 user_id
-        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
-        $stmt->execute([$data['from']]);
-        $fromUser = $stmt->fetch(PDO::FETCH_ASSOC);
-        $fromUserId = $fromUser ? $fromUser['id'] : null;
-        
-        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
-        $stmt->execute([$data['to']]);
-        $toUser = $stmt->fetch(PDO::FETCH_ASSOC);
-        $toUserId = $toUser ? $toUser['id'] : null;
-        
-        if (!$fromUserId || !$toUserId) {
-            echo json_encode(['error' => '找不到指定的用戶']);
-            exit;
-        }
-        
-        $sql = "INSERT INTO private_chat_history (from_user_id, to_user_id, message, role) VALUES (?, ?, ?, ?)";
+    // 插入訊息（不包含 role 欄位）
+    if ($hasFromUserId) {
+        // 使用 from_user_id, to_user_id
+        $sql = "INSERT INTO private_chat_history (from_user_id, to_user_id, message) VALUES (?, ?, ?)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$fromUserId, $toUserId, $data['message'], $data['role'] ?? '用戶']);
-    } elseif ($useUsername) {
-        // 使用舊版本：直接使用 username
-        $sql = "INSERT INTO private_chat_history (from_user, to_user, message, role) VALUES (?, ?, ?, ?)";
+        $stmt->execute([$fromUserId, $toUserId, $data['message']]);
+        error_log("使用 from_user_id/to_user_id 保存消息: from_user_id={$fromUserId}, to_user_id={$toUserId}");
+    } elseif ($hasFromUser) {
+        // 使用 from_user, to_user (INT 類型)
+        $sql = "INSERT INTO private_chat_history (from_user, to_user, message) VALUES (?, ?, ?)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$data['from'], $data['to'], $data['message'], $data['role'] ?? '用戶']);
+        $stmt->execute([$fromUserId, $toUserId, $data['message']]);
+        error_log("使用 from_user/to_user (INT) 保存消息: from_user={$fromUserId}, to_user={$toUserId}");
     } else {
+        error_log("表結構異常: 找不到用戶欄位");
         echo json_encode(['error' => 'private_chat_history 表結構異常，找不到用戶欄位']);
         exit;
     }
     
     $message_id = $pdo->lastInsertId();
+    error_log("消息保存成功，ID: {$message_id}");
     
     // 發送FCM推播通知
     $notification_sent = false;
@@ -111,26 +130,39 @@ try {
         'fcm_notification' => $notification_sent ? 'sent' : 'failed'
     ];
     
-    // 如果是正規化版本，返回完整的訊息資料
-    if ($useUserId) {
+    // 返回完整的訊息資料（使用 JOIN 獲取 username）
+    $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                        WHERE TABLE_SCHEMA = 'topics_good' 
+                        AND TABLE_NAME = 'private_chat_history' 
+                        AND COLUMN_NAME IN ('from_user_id', 'to_user_id', 'from_user', 'to_user')");
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $hasFromUserId = in_array('from_user_id', $columns);
+    
+    if ($hasFromUserId) {
         $stmt = $pdo->prepare("SELECT pch.*, u1.username as from_username, u2.username as to_username 
                               FROM private_chat_history pch
                               LEFT JOIN user u1 ON pch.from_user_id = u1.id
                               LEFT JOIN user u2 ON pch.to_user_id = u2.id
                               WHERE pch.id = ?");
-        $stmt->execute([$message_id]);
-        $savedMessage = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($savedMessage) {
-            $returnData['saved_message'] = [
-                'id' => (int)$savedMessage['id'],
-                'from_user' => $savedMessage['from_username'],
-                'to_user' => $savedMessage['to_username'],
-                'message' => $savedMessage['message'],
-                'role' => $savedMessage['role'],
-                'timestamp' => $savedMessage['timestamp']
-            ];
-        }
+    } else {
+        $stmt = $pdo->prepare("SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                              FROM private_chat_history pch
+                              LEFT JOIN user u1 ON pch.from_user = u1.id
+                              LEFT JOIN user u2 ON pch.to_user = u2.id
+                              WHERE pch.id = ?");
+    }
+    $stmt->execute([$message_id]);
+    $savedMessage = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($savedMessage) {
+        $returnData['saved_message'] = [
+            'id' => (int)$savedMessage['id'],
+            'from_user' => $savedMessage['from_username'],
+            'to_user' => $savedMessage['to_username'],
+            'message' => $savedMessage['message'],
+            'timestamp' => $savedMessage['timestamp']
+        ];
     }
     
     echo json_encode($returnData);

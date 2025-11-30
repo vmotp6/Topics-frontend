@@ -9,10 +9,14 @@ require_once 'generate_captcha.php';
 // 檢查登入狀態 (調試模式)
 $debug_mode = true; // 設為 false 可關閉調試模式
 
+// 檢查是否為老師角色（支援角色代碼和中文名稱）
+$user_role = $_SESSION['role'] ?? '';
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+
 if ($debug_mode) {
     // 調試模式：顯示詳細資訊
     // 檢查 user_id、id 或 username 其中之一存在即可
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || !$is_teacher) {
         echo "<div style='background: #f8d7da; color: #721c24; padding: 20px; margin: 20px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
         echo "<h3>⚠️ 登入驗證失敗</h3>";
         echo "<p><strong>原因分析：</strong></p>";
@@ -36,8 +40,8 @@ if ($debug_mode) {
             echo "<li>❌ 缺少 role (role)</li>";
         } else {
             echo "<li>✅ role 存在: " . $_SESSION['role'];
-            if ($_SESSION['role'] !== '老師') {
-                echo " (但不是 '老師')";
+            if (!$is_teacher) {
+                echo " (但不是 '老師' 或 'TEA')";
             }
             echo "</li>";
         }
@@ -57,7 +61,7 @@ if ($debug_mode) {
     }
 } else {
     // 正常模式：直接跳轉
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || !$is_teacher) {
         header("Location: login.php");
         exit();
     }
@@ -70,11 +74,12 @@ $conn = getDatabaseConnection();
 $teacher_id = null;
 $teacher_info = null;
 
-// 從 teacher 表獲取教師詳細資訊（包含帳號）
+// 從 teacher 表和 user 表獲取教師詳細資訊（包含帳號、姓名、email）
+// 注意：name 和 email 欄位在 user 表中，不在 teacher 表中
 if (isset($_SESSION['user_id'])) {
     // 使用 user_id 查詢 (如果 SESSION 中有 user_id)
     $teacher_id = $_SESSION['user_id'];
-    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
+    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
                     INNER JOIN user u ON t.user_id = u.id 
                     WHERE t.user_id = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
@@ -84,7 +89,7 @@ if (isset($_SESSION['user_id'])) {
 } elseif (isset($_SESSION['id'])) {
     // 使用 id 查詢 (如果 SESSION 中有 id)
     $teacher_id = $_SESSION['id'];
-    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
+    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
                     INNER JOIN user u ON t.user_id = u.id 
                     WHERE t.user_id = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
@@ -93,7 +98,7 @@ if (isset($_SESSION['user_id'])) {
     }
 } elseif (isset($_SESSION['username'])) {
     // 使用 username 查詢：先從 user 表找到對應的 id，再用這個 id 去 teacher 表找 user_id
-    $teacher_sql = "SELECT t.*, u.username FROM teacher t 
+    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
                     INNER JOIN user u ON t.user_id = u.id 
                     WHERE u.username = ?";
     $teacher_stmt = $conn->prepare($teacher_sql);
@@ -111,6 +116,27 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
         // 如果是用 username 查詢的，設定 teacher_id
         if (!$teacher_id && $teacher_info) {
             $teacher_id = $teacher_info['user_id'];
+        }
+        
+        // 將科系代碼轉換為名稱（department 欄位存儲的是代碼，需要轉換為名稱）
+        if (!empty($teacher_info['department'])) {
+            $dept_code = $teacher_info['department'];
+            $dept_stmt = $conn->prepare("SELECT name FROM departments WHERE code = ?");
+            if ($dept_stmt) {
+                $dept_stmt->bind_param("s", $dept_code);
+                $dept_stmt->execute();
+                $dept_result = $dept_stmt->get_result();
+                if ($dept_result && $dept_result->num_rows > 0) {
+                    $dept_row = $dept_result->fetch_assoc();
+                    $teacher_info['department_name'] = $dept_row['name'];
+                } else {
+                    // 如果找不到名稱，使用代碼本身
+                    $teacher_info['department_name'] = $dept_code;
+                }
+                $dept_stmt->close();
+            }
+        } else {
+            $teacher_info['department_name'] = '';
         }
     }
     $teacher_stmt->close();
@@ -134,11 +160,13 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
 }
 
 // 查詢該教師的活動記錄（通過 JOIN 獲取 teacher 名稱）
+// 注意：name 欄位在 user 表中，不在 teacher 表中
 $activity_records = [];
 if ($teacher_id) {
-    $records_sql = "SELECT ar.*, t.name AS teacher_name_display, t.department AS teacher_department_display
+    $records_sql = "SELECT ar.*, u.name AS teacher_name_display, t.department AS teacher_department_display
                     FROM activity_records ar
                     LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+                    LEFT JOIN user u ON ar.teacher_id = u.id
                     WHERE ar.teacher_id = ? 
                     ORDER BY ar.activity_date DESC, ar.id DESC";
     $records_stmt = $conn->prepare($records_sql);
@@ -149,7 +177,7 @@ if ($teacher_id) {
         
         if ($records_result) {
             while ($row = $records_result->fetch_assoc()) {
-                // teacher_name 字段存儲的是代碼，teacher_name_display 是從 teacher 表 JOIN 來的名稱
+                // teacher_name_display 是從 user 表 JOIN 來的名稱
                 $activity_records[] = $row;
             }
         }
@@ -157,49 +185,16 @@ if ($teacher_id) {
     }
 }
 
-// 從 participant_options 表讀取參與者選項
-$participants_options = [];
-$participants_options_map = []; // code => name 映射
-$participants_options_query = "SELECT code, name, category, display_order FROM participant_options WHERE is_active = 1 ORDER BY display_order, id";
-try {
-    $participants_options_result = $conn->query($participants_options_query);
-    if ($participants_options_result && $participants_options_result->num_rows > 0) {
-        while ($row = $participants_options_result->fetch_assoc()) {
-            $participants_options[] = $row;
-            $participants_options_map[$row['code']] = $row['name'];
-        }
-    } else {
-        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
-        throw new Exception('Table not found or empty');
-    }
-} catch (Exception $e) {
-    // 如果表不存在，使用預設選項（向後兼容）
-    $participants_options = [
-        ['code' => 'JHS_9', 'name' => '國中九年級', 'category' => '國中', 'display_order' => 3],
-        ['code' => 'JHS_8', 'name' => '國中八年級', 'category' => '國中', 'display_order' => 2],
-        ['code' => 'JHS_7', 'name' => '國中七年級', 'category' => '國中', 'display_order' => 1],
-        ['code' => 'SHS_3', 'name' => '高中三年級', 'category' => '高中', 'display_order' => 6],
-        ['code' => 'SHS_2', 'name' => '高中二年級', 'category' => '高中', 'display_order' => 5],
-        ['code' => 'SHS_1', 'name' => '高中一年級', 'category' => '高中', 'display_order' => 4],
-        ['code' => 'TEACHER', 'name' => '教師(職員工)', 'category' => '其他', 'display_order' => 7],
-        ['code' => 'PARENT', 'name' => '家長', 'category' => '其他', 'display_order' => 8],
-        ['code' => 'OTHER', 'name' => '其他', 'category' => '其他', 'display_order' => 9]
-    ];
-    foreach ($participants_options as $opt) {
-        $participants_options_map[$opt['code']] = $opt['name'];
-    }
-}
-
-// 從 activity_type_options 表讀取活動類型選項
+// 從 activity_types 表讀取活動類型選項
 $activity_type_options = [];
-$activity_type_options_map = []; // code => name 映射
-$activity_type_options_query = "SELECT code, name, category, display_order FROM activity_type_options WHERE is_active = 1 ORDER BY display_order, id";
+$activity_type_options_map = []; // ID => name 映射
+$activity_type_options_query = "SELECT ID, name FROM activity_types ORDER BY ID";
 try {
     $activity_type_options_result = $conn->query($activity_type_options_query);
     if ($activity_type_options_result && $activity_type_options_result->num_rows > 0) {
         while ($row = $activity_type_options_result->fetch_assoc()) {
-            $activity_type_options[] = $row;
-            $activity_type_options_map[$row['code']] = $row['name'];
+            $activity_type_options[] = ['id' => $row['ID'], 'name' => $row['name']];
+            $activity_type_options_map[$row['ID']] = $row['name'];
         }
     } else {
         // 如果表不存在或沒有資料，使用預設選項（向後兼容）
@@ -208,12 +203,82 @@ try {
 } catch (Exception $e) {
     // 如果表不存在，使用預設選項（向後兼容）
     $activity_type_options = [
-        ['code' => 'TYPE_SCHOOL_VISIT', 'name' => '來校體驗', 'category' => '校內', 'display_order' => 1],
-        ['code' => 'TYPE_OFF_CAMPUS', 'name' => '校外參訪', 'category' => '校外', 'display_order' => 2],
-        ['code' => 'TYPE_LECTURE', 'name' => '講座分享', 'category' => '其他', 'display_order' => 3]
+        ['id' => 1, 'name' => '來校體驗'],
+        ['id' => 2, 'name' => '校外參訪'],
+        ['id' => 3, 'name' => '講座分享']
     ];
     foreach ($activity_type_options as $opt) {
-        $activity_type_options_map[$opt['code']] = $opt['name'];
+        $activity_type_options_map[$opt['id']] = $opt['name'];
+    }
+}
+
+// 從 identity_options 表讀取參與對象選項（排除專一到專五 F1-F5，其他放在最後）
+$participants_options = [];
+$participants_options_map = []; // code => name 映射
+$participants_options_query = "SELECT code, name FROM identity_options WHERE code NOT IN ('F1', 'F2', 'F3', 'F4', 'F5') ORDER BY CASE WHEN code = 'O1' THEN 1 ELSE 0 END, code";
+try {
+    $participants_options_result = $conn->query($participants_options_query);
+    if ($participants_options_result && $participants_options_result->num_rows > 0) {
+        while ($row = $participants_options_result->fetch_assoc()) {
+            $participants_options[] = ['code' => $row['code'], 'name' => $row['name']];
+            $participants_options_map[$row['code']] = $row['name'];
+        }
+        // 確保「其他」(O1) 在最後
+        usort($participants_options, function($a, $b) {
+            if ($a['code'] === 'O1') return 1;
+            if ($b['code'] === 'O1') return -1;
+            return strcmp($a['code'], $b['code']);
+        });
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
+    }
+} catch (Exception $e) {
+    // 如果表不存在，使用預設選項（向後兼容），「其他」放在最後
+    $participants_options = [
+        ['code' => 'H1', 'name' => '高一'],
+        ['code' => 'H2', 'name' => '高二'],
+        ['code' => 'H3', 'name' => '高三'],
+        ['code' => 'J1', 'name' => '國一'],
+        ['code' => 'J2', 'name' => '國二'],
+        ['code' => 'J3', 'name' => '國三'],
+        ['code' => 'T1', 'name' => '教師(職員工)'],
+        ['code' => 'P1', 'name' => '家長'],
+        ['code' => 'O1', 'name' => '其他']  // 其他放在最後
+    ];
+    foreach ($participants_options as $opt) {
+        $participants_options_map[$opt['code']] = $opt['name'];
+    }
+}
+
+// 從 activity_feedback_options 表讀取活動紀錄選項
+$activity_feedback_options = [];
+$activity_feedback_options_map = []; // id => option 映射
+$activity_feedback_options_query = "SELECT id, option FROM activity_feedback_options ORDER BY id";
+try {
+    $activity_feedback_options_result = $conn->query($activity_feedback_options_query);
+    if ($activity_feedback_options_result && $activity_feedback_options_result->num_rows > 0) {
+        while ($row = $activity_feedback_options_result->fetch_assoc()) {
+            $activity_feedback_options[] = ['id' => $row['id'], 'option' => $row['option']];
+            $activity_feedback_options_map[$row['id']] = $row['option'];
+        }
+    } else {
+        // 如果表不存在或沒有資料，使用預設選項（向後兼容）
+        throw new Exception('Table not found or empty');
+    }
+} catch (Exception $e) {
+    // 如果表不存在，使用預設選項（向後兼容）
+    $activity_feedback_options = [
+        ['id' => 1, 'option' => '反應熱絡'],
+        ['id' => 2, 'option' => '詢問度高'],
+        ['id' => 3, 'option' => '反應冷淡'],
+        ['id' => 4, 'option' => '願意參與小活動'],
+        ['id' => 5, 'option' => '願意加入LINE'],
+        ['id' => 6, 'option' => '願意追蹤FB、IG'],
+        ['id' => 7, 'option' => '其他']
+    ];
+    foreach ($activity_feedback_options as $opt) {
+        $activity_feedback_options_map[$opt['id']] = $opt['option'];
     }
 }
 
@@ -253,36 +318,64 @@ if ($_POST) {
     }
     
     if (empty($missing_fields)) {
-        // 處理參與對象多選（使用代碼存儲）
-        $participants = [];
+        // 處理參與對象多選
+        $participants_codes = [];
+        $participants_other_text = null;
         if (isset($_POST['participants'])) {
-            $participants = $_POST['participants'];
-            // 處理「其他」選項：如果有自定義文字，存儲為 "OTHER:自定義文字"
-            if (isset($_POST['participants_other']) && !empty(trim($_POST['participants_other']))) {
-                $other_text = trim($_POST['participants_other']);
-                // 檢查是否有 OTHER 代碼被選中
-                $has_other = false;
-                foreach ($participants as $key => $code) {
-                    if ($code === 'OTHER') {
-                        $participants[$key] = 'OTHER:' . $other_text;
-                        $has_other = true;
-                        break;
+            foreach ($_POST['participants'] as $code) {
+                // 處理「其他」選項：如果是 O1 或有自定義文字
+                if (isset($_POST['participants_other']) && !empty(trim($_POST['participants_other']))) {
+                    if ($code === 'O1' || strpos($code, 'O1:') === 0) {
+                        $participants_other_text = trim($_POST['participants_other']);
+                        // 不將 O1 加入 participants_codes，因為其他文字會存在 participants_other_text
+                        continue;
                     }
                 }
-                // 如果沒有 OTHER 但填寫了其他文字，添加它
-                if (!$has_other) {
-                    $participants[] = 'OTHER:' . $other_text;
+                // 排除 O1（其他）選項，因為會存在 participants_other_text
+                if ($code !== 'O1' && strpos($code, 'O1:') !== 0) {
+                    $participants_codes[] = $code;
                 }
             }
+            // 如果沒有選 O1 但有填寫其他文字，也儲存
+            if (empty($participants_codes) && isset($_POST['participants_other']) && !empty(trim($_POST['participants_other']))) {
+                $participants_other_text = trim($_POST['participants_other']);
+            }
         }
-        $participants_str = implode(',', $participants);
         
         // 處理活動紀錄多選
-        $feedback = [];
+        $feedback_option_ids = [];
+        $feedback_other_text = null;
         if (isset($_POST['activity_feedback'])) {
-            $feedback = $_POST['activity_feedback'];
+            foreach ($_POST['activity_feedback'] as $feedback_val) {
+                // 處理「其他」選項（id=7）
+                if (isset($_POST['activity_feedback_other']) && !empty(trim($_POST['activity_feedback_other']))) {
+                    if ($feedback_val == '7' || $feedback_val === '其他' || strpos($feedback_val, '其他: ') === 0) {
+                        $feedback_other_text = trim($_POST['activity_feedback_other']);
+                        // 不將 7 加入 feedback_option_ids，因為其他文字會存在 feedback_other_text
+                        continue;
+                    }
+                }
+                // 轉換為數字ID（如果是文字，需要映射）
+                $option_id = is_numeric($feedback_val) ? (int)$feedback_val : null;
+                if ($option_id !== null && $option_id != 7) {
+                    $feedback_option_ids[] = $option_id;
+                }
+            }
+            // 如果沒有選「其他」但有填寫其他文字，也儲存
+            if (empty($feedback_option_ids) && isset($_POST['activity_feedback_other']) && !empty(trim($_POST['activity_feedback_other']))) {
+                $feedback_other_text = trim($_POST['activity_feedback_other']);
+            }
         }
-        $feedback_str = implode(',', $feedback);
+        
+        // 處理活動時間：轉換為 1=上班日, 2=假日
+        $activity_time_value = 1; // 預設上班日
+        if (isset($_POST['activity_time'])) {
+            if ($_POST['activity_time'] === '2' || $_POST['activity_time'] === '假日') {
+                $activity_time_value = 2;
+            } elseif ($_POST['activity_time'] === '1' || $_POST['activity_time'] === '上班日') {
+                $activity_time_value = 1;
+            }
+        }
         
         // 處理檔案上傳
         $upload_dir = UPLOAD_DIR;
@@ -312,49 +405,51 @@ if ($_POST) {
         // 將檔案路徑轉為 JSON 字串儲存
         $files_json = !empty($uploaded_files) ? json_encode($uploaded_files) : null;
         
-        // 插入資料庫
-        // activity_type 字段存儲代碼，而不是名稱
-        // 顯示時通過 JOIN 相應表獲取名稱
-        // 注意：已移除 teacher_name 字段，只使用 teacher_id
-        $sql = "INSERT INTO activity_records (activity_date, teacher_unit, teacher_id, school_name, contact_person, contact_phone, activity_type, activity_time, participants, activity_feedback, suggestion, uploaded_files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // 插入資料庫 - 注意欄位名稱：school 不是 school_name，activity_type 是 ID
+        $sql = "INSERT INTO activity_records (activity_date, teacher_id, school, contact_person, contact_phone, activity_type, activity_time, participants_other_text, feedback_other_text, suggestion, uploaded_files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($sql);
         
-        // activity_type 存儲代碼，如果提交的是名稱，則轉換為代碼
-        $activity_type_code = $_POST['activity_type'];
-        if (isset($activity_type_options_map) && !empty($activity_type_options_map)) {
-            // 檢查是否為名稱，如果是則轉換為代碼
-            $code_found = false;
-            foreach ($activity_type_options_map as $code => $name) {
-                if ($name === $_POST['activity_type']) {
-                    $activity_type_code = $code;
-                    $code_found = true;
-                    break;
-                }
-            }
-            // 如果找不到對應的代碼，且不是代碼格式，保留原值（向後兼容）
-            if (!$code_found && !isset($activity_type_options_map[$_POST['activity_type']])) {
-                // 可能是舊數據或直接輸入的代碼，保持原樣
-                $activity_type_code = $_POST['activity_type'];
-            }
-        }
+        // activity_type 存儲 ID
+        $activity_type_id = (int)$_POST['activity_type'];
         
-        $stmt->bind_param("ssisssssssss", 
-            $_POST['activity_date'],
-            $_POST['teacher_unit'],
-            $teacher_id,
-            $_POST['school_name'],
-            $_POST['contact_person'],
-            $_POST['contact_phone'],
-            $activity_type_code, // 存儲代碼而不是名稱
-            $_POST['activity_time'],
-            $participants_str,
-            $feedback_str,
-            $_POST['suggestion'],
-            $files_json
+        $stmt->bind_param("sisssiissss", 
+            $_POST['activity_date'],           // s - activity_date (date)
+            $teacher_id,                       // i - teacher_id (int)
+            $_POST['school_name'],             // s - school (string)
+            $_POST['contact_person'],          // s - contact_person (string)
+            $_POST['contact_phone'],           // s - contact_phone (string)
+            $activity_type_id,                 // i - activity_type (int)
+            $activity_time_value,              // i - activity_time (tinyint)
+            $participants_other_text,          // s - participants_other_text (text)
+            $feedback_other_text,              // s - feedback_other_text (text)
+            $_POST['suggestion'],              // s - suggestion (text)
+            $files_json                        // s - uploaded_files (json string)
         );
         
         if ($stmt->execute()) {
+            $activity_id = $stmt->insert_id;
+            
+            // 插入參與對象到 activity_participants 表
+            if (!empty($participants_codes)) {
+                $participants_stmt = $conn->prepare("INSERT INTO activity_participants (activity_id, participants) VALUES (?, ?)");
+                foreach ($participants_codes as $code) {
+                    $participants_stmt->bind_param("is", $activity_id, $code);
+                    $participants_stmt->execute();
+                }
+                $participants_stmt->close();
+            }
+            
+            // 插入活動紀錄到 activity_feedback 表
+            if (!empty($feedback_option_ids)) {
+                $feedback_stmt = $conn->prepare("INSERT INTO activity_feedback (activity_id, option_id) VALUES (?, ?)");
+                foreach ($feedback_option_ids as $option_id) {
+                    $feedback_stmt->bind_param("ii", $activity_id, $option_id);
+                    $feedback_stmt->execute();
+                }
+                $feedback_stmt->close();
+            }
+            
             // 提交成功後重新生成驗證碼
             $_SESSION['captcha_code'] = generateCaptcha();
             // 清空 POST 資料，避免表單資料被保留
@@ -456,7 +551,7 @@ $conn->close();
                             <strong>教師姓名:</strong> <?php echo htmlspecialchars($teacher_info['name'] ?? '未設定'); ?>
                         </div>
                          <div>
-                             <strong>教師單位:</strong> <?php echo htmlspecialchars($teacher_info['department'] ?? '未設定'); ?>
+                             <strong>教師單位:</strong> <?php echo htmlspecialchars($teacher_info['department_name'] ?? ($teacher_info['department'] ?? '未設定')); ?>
                          </div>
                         <div>
                             <strong>電子信箱:</strong> <?php echo htmlspecialchars($teacher_info['email'] ?? '未設定'); ?>
@@ -498,6 +593,13 @@ $conn->close();
 
 
 <form action="" method="post" enctype="multipart/form-data">
+                    <!-- 刪除草稿按鈕 -->
+                    <div style="text-align: right; margin-bottom: 15px;">
+                        <button type="button" id="clearDraftBtn" onclick="clearDraft()" style="padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; background: #dc3545; color: white; transition: all 0.3s ease;">
+                            <i class="fas fa-trash"></i> 刪除草稿
+                        </button>
+                    </div>
+                    
                 <div class="form-grid">
                     <!-- 基本資訊 -->
                     <div class="form-section">
@@ -507,13 +609,27 @@ $conn->close();
                                 <label><span class="required">*</span> 活動日期:</label>
                                 <input type="date" name="activity_date" value="<?php echo isset($_POST['activity_date']) ? htmlspecialchars($_POST['activity_date']) : ''; ?>" required>
                             </div>
-                            <div class="field-group readonly-field">
-                                <label><span class="required">*</span> 教師單位: <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small></label>
-                                                                 <input type="text" name="teacher_unit" placeholder="請輸入教師單位" 
+                            <div class="field-group <?php echo (isset($teacher_info) && !empty($teacher_info['department_name'])) ? 'readonly-field' : ''; ?>">
+                                <label><span class="required">*</span> 教師單位: 
+                                    <?php if (isset($teacher_info) && !empty($teacher_info['department_name'])): ?>
+                                        <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small>
+                                    <?php else: ?>
+                                        <small style="color: #856404; font-style: italic;">(請先填寫個人資料中的科系，或手動輸入)</small>
+                                    <?php endif; ?>
+                                </label>
+                                <input type="text" name="teacher_unit" placeholder="請輸入教師單位" 
                                         value="<?php 
-                                        echo isset($_POST['teacher_unit']) ? htmlspecialchars($_POST['teacher_unit']) : 
-                                             (isset($teacher_info['department']) ? htmlspecialchars($teacher_info['department']) : ''); 
-                                        ?>" readonly>
+                                        if (isset($_POST['teacher_unit']) && !empty($_POST['teacher_unit'])) {
+                                            // 如果有 POST 資料，使用 POST 資料
+                                            echo htmlspecialchars($_POST['teacher_unit']);
+                                        } elseif (isset($teacher_info) && !empty($teacher_info['department_name'])) {
+                                            // 只有在個人資料中有科系名稱時才自動帶入
+                                            echo htmlspecialchars($teacher_info['department_name']);
+                                        } else {
+                                            // 沒有科系，不自動帶入任何值
+                                            echo '';
+                                        }
+                                        ?>" <?php echo (isset($teacher_info) && !empty($teacher_info['department_name'])) ? 'readonly' : ''; ?>>
                             </div>
                             <div class="field-group readonly-field">
                                 <label><span class="required"></span> 教師姓名: <small style="color: #6c757d; font-style: italic;">(系統自動填入，僅供顯示)</small></label>
@@ -548,13 +664,13 @@ $conn->close();
                                 <select name="activity_type" required>
                                     <option value="">請選擇活動性質</option>
                                     <?php 
-                                    // 從 activity_type_options 表讀取選項
+                                    // 從 activity_types 表讀取選項
                                     $selected_activity_type = isset($_POST['activity_type']) ? $_POST['activity_type'] : '';
                                     foreach ($activity_type_options as $option): 
-                                        // 檢查是否選中（支持代碼或名稱）
-                                        $is_selected = ($selected_activity_type === $option['code'] || $selected_activity_type === $option['name']);
+                                        // 檢查是否選中（支持ID或名稱）
+                                        $is_selected = ($selected_activity_type == $option['id'] || $selected_activity_type === $option['name']);
                                     ?>
-                                    <option value="<?php echo htmlspecialchars($option['code']); ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
+                                    <option value="<?php echo htmlspecialchars($option['id']); ?>" <?php echo $is_selected ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($option['name']); ?>
                                     </option>
                                     <?php endforeach; ?>
@@ -564,8 +680,8 @@ $conn->close();
                                 <label><span class="required">*</span> 活動時間:</label>
                                 <select name="activity_time" required>
                                     <option value="">請選擇活動時間</option>
-                                    <option value="上班日" <?php echo (isset($_POST['activity_time']) && $_POST['activity_time'] === '上班日') ? 'selected' : ''; ?>>上班日</option>
-                                    <option value="假日" <?php echo (isset($_POST['activity_time']) && $_POST['activity_time'] === '假日') ? 'selected' : ''; ?>>假日</option>
+                                    <option value="1" <?php echo (isset($_POST['activity_time']) && ($_POST['activity_time'] === '1' || $_POST['activity_time'] === '上班日')) ? 'selected' : ''; ?>>上班日</option>
+                                    <option value="2" <?php echo (isset($_POST['activity_time']) && ($_POST['activity_time'] === '2' || $_POST['activity_time'] === '假日')) ? 'selected' : ''; ?>>假日</option>
                 </select>
                             </div>
                         </div>
@@ -579,17 +695,17 @@ $conn->close();
                             $selected_participants = isset($_POST['participants']) ? $_POST['participants'] : [];
                             $participants_other_text = isset($_POST['participants_other']) ? htmlspecialchars($_POST['participants_other']) : '';
                             
-                            // 檢查是否有「其他」選項被選中，並提取自定義文字
+                            // 檢查是否有「其他」選項被選中（O1），並提取自定義文字
                             $is_participants_other_checked = false;
                             $participants_other_value = '';
                             foreach ($selected_participants as $selected) {
-                                if ($selected === 'OTHER' || strpos($selected, 'OTHER:') === 0) {
+                                if ($selected === 'O1' || strpos($selected, 'O1:') === 0) {
                                     $is_participants_other_checked = true;
-                                    if (strpos($selected, 'OTHER:') === 0) {
-                                        $participants_other_text = htmlspecialchars(substr($selected, 6)); // 移除「OTHER:」前綴
+                                    if (strpos($selected, 'O1:') === 0) {
+                                        $participants_other_text = htmlspecialchars(substr($selected, 3)); // 移除「O1:」前綴
                                         $participants_other_value = $selected; // 保留完整值用於 checkbox
                                     } else {
-                                        $participants_other_value = 'OTHER';
+                                        $participants_other_value = 'O1';
                                     }
                                     break;
                                 }
@@ -600,25 +716,25 @@ $conn->close();
                                 <?php 
                                 $is_checked = false;
                                 $checkbox_value = $option['code'];
-                                if ($option['code'] === 'OTHER') {
+                                if ($option['code'] === 'O1') {
                                     $is_checked = $is_participants_other_checked;
-                                    $checkbox_value = $is_participants_other_checked && !empty($participants_other_value) ? $participants_other_value : 'OTHER';
+                                    $checkbox_value = $is_participants_other_checked && !empty($participants_other_value) ? $participants_other_value : 'O1';
                                 } else {
                                     $is_checked = in_array($option['code'], $selected_participants);
                                 }
                                 ?>
                                 <input type="checkbox" name="participants[]" value="<?php echo htmlspecialchars($checkbox_value); ?>" 
                                        <?php echo $is_checked ? 'checked' : ''; ?>
-                                       <?php if ($option['code'] === 'OTHER'): ?>
+                                       <?php if ($option['code'] === 'O1'): ?>
                                        onchange="toggleOtherInput(this, 'participants_other')"
                                        <?php endif; ?>>
                                 <span><?php echo htmlspecialchars($option['name']); ?></span>
-                                <?php if ($option['code'] === 'OTHER'): ?>
+                                <?php if ($option['code'] === 'O1'): ?>
                                 <input type="text" name="participants_other" id="participants_other" 
                                        placeholder="請輸入其他參與對象" 
                                        value="<?php echo $participants_other_text; ?>"
                                        style="flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px; display: <?php echo $is_participants_other_checked ? 'block' : 'none'; ?>;"
-                                       onchange="updateOtherCheckboxValue('participants', this)">
+                                       onchange="updateOtherCheckboxValue('participants', this, 'O1')">
                                 <?php endif; ?>
                             </label>
                             <?php endforeach; ?>
@@ -630,50 +746,52 @@ $conn->close();
                         <h3><i class="fas fa-chart-line"></i> 活動紀錄 <span class="required">*</span></h3>
                         <div class="checkbox-grid">
                             <?php 
-                            $feedback_options = ['反應熱絡、詢問度高', '反應冷淡', '願意參與小活動', '願意加入LINE', '願意追蹤FB、IG', '其他'];
                             $selected_feedback = isset($_POST['activity_feedback']) ? $_POST['activity_feedback'] : [];
                             $feedback_other_text = isset($_POST['activity_feedback_other']) ? htmlspecialchars($_POST['activity_feedback_other']) : '';
                             
-                            // 檢查是否有「其他」選項被選中，並提取自定義文字
+                            // 檢查是否有「其他」選項被選中（id=7），並提取自定義文字
                             $is_feedback_other_checked = false;
                             $feedback_other_value = '';
                             foreach ($selected_feedback as $selected) {
-                                if ($selected === '其他' || strpos($selected, '其他: ') === 0) {
+                                // 檢查是否為「其他」的ID (7) 或文字「其他」
+                                if ($selected == '7' || $selected === '其他' || strpos($selected, '其他: ') === 0) {
                                     $is_feedback_other_checked = true;
                                     if (strpos($selected, '其他: ') === 0) {
                                         $feedback_other_text = htmlspecialchars(substr($selected, 4)); // 移除「其他: 」前綴
                                         $feedback_other_value = $selected; // 保留完整值用於 checkbox
                                     } else {
-                                        $feedback_other_value = '其他';
+                                        $feedback_other_value = '7';
                                     }
                                     break;
                                 }
                             }
                             ?>
-                            <?php foreach ($feedback_options as $option): ?>
+                            <?php foreach ($activity_feedback_options as $option): ?>
                             <label class="checkbox-item" style="display: flex; align-items: center; gap: 8px;">
                                 <?php 
                                 $is_checked = false;
-                                $checkbox_value = $option;
-                                if ($option === '其他') {
+                                $checkbox_value = $option['id'];
+                                // 檢查「其他」選項（id=7）
+                                if ($option['id'] == 7) {
                                     $is_checked = $is_feedback_other_checked;
-                                    $checkbox_value = $is_feedback_other_checked && !empty($feedback_other_value) ? $feedback_other_value : '其他';
+                                    $checkbox_value = $is_feedback_other_checked && !empty($feedback_other_value) ? $feedback_other_value : '7';
                                 } else {
-                                    $is_checked = in_array($option, $selected_feedback);
+                                    // 支持舊格式（文字）和新格式（ID）
+                                    $is_checked = in_array($option['id'], $selected_feedback) || in_array($option['option'], $selected_feedback);
                                 }
                                 ?>
                                 <input type="checkbox" name="activity_feedback[]" value="<?php echo htmlspecialchars($checkbox_value); ?>" 
                                        <?php echo $is_checked ? 'checked' : ''; ?>
-                                       <?php if ($option === '其他'): ?>
+                                       <?php if ($option['id'] == 7): ?>
                                        onchange="toggleOtherInput(this, 'activity_feedback_other')"
                                        <?php endif; ?>>
-                                <span><?php echo htmlspecialchars($option); ?></span>
-                                <?php if ($option === '其他'): ?>
+                                <span><?php echo htmlspecialchars($option['option']); ?></span>
+                                <?php if ($option['id'] == 7): ?>
                                 <input type="text" name="activity_feedback_other" id="activity_feedback_other" 
                                        placeholder="請輸入其他活動紀錄" 
                                        value="<?php echo $feedback_other_text; ?>"
                                        style="flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px; display: <?php echo $is_feedback_other_checked ? 'block' : 'none'; ?>;"
-                                       onchange="updateOtherCheckboxValue('activity_feedback', this)">
+                                       onchange="updateOtherCheckboxValue('activity_feedback', this, '7')">
                                 <?php endif; ?>
                             </label>
                             <?php endforeach; ?>
@@ -1025,19 +1143,30 @@ $conn->close();
         }
         
         // 更新「其他」選項的 checkbox 值，將自定義文字附加到值中
-        function updateOtherCheckboxValue(type, inputElement) {
+        function updateOtherCheckboxValue(type, inputElement, otherCode = null) {
             // 找到對應的 checkbox（在同一個 label 中）
             const label = inputElement.closest('label');
             if (label) {
                 const checkbox = label.querySelector('input[type="checkbox"]');
-                if (checkbox && (checkbox.value === '其他' || checkbox.value.startsWith('其他: '))) {
-                    const customText = inputElement.value.trim();
-                    if (customText) {
-                        // 將自定義文字附加到 checkbox 值中
-                        checkbox.value = '其他: ' + customText;
-                    } else {
-                        // 如果沒有輸入文字，恢復為「其他」
-                        checkbox.value = '其他';
+                const customText = inputElement.value.trim();
+                
+                if (type === 'participants' && otherCode) {
+                    // 參與對象：使用代碼 O1
+                    if (checkbox && (checkbox.value === otherCode || checkbox.value.startsWith(otherCode + ':'))) {
+                        if (customText) {
+                            checkbox.value = otherCode + ':' + customText;
+                        } else {
+                            checkbox.value = otherCode;
+                        }
+                    }
+                } else if (type === 'activity_feedback') {
+                    // 活動紀錄：使用 ID 7
+                    if (checkbox && (checkbox.value === '7' || checkbox.value === '其他' || checkbox.value.startsWith('其他: ') || checkbox.value.startsWith('7:'))) {
+                        if (customText) {
+                            checkbox.value = '7:' + customText;
+                        } else {
+                            checkbox.value = '7';
+                        }
                     }
                 }
             }
@@ -1045,10 +1174,31 @@ $conn->close();
         
         // ==================== RIC 核心功能 ====================
         
-        // 表單資料管理
+        // 表單資料管理（全局變量，確保函數可以訪問）
         const FORM_STORAGE_KEY = 'activity_record_draft';
         let autoSaveTimer = null;
         let isSubmitting = false;
+        
+        // 清除草稿函數（定義在全局作用域，確保 onclick 可以訪問）
+        window.clearDraft = function() {
+            if (confirm('確定要清除所有草稿資料嗎？')) {
+                localStorage.removeItem(FORM_STORAGE_KEY);
+                // 嘗試調用 showStatus 函數（如果存在）
+                if (typeof showStatus === 'function') {
+                    showStatus('草稿已清除', 'info');
+                } else {
+                    alert('草稿已清除');
+                }
+                const form = document.querySelector('form');
+                if (form) {
+                    form.reset();
+                }
+                // 嘗試調用 updateProgress 函數（如果存在）
+                if (typeof updateProgress === 'function') {
+                    updateProgress();
+                }
+            }
+        };
         
         // 初始化 RIC 功能
         document.addEventListener('DOMContentLoaded', function() {
@@ -1724,15 +1874,7 @@ $conn->close();
             }
         }
         
-        // 清除草稿
-        function clearDraft() {
-            if (confirm('確定要清除所有草稿資料嗎？')) {
-                localStorage.removeItem(FORM_STORAGE_KEY);
-                showStatus('草稿已清除', 'info');
-                document.querySelector('form').reset();
-                updateProgress();
-            }
-        }
+        // clearDraft 函數已在全局作用域定義（見上方），此處不需要重複定義
         
         // ==================== 即時驗證功能 ====================
         
@@ -2526,3 +2668,4 @@ $conn->close();
     <?php include("share/ai_widget.php"); ?>
 </body>
 </html>
+

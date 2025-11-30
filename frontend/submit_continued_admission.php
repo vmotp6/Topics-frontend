@@ -50,32 +50,51 @@ try {
     $skills = $_POST['skills'] ?? '';
     
     // 處理志願序 - 從資料庫讀取科系映射
-    $conn = getDatabaseConnection();
+    // 先創建臨時 PDO 連接用於查詢科系（稍後會重新創建用於插入）
+    $temp_dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+    $temp_pdo = new PDO($temp_dsn, DB_USERNAME, DB_PASSWORD);
+    $temp_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
     $choices = [];
     
-    // 從資料庫取得所有啟用的科系
-    $courses_query = "SELECT course_name FROM admission_courses WHERE is_active = 1 ORDER BY sort_order, course_name";
-    $courses_result = $conn->query($courses_query);
-    $all_courses = [];
-    if ($courses_result) {
-        while ($row = $courses_result->fetch_assoc()) {
-            $all_courses[] = $row['course_name'];
+    // 調試：打印所有 POST 數據中的 choice_ 開頭的字段
+    $choice_fields = [];
+    foreach ($_POST as $key => $value) {
+        if (strpos($key, 'choice_') === 0) {
+            $choice_fields[$key] = $value;
         }
     }
+    error_log("接收到的志願序字段: " . json_encode($choice_fields, JSON_UNESCAPED_UNICODE));
+    
+    // 從資料庫取得所有科系（從 departments 表），包含 code 和 name
+    $courses_query = "SELECT code, name FROM departments ORDER BY code, name";
+    $courses_stmt = $temp_pdo->query($courses_query);
+    $all_courses = [];
+    $course_code_to_name = []; // 科系代碼到名稱的映射
+    if ($courses_stmt) {
+        while ($row = $courses_stmt->fetch(PDO::FETCH_ASSOC)) {
+            $all_courses[] = $row['name'];
+            $course_code_to_name[$row['code']] = $row['name'];
+        }
+    }
+    error_log("資料庫中的科系列表: " . json_encode($all_courses, JSON_UNESCAPED_UNICODE));
     
     // 建立欄位名稱到科系名稱的映射（反向映射）
+    // 使用科系代碼生成字段名，與前端保持一致
     $field_to_course_map = [];
-    foreach ($all_courses as $course_name) {
-        // 將科系名稱轉換為欄位名稱（與前端一致）
-        $field_name = 'choice_' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $course_name));
+    foreach ($course_code_to_name as $code => $course_name) {
+        // 使用科系代碼生成字段名稱（與前端一致）
+        $field_name = 'choice_' . strtolower($code);
         $field_to_course_map[$field_name] = $course_name;
     }
+    error_log("欄位名稱映射: " . json_encode($field_to_course_map, JSON_UNESCAPED_UNICODE));
     
     // 收集所有選擇的志願序
     foreach ($field_to_course_map as $field_name => $choice_name) {
         if (isset($_POST[$field_name]) && !empty($_POST[$field_name])) {
             $priority = intval($_POST[$field_name]);
             $choices[$priority] = $choice_name;
+            error_log("找到志願 #{$priority}: {$choice_name} (字段: {$field_name}, 值: {$_POST[$field_name]})");
         }
     }
     
@@ -89,6 +108,7 @@ try {
     // 調試日誌：記錄志願序數據
     error_log("志願序處理結果: " . $choices_json);
     error_log("志願序數組: " . print_r($choices, true));
+    error_log("志願序數量: " . count($choices));
     
     // 驗證必填欄位
     if (empty($name)) {
@@ -140,10 +160,53 @@ try {
         }
     }
     
+    // 驗證出生日期
+    if ($birth_year <= 0 || $birth_month <= 0 || $birth_day <= 0) {
+        throw new Exception('請填寫完整的出生年月日');
+    }
+    
+    // 驗證日期有效性
+    if (!checkdate($birth_month, $birth_day, $birth_year)) {
+        throw new Exception('出生日期不正確，請檢查年月日');
+    }
+    
+    // 將出生年月日合併為 birth_date (DATE格式)
+    $birth_date = sprintf('%04d-%02d-%02d', $birth_year, $birth_month, $birth_day);
+    
+    // 轉換性別格式：male -> 1 (男), female -> 2 (女)
+    $gender_int = 1; // 預設為男
+    if ($gender === 'female') {
+        $gender_int = 2; // 女
+    } elseif ($gender === 'male') {
+        $gender_int = 1; // 男
+    } else {
+        // 如果已經是數字格式，直接使用
+        $gender_int = intval($gender);
+        if ($gender_int !== 1 && $gender_int !== 2) {
+            $gender_int = 1; // 預設為男
+        }
+    }
+    
     // 使用PDO連接資料庫
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $pdo = new PDO($dsn, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 自動生成 apply_no (格式：年份 + 序號，例如：2025001)
+    $current_year = date('Y');
+    // 查詢今年最大的 apply_no
+    $max_apply_no_sql = "SELECT MAX(CAST(SUBSTRING(apply_no, 5) AS UNSIGNED)) as max_num 
+                         FROM continued_admission 
+                         WHERE apply_no LIKE ?";
+    $max_stmt = $pdo->prepare($max_apply_no_sql);
+    $max_stmt->execute([$current_year . '%']);
+    $max_result = $max_stmt->fetch(PDO::FETCH_ASSOC);
+    $next_num = 1;
+    if ($max_result && $max_result['max_num'] !== null) {
+        $next_num = intval($max_result['max_num']) + 1;
+    }
+    // 生成 apply_no (格式：YYYY + 3位數序號，例如：2025001)
+    $apply_no = $current_year . str_pad($next_num, 3, '0', STR_PAD_LEFT);
     
     // 移除身分證字號重複檢查，允許相同身分證字號報名
     
@@ -223,60 +286,197 @@ try {
     // 準備外籍生相關數據
     $is_foreign_int = ($is_foreign_student === 'yes') ? 1 : 0;
     
-    // 檢查資料表是否有外籍生相關欄位（動態構建SQL）
-    $columns_check = $pdo->query("SHOW COLUMNS FROM continued_admission LIKE 'is_foreign_student'");
-    $has_foreign_fields = $columns_check->rowCount() > 0;
+    // 從 school_name 中提取學校代碼（格式：學校名稱 (縣市區)）
+    // 需要從 school_data 表中查找對應的 school_code
+    $school_code = '';
+    if (!empty($school_name)) {
+        // 提取學校名稱（去除括號部分）
+        $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
+        // 查詢學校代碼（必須存在且不為空）
+        $school_query = "SELECT school_code FROM school_data WHERE name = ? AND school_code IS NOT NULL AND school_code != '' AND is_active = 1 LIMIT 1";
+        $school_stmt = $pdo->prepare($school_query);
+        $school_stmt->execute([$school_name_only]);
+        $school_result = $school_stmt->fetch(PDO::FETCH_ASSOC);
+        if ($school_result && !empty($school_result['school_code'])) {
+            $school_code = $school_result['school_code'];
+        } else {
+            // 如果找不到學校，拋出錯誤（因為外鍵約束要求有效的 school_code）
+            throw new Exception("找不到學校 '{$school_name_only}' 的有效代碼，請從系統提供的選項中選擇學校");
+        }
+    } else {
+        // 如果學校名稱為空，也拋出錯誤
+        throw new Exception('就讀國中為必填欄位，請填寫');
+    }
     
-    if ($has_foreign_fields) {
-        // 如果資料表有外籍生欄位，使用完整欄位列表
+    // 組合完整地址字符串
+    $address_parts = [];
+    if (!empty($city)) $address_parts[] = $city;
+    if (!empty($district)) $address_parts[] = $district;
+    if (!empty($village)) $address_parts[] = $village;
+    if (!empty($neighbor)) $address_parts[] = $neighbor . '鄰';
+    if (!empty($road)) $address_parts[] = $road;
+    if (!empty($section)) $address_parts[] = $section . '段';
+    if (!empty($lane)) $address_parts[] = $lane . '巷';
+    if (!empty($alley)) $address_parts[] = $alley . '弄';
+    if (!empty($house_no)) $address_parts[] = $house_no . '號';
+    if (!empty($floor)) $address_parts[] = $floor;
+    $full_address = implode('', $address_parts);
+    
+    // 檢查資料表結構，判斷是否有新欄位
+    $columns_check = $pdo->query("SHOW COLUMNS FROM continued_admission");
+    $columns = $columns_check->fetchAll(PDO::FETCH_COLUMN);
+    $has_foreign_fields = in_array('is_foreign_student', $columns);
+    $has_birth_date = in_array('birth_date', $columns);
+    $has_apply_no = in_array('apply_no', $columns);
+    
+    if ($has_foreign_fields && $has_birth_date && $has_apply_no) {
+        // 如果資料表有所有新欄位，使用完整欄位列表
         $sql = "INSERT INTO continued_admission (
-            exam_no, name, id_number, is_foreign_student, nationality, passport_number,
-            birth_year, birth_month, birth_day, gender, phone, mobile,
-            school_city, school_name, zip_code, city, district, village, neighbor,
-            road, section, lane, alley, house_no, floor, same_address, contact_address,
-            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            apply_no, exam_no, name, id_number, is_foreign_student, nationality, passport_number,
+            birth_date, gender, phone, mobile, school,
+            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $pdo->prepare($sql);
         
-        // 執行插入（包含外籍生欄位）
+        // 執行插入（包含所有新欄位）
         $result = $stmt->execute([
-            $exam_no, $name, $id_number, $is_foreign_int, $nationality, $passport_number,
-            $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
-            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
-            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
-            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+            $apply_no, $exam_no, $name, $id_number, $is_foreign_int, $nationality, $passport_number,
+            $birth_date, $gender_int, $phone, $mobile, $school_code,
+            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, 
+            'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s') // status='PE'(待審核), reviewer_id=0, review_notes='', reviewed_at='0000-00-00 00:00:00', updated_at=現在時間
         ]);
-    } else {
-        // 如果資料表沒有外籍生欄位，使用原有欄位列表（向後兼容）
-        // 外籍生的護照號碼會存入id_number欄位（格式：PASSPORT_XXXXX）
+    } elseif ($has_birth_date && $has_apply_no) {
+        // 如果資料表有 birth_date 和 apply_no，但沒有外籍生欄位
         $sql = "INSERT INTO continued_admission (
-            exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
-            school_city, school_name, zip_code, city, district, village, neighbor,
-            road, section, lane, alley, house_no, floor, same_address, contact_address,
-            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            apply_no, exam_no, name, id_number,
+            birth_date, gender, phone, mobile, school,
+            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $pdo->prepare($sql);
         
         // 執行插入（不包含外籍生欄位，但護照號碼已存入id_number）
         $result = $stmt->execute([
-            $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender, $phone, $mobile,
-            $school_city, $school_name, $zip_code, $city, $district, $village, $neighbor,
-            $road, $section, $lane, $alley, $house_no, $floor, $same_address_int, $contact_address,
+            $apply_no, $exam_no, $name, $id_number,
+            $birth_date, $gender_int, $phone, $mobile, $school_code,
+            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
+            'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s') // status='PE'(待審核), reviewer_id=0, review_notes='', reviewed_at='0000-00-00 00:00:00', updated_at=現在時間
+        ]);
+    } else {
+        // 向後兼容：如果資料表沒有新欄位，使用舊的欄位列表
+        $sql = "INSERT INTO continued_admission (
+            exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
+            school_city, school_name,
+            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt = $pdo->prepare($sql);
+        
+        // 執行插入（使用舊格式）
+        $result = $stmt->execute([
+            $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender_int, $phone, $mobile,
+            $school_city, $school_name,
             $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
         ]);
     }
     
     if ($result) {
         $insert_id = $pdo->lastInsertId();
-        error_log("Successfully inserted record with ID: " . $insert_id . " for name: " . $name);
+        error_log("Successfully inserted record with ID: " . $insert_id . " for name: " . $name . ", apply_no: " . $apply_no);
+        
+        // 插入地址信息到 continued_admission_addres 表
+        try {
+            $address_sql = "INSERT INTO continued_admission_addres (admission_id, zip_code, address, same_address, contact_address) VALUES (?, ?, ?, ?, ?)";
+            $address_stmt = $pdo->prepare($address_sql);
+            $address_result = $address_stmt->execute([
+                $insert_id,
+                $zip_code,
+                $full_address,
+                $same_address_int,
+                $contact_address
+            ]);
+            
+            if ($address_result) {
+                error_log("成功插入地址信息到 continued_admission_addres 表，admission_id: " . $insert_id);
+            } else {
+                error_log("警告：插入地址信息失敗，admission_id: " . $insert_id);
+            }
+        } catch (PDOException $e) {
+            error_log("插入地址信息時發生錯誤: " . $e->getMessage());
+            // 地址插入失敗不影響主流程，只記錄錯誤
+        }
+        
+        // 插入志願序到 continued_admission_choices 表
+        if (!empty($choices) && is_array($choices)) {
+            error_log("開始插入志願序，共 " . count($choices) . " 個志願，application_id: " . $insert_id);
+            
+            try {
+                // 準備插入志願序的 SQL
+                $choice_sql = "INSERT INTO continued_admission_choices (application_id, choice_order, department_code) VALUES (?, ?, ?)";
+                $choice_stmt = $pdo->prepare($choice_sql);
+                
+                // 準備查詢科系代碼的 SQL
+                $dept_sql = "SELECT code FROM departments WHERE name = ? LIMIT 1";
+                $dept_stmt = $pdo->prepare($dept_sql);
+                
+                $choice_insert_count = 0;
+                $choice_errors = [];
+                
+                foreach ($choices as $index => $choice_name) {
+                    $choice_order = $index + 1; // 志願順序從1開始
+                    
+                    try {
+                        // 查詢科系代碼
+                        $dept_stmt->execute([$choice_name]);
+                        $dept_result = $dept_stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($dept_result && isset($dept_result['code'])) {
+                            $department_code = $dept_result['code'];
+                            
+                            // 插入志願序記錄
+                            $choice_result = $choice_stmt->execute([$insert_id, $choice_order, $department_code]);
+                            
+                            if ($choice_result) {
+                                $choice_insert_count++;
+                                error_log("成功插入志願序 #{$choice_order}: {$choice_name} (代碼: {$department_code}, application_id: {$insert_id})");
+                            } else {
+                                $error_info = $choice_stmt->errorInfo();
+                                $error_msg = "插入志願序失敗 #{$choice_order}: {$choice_name} - " . ($error_info[2] ?? '未知錯誤');
+                                error_log($error_msg);
+                                $choice_errors[] = $error_msg;
+                            }
+                        } else {
+                            $error_msg = "警告：找不到科系 '{$choice_name}' 的代碼，跳過此志願";
+                            error_log($error_msg);
+                            $choice_errors[] = $error_msg;
+                        }
+                    } catch (PDOException $e) {
+                        $error_msg = "插入志願序 #{$choice_order} 時發生錯誤: " . $e->getMessage();
+                        error_log($error_msg);
+                        $choice_errors[] = $error_msg;
+                    }
+                }
+                
+                error_log("志願序插入完成，成功插入 {$choice_insert_count} / " . count($choices) . " 個志願");
+                if (!empty($choice_errors)) {
+                    error_log("志願序插入錯誤: " . implode('; ', $choice_errors));
+                }
+            } catch (PDOException $e) {
+                error_log("插入志願序時發生嚴重錯誤: " . $e->getMessage());
+                error_log("錯誤代碼: " . $e->getCode());
+            }
+        } else {
+            error_log("警告：志願序為空或不是數組，跳過志願序插入");
+            error_log("choices 變量內容: " . var_export($choices, true));
+        }
         
         echo json_encode([
             'success' => true,
-            'message' => '報名成功！您的報名編號是: ' . $insert_id,
+            'message' => '報名成功！您的報名編號是: ' . $apply_no,
             'operation' => 'insert',
-            'insert_id' => $insert_id
+            'insert_id' => $insert_id,
+            'apply_no' => $apply_no
         ], JSON_UNESCAPED_UNICODE);
     } else {
         throw new Exception('報名失敗，請稍後再試');

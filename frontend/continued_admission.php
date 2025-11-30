@@ -6,24 +6,30 @@ require_once 'config.php';
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
-// 取得啟用的科系
+// 取得科系資料（從 departments 表）
 $courses = [];
-$courses_query = "SELECT c.id, c.course_name 
-                  FROM admission_courses c 
-                  WHERE c.is_active = 1 
-                  ORDER BY c.sort_order, c.course_name";
+$courses_query = "SELECT code, name 
+                  FROM departments 
+                  ORDER BY code, name";
 $courses_result = $conn->query($courses_query);
 if ($courses_result) {
     while ($row = $courses_result->fetch_assoc()) {
-        $courses[] = $row;
+        // 統一使用 name 作為 course_name，以便與後續代碼兼容
+        $courses[] = [
+            'id' => $row['code'],
+            'course_name' => $row['name'],
+            'code' => $row['code'] // 保留 code 用於生成字段名
+        ];
     }
 }
 
 // 建立科系名稱到隱藏欄位名稱的映射（用於 JavaScript）
+// 使用科系代碼（code）來生成字段名，避免中文字符轉換問題
 $courseNameToFieldMap = [];
 foreach ($courses as $course) {
-    // 將科系名稱轉換為欄位名稱（例如：護理科 -> choice_nursing）
-    $fieldName = 'choice_' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $course['course_name']));
+    // 使用科系代碼生成字段名稱（例如：FOREIGN_LANG -> choice_foreign_lang）
+    // 這樣可以避免中文字符轉換問題，確保每個科系都有唯一的字段名
+    $fieldName = 'choice_' . strtolower($course['code']);
     $courseNameToFieldMap[$course['course_name']] = $fieldName;
 }
 ?>
@@ -632,7 +638,10 @@ foreach ($courses as $course) {
       }
 
       function handleSelectedDragStart(e) {
-        e.dataTransfer.setData('text/plain', e.target.dataset.choice);
+        // 使用 currentTarget 或 closest 確保獲取正確的元素
+        const item = e.currentTarget || e.target.closest('.selected-choice-item');
+        const choice = item ? item.dataset.choice : e.target.dataset.choice;
+        e.dataTransfer.setData('text/plain', choice);
         e.dataTransfer.effectAllowed = 'move';
       }
 
@@ -669,6 +678,10 @@ foreach ($courses as $course) {
       }
 
       function updateHiddenFields() {
+        console.log('updateHiddenFields 被調用');
+        console.log('selectedChoices:', selectedChoices);
+        console.log('choiceMap:', choiceMap);
+        
         // 清空所有隱藏欄位
         document.querySelectorAll('input[type="hidden"][name^="choice_"]').forEach(input => {
           input.value = '';
@@ -677,11 +690,26 @@ foreach ($courses as $course) {
         // 設定新的值
         selectedChoices.forEach((choice, index) => {
           const inputName = choiceMap[choice];
+          console.log(`處理志願 #${index + 1}: ${choice} -> 字段名: ${inputName}`);
+          
           if (inputName) {
             const input = document.getElementById(`hidden_${inputName}`);
             if (input) {
               input.value = index + 1;
+              console.log(`設置隱藏字段 ${inputName} = ${index + 1}`);
+            } else {
+              console.error(`找不到隱藏字段: hidden_${inputName}`);
             }
+          } else {
+            console.error(`找不到 ${choice} 的字段映射`);
+          }
+        });
+        
+        // 驗證所有隱藏字段的值
+        console.log('隱藏字段驗證:');
+        document.querySelectorAll('input[type="hidden"][name^="choice_"]').forEach(input => {
+          if (input.value) {
+            console.log(`${input.name} = ${input.value}`);
           }
         });
       }
@@ -1148,10 +1176,63 @@ foreach ($courses as $course) {
         
         console.log('Form found in submitForm:', form);
         
-        // 確保隱藏字段被更新
+        // 確保隱藏字段被更新（在創建 FormData 之前）
         updateHiddenFields();
         
+        // 直接使用 selectedChoices 數組構建 FormData，不依賴隱藏字段
+        console.log('=== 開始提交流程 ===');
+        console.log('selectedChoices 數組:', selectedChoices);
+        console.log('selectedChoices 長度:', selectedChoices.length);
+        console.log('choiceMap:', choiceMap);
+        
+        // 再次確保隱藏字段已更新（用於顯示）
+        updateHiddenFields();
+        
+        // 創建 FormData
         const formData = new FormData(form);
+        
+        // 直接從 selectedChoices 數組添加志願序字段到 FormData
+        // 這是主要方法，不依賴隱藏字段
+        console.log('開始直接從 selectedChoices 添加志願序字段到 FormData');
+        selectedChoices.forEach((choice, index) => {
+          const inputName = choiceMap[choice];
+          const priority = index + 1;
+          
+          if (inputName) {
+            // 先刪除舊值（如果存在）
+            if (formData.has(inputName)) {
+              formData.delete(inputName);
+            }
+            // 添加新值
+            formData.append(inputName, priority.toString());
+            console.log(`✅ 直接添加: ${inputName} = ${priority} (志願 #${priority}: ${choice})`);
+          } else {
+            console.error(`❌ 找不到 ${choice} 的字段映射`);
+          }
+        });
+        
+        // 驗證 FormData 中的志願序字段
+        console.log('=== FormData 驗證 ===');
+        let foundInFormData = 0;
+        for (let [key, value] of formData.entries()) {
+          if (key.startsWith('choice_')) {
+            console.log(`  ✅ ${key} = ${value}`);
+            foundInFormData++;
+          }
+        }
+        console.log(`FormData 中共找到 ${foundInFormData} 個志願序字段`);
+        console.log(`selectedChoices 中有 ${selectedChoices.length} 個志願`);
+        
+        if (foundInFormData !== selectedChoices.length) {
+          console.error(`⚠️ 警告：FormData 中的字段數量 (${foundInFormData}) 與 selectedChoices 數量 (${selectedChoices.length}) 不匹配！`);
+        }
+        
+        // 繼續提交流程
+        continueSubmit(formData, submitBtn);
+      }
+      
+      // 繼續提交的函數
+      function continueSubmit(formData, submitBtn) {
         
         // 顯示載入狀態
         const originalText = submitBtn ? submitBtn.textContent : '';
@@ -1171,18 +1252,39 @@ foreach ($courses as $course) {
         // 調試：檢查志願序隱藏字段
         console.log('志願序隱藏字段檢查:');
         const choiceFields = Object.values(choiceMap); // 使用動態生成的映射
+        let foundChoices = 0;
         choiceFields.forEach(field => {
           const input = document.getElementById(`hidden_${field}`);
           if (input) {
-            console.log(`${field}: ${input.value}`);
+            const value = input.value;
+            console.log(`${field}: ${value}`);
+            if (value) {
+              foundChoices++;
+              // 確保 FormData 中包含這個字段
+              if (!formData.has(field)) {
+                console.warn(`警告：FormData 中缺少字段 ${field}，手動添加`);
+                formData.append(field, value);
+              }
+            }
+          } else {
+            console.warn(`找不到隱藏字段元素: hidden_${field}`);
           }
         });
+        console.log(`找到 ${foundChoices} 個志願序字段`);
         
         // 檢查表單是否有數據
         if (formData.entries().next().done) {
           console.log('FormData is empty!');
         } else {
           console.log('FormData has content');
+        }
+        
+        // 再次驗證：檢查所有 choice_ 開頭的字段
+        console.log('FormData 中所有 choice_ 字段:');
+        for (let [key, value] of formData.entries()) {
+          if (key.startsWith('choice_')) {
+            console.log(`  ${key} = ${value}`);
+          }
         }
         
         // 添加請求 ID 來追蹤重複請求

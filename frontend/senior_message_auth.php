@@ -140,32 +140,76 @@ class SeniorMessageAuth {
     }
     
     /**
+     * 將中文類別名稱轉換為 post_categories 代碼
+     * @param string $chineseName 中文類別名稱
+     * @return string 類別代碼
+     */
+    private function convertMessageTypeToCode($chineseName) {
+        $mapping = [
+            '經驗分享' => 'EXP',
+            '學習建議' => 'STD',
+            '生活指南' => 'LIFE',
+            '就業資訊' => 'CAR',
+            '推薦餐廳' => 'REST',
+            '其他' => 'OTH'
+        ];
+        
+        return $mapping[$chineseName] ?? 'OTH';
+    }
+    
+    /**
+     * 獲取用戶ID（根據email或username）
+     * @param string $emailOrUsername
+     * @return int|null
+     */
+    private function getUserId($emailOrUsername) {
+        try {
+            $stmt = $this->pdo->prepare("SELECT id FROM user WHERE username = ? OR email = ? LIMIT 1");
+            $stmt->execute([$emailOrUsername, $emailOrUsername]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result ? (int)$result['id'] : null;
+        } catch(PDOException $e) {
+            error_log("獲取用戶ID失敗: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    /**
      * 創建留言
      * @param array $messageData
      * @return array
      */
     public function createMessage($messageData) {
         try {
+            // 獲取用戶ID
+            $user_id = $this->getUserId($messageData['author_email'] ?? '');
+            if (!$user_id) {
+                return [
+                    'success' => false,
+                    'error' => '無法找到用戶資料，請確認您已正確登入'
+                ];
+            }
+            
+            // 將中文類別名稱轉換為代碼
+            $message_type_code = $this->convertMessageTypeToCode($messageData['message_type'] ?? '其他');
+            
             // 檢查是否需要添加餐廳相關欄位
             $hasRestaurantData = isset($messageData['restaurant_name']) && !empty($messageData['restaurant_name']);
             
-            if ($hasRestaurantData) {
-                // 先檢查表是否有餐廳相關欄位，如果沒有則添加
-                $this->ensureRestaurantColumns();
-                
-                $sql = "INSERT INTO senior_messages (title, content, author_name, author_email, author_department, author_grade, author_contact, message_type, author_grade_year, restaurant_name, restaurant_address, restaurant_lat, restaurant_lng, restaurant_place_id, restaurant_rating, delivery_rating, price_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            // 檢查表是否有餐廳相關欄位
+            $hasRestaurantColumns = $this->checkRestaurantColumns();
+            
+            if ($hasRestaurantData && $hasRestaurantColumns) {
+                // 如果有餐廳資料且欄位存在，插入餐廳相關欄位
+                $sql = "INSERT INTO senior_messages (user_id, title, content, author_contact, message_type, restaurant_name, restaurant_address, restaurant_lat, restaurant_lng, restaurant_place_id, restaurant_rating, delivery_rating, price_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $this->pdo->prepare($sql);
                 
                 $result = $stmt->execute([
+                    $user_id,
                     $messageData['title'],
                     $messageData['content'],
-                    $messageData['author_name'],
-                    $messageData['author_email'],
-                    $messageData['author_department'],
-                    $messageData['author_grade'],
-                    $messageData['author_contact'],
-                    $messageData['message_type'],
-                    $messageData['author_grade_year'],
+                    $messageData['author_contact'] ?? null,
+                    $message_type_code,
                     $messageData['restaurant_name'] ?? null,
                     $messageData['restaurant_address'] ?? null,
                     $messageData['restaurant_lat'] ?? null,
@@ -176,19 +220,16 @@ class SeniorMessageAuth {
                     $messageData['price_level'] ?? null
                 ]);
             } else {
-                $sql = "INSERT INTO senior_messages (title, content, author_name, author_email, author_department, author_grade, author_contact, message_type, author_grade_year) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                // 如果沒有餐廳資料或欄位不存在，只插入基本欄位
+                $sql = "INSERT INTO senior_messages (user_id, title, content, author_contact, message_type) VALUES (?, ?, ?, ?, ?)";
                 $stmt = $this->pdo->prepare($sql);
                 
                 $result = $stmt->execute([
+                    $user_id,
                     $messageData['title'],
                     $messageData['content'],
-                    $messageData['author_name'],
-                    $messageData['author_email'],
-                    $messageData['author_department'],
-                    $messageData['author_grade'],
-                    $messageData['author_contact'],
-                    $messageData['message_type'],
-                    $messageData['author_grade_year']
+                    $messageData['author_contact'] ?? null,
+                    $message_type_code
                 ]);
             }
             
@@ -213,13 +254,26 @@ class SeniorMessageAuth {
     }
     
     /**
-     * 確保表中有餐廳相關欄位
+     * 檢查表中是否有餐廳相關欄位
+     * @return bool
+     */
+    private function checkRestaurantColumns() {
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM senior_messages LIKE 'restaurant_name'");
+            return $stmt->rowCount() > 0;
+        } catch(PDOException $e) {
+            error_log("檢查餐廳欄位時發生錯誤: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 確保表中有餐廳相關欄位（如果需要可以調用此方法添加）
      */
     private function ensureRestaurantColumns() {
         try {
             // 檢查欄位是否存在
-            $stmt = $this->pdo->query("SHOW COLUMNS FROM senior_messages LIKE 'restaurant_name'");
-            if ($stmt->rowCount() == 0) {
+            if (!$this->checkRestaurantColumns()) {
                 // 添加餐廳相關欄位
                 $alterSql = "ALTER TABLE senior_messages 
                     ADD COLUMN restaurant_name VARCHAR(255) DEFAULT NULL COMMENT '餐廳名稱（僅用於推薦餐廳類型）',

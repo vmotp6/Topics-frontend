@@ -14,8 +14,9 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為學生角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
+// 檢查是否為學生角色（只驗證角色代碼 'STU'）
+$user_role = $_SESSION['role'] ?? '';
+if (!isset($_SESSION['role']) || $user_role !== 'STU') {
     header("Location: index.php");
     exit;
 }
@@ -48,11 +49,11 @@ try {
 
 $permission_result = $auth->checkPermission($user_email);
 
-// 從資料庫獲取用戶姓名和科系 - 使用與 senior_messages.php 相同的連接方式
+// 從資料庫獲取用戶姓名和科系
 $user_name = '';
 $user_department = '';
 try {
-    // 使用直接 PDO 連接（與 senior_messages.php 一致）
+    // 使用直接 PDO 連接
     $host = 'localhost';
     $dbname = 'topics_good';
     $username = 'root';
@@ -61,92 +62,61 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // 優先從 student_normalized 表獲取姓名和科系（正規化後的資料）
-    // 先嘗試用 username 查詢
+    // 從 user 表和 student 表獲取資料（姓名在 user 表，科系在 student 表）
     $stmt = $pdo->prepare("
-        SELECT sn.name, d.name as department_name
-        FROM student_normalized sn
-        JOIN user u ON sn.user_id = u.id
-        LEFT JOIN departments d ON sn.department_id = d.id
+        SELECT 
+            u.name as user_name,
+            u.id as user_id,
+            s.department as department_code,
+            d.name as department_name
+        FROM user u
+        LEFT JOIN student s ON u.id = s.user_id
+        LEFT JOIN departments d ON s.department = d.code
         WHERE u.username = ? OR u.email = ?
+        LIMIT 1
     ");
     $stmt->execute([$user_email, $user_email]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($result) {
-        if (!empty($result['name'])) {
-            $user_name = $result['name'];
+        // 獲取姓名（優先使用 user 表的 name，如果沒有則使用 username）
+        if (!empty($result['user_name'])) {
+            $user_name = $result['user_name'];
+        } elseif (!empty($user_email)) {
+            // 如果沒有姓名，使用 username 或 email 的前綴
+            $user_name = explode('@', $user_email)[0];
         }
+        
+        // 獲取科系名稱（優先使用 departments 表的名稱，如果沒有則使用代碼）
         if (!empty($result['department_name'])) {
             $user_department = $result['department_name'];
+        } elseif (!empty($result['department_code'])) {
+            $user_department = $result['department_code'];
         }
-    }
-    
-    // 如果還是沒有找到，嘗試用 email 查詢 user 表，然後再查 student_normalized
-    if (empty($user_name) || empty($user_department)) {
-        // 先從 user 表獲取 user_id
-        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ? OR email = ?");
+    } else {
+        // 如果完全找不到用戶，至少嘗試從 user 表獲取姓名
+        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ? OR email = ? LIMIT 1");
         $stmt->execute([$user_email, $user_email]);
         $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($user_result && !empty($user_result['id'])) {
-            $user_id = $user_result['id'];
-            
-            // 用 user_id 查詢 student_normalized
-            $stmt = $pdo->prepare("
-                SELECT sn.name, d.name as department_name
-                FROM student_normalized sn
-                LEFT JOIN departments d ON sn.department_id = d.id
-                WHERE sn.user_id = ?
-            ");
-            $stmt->execute([$user_id]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($result) {
-                if (empty($user_name) && !empty($result['name'])) {
-                    $user_name = $result['name'];
-                }
-                if (empty($user_department) && !empty($result['department_name'])) {
-                    $user_department = $result['department_name'];
-                }
-            }
-        }
-    }
-    
-    // 如果 student_normalized 表中沒有，嘗試從 student 表獲取（備用方案）
-    if (empty($user_name) || empty($user_department)) {
-        $stmt = $pdo->prepare("
-            SELECT s.name, s.department 
-            FROM student s
-            JOIN user u ON s.user_id = u.id
-            WHERE u.username = ? OR u.email = ?
-        ");
-        $stmt->execute([$user_email, $user_email]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($result) {
-            if (empty($user_name) && !empty($result['name'])) {
-                $user_name = $result['name'];
-            }
-            if (empty($user_department) && !empty($result['department'])) {
-                $user_department = $result['department'];
-            }
-        }
-    }
-    
-    // 如果還是沒有姓名，嘗試從 user 表獲取（最後備用方案）
-    if (empty($user_name)) {
-        $stmt = $pdo->prepare("SELECT name FROM user WHERE username = ? OR email = ?");
-        $stmt->execute([$user_email, $user_email]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($result && !empty($result['name'])) {
-            $user_name = $result['name'];
+        if ($user_result && !empty($user_result['name'])) {
+            $user_name = $user_result['name'];
+        } elseif (!empty($user_email)) {
+            // 最後備用方案：使用 username 或 email
+            $user_name = explode('@', $user_email)[0];
         }
     }
 } catch (PDOException $e) {
     error_log("獲取用戶資料錯誤: " . $e->getMessage());
+    // 如果查詢失敗，至少嘗試使用 username 作為姓名
+    if (empty($user_name) && !empty($user_email)) {
+        $user_name = explode('@', $user_email)[0];
+    }
 } catch (Exception $e) {
     error_log("獲取用戶資料錯誤: " . $e->getMessage());
+    // 如果查詢失敗，至少嘗試使用 username 作為姓名
+    if (empty($user_name) && !empty($user_email)) {
+        $user_name = explode('@', $user_email)[0];
+    }
 }
 
 // 如果沒有權限，顯示錯誤頁面

@@ -11,8 +11,8 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
     exit;
 }
 
-// 檢查是否為學生角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '學生') {
+// 檢查是否為學生角色（支援角色代碼 'STU' 和中文名稱 '學生'）
+if (!isset($_SESSION['role']) || ($_SESSION['role'] !== '學生' && $_SESSION['role'] !== 'STU')) {
     echo json_encode(['success' => false, 'message' => '只有學生可以保存個人資料']);
     exit;
 }
@@ -147,8 +147,84 @@ try {
     $stmt->execute([$name, $user_id]);
     error_log("資料庫更新姓名: username={$username}, name={$name}");
     
+    // 將科系名稱轉換為代碼
+    $department_code = null;
+    if (!empty($department)) {
+        // 先檢查是否已經是代碼
+        $stmt_dept = $pdo->prepare("SELECT code FROM departments WHERE code = ?");
+        $stmt_dept->execute([$department]);
+        $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+        if ($dept_result) {
+            $department_code = $dept_result['code'];
+        } else {
+            // 如果不是代碼，嘗試用名稱查詢
+            $stmt_dept = $pdo->prepare("SELECT code FROM departments WHERE name = ?");
+            $stmt_dept->execute([$department]);
+            $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+            if ($dept_result) {
+                $department_code = $dept_result['code'];
+            } else {
+                error_log("無法找到科系代碼: {$department}");
+                echo json_encode(['success' => false, 'message' => '無效的科系']);
+                exit;
+            }
+        }
+    }
+    
+    // 將年級名稱轉換為代碼
+    $grade_code = null;
+    if (!empty($grade)) {
+        // 年級映射：將表單中的選項映射到代碼
+        $grade_code_mapping = [
+            // 五專
+            '專一' => 'F1',
+            '專二' => 'F2',
+            '專三' => 'F3',
+            '專四' => 'F4',
+            '專五' => 'F5',
+            // 國中
+            '國一' => 'J1',
+            '國二' => 'J2',
+            '國三' => 'J3',
+            // 高中（向後兼容）
+            '高一' => 'H1',
+            '高二' => 'H2',
+            '高三' => 'H3',
+            // 舊格式（向後兼容）
+            '一年級' => 'F1',
+            '二年級' => 'F2',
+            '三年級' => 'F3',
+            '四年級' => 'F4',
+            '五年級' => 'F5'
+        ];
+        
+        // 先檢查是否已經在映射表中
+        if (isset($grade_code_mapping[$grade])) {
+            $grade_code = $grade_code_mapping[$grade];
+            // 驗證代碼是否存在於資料庫中
+            $stmt_check = $pdo->prepare("SELECT code FROM identity_options WHERE code = ?");
+            $stmt_check->execute([$grade_code]);
+            if (!$stmt_check->fetch()) {
+                error_log("年級代碼不存在於資料庫: {$grade_code}");
+                $grade_code = null;
+            }
+        } else {
+            // 如果不是標準映射，嘗試直接查詢（可能是代碼或名稱）
+            $stmt_grade = $pdo->prepare("SELECT code FROM identity_options WHERE name = ? OR code = ?");
+            $stmt_grade->execute([$grade, $grade]);
+            $grade_result = $stmt_grade->fetch(PDO::FETCH_ASSOC);
+            if ($grade_result) {
+                $grade_code = $grade_result['code'];
+            } else {
+                // 如果找不到對應的代碼，設為 null（允許為空）
+                error_log("無法找到年級代碼: {$grade}");
+                $grade_code = null;
+            }
+        }
+    }
+    
     // 檢查 student 表是否存在該用戶的記錄
-    $stmt = $pdo->prepare("SELECT id FROM student WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT user_id FROM student WHERE user_id = ?");
     $stmt->execute([$user_id]);
     $student_exists = $stmt->fetch();
     
@@ -165,20 +241,46 @@ try {
         error_log("資料庫驗證: 更新後的頭像路徑={$updated_path}");
     }
     
-    if ($student_exists) {
-        // 更新現有資料（包含姓名，不包含email，email由註冊時設定，不允許修改）
-        $stmt = $pdo->prepare("UPDATE student SET name = ?, department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
-        $stmt->execute([$name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $user_id]);
-    } else {
-        // 獲取email（如果有的話）
+    // 檢查 student 表是否有 email 欄位
+    $has_email_column = false;
+    try {
+        $check_stmt = $pdo->query("SHOW COLUMNS FROM student LIKE 'email'");
+        $has_email_column = $check_stmt->rowCount() > 0;
+    } catch(PDOException $e) {
+        $has_email_column = false;
+    }
+    
+    // 獲取email（如果 student 表有 email 欄位且 user 表有 email）
+    $email = null;
+    if ($has_email_column) {
         $stmt = $pdo->prepare("SELECT email FROM user WHERE id = ?");
         $stmt->execute([$user_id]);
         $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
         $email = $user_data['email'] ?? null;
-        
-        // 插入新資料（使用表單提交的姓名，email從user表獲取，不允許修改）
-        $stmt = $pdo->prepare("INSERT INTO student (user_id, name, department, phone, student_id, grade, class_name, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $name, $department, $phone, $student_id ?: null, $grade ?: null, $class_name ?: null, $email]);
+    }
+    
+    if ($student_exists) {
+        // 更新現有資料（不包含 name，name 在 user 表中）
+        if ($has_email_column) {
+            // 如果 student 表有 email 欄位，包含在更新中
+            $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ?, student_id = ?, grade = ?, class_name = ?, email = ? WHERE user_id = ?");
+            $stmt->execute([$department_code, $phone, $student_id ?: null, $grade_code, $class_name ?: null, $email, $user_id]);
+        } else {
+            // 如果 student 表沒有 email 欄位，不包含在更新中
+            $stmt = $pdo->prepare("UPDATE student SET department = ?, phone = ?, student_id = ?, grade = ?, class_name = ? WHERE user_id = ?");
+            $stmt->execute([$department_code, $phone, $student_id ?: null, $grade_code, $class_name ?: null, $user_id]);
+        }
+    } else {
+        // 插入新資料
+        if ($has_email_column) {
+            // 如果 student 表有 email 欄位，包含在插入中
+            $stmt = $pdo->prepare("INSERT INTO student (user_id, department, phone, student_id, grade, class_name, email) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$user_id, $department_code, $phone, $student_id ?: null, $grade_code, $class_name ?: null, $email]);
+        } else {
+            // 如果 student 表沒有 email 欄位，不包含在插入中
+            $stmt = $pdo->prepare("INSERT INTO student (user_id, department, phone, student_id, grade, class_name) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$user_id, $department_code, $phone, $student_id ?: null, $grade_code, $class_name ?: null]);
+        }
     }
     
     $message = '個人資料保存成功';

@@ -26,26 +26,49 @@ if ($sessions_result) {
     }
 }
 
-// 取得啟用的年級選項
+// 取得啟用的年級選項（從 identity_options 表，只取國一到國三）
 $grades = [];
-$grades_query = "SELECT grade_name FROM admission_grades WHERE is_active = 1 ORDER BY sort_order";
+$grades_map = []; // code => name 映射
+$grades_query = "SELECT code, name FROM identity_options WHERE code IN ('J1', 'J2', 'J3') ORDER BY code";
 $grades_result = $conn->query($grades_query);
 if ($grades_result) {
     while ($row = $grades_result->fetch_assoc()) {
-        $grades[] = $row['grade_name'];
+        $grades[] = ['code' => $row['code'], 'name' => $row['name']];
+        $grades_map[$row['code']] = $row['name'];
+    }
+}
+// 如果查詢失敗或沒有資料，使用預設值
+if (empty($grades)) {
+    $grades = [
+        ['code' => 'J1', 'name' => '國一'],
+        ['code' => 'J2', 'name' => '國二'],
+        ['code' => 'J3', 'name' => '國三']
+    ];
+    foreach ($grades as $g) {
+        $grades_map[$g['code']] = $g['name'];
     }
 }
 
-// 取得啟用的體驗課程
-$courses = [];
-$courses_query = "SELECT c.course_name 
-                  FROM admission_courses c 
-                  WHERE c.is_active = 1 
-                  ORDER BY c.sort_order";
-$courses_result = $conn->query($courses_query);
-if ($courses_result) {
-    while ($row = $courses_result->fetch_assoc()) {
-        $courses[] = $row['course_name'];
+// 取得科系選項（從 departments 表）
+$departments = [];
+$departments_map = []; // code => name 映射
+$departments_query = "SELECT code, name FROM departments ORDER BY name";
+$departments_result = $conn->query($departments_query);
+if ($departments_result) {
+    while ($row = $departments_result->fetch_assoc()) {
+        $departments[] = ['code' => $row['code'], 'name' => $row['name']];
+        $departments_map[$row['code']] = $row['name'];
+    }
+}
+// 如果查詢失敗或沒有資料，使用預設值
+if (empty($departments)) {
+    $departments = [
+        ['code' => 'IM', 'name' => '資訊管理科'],
+        ['code' => 'BM', 'name' => '企業管理科'],
+        ['code' => 'NU', 'name' => '護理科']
+    ];
+    foreach ($departments as $d) {
+        $departments_map[$d['code']] = $d['name'];
     }
 }
 
@@ -85,9 +108,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'search' && isset($_GET['email
     
     if (!empty($search_email) && filter_var($search_email, FILTER_VALIDATE_EMAIL)) {
         // 搜尋該電子郵件的所有報名記錄
-        $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+        $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
                         FROM admission_applications a 
                         LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                        LEFT JOIN school_data sd ON a.school = sd.school_code
                         WHERE a.email = ? 
                         ORDER BY a.created_at DESC";
         $search_stmt = $conn->prepare($search_query);
@@ -143,9 +167,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'cancel' && isset($_POST['ap
             
             // 重新搜尋以更新結果
             $search_email = $email;
-            $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+            $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
                             FROM admission_applications a 
                             LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                            LEFT JOIN school_data sd ON a.school = sd.school_code
                             WHERE a.email = ? 
                             ORDER BY a.created_at DESC";
             $search_stmt = $conn->prepare($search_query);
@@ -186,8 +211,39 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
     $application_id = intval($_POST['application_id']);
     $email = trim($_POST['email']);
     $new_session_id = intval($_POST['new_session_id']);
-    $new_course_priority_1 = trim($_POST['new_course_priority_1']);
-    $new_course_priority_2 = trim($_POST['new_course_priority_2']);
+    $new_course_priority_1_input = trim($_POST['new_course_priority_1']);
+    $new_course_priority_2_input = trim($_POST['new_course_priority_2']);
+    
+    // 將科系名稱轉換為代碼（如果輸入的是名稱）
+    $new_course_priority_1 = '';
+    if (!empty($new_course_priority_1_input)) {
+        if (isset($departments_map[$new_course_priority_1_input])) {
+            $new_course_priority_1 = $new_course_priority_1_input; // 已經是代碼
+        } else {
+            // 輸入的是名稱，需要找到對應的代碼
+            foreach ($departments_map as $code => $name) {
+                if ($name === $new_course_priority_1_input) {
+                    $new_course_priority_1 = $code;
+                    break;
+                }
+            }
+        }
+    }
+    
+    $new_course_priority_2 = '';
+    if (!empty($new_course_priority_2_input)) {
+        if (isset($departments_map[$new_course_priority_2_input])) {
+            $new_course_priority_2 = $new_course_priority_2_input; // 已經是代碼
+        } else {
+            // 輸入的是名稱，需要找到對應的代碼
+            foreach ($departments_map as $code => $name) {
+                if ($name === $new_course_priority_2_input) {
+                    $new_course_priority_2 = $code;
+                    break;
+                }
+            }
+        }
+    }
     
     // 驗證電子郵件和申請ID的匹配
     $verify_query = "SELECT id FROM admission_applications WHERE id = ? AND email = ?";
@@ -226,12 +282,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                 }
                 $session_info_stmt->close();
                 
-                // 更新報名記錄
+                // 更新報名記錄（移除 session_choice 字段）
                 $update_query = "UPDATE admission_applications 
-                                SET session_id = ?, session_choice = ?, course_priority_1 = ?, course_priority_2 = ?
+                                SET session_id = ?, course_priority_1 = ?, course_priority_2 = ?
                                 WHERE id = ? AND email = ?";
                 $update_stmt = $conn->prepare($update_query);
-                $update_stmt->bind_param("isssis", $new_session_id, $new_session_name, $new_course_priority_1, $new_course_priority_2, $application_id, $email);
+                $update_stmt->bind_param("issis", $new_session_id, $new_course_priority_1, $new_course_priority_2, $application_id, $email);
                 
                 if ($update_stmt->execute()) {
                     $success_message = "報名已成功修改！";
@@ -241,9 +297,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                         require_once 'includes/email_functions.php';
                         
                         // 取得修改後的完整資料
-                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
                                         FROM admission_applications a 
                                         LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                                        LEFT JOIN school_data sd ON a.school = sd.school_code
                                         WHERE a.id = ?";
                         $updated_stmt = $conn->prepare($updated_query);
                         $updated_stmt->bind_param("i", $application_id);
@@ -251,15 +308,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                         $updated_result = $updated_stmt->get_result();
                         
                         if ($updated_row = $updated_result->fetch_assoc()) {
-                            // 組合課程資訊用於郵件
+                            // 組合科系資訊用於郵件（將代碼轉換為名稱）
                             $course_info = [];
                             if (!empty($updated_row['course_priority_1'])) {
-                                $course_info[] = "第一選擇：" . $updated_row['course_priority_1'];
+                                $dept_name_1 = isset($departments_map[$updated_row['course_priority_1']]) 
+                                    ? $departments_map[$updated_row['course_priority_1']] 
+                                    : $updated_row['course_priority_1'];
+                                $course_info[] = "第一選擇：" . $dept_name_1;
                             }
                             if (!empty($updated_row['course_priority_2'])) {
-                                $course_info[] = "第二選擇：" . $updated_row['course_priority_2'];
+                                $dept_name_2 = isset($departments_map[$updated_row['course_priority_2']]) 
+                                    ? $departments_map[$updated_row['course_priority_2']] 
+                                    : $updated_row['course_priority_2'];
+                                $course_info[] = "第二選擇：" . $dept_name_2;
                             }
-                            $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
+                            $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇科系';
                             
                             // 發送修改確認郵件
                             $modify_email_sent = sendModifyConfirmationEmail(
@@ -285,9 +348,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                     
                     // 重新搜尋以更新結果
                     $search_email = $email;
-                    $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type 
+                    $search_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
                                     FROM admission_applications a 
                                     LEFT JOIN admission_sessions s ON a.session_id = s.id 
+                                    LEFT JOIN school_data sd ON a.school = sd.school_code
                                     WHERE a.email = ? 
                                     ORDER BY a.created_at DESC";
                     $search_stmt = $conn->prepare($search_query);
@@ -384,12 +448,27 @@ if ($_POST && !isset($_POST['action'])) {
         $_POST['contact_phone'] = $phone; // 標準化電話號碼格式
     }
     
-    // 驗證就讀年級（必須從系統選項中選擇）
+    // 驗證就讀年級（必須從系統選項中選擇，存儲 code）
+    $grade_code = '';
     if (!empty($_POST['grade'])) {
-        $grade = $_POST['grade'];
-        // 檢查年級是否在允許的年級列表中
-        if (!in_array($grade, $grades)) {
-            $missing_fields[] = 'grade_invalid';
+        $grade_input = $_POST['grade'];
+        // 檢查是代碼還是名稱，轉換為代碼
+        if (isset($grades_map[$grade_input])) {
+            // 輸入的是代碼
+            $grade_code = $grade_input;
+        } else {
+            // 輸入的是名稱，需要找到對應的代碼
+            $found = false;
+            foreach ($grades_map as $code => $name) {
+                if ($name === $grade_input) {
+                    $grade_code = $code;
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $missing_fields[] = 'grade_invalid';
+            }
         }
     }
     
@@ -403,16 +482,40 @@ if ($_POST && !isset($_POST['action'])) {
     }
     
     if (empty($missing_fields)) {
-        // 處理體驗課程優先順序
+        // 處理科系優先順序（存儲 departments.code）
         $course_priority_1 = '';
         $course_priority_2 = '';
         
         if (isset($_POST['course_priority_1']) && !empty($_POST['course_priority_1'])) {
-            $course_priority_1 = $_POST['course_priority_1'];
+            $priority1_input = $_POST['course_priority_1'];
+            // 檢查是代碼還是名稱，轉換為代碼
+            if (isset($departments_map[$priority1_input])) {
+                $course_priority_1 = $priority1_input; // 已經是代碼
+            } else {
+                // 輸入的是名稱，需要找到對應的代碼
+                foreach ($departments_map as $code => $name) {
+                    if ($name === $priority1_input) {
+                        $course_priority_1 = $code;
+                        break;
+                    }
+                }
+            }
         }
         
         if (isset($_POST['course_priority_2']) && !empty($_POST['course_priority_2'])) {
-            $course_priority_2 = $_POST['course_priority_2'];
+            $priority2_input = $_POST['course_priority_2'];
+            // 檢查是代碼還是名稱，轉換為代碼
+            if (isset($departments_map[$priority2_input])) {
+                $course_priority_2 = $priority2_input; // 已經是代碼
+            } else {
+                // 輸入的是名稱，需要找到對應的代碼
+                foreach ($departments_map as $code => $name) {
+                    if ($name === $priority2_input) {
+                        $course_priority_2 = $code;
+                        break;
+                    }
+                }
+            }
         }
         
         // 確保資料庫連接有效
@@ -433,34 +536,69 @@ if ($_POST && !isset($_POST['action'])) {
         }
         $session_stmt->close();
         
-        // 檢查並添加必要的郵件字段（如果不存在）
-        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS email_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送確認郵件（0=未發送，1=已發送）'");
-        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP NULL COMMENT '確認郵件發送時間'");
-        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent TINYINT(1) DEFAULT 0 COMMENT '是否已發送活動提醒郵件（0=未發送，1=已發送）'");
-        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP NULL COMMENT '提醒郵件發送時間'");
-        $conn->query("ALTER TABLE admission_applications ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '報名時間'");
+        // 從學校名稱中提取 school_code
+        // 格式：學校名稱 (城市區域) -> 需要查詢 school_data 表獲取 school_code
+        $school_code = '';
+        if (!empty($_POST['school_name'])) {
+            $school_name_input = $_POST['school_name'];
+            // 移除格式中的 (城市區域) 部分，只保留學校名稱
+            $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name_input);
+            
+            // 查詢 school_data 表獲取 school_code
+            $school_query = "SELECT school_code FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1";
+            $school_stmt = $conn->prepare($school_query);
+            $school_stmt->bind_param("s", $school_name_only);
+            $school_stmt->execute();
+            $school_result = $school_stmt->get_result();
+            
+            if ($school_row = $school_result->fetch_assoc()) {
+                $school_code = $school_row['school_code'];
+            } else {
+                // 如果找不到，嘗試模糊匹配
+                $school_query2 = "SELECT school_code FROM school_data WHERE name LIKE ? AND is_active = 1 LIMIT 1";
+                $school_stmt2 = $conn->prepare($school_query2);
+                $like_pattern = "%" . $school_name_only . "%";
+                $school_stmt2->bind_param("s", $like_pattern);
+                $school_stmt2->execute();
+                $school_result2 = $school_stmt2->get_result();
+                if ($school_row2 = $school_result2->fetch_assoc()) {
+                    $school_code = $school_row2['school_code'];
+                }
+                $school_stmt2->close();
+            }
+            $school_stmt->close();
+            
+            if (empty($school_code)) {
+                $missing_fields[] = 'school_not_found';
+            }
+        }
         
-        // 插入資料（包含郵件狀態字段和session_id）
-        $sql = "INSERT INTO admission_applications (email, school_name, student_name, grade, parent_name, contact_phone, line_id, session_id, session_choice, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
+        // 轉換 receive_info 為 tinyint (0/1)
+        $receive_info_value = 0;
+        if (!empty($_POST['receive_info'])) {
+            $receive_info_value = ($_POST['receive_info'] === '是，願意') ? 1 : 0;
+        }
+        
+        // 插入資料（使用正確的表名和字段名）
+        $sql = "INSERT INTO admission_applications (email, school, student_name, grade, parent_name, contact_phone, line_id, session_id, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             throw new Exception("SQL 準備失敗: " . $conn->error . " | SQL: " . $sql);
         }
         
-        $stmt->bind_param("ssssssiissss", 
+        $stmt->bind_param("ssssssiissi", 
             $_POST['email'],
-            $_POST['school_name'],
+            $school_code,  // 存儲 school_data.school_code (varchar(20))
             $_POST['student_name'],
-            $_POST['grade'],
+            $grade_code,  // 存儲 identity_options.code (J1, J2, J3)
             $_POST['parent_name'],
             $_POST['contact_phone'],
             $_POST['line_id'],
-            $session_id,
-            $session_name,
-            $course_priority_1,
-            $course_priority_2,
-            $_POST['receive_info']
+            $session_id,  // int
+            $course_priority_1,  // 存儲 departments.code
+            $course_priority_2,  // 存儲 departments.code
+            $receive_info_value  // tinyint: 0=否, 1=是
         );
         
         if ($stmt->execute()) {
@@ -570,6 +708,7 @@ if ($_POST && !isset($_POST['action'])) {
             'email_invalid' => '電子郵件格式不正確',
             'school_name' => '請填寫學校名稱',
             'school_name_invalid' => '請從系統提供的選項中選擇學校，不能自行輸入',
+            'school_not_found' => '找不到對應的學校代碼，請重新選擇學校',
             'student_name' => '請填寫學生姓名',
             'grade' => '請選擇就讀年級',
             'grade_invalid' => '請從系統提供的選項中選擇就讀年級',
@@ -696,7 +835,12 @@ $conn->close();
                         </div>
                         <div class="detail-row">
                             <span class="label">年級：</span>
-                            <span class="value"><?php echo htmlspecialchars($application['grade']); ?></span>
+                            <span class="value"><?php 
+                                $grade_display = isset($grades_map[$application['grade']]) 
+                                    ? $grades_map[$application['grade']] 
+                                    : htmlspecialchars($application['grade']);
+                                echo htmlspecialchars($grade_display); 
+                            ?></span>
                         </div>
                         <div class="detail-row">
                             <span class="label">聯絡人：</span>
@@ -708,14 +852,24 @@ $conn->close();
                         </div>
                         <?php if (!empty($application['course_priority_1'])): ?>
                         <div class="detail-row">
-                            <span class="label">第一選擇課程：</span>
-                            <span class="value"><?php echo htmlspecialchars($application['course_priority_1']); ?></span>
+                            <span class="label">第一選擇科系：</span>
+                            <span class="value"><?php 
+                                $dept_name_1 = isset($departments_map[$application['course_priority_1']]) 
+                                    ? $departments_map[$application['course_priority_1']] 
+                                    : htmlspecialchars($application['course_priority_1']);
+                                echo htmlspecialchars($dept_name_1); 
+                            ?></span>
                         </div>
                         <?php endif; ?>
                         <?php if (!empty($application['course_priority_2'])): ?>
                         <div class="detail-row">
-                            <span class="label">第二選擇課程：</span>
-                            <span class="value"><?php echo htmlspecialchars($application['course_priority_2']); ?></span>
+                            <span class="label">第二選擇科系：</span>
+                            <span class="value"><?php 
+                                $dept_name_2 = isset($departments_map[$application['course_priority_2']]) 
+                                    ? $departments_map[$application['course_priority_2']] 
+                                    : htmlspecialchars($application['course_priority_2']);
+                                echo htmlspecialchars($dept_name_2); 
+                            ?></span>
                         </div>
                         <?php endif; ?>
                         <div class="detail-row">
@@ -786,8 +940,8 @@ $conn->close();
                             <select name="grade" required>
                                 <option value="">請選擇年級</option>
                                 <?php foreach ($grades as $grade): ?>
-                                    <option value="<?php echo htmlspecialchars($grade); ?>" <?php echo (isset($_POST['grade']) && $_POST['grade'] === $grade) ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($grade); ?>
+                                    <option value="<?php echo htmlspecialchars($grade['code']); ?>" <?php echo (isset($_POST['grade']) && $_POST['grade'] === $grade['code']) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($grade['name']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -845,20 +999,20 @@ $conn->close();
                     </div>
                 </div>
 
-                <!-- 體驗課程 -->
+                <!-- 科系選擇 -->
                 <div class="form-section">
-                    <h3><span class="required">*</span> <i class="fas fa-book-open"></i>  體驗課程選擇 </h3>
-                    <p style="margin-bottom: 15px; color: #666;">請從下方課程中拖曳最多兩個課程到右側框框中，並可調整優先順序</p>
+                    <h3><span class="required">*</span> <i class="fas fa-book-open"></i>  科系選擇 </h3>
+                    <p style="margin-bottom: 15px; color: #666;">請從下方科系中拖曳最多兩個科系到右側框框中，並可調整優先順序</p>
                     
                     <div class="course-selection-container">
-                        <!-- 可選課程列表 -->
+                        <!-- 可選科系列表 -->
                         <div class="available-courses">
-                            <h4><i class="fas fa-list"></i> 可選課程</h4>
+                            <h4><i class="fas fa-list"></i> 可選科系</h4>
                             <div class="course-list" id="availableCourses">
-                                <?php foreach ($courses as $course): ?>
-                                    <div class="course-item" draggable="true" data-course="<?php echo htmlspecialchars($course); ?>">
+                                <?php foreach ($departments as $dept): ?>
+                                    <div class="course-item" draggable="true" data-course="<?php echo htmlspecialchars($dept['code']); ?>" data-course-name="<?php echo htmlspecialchars($dept['name']); ?>">
                                         <i class="fas fa-grip-vertical"></i>
-                                        <span><?php echo htmlspecialchars($course); ?></span>
+                                        <span><?php echo htmlspecialchars($dept['name']); ?></span>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -970,7 +1124,11 @@ $conn->close();
         }
 
         function handleDragStart(e) {
-            e.dataTransfer.setData('text/plain', e.target.dataset.course);
+            const courseItem = e.target.closest('.course-item');
+            const courseCode = courseItem.dataset.course;
+            const courseName = courseItem.dataset.courseName || courseCode;
+            e.dataTransfer.setData('text/plain', courseCode);
+            e.dataTransfer.setData('text/course-name', courseName);
         }
 
         function handleDragOver(e) {
@@ -990,25 +1148,26 @@ $conn->close();
 
         function handleDrop(e) {
             e.preventDefault();
-            const courseName = e.dataTransfer.getData('text/plain');
+            const courseCode = e.dataTransfer.getData('text/plain');
+            const courseName = e.dataTransfer.getData('text/course-name') || courseCode;
             const dropZone = e.target.closest('.course-drop-zone');
             
             dropZone.classList.remove('drag-over');
 
-            // 檢查是否已經選擇過這個課程
-            if (selectedCourses.includes(courseName)) {
-                alert('此課程已經被選擇了！');
+            // 檢查是否已經選擇過這個科系
+            if (selectedCourses.some(c => c.code === courseCode)) {
+                alert('此科系已經被選擇了！');
                 return;
             }
 
             // 檢查是否超過最大選擇數量
             if (selectedCourses.length >= maxCourses) {
-                alert(`最多只能選擇 ${maxCourses} 個課程！`);
+                alert(`最多只能選擇 ${maxCourses} 個科系！`);
                 return;
             }
 
-            // 添加到選擇列表
-            selectedCourses.push(courseName);
+            // 添加到選擇列表（存儲代碼和名稱）
+            selectedCourses.push({code: courseCode, name: courseName});
             updateSelectedCoursesDisplay();
             updateHiddenFields();
         }
@@ -1030,14 +1189,16 @@ $conn->close();
             let html = '';
             selectedCourses.forEach((course, index) => {
                 const priorityText = index === 0 ? '第一優先' : '第二優先';
+                const courseCode = typeof course === 'object' ? course.code : course;
+                const courseName = typeof course === 'object' ? course.name : course;
                 html += `
-                    <div class="selected-course-item" data-course="${course}">
+                    <div class="selected-course-item" data-course="${courseCode}">
                         <div class="course-info">
-                            <div class="course-name">${course}</div>
+                            <div class="course-name">${courseName}</div>
                         </div>
                         <div class="course-actions">
                             <span class="priority-badge">${priorityText}</span>
-                            <button type="button" class="remove-btn" onclick="removeCourse('${course}')">
+                            <button type="button" class="remove-btn" onclick="removeCourse('${courseCode}')">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -1057,7 +1218,9 @@ $conn->close();
         }
 
         function handleSelectedDragStart(e) {
-            e.dataTransfer.setData('text/plain', e.target.dataset.course);
+            const courseItem = e.target.closest('.selected-course-item');
+            const courseCode = courseItem.dataset.course;
+            e.dataTransfer.setData('text/plain', courseCode);
             e.dataTransfer.effectAllowed = 'move';
         }
 
@@ -1068,24 +1231,28 @@ $conn->close();
 
         function handleSelectedDrop(e) {
             e.preventDefault();
-            const draggedCourse = e.dataTransfer.getData('text/plain');
-            const targetCourse = e.target.closest('.selected-course-item').dataset.course;
+            const draggedCourseCode = e.dataTransfer.getData('text/plain');
+            const targetCourseItem = e.target.closest('.selected-course-item');
+            const targetCourseCode = targetCourseItem ? targetCourseItem.dataset.course : null;
 
-            if (draggedCourse !== targetCourse) {
+            if (targetCourseCode && draggedCourseCode !== targetCourseCode) {
                 // 交換位置
-                const draggedIndex = selectedCourses.indexOf(draggedCourse);
-                const targetIndex = selectedCourses.indexOf(targetCourse);
+                const draggedIndex = selectedCourses.findIndex(c => (typeof c === 'object' ? c.code : c) === draggedCourseCode);
+                const targetIndex = selectedCourses.findIndex(c => (typeof c === 'object' ? c.code : c) === targetCourseCode);
 
-                selectedCourses[draggedIndex] = targetCourse;
-                selectedCourses[targetIndex] = draggedCourse;
+                if (draggedIndex > -1 && targetIndex > -1) {
+                    const temp = selectedCourses[draggedIndex];
+                    selectedCourses[draggedIndex] = selectedCourses[targetIndex];
+                    selectedCourses[targetIndex] = temp;
 
-                updateSelectedCoursesDisplay();
-                updateHiddenFields();
+                    updateSelectedCoursesDisplay();
+                    updateHiddenFields();
+                }
             }
         }
 
-        function removeCourse(courseName) {
-            const index = selectedCourses.indexOf(courseName);
+        function removeCourse(courseCode) {
+            const index = selectedCourses.findIndex(c => (typeof c === 'object' ? c.code : c) === courseCode);
             if (index > -1) {
                 selectedCourses.splice(index, 1);
                 updateSelectedCoursesDisplay();
@@ -1094,8 +1261,9 @@ $conn->close();
         }
 
         function updateHiddenFields() {
-            document.getElementById('coursePriority1').value = selectedCourses[0] || '';
-            document.getElementById('coursePriority2').value = selectedCourses[1] || '';
+            // 存儲科系代碼（departments.code）
+            document.getElementById('coursePriority1').value = selectedCourses[0] ? (typeof selectedCourses[0] === 'object' ? selectedCourses[0].code : selectedCourses[0]) : '';
+            document.getElementById('coursePriority2').value = selectedCourses[1] ? (typeof selectedCourses[1] === 'object' ? selectedCourses[1].code : selectedCourses[1]) : '';
         }
         
         // 表單提交驗證
@@ -1109,10 +1277,10 @@ $conn->close();
                 return false;
             }
 
-            // 檢查是否至少選擇了一個課程
+            // 檢查是否至少選擇了一個科系
             if (selectedCourses.length === 0) {
                 e.preventDefault();
-                alert('請至少選擇一個體驗課程！');
+                alert('請至少選擇一個科系！');
                 document.getElementById('selectedCourses').scrollIntoView({ behavior: 'smooth' });
                 return false;
             }
@@ -1170,9 +1338,14 @@ $conn->close();
         // 頁面載入完成後初始化
         // 學校搜尋功能
         function performSchoolSearch() {
+            console.log('performSchoolSearch 被調用');
             const keyword = document.getElementById('school_name').value.trim();
             const resultsDiv = document.getElementById('schoolResults');
             const clearBtn = document.getElementById('clearSchoolSearch');
+            
+            console.log('keyword:', keyword);
+            console.log('resultsDiv:', resultsDiv);
+            console.log('clearBtn:', clearBtn);
 
             // 顯示/隱藏清除按鈕
             if (keyword.length > 0) {
@@ -1186,22 +1359,57 @@ $conn->close();
             }
 
             if (keyword.length < 2) {
-                resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
-                resultsDiv.classList.add('show');
+                console.log('關鍵字長度不足，顯示提示');
+                if (resultsDiv) {
+                    resultsDiv.innerHTML = '<div class="search-result-item">請輸入至少2個字元</div>';
+                    resultsDiv.classList.add('show');
+                    console.log('結果區域已顯示');
+                } else {
+                    console.error('resultsDiv 不存在！');
+                }
                 // 當下拉選單顯示時，清除錯誤提示（用戶還在輸入中）
                 clearSchoolError();
                 return;
             }
 
             // 顯示載入中
-            resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
-            resultsDiv.classList.add('show');
+            console.log('開始搜尋，顯示載入中...');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '<div class="search-result-item"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
+                resultsDiv.classList.add('show');
+                console.log('載入中訊息已顯示，resultsDiv.classList:', resultsDiv.classList.toString());
+            } else {
+                console.error('resultsDiv 不存在，無法顯示搜尋結果！');
+                return;
+            }
             // 當下拉選單顯示時，清除錯誤提示（用戶還在選擇中）
             clearSchoolError();
 
             // 從API獲取搜尋結果
-            fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
-                .then(response => response.json())
+            const apiUrl = `api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`;
+            console.log('API URL:', apiUrl);
+            
+            fetch(apiUrl)
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', response.headers);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(text => {
+                    console.log('Response text:', text);
+                    try {
+                        const data = JSON.parse(text);
+                        console.log('Parsed data:', data);
+                        return data;
+                    } catch (e) {
+                        console.error('JSON parse error:', e);
+                        console.error('Response text:', text);
+                        throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+                    }
+                })
                 .then(data => {
                     console.log('搜尋結果:', data);
                     if (data.schools && data.schools.length > 0) {
@@ -1213,11 +1421,15 @@ $conn->close();
                                 additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
                             }
                             
-                            return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                            // 处理 district 可能为空的情况
+                            const district = school.district || '';
+                            const location = district ? `${school.city}${district}` : school.city;
+                            
+                            return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${district}')">
                                 <i class="fas fa-school"></i>
                                 <div class="school-info">
                                     <span class="school-name">${displayName}</span>
-                                    <span class="school-location">${school.city} ${school.district}</span>
+                                    <span class="school-location">${location}</span>
                                     ${additionalInfo}
                                 </div>
                             </div>`;
@@ -1324,7 +1536,9 @@ $conn->close();
 
         // 選擇學校
         function selectSchool(schoolName, city, district) {
-            const fullSchoolName = `${schoolName} (${city}${district})`;
+            // 处理 district 可能为空的情况
+            const districtPart = district ? district : '';
+            const fullSchoolName = districtPart ? `${schoolName} (${city}${districtPart})` : `${schoolName} (${city})`;
             document.getElementById('school_name').value = fullSchoolName;
             document.getElementById('schoolResults').classList.remove('show');
             document.getElementById('clearSchoolSearch').style.display = 'block';
@@ -1339,12 +1553,29 @@ $conn->close();
             // 綁定學校搜尋事件
             const schoolSearchInput = document.getElementById('school_name');
             const clearSchoolBtn = document.getElementById('clearSchoolSearch');
+            const resultsDiv = document.getElementById('schoolResults');
+            
+            console.log('=== 學校搜尋初始化 ===');
+            console.log('schoolSearchInput:', schoolSearchInput);
+            console.log('clearSchoolBtn:', clearSchoolBtn);
+            console.log('resultsDiv:', resultsDiv);
+            console.log('resultsDiv 樣式:', resultsDiv ? window.getComputedStyle(resultsDiv).display : 'N/A');
 
             if (schoolSearchInput) {
+                console.log('學校搜尋輸入框找到，綁定事件監聽器');
                 // 輸入事件（即時搜尋）
-                schoolSearchInput.addEventListener('input', function() {
+                schoolSearchInput.addEventListener('input', function(e) {
+                    console.log('輸入事件觸發，值:', this.value);
                     performSchoolSearch();
                     // 當下拉選單顯示時，不進行驗證（用戶還在輸入和選擇中）
+                });
+                
+                // 添加 keyup 事件作為備用
+                schoolSearchInput.addEventListener('keyup', function(e) {
+                    console.log('Keyup 事件觸發，值:', this.value);
+                    if (this.value.length >= 2) {
+                        performSchoolSearch();
+                    }
                 });
                 
                 // 失去焦點時立即驗證
@@ -1489,13 +1720,16 @@ $conn->close();
         // 生成課程選項
         function generateCourseOptions(currentCourse) {
             try {
-                const courses = <?php echo json_encode($courses); ?>;
+                const departments = <?php echo json_encode($departments); ?>;
                 let options = '';
                 
-                if (courses && Array.isArray(courses)) {
-                    courses.forEach(course => {
-                        const selected = course === currentCourse ? 'selected' : '';
-                        options += `<option value="${course}" ${selected}>${course}</option>`;
+                if (departments && Array.isArray(departments)) {
+                    departments.forEach(dept => {
+                        // currentCourse 可能是代碼或名稱，需要匹配
+                        const courseCode = typeof dept === 'object' ? dept.code : dept;
+                        const courseName = typeof dept === 'object' ? dept.name : dept;
+                        const selected = (courseCode === currentCourse || courseName === currentCourse) ? 'selected' : '';
+                        options += `<option value="${courseCode}" ${selected}>${courseName}</option>`;
                     });
                 } else {
                     options = '<option value="">暫無可用課程</option>';

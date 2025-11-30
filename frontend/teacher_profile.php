@@ -11,15 +11,15 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師或學生角色
+// 檢查是否為老師或學生角色（支援角色代碼）
 $user_role = $_SESSION['role'] ?? '';
-if (!in_array($user_role, ['老師', '學生'])) {
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_student = ($user_role === '學生' || $user_role === 'STU');
+
+if (!$is_teacher && !$is_student) {
     header("Location: index.php");
     exit;
 }
-
-$is_teacher = ($user_role === '老師');
-$is_student = ($user_role === '學生');
 
 // 獲取用戶姓名（老師或學生）
 $user_name = '';
@@ -72,7 +72,7 @@ try {
     
     // 根據角色從不同表獲取詳細資料
     if ($is_teacher) {
-        // 從 teacher 表獲取
+        // 從 teacher 表獲取（包括代碼轉換為名稱）
         $stmt = $pdo->prepare("
             SELECT t.department, t.phone 
             FROM teacher t
@@ -82,8 +82,18 @@ try {
         $stmt->execute([$_SESSION['username']]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($result) {
-            $current_department = $result['department'] ?? '';
             $current_phone = $result['phone'] ?? '';
+            
+            // 將科系代碼轉換為名稱
+            $dept_code = $result['department'] ?? '';
+            if (!empty($dept_code)) {
+                $stmt_dept = $pdo->prepare("SELECT name FROM departments WHERE code = ?");
+                $stmt_dept->execute([$dept_code]);
+                $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+                $current_department = $dept_result['name'] ?? $dept_code; // 如果找不到名稱，使用代碼
+            } else {
+                $current_department = '';
+            }
         }
     } elseif ($is_student) {
         // 從 student 表獲取所有欄位
@@ -420,13 +430,25 @@ try {
                     <label for="department">科系</label>
                     <select id="department" name="department" required>
                         <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
-                        <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
-                        <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
-                        <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
-                        <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
-                        <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
-                        <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
-                        <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                        <?php
+                        // 從資料庫動態載入科系選項
+                        try {
+                            $stmt_depts = $pdo->prepare("SELECT code, name FROM departments ORDER BY name");
+                            $stmt_depts->execute();
+                            $departments = $stmt_depts->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($departments as $dept) {
+                                $dept_name = htmlspecialchars($dept['name']);
+                                $is_selected = ($current_department === $dept_name) ? 'selected' : '';
+                                echo "<option value=\"{$dept_name}\" {$is_selected}>{$dept_name}</option>";
+                            }
+                        } catch (PDOException $e) {
+                            error_log("載入科系選項錯誤: " . $e->getMessage());
+                            // 如果載入失敗，使用預設選項
+                            echo '<option value="資訊管理科">資訊管理科</option>';
+                            echo '<option value="企業管理科">企業管理科</option>';
+                            echo '<option value="護理科">護理科</option>';
+                        }
+                        ?>
                     </select>
                 </div>
                 
@@ -445,13 +467,25 @@ try {
                     <label for="department">科系</label>
                     <select id="department" name="department" required>
                         <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
-                        <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
-                        <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
-                        <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
-                        <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
-                        <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
-                        <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
-                        <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                        <?php
+                        // 從資料庫動態載入科系選項
+                        try {
+                            $stmt_depts = $pdo->prepare("SELECT code, name FROM departments ORDER BY name");
+                            $stmt_depts->execute();
+                            $departments = $stmt_depts->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($departments as $dept) {
+                                $dept_name = htmlspecialchars($dept['name']);
+                                $is_selected = ($current_department === $dept_name) ? 'selected' : '';
+                                echo "<option value=\"{$dept_name}\" {$is_selected}>{$dept_name}</option>";
+                            }
+                        } catch (PDOException $e) {
+                            error_log("載入科系選項錯誤: " . $e->getMessage());
+                            // 如果載入失敗，使用預設選項
+                            echo '<option value="資訊管理科">資訊管理科</option>';
+                            echo '<option value="企業管理科">企業管理科</option>';
+                            echo '<option value="護理科">護理科</option>';
+                        }
+                        ?>
                     </select>
                 </div>
                 
@@ -476,12 +510,12 @@ try {
                 </div>
             <?php endif; ?>
             
-            <button type="submit" class="submit-btn">保存資料</button>
+            <button type="submit" class="submit-btn">儲存資料</button>
         </form>
         
         <div id="message"></div>
         
-        <!-- 修改密碼區塊（所有老師都可以使用） -->
+        <!-- 修改密碼區塊（所有用戶都可以使用） -->
         <div class="credentials-section">
             <h2>修改密碼</h2>
             <form id="passwordForm">
@@ -656,22 +690,50 @@ try {
             e.preventDefault();
             
             const username = '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>';
-            const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
+            const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             const name = document.getElementById('name') ? document.getElementById('name').value : '';
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
-            // 驗證必填欄位
-            if (!department || !phone) {
-                const messageDiv = document.getElementById('message');
-                messageDiv.className = 'message error';
-                messageDiv.textContent = '請填寫所有必填欄位（科系、電話）';
-                return;
+            // 根據角色判斷（支援代碼和中文名稱）
+            const isTeacherRole = (role === '老師' || role === 'TEA');
+            const isStudentRole = (role === '學生' || role === 'STU');
+            
+            // 調試：輸出角色信息
+            console.log('🔍 角色檢查:', {
+                'role原始值': role,
+                'role類型': typeof role,
+                'role長度': role ? role.length : 0,
+                'isTeacherRole': isTeacherRole,
+                'isStudentRole': isStudentRole,
+                'PHP_is_teacher': <?php echo $is_teacher ? 'true' : 'false'; ?>,
+                'PHP_is_student': <?php echo $is_student ? 'true' : 'false'; ?>
+            });
+            
+            // 驗證必填欄位（根據角色不同）
+            if (isTeacherRole) {
+                // 老師必填：科系、電話
+                if (!department || !phone) {
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '請填寫所有必填欄位（科系、電話）';
+                    return;
+                }
+            } else if (isStudentRole) {
+                // 學生必填：姓名、科系、電話
+                if (!name || !department || !phone) {
+                    const messageDiv = document.getElementById('message');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '請填寫所有必填欄位（姓名、科系、電話）';
+                    return;
+                }
             }
             
             const formData = new FormData();
             formData.append('username', username);
-            formData.append('name', name); // 從表單獲取姓名
+            if (name) {
+                formData.append('name', name); // 從表單獲取姓名
+            }
             formData.append('department', department);
             formData.append('phone', phone);
             formData.append('role', role); // 添加角色資訊
@@ -697,9 +759,11 @@ try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
             
-            // 根據角色選擇不同的保存方式
-            if (role === '老師') {
-                // 老師使用前端 PHP 保存（支援頭像上傳）
+            // 根據角色選擇不同的儲存方式（支援角色代碼和中文名稱）
+            console.log('角色判斷:', role, 'isTeacherRole:', isTeacherRole, 'isStudentRole:', isStudentRole);
+            if (isTeacherRole) {
+                console.log('調用 save_teacher_profile.php');
+                // 老師使用前端 PHP 儲存（支援頭像上傳）
                 fetch('save_teacher_profile.php', {
                     method: 'POST',
                     body: formData,
@@ -711,7 +775,7 @@ try {
                         const messageDiv = document.getElementById('message');
                         if (response.ok && data.success) {
                             messageDiv.className = 'message success';
-                            messageDiv.textContent = data.message || '個人資料保存成功';
+                            messageDiv.textContent = data.message || '個人資料儲存成功';
                             
                             // 如果頭像已更新，更新預覽
                             if (data.avatar_updated && data.avatar_path) {
@@ -751,10 +815,11 @@ try {
                     clearTimeout(timeoutId);
                     const messageDiv = document.getElementById('message');
                     messageDiv.className = 'message error';
-                    messageDiv.textContent = '保存失敗，請稍後再試。';
+                    messageDiv.textContent = '儲存失敗，請稍後再試。';
                 });
-            } else {
-                // 學生使用前端 PHP 保存
+            } else if (isStudentRole) {
+                console.log('✅ 檢測到學生角色，調用 save_student_profile.php');
+                // 學生使用前端 PHP 儲存
                 fetch('save_student_profile.php', {
                     method: 'POST',
                     body: formData,
@@ -766,7 +831,7 @@ try {
                         const messageDiv = document.getElementById('message');
                         if (response.ok && data.success) {
                             messageDiv.className = 'message success';
-                            messageDiv.textContent = data.message || '個人資料保存成功';
+                            messageDiv.textContent = data.message || '個人資料儲存成功';
                             
                             // 如果頭像已更新，更新預覽
                             if (data.avatar_updated && data.avatar_path) {
@@ -806,13 +871,18 @@ try {
                     clearTimeout(timeoutId);
                     const messageDiv = document.getElementById('message');
                     messageDiv.className = 'message error';
-                    messageDiv.textContent = '保存失敗，請稍後再試。';
+                    messageDiv.textContent = '儲存失敗，請稍後再試。';
                 });
+            } else {
+                // 既不是老師也不是學生，顯示錯誤
+                console.error('❌ 錯誤：無法識別的角色:', role);
+                const messageDiv = document.getElementById('message');
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '錯誤：無法識別的角色，請重新登入。';
             }
         });
         
-        // 修改密碼表單提交（所有老師都可以使用）
-        <?php if ($is_teacher): ?>
+        // 修改密碼表單提交（所有用戶都可以使用）
         const passwordForm = document.getElementById('passwordForm');
         if (passwordForm) {
             passwordForm.addEventListener('submit', function(e) {
@@ -845,7 +915,25 @@ try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
-                fetch('update_teacher_password.php', {
+                // 根據角色選擇不同的API
+                const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+                const isTeacherRole = (role === '老師' || role === 'TEA');
+                const isStudentRole = (role === '學生' || role === 'STU');
+                
+                // 根據角色調用不同的API
+                let passwordUpdateUrl = '';
+                if (isTeacherRole) {
+                    passwordUpdateUrl = 'update_teacher_password.php';
+                } else if (isStudentRole) {
+                    passwordUpdateUrl = 'update_student_password.php';
+                } else {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '錯誤：無法識別的角色，請重新登入。';
+                    return;
+                }
+                
+                fetch(passwordUpdateUrl, {
                     method: 'POST',
                     body: formData,
                     signal: controller.signal
@@ -888,7 +976,6 @@ try {
                 });
             });
         }
-        <?php endif; ?>
     </script>
 <?php include("share/footer.php"); ?>
 <?php include("share/ai_widget.php"); ?>

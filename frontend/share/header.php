@@ -568,7 +568,8 @@ function getActiveClass($targetFile) {
     padding: 15px;
     min-width: 150px;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-    z-index: 2000;
+    z-index: 10000; /* 提高 z-index 確保在其他元素之上 */
+    pointer-events: auto; /* 確保可以點擊 */
   }
 
   .dropdown-menu .username {
@@ -885,21 +886,17 @@ function getActiveClass($targetFile) {
 <div class="container">
   <!-- Logo 區域 -->
   <a href="<?php 
-    // 根據登入狀態和角色決定導向頁面
+    // 根據登入狀態和角色決定導向頁面（支援角色代碼和中文名稱）
     if ($isLoggedIn && isset($_SESSION['role'])) {
-      switch ($_SESSION['role']) {
-        case '學生':
-          echo getCorrectPath('student.php');
-          break;
-        case '老師':
-          echo getCorrectPath('teacher.php');
-          break;
-        case '學校行政人員':
-          echo getCorrectPath('admin.php');
-          break;
-        default:
-          echo getCorrectPath('index.php');
-          break;
+      $role = $_SESSION['role'];
+      if ($role === '學生' || $role === 'STU') {
+        echo getCorrectPath('student.php');
+      } elseif ($role === '老師' || $role === 'TEA') {
+        echo getCorrectPath('teacher.php');
+      } elseif ($role === '學校行政人員' || $role === 'STA') {
+        echo getCorrectPath('admin.php');
+      } else {
+        echo getCorrectPath('index.php');
       }
     } else {
       echo getCorrectPath('index.php');
@@ -915,8 +912,14 @@ function getActiveClass($targetFile) {
   </a>
 
   <div class="navbar-links">
+    <?php 
+    // 統一設定角色變數（支援代碼和中文名稱）
+    $header_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+    $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA');
+    $is_header_student = ($header_role === '學生' || $header_role === 'STU');
+    ?>
     <!-- 共同可見的連結 -->
-    <?php if (!($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師')): ?>
+    <?php if (!($isLoggedIn && $is_header_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
     <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
@@ -929,7 +932,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('mobile_junior.php'); ?>" class="<?php echo getActiveClass('mobile_junior.php'); ?>">國中招生報名網頁</a>
     <?php else: ?>
       <!-- 僅登入用戶可見的連結 -->
-      <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
+      <?php if ($isLoggedIn && $is_header_student): ?>
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">學長姐留言板</a>
     <?php endif; ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
@@ -937,11 +940,11 @@ function getActiveClass($targetFile) {
 
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
     
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
     <?php endif; ?>
     
@@ -961,7 +964,7 @@ function getActiveClass($targetFile) {
 
 <?php if ($isLoggedIn): ?>
   <div class="user-dropdown">
-                   <div class="avatar-btn" onclick="toggleDropdown()">
+                   <div class="avatar-btn" onclick="toggleDropdown(event)">
              <?php
              // 獲取用戶頭像和姓名
              $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
@@ -1019,9 +1022,12 @@ function getActiveClass($targetFile) {
                                      <div class="dropdown-menu" id="dropdownMenu">
          <span class="username"><?php echo htmlspecialchars($user_display_name); ?></span>
          <?php if ($isLoggedIn && isset($_SESSION['role'])): ?>
-            <?php if ($_SESSION['role'] === '老師'): ?>
+            <?php 
+            $user_role = $_SESSION['role'];
+            // 支援角色代碼和中文名稱
+            if ($user_role === '老師' || $user_role === 'TEA'): ?>
                 <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
-            <?php elseif ($_SESSION['role'] === '學生'): ?>
+            <?php elseif ($user_role === '學生' || $user_role === 'STU'): ?>
                 <a href="<?php echo getCorrectPath('student_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php else: ?>
                 <a href="#" class="btn-logout">個人資料</a>
@@ -1052,7 +1058,12 @@ function getActiveClass($targetFile) {
 <div class="mobile-menu" id="mobileMenu">
   <div class="mobile-nav-links">
     <!-- 共同可見的連結 -->
-    <?php if (!($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師')): ?>
+    <?php 
+    // 統一設定角色變數（支援代碼和中文名稱）
+    $mobile_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+    $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA');
+    $is_mobile_student = ($mobile_role === '學生' || $mobile_role === 'STU');
+    if (!($isLoggedIn && $is_mobile_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
     <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
@@ -1069,13 +1080,13 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
     
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生'): ?>
+    <?php if ($isLoggedIn && $is_mobile_student): ?>
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
     <?php endif; ?>
     
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
-    <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '老師'): ?>
+    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
     
@@ -1270,11 +1281,11 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       .then((sessionResult) => {
         console.log("Session 設定結果:", sessionResult);
         if (sessionResult.success) {
-          // 在 set_session.php 成功後才進行頁面跳轉
+          // 在 set_session.php 成功後才進行頁面跳轉（支援角色代碼和中文名稱）
           console.log("準備跳轉，角色:", data.role);
-          if (data.role === "老師") {
+          if (data.role === "老師" || data.role === "TEA") {
             window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-          } else if (data.role === "學生") {
+          } else if (data.role === "學生" || data.role === "STU") {
             window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
           } else if (data.role === "學校行政人員") {
             window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
@@ -1310,10 +1321,17 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   });
 });
 
-function toggleDropdown() {
+function toggleDropdown(event) {
+  if (event) {
+    event.stopPropagation(); // 阻止事件冒泡
+  }
   const menu = document.getElementById("dropdownMenu");
   if (menu) {
-    menu.style.display = menu.style.display === "block" ? "none" : "block";
+    const isVisible = menu.style.display === "block";
+    menu.style.display = isVisible ? "none" : "block";
+    console.log("下拉選單切換:", isVisible ? "關閉" : "開啟");
+  } else {
+    console.error("找不到下拉選單元素");
   }
 }
 
@@ -1412,7 +1430,7 @@ function checkTeacherProfile() {
   // 等後端服務器修復後再啟用
   return;
   
-  if (username && role === '老師' && notificationDot) {
+  if (username && (role === '老師' || role === 'TEA') && notificationDot) {
     // 使用 AbortController 來設置超時
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超時

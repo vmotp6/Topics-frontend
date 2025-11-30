@@ -43,28 +43,14 @@ try {
     die("資料庫連接失敗: " . $e->getMessage());
 }
 
-// 檢查留言權限（只有登入的學生才能發布留言）
+// 檢查留言權限（所有登入的學生都可以發布留言）
 $can_post_message = false;
-if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
-    $auth = new SeniorMessageAuth();
-    
-    // 從資料庫獲取用戶的email（而不是直接使用username）
-    // 因為一般註冊的帳號，username不是email，只有Google登入的才是
-    $user_email = $_SESSION['username']; // 預設值（Google登入時username就是email）
-    try {
-        $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
-        $stmt->execute([$_SESSION['username']]);
-        $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($user_result && !empty($user_result['email'])) {
-            $user_email = $user_result['email']; // 使用資料庫中的email
-        }
-    } catch(PDOException $e) {
-        error_log("獲取用戶email失敗: " . $e->getMessage());
-        // 如果查詢失敗，繼續使用username作為email（兼容Google登入）
-    }
-    
-    $permission_result = $auth->checkPermission($user_email);
-    $can_post_message = $permission_result['has_permission'];
+$user_role = $_SESSION['role'] ?? '';
+// 只驗證角色代碼 'STU'
+if ($isLoggedIn && isset($_SESSION['role']) && $user_role === 'STU') {
+    // 只要身分是「學生」就可以發布留言，不需要檢查email
+    $can_post_message = true;
+    $permission_result = ['has_permission' => true, 'message' => '您有留言權限'];
 } else {
     $permission_result = ['has_permission' => false, 'error' => '請先登入'];
 }
@@ -73,8 +59,23 @@ if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '學生') {
 $sort_order = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
 $order_by = ($sort_order === 'oldest') ? 'ASC' : 'DESC';
 
-// 獲取分類篩選參數
+// 獲取分類篩選參數（支援中文名稱和代碼）
 $filter_type = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+
+// 將中文類別名稱轉換為代碼的映射
+$category_mapping = [
+    '經驗分享' => 'EXP',
+    '學習建議' => 'STD',
+    '生活指南' => 'LIFE',
+    '就業資訊' => 'CAR',
+    '推薦餐廳' => 'REST',
+    '其他' => 'OTH'
+];
+
+// 將篩選條件轉換為代碼（如果輸入的是中文）
+$filter_code = ($filter_type !== 'all' && isset($category_mapping[$filter_type])) 
+    ? $category_mapping[$filter_type] 
+    : $filter_type;
 
 // 分頁設定
 $per_page = 15; // 每頁顯示15則留言
@@ -87,15 +88,44 @@ $total_messages = 0;
 $total_pages = 0;
 
 try {
+    // 檢查 is_published 欄位是否存在
+    $has_is_published = false;
+    try {
+        $check_sql = "SHOW COLUMNS FROM senior_messages LIKE 'is_published'";
+        $check_stmt = $pdo->query($check_sql);
+        $has_is_published = $check_stmt->rowCount() > 0;
+    } catch(PDOException $e) {
+        $has_is_published = false;
+    }
+    
+    // 檢查餐廳相關欄位是否存在
+    $has_restaurant_fields = false;
+    try {
+        $check_sql = "SHOW COLUMNS FROM senior_messages LIKE 'restaurant_name'";
+        $check_stmt = $pdo->query($check_sql);
+        $has_restaurant_fields = $check_stmt->rowCount() > 0;
+    } catch(PDOException $e) {
+        $has_restaurant_fields = false;
+    }
+    
     // 先計算總留言數（根據篩選條件）
-    $count_sql = "SELECT COUNT(*) as total FROM senior_messages WHERE is_published = 1";
-    if ($filter_type !== 'all') {
-        $count_sql .= " AND COALESCE(message_type, '其他') = :filter_type";
+    $count_sql = "SELECT COUNT(*) as total 
+                  FROM senior_messages sm";
+    
+    // 只有在 is_published 欄位存在時才添加過濾條件
+    // 移除 is_published = 1 的條件，顯示所有記錄
+    $where_conditions = [];
+    if ($filter_code !== 'all') {
+        $where_conditions[] = "COALESCE(sm.message_type, 'OTH') = :filter_type";
+    }
+    
+    if (!empty($where_conditions)) {
+        $count_sql .= " WHERE " . implode(" AND ", $where_conditions);
     }
     
     $stmt = $pdo->prepare($count_sql);
-    if ($filter_type !== 'all') {
-        $stmt->bindValue(':filter_type', $filter_type, PDO::PARAM_STR);
+    if ($filter_code !== 'all') {
+        $stmt->bindValue(':filter_type', $filter_code, PDO::PARAM_STR);
     }
     $stmt->execute();
     $total_result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -108,48 +138,132 @@ try {
         $offset = ($current_page - 1) * $per_page;
     }
     
-    // 獲取當前頁的留言資料
-    $sql = "SELECT *, COALESCE(message_type, '其他') as message_type 
-            FROM senior_messages 
-            WHERE is_published = 1";
+    // 獲取當前頁的留言資料（使用 JOIN 獲取作者資訊和類別名稱）
+    $sql = "SELECT 
+                sm.id,
+                sm.user_id,
+                sm.title,
+                sm.content,
+                sm.author_contact,
+                sm.message_type,
+                COALESCE(pc.name, '其他') as message_type_name,
+                sm.is_published,
+                sm.created_at,
+                sm.updated_at,
+                sm.view_count,
+                sm.like_count,
+                u.name as author_name,
+                u.email as author_email,
+                u.profile_picture as author_profile_picture,
+                COALESCE(d.name, s.department) as author_department,
+                COALESCE(g.name, s.grade) as author_grade";
     
-    if ($filter_type !== 'all') {
-        $sql .= " AND COALESCE(message_type, '其他') = :filter_type";
+    // 只有在欄位存在時才查詢餐廳相關欄位
+    if ($has_restaurant_fields) {
+        $sql .= ",
+                sm.restaurant_name,
+                sm.restaurant_address,
+                sm.restaurant_lat,
+                sm.restaurant_lng,
+                sm.restaurant_place_id,
+                sm.restaurant_rating,
+                sm.delivery_rating,
+                sm.price_level";
+    } else {
+        // 如果欄位不存在，設置為 NULL
+        $sql .= ",
+                NULL as restaurant_name,
+                NULL as restaurant_address,
+                NULL as restaurant_lat,
+                NULL as restaurant_lng,
+                NULL as restaurant_place_id,
+                NULL as restaurant_rating,
+                NULL as delivery_rating,
+                NULL as price_level";
     }
     
-    $sql .= " ORDER BY created_at $order_by LIMIT :limit OFFSET :offset";
+    $sql .= " FROM senior_messages sm
+            LEFT JOIN user u ON sm.user_id = u.id
+            LEFT JOIN student s ON sm.user_id = s.user_id
+            LEFT JOIN departments d ON s.department = d.code
+            LEFT JOIN identity_options g ON s.grade = g.code
+            LEFT JOIN post_categories pc ON sm.message_type = pc.code";
+    
+    // 構建 WHERE 條件（移除 is_published = 1 的過濾，顯示所有記錄）
+    $where_conditions = [];
+    if ($filter_code !== 'all') {
+        $where_conditions[] = "COALESCE(sm.message_type, 'OTH') = :filter_type";
+    }
+    
+    if (!empty($where_conditions)) {
+        $sql .= " WHERE " . implode(" AND ", $where_conditions);
+    }
+    
+    $sql .= " ORDER BY sm.created_at $order_by LIMIT :limit OFFSET :offset";
     
     $stmt = $pdo->prepare($sql);
-    if ($filter_type !== 'all') {
-        $stmt->bindValue(':filter_type', $filter_type, PDO::PARAM_STR);
+    if ($filter_code !== 'all') {
+        $stmt->bindValue(':filter_type', $filter_code, PDO::PARAM_STR);
     }
     $stmt->bindValue(':limit', $per_page, PDO::PARAM_INT);
     $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // 將 message_type_name 映射回 message_type 以便後續使用
+    // 同時處理科系和年級的中文顯示
+    $grade_display_mapping = [
+        'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
+        'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
+        'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
+    ];
+    
+    foreach ($messages as &$message) {
+        $message['message_type'] = $message['message_type_name'] ?? '其他';
+        
+        // 如果年級還是代碼格式，轉換為中文
+        if (!empty($message['author_grade'])) {
+            $grade_code = $message['author_grade'];
+            // 如果 identity_options 表返回的是代碼而不是名稱，進行轉換
+            if (isset($grade_display_mapping[$grade_code])) {
+                $message['author_grade'] = $grade_display_mapping[$grade_code];
+            }
+        }
+        
+        // 確保科系顯示為中文（如果還是代碼，保持原樣，因為 COALESCE 已經處理了）
+        // 如果 author_department 為空或未知，設置為 '未知科系'
+        if (empty($message['author_department'])) {
+            $message['author_department'] = '未知科系';
+        }
+        
+        // 如果 author_grade 為空或未知，設置為 '未知年級'
+        if (empty($message['author_grade'])) {
+            $message['author_grade'] = '未知年級';
+        }
+    }
+    unset($message);
+    
     // 為每個留言檢查用戶是否已點讚（只有登入用戶才檢查）
-    // 獲取用戶email（從資料庫獲取，而不是直接使用username）
-    $user_email_for_likes = '';
+    // 獲取用戶ID（從資料庫獲取）
+    $user_id_for_likes = null;
     if ($isLoggedIn) {
-        $user_email_for_likes = $_SESSION['username']; // 預設值
         try {
-            $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
             $stmt->execute([$_SESSION['username']]);
             $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($user_result && !empty($user_result['email'])) {
-                $user_email_for_likes = $user_result['email'];
+            if ($user_result && !empty($user_result['id'])) {
+                $user_id_for_likes = (int)$user_result['id'];
             }
         } catch(PDOException $e) {
-            error_log("獲取用戶email失敗: " . $e->getMessage());
+            error_log("獲取用戶ID失敗: " . $e->getMessage());
         }
     }
     
     foreach ($messages as &$message) {
-        if ($isLoggedIn && !empty($user_email_for_likes)) {
+        if ($isLoggedIn && $user_id_for_likes !== null) {
             try {
-                $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
-                $stmt->execute([$message['id'], $user_email_for_likes]);
+                $stmt = $pdo->prepare("SELECT message_id FROM message_likes WHERE message_id = ? AND user_id = ?");
+                $stmt->execute([$message['id'], $user_id_for_likes]);
                 $message['user_liked'] = $stmt->fetch() ? true : false;
             } catch(PDOException $e) {
                 // 如果 message_likes 表不存在，設為 false
@@ -201,60 +315,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $message_id = (int)$_POST['message_id'];
     $is_liked = $_POST['is_liked'] === '1';
     
-    // 獲取用戶email（從資料庫獲取，而不是直接使用username）
-    $user_email = '';
+    // 獲取用戶ID（從資料庫獲取）
+    $user_id = null;
     if ($isLoggedIn) {
-        $user_email = $_SESSION['username']; // 預設值
         try {
-            $stmt = $pdo->prepare("SELECT email FROM user WHERE username = ?");
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
             $stmt->execute([$_SESSION['username']]);
             $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($user_result && !empty($user_result['email'])) {
-                $user_email = $user_result['email'];
+            if ($user_result && !empty($user_result['id'])) {
+                $user_id = (int)$user_result['id'];
             }
         } catch(PDOException $e) {
-            error_log("獲取用戶email失敗: " . $e->getMessage());
+            error_log("獲取用戶ID失敗: " . $e->getMessage());
         }
     }
     
     // 檢查用戶是否登入
-    if (!$isLoggedIn || empty($user_email)) {
+    if (!$isLoggedIn || $user_id === null) {
         echo json_encode(['success' => false, 'error' => '請先登入']);
         exit;
     }
     
     try {
-        // 檢查 message_likes 表是否存在，如果不存在則創建
+        // 檢查 message_likes 表是否存在，如果不存在則創建（根據實際資料庫結構）
         $stmt = $pdo->query("SHOW TABLES LIKE 'message_likes'");
         $table_exists = $stmt->rowCount() > 0;
         
         if (!$table_exists) {
-            // 自動創建表
+            // 根據實際資料庫結構創建表（使用 message_id 和 user_id 作為複合主鍵）
             $createTableSQL = "CREATE TABLE IF NOT EXISTS message_likes (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                message_id INT NOT NULL,
-                user_email VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_like (message_id, user_email),
-                FOREIGN KEY (message_id) REFERENCES senior_messages(id) ON DELETE CASCADE,
-                INDEX idx_message_id (message_id),
-                INDEX idx_user_email (user_email)
+                message_id INT(11) NOT NULL COMMENT '被按讚的訊息ID',
+                user_id INT(11) NOT NULL COMMENT '按讚的使用者ID',
+                liked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '按讚時間',
+                PRIMARY KEY (message_id, user_id),
+                KEY user_id (user_id),
+                CONSTRAINT message_likes_ibfk_1 FOREIGN KEY (message_id) REFERENCES senior_messages(id) ON DELETE CASCADE,
+                CONSTRAINT message_likes_ibfk_2 FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
             
             $pdo->exec($createTableSQL);
         }
         
         // 檢查是否已經點讚過
-        $stmt = $pdo->prepare("SELECT id FROM message_likes WHERE message_id = ? AND user_email = ?");
-        $stmt->execute([$message_id, $user_email]);
+        $stmt = $pdo->prepare("SELECT message_id FROM message_likes WHERE message_id = ? AND user_id = ?");
+        $stmt->execute([$message_id, $user_id]);
         $existing_like = $stmt->fetch();
         
         if ($is_liked) {
             // 取消愛心
             if ($existing_like) {
                 // 刪除點讚記錄
-                $stmt = $pdo->prepare("DELETE FROM message_likes WHERE message_id = ? AND user_email = ?");
-                $stmt->execute([$message_id, $user_email]);
+                $stmt = $pdo->prepare("DELETE FROM message_likes WHERE message_id = ? AND user_id = ?");
+                $stmt->execute([$message_id, $user_id]);
                 
                 // 減少點讚數（確保不會變成負數）
                 $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = GREATEST(0, like_count - 1) WHERE id = ?");
@@ -273,9 +385,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             // 添加愛心
             if (!$existing_like) {
-                // 添加點讚記錄
-                $stmt = $pdo->prepare("INSERT INTO message_likes (message_id, user_email, created_at) VALUES (?, ?, NOW())");
-                $stmt->execute([$message_id, $user_email]);
+                // 添加點讚記錄（使用 liked_at 欄位）
+                $stmt = $pdo->prepare("INSERT INTO message_likes (message_id, user_id, liked_at) VALUES (?, ?, NOW())");
+                $stmt->execute([$message_id, $user_id]);
                 
                 // 增加點讚數
                 $stmt = $pdo->prepare("UPDATE senior_messages SET like_count = like_count + 1 WHERE id = ?");

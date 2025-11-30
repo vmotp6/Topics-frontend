@@ -11,9 +11,9 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為學生角色
+// 檢查是否為學生角色（支援角色代碼 'STU' 和中文名稱 '學生'）
 $user_role = $_SESSION['role'] ?? '';
-if ($user_role !== '學生') {
+if ($user_role !== '學生' && $user_role !== 'STU') {
     header("Location: index.php");
     exit;
 }
@@ -57,25 +57,80 @@ try {
         }
     }
     
-    // 從 student 表獲取所有欄位
+    // 從 student 表獲取所有欄位（包括代碼轉換為名稱）
+    // 使用 LEFT JOIN 以確保即使 student 表中沒有記錄也能獲取 user 資料
     $stmt = $pdo->prepare("
         SELECT s.department, s.phone, s.student_id, s.grade, s.class_name, s.email 
-        FROM student s
-        JOIN user u ON s.user_id = u.id
+        FROM user u
+        LEFT JOIN student s ON u.id = s.user_id
         WHERE u.username = ?
     ");
     $stmt->execute([$_SESSION['username']]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($result) {
-        $current_department = $result['department'] ?? '';
-        $current_phone = $result['phone'] ?? '';
-        $current_student_id = $result['student_id'] ?? '';
-        $current_grade = $result['grade'] ?? '';
-        $current_class_name = $result['class_name'] ?? '';
+    
+    // 調試：記錄查詢結果
+    error_log("Student profile query result: " . print_r($result, true));
+    error_log("Current username: " . ($_SESSION['username'] ?? 'not set'));
+    
+    // 即使 result 為 false 或空，也要處理（可能 student 表沒有記錄）
+    if ($result !== false) {
+        // 獲取學生資料（可能為 NULL）
+        $current_phone = isset($result['phone']) && $result['phone'] !== null ? $result['phone'] : '';
+        $current_student_id = isset($result['student_id']) && $result['student_id'] !== null ? $result['student_id'] : '';
+        $current_class_name = isset($result['class_name']) && $result['class_name'] !== null ? $result['class_name'] : '';
+        
         // 如果student表有email，優先使用；否則使用之前從user表獲取的
-        if (!empty($result['email'])) {
+        if (!empty($result['email']) && $result['email'] !== null) {
             $current_email = $result['email'];
         }
+        
+        // 將科系代碼轉換為名稱
+        $dept_code = isset($result['department']) && $result['department'] !== null ? $result['department'] : '';
+        if (!empty($dept_code)) {
+            $stmt_dept = $pdo->prepare("SELECT name FROM departments WHERE code = ?");
+            $stmt_dept->execute([$dept_code]);
+            $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+            if ($dept_result && !empty($dept_result['name'])) {
+                $current_department = $dept_result['name'];
+            } else {
+                // 如果找不到名稱，使用代碼（但這不應該發生）
+                $current_department = $dept_code;
+            }
+        } else {
+            $current_department = '';
+        }
+        
+        // 將年級代碼轉換為名稱
+        $grade_code = isset($result['grade']) && $result['grade'] !== null ? $result['grade'] : '';
+        if (!empty($grade_code)) {
+            $stmt_grade = $pdo->prepare("SELECT name FROM identity_options WHERE code = ?");
+            $stmt_grade->execute([$grade_code]);
+            $grade_result = $stmt_grade->fetch(PDO::FETCH_ASSOC);
+            if ($grade_result && !empty($grade_result['name'])) {
+                $grade_name = $grade_result['name'];
+                // 將年級代碼/名稱轉換為表單顯示格式
+                $grade_display_mapping = [
+                    'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
+                    'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
+                    'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
+                ];
+                // 先檢查代碼映射，如果沒有則使用資料庫中的名稱
+                $current_grade = $grade_display_mapping[$grade_code] ?? $grade_name;
+            } else {
+                // 如果找不到，嘗試直接使用代碼映射
+                $grade_display_mapping = [
+                    'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
+                    'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
+                    'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
+                ];
+                $current_grade = $grade_display_mapping[$grade_code] ?? '';
+            }
+        } else {
+            $current_grade = '';
+        }
+        
+        // 調試：記錄處理後的變數值
+        error_log("Loaded values - name: {$user_name}, dept: {$current_department}, grade: {$current_grade}, phone: {$current_phone}, student_id: {$current_student_id}, class: {$current_class_name}");
     }
 } catch (PDOException $e) {
     error_log("無法從資料庫獲取用戶資料: " . $e->getMessage());
@@ -265,6 +320,22 @@ try {
     <div class="profile-container">
         <h1 class="profile-title">個人資料設定</h1>
         
+        <?php
+        // 調試：顯示載入的資料（僅在開發時使用，生產環境應移除）
+        if (isset($_GET['debug']) && $_GET['debug'] === '1') {
+            echo "<div style='background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px;'>";
+            echo "<strong>調試信息：</strong><br>";
+            echo "姓名: " . htmlspecialchars($user_name) . "<br>";
+            echo "科系: " . htmlspecialchars($current_department) . "<br>";
+            echo "年級: " . htmlspecialchars($current_grade) . "<br>";
+            echo "電話: " . htmlspecialchars($current_phone) . "<br>";
+            echo "學號: " . htmlspecialchars($current_student_id) . "<br>";
+            echo "班級: " . htmlspecialchars($current_class_name) . "<br>";
+            echo "Username: " . htmlspecialchars($_SESSION['username'] ?? 'not set') . "<br>";
+            echo "</div>";
+        }
+        ?>
+        
         <!-- 頭像上傳區域 -->
         <div class="avatar-section">
             <img id="avatarPreview" class="avatar-preview" 
@@ -316,52 +387,71 @@ try {
             <!-- 基本資料 -->
             <div class="form-group">
                 <label for="name">姓名 <span style="color: #f5222d;">*</span></label>
-                <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name); ?>" required>
+                <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name ?? ''); ?>" required>
             </div>
             
             <!-- 學生專用欄位 -->
             <div class="form-group">
                 <label for="student_id">學號</label>
-                <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" value="<?php echo htmlspecialchars($current_student_id); ?>">
+                <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" value="<?php echo htmlspecialchars($current_student_id ?? ''); ?>">
             </div>
             
             <div class="form-group">
                 <label for="department">科系 <span style="color: #f5222d;">*</span></label>
                 <select id="department" name="department" required>
-                    <option value="" disabled <?php echo empty($current_department) ? 'selected' : ''; ?>>請選擇科系</option>
-                    <option value="資訊管理科" <?php echo $current_department === '資訊管理科' ? 'selected' : ''; ?>>資訊管理科</option>
-                    <option value="企業管理科" <?php echo $current_department === '企業管理科' ? 'selected' : ''; ?>>企業管理科</option>
-                    <option value="護理科" <?php echo $current_department === '護理科' ? 'selected' : ''; ?>>護理科</option>
-                    <option value="幼保科" <?php echo $current_department === '幼保科' ? 'selected' : ''; ?>>幼保科</option>
-                    <option value="應用外語科" <?php echo $current_department === '應用外語科' ? 'selected' : ''; ?>>應用外語科</option>
-                    <option value="視光科" <?php echo $current_department === '視光科' ? 'selected' : ''; ?>>視光科</option>
-                    <option value="動畫科" <?php echo $current_department === '動畫科' ? 'selected' : ''; ?>>動畫科</option>
+                    <option value="" <?php echo empty($current_department ?? '') ? 'selected' : ''; ?>>請選擇科系</option>
+                    <?php
+                    // 從資料庫動態載入科系選項
+                    try {
+                        $stmt_depts = $pdo->prepare("SELECT code, name FROM departments ORDER BY name");
+                        $stmt_depts->execute();
+                        $departments = $stmt_depts->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($departments as $dept) {
+                            $dept_name = htmlspecialchars($dept['name']);
+                            $is_selected = ($current_department === $dept_name) ? 'selected' : '';
+                            echo "<option value=\"{$dept_name}\" {$is_selected}>{$dept_name}</option>";
+                        }
+                    } catch (PDOException $e) {
+                        error_log("載入科系選項錯誤: " . $e->getMessage());
+                        // 如果載入失敗，使用預設選項
+                        echo '<option value="資訊管理科" ' . ($current_department === '資訊管理科' ? 'selected' : '') . '>資訊管理科</option>';
+                        echo '<option value="企業管理科" ' . ($current_department === '企業管理科' ? 'selected' : '') . '>企業管理科</option>';
+                        echo '<option value="護理科" ' . ($current_department === '護理科' ? 'selected' : '') . '>護理科</option>';
+                    }
+                    ?>
                 </select>
             </div>
             
             <div class="form-group">
                 <label for="grade">年級</label>
                 <select id="grade" name="grade">
-                    <option value="" <?php echo empty($current_grade) ? 'selected' : ''; ?>>請選擇年級</option>
-                    <option value="一年級" <?php echo $current_grade === '一年級' ? 'selected' : ''; ?>>一年級</option>
-                    <option value="二年級" <?php echo $current_grade === '二年級' ? 'selected' : ''; ?>>二年級</option>
-                    <option value="三年級" <?php echo $current_grade === '三年級' ? 'selected' : ''; ?>>三年級</option>
-                    <option value="四年級" <?php echo $current_grade === '四年級' ? 'selected' : ''; ?>>四年級</option>
-                    <option value="五年級" <?php echo $current_grade === '五年級' ? 'selected' : ''; ?>>五年級</option>
+                    <option value="" <?php echo empty($current_grade ?? '') ? 'selected' : ''; ?>>請選擇年級</option>
+                    <optgroup label="五專">
+                        <option value="專一" <?php echo $current_grade === '專一' ? 'selected' : ''; ?>>專一</option>
+                        <option value="專二" <?php echo $current_grade === '專二' ? 'selected' : ''; ?>>專二</option>
+                        <option value="專三" <?php echo $current_grade === '專三' ? 'selected' : ''; ?>>專三</option>
+                        <option value="專四" <?php echo $current_grade === '專四' ? 'selected' : ''; ?>>專四</option>
+                        <option value="專五" <?php echo $current_grade === '專五' ? 'selected' : ''; ?>>專五</option>
+                    </optgroup>
+                    <optgroup label="國中">
+                        <option value="國一" <?php echo $current_grade === '國一' ? 'selected' : ''; ?>>國一</option>
+                        <option value="國二" <?php echo $current_grade === '國二' ? 'selected' : ''; ?>>國二</option>
+                        <option value="國三" <?php echo $current_grade === '國三' ? 'selected' : ''; ?>>國三</option>
+                    </optgroup>
                 </select>
             </div>
             
             <div class="form-group">
                 <label for="class_name">班級</label>
-                <input type="text" id="class_name" name="class_name" placeholder="例如：資管一甲" value="<?php echo htmlspecialchars($current_class_name); ?>">
+                <input type="text" id="class_name" name="class_name" placeholder="例如：資管一甲" value="<?php echo htmlspecialchars($current_class_name ?? ''); ?>">
             </div>
             
             <div class="form-group">
                 <label for="phone">電話 <span style="color: #f5222d;">*</span></label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>" required>
             </div>
             
-            <button type="submit" class="submit-btn">保存資料</button>
+            <button type="submit" class="submit-btn">儲存資料</button>
         </form>
         
         <div id="message"></div>
@@ -406,38 +496,8 @@ try {
             }
         }
 
-        // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
-        window.addEventListener('load', function() {
-            // 如果 PHP 已經從資料庫載入了資料，直接使用（不需要 API 調用）
-            const currentName = '<?php echo htmlspecialchars($user_name ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            const currentDept = '<?php echo htmlspecialchars($current_department ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            const currentPhone = '<?php echo htmlspecialchars($current_phone ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            
-            if (currentName && document.getElementById('name')) {
-                document.getElementById('name').value = currentName;
-            }
-            if (currentDept && document.getElementById('department')) {
-                document.getElementById('department').value = currentDept;
-            }
-            if (currentPhone && document.getElementById('phone')) {
-                document.getElementById('phone').value = currentPhone;
-            }
-            
-            // 學生專用欄位
-            const currentStudentId = '<?php echo htmlspecialchars($current_student_id ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            const currentGrade = '<?php echo htmlspecialchars($current_grade ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            const currentClassName = '<?php echo htmlspecialchars($current_class_name ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-            
-            if (currentStudentId && document.getElementById('student_id')) {
-                document.getElementById('student_id').value = currentStudentId;
-            }
-            if (currentGrade && document.getElementById('grade')) {
-                document.getElementById('grade').value = currentGrade;
-            }
-            if (currentClassName && document.getElementById('class_name')) {
-                document.getElementById('class_name').value = currentClassName;
-            }
-        });
+        // PHP 已經在 HTML 的 value 屬性中設置了所有資料，不需要 JavaScript 再次設置
+        // 這裡保留空的事件監聽器以備將來使用
 
         // 表單提交（學生資料）
         document.getElementById('profileForm').addEventListener('submit', function(e) {
@@ -495,7 +555,7 @@ try {
                     const messageDiv = document.getElementById('message');
                     if (response.ok && data.success) {
                         messageDiv.className = 'message success';
-                        messageDiv.textContent = data.message || '個人資料保存成功';
+                        messageDiv.textContent = data.message || '個人資料儲存成功';
                         
                          // 如果頭像已更新，更新預覽
                          if (data.avatar_updated && data.avatar_path) {
@@ -535,7 +595,7 @@ try {
                 clearTimeout(timeoutId);
                 const messageDiv = document.getElementById('message');
                 messageDiv.className = 'message error';
-                messageDiv.textContent = '保存失敗，請稍後再試。';
+                messageDiv.textContent = '儲存存失敗，請稍後再試。';
             });
         });
 

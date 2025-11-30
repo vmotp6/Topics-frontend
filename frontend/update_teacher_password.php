@@ -11,8 +11,9 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
     exit;
 }
 
-// 檢查是否為老師角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查是否為老師角色（支援角色代碼 'TEA' 和中文名稱 '老師'）
+$user_role = $_SESSION['role'] ?? '';
+if ($user_role !== '老師' && $user_role !== 'TEA') {
     echo json_encode(['success' => false, 'message' => '只有老師可以修改密碼']);
     exit;
 }

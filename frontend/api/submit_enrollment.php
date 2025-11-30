@@ -5,6 +5,13 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0); // 不顯示錯誤，記錄到日誌
 ini_set('log_errors', 1);
 
+// 設定錯誤日誌文件位置（如果未設定）
+if (ini_get('error_log') == '') {
+    // 嘗試設定錯誤日誌到當前目錄
+    $log_file = __DIR__ . '/enrollment_errors.log';
+    ini_set('error_log', $log_file);
+}
+
 // 設定回應為 JSON（必須在任何輸出之前）
 header('Content-Type: application/json; charset=utf-8');
 
@@ -44,16 +51,40 @@ function handleError($errno, $errstr, $errfile, $errline) {
 
 // 自定義異常處理函數
 function handleException($exception) {
-    error_log("Uncaught Exception: " . $exception->getMessage());
-    error_log("異常堆疊: " . $exception->getTraceAsString());
+    $errorMessage = $exception->getMessage();
+    $errorTrace = $exception->getTraceAsString();
+    
+    error_log("=== 未捕獲的異常 ===");
+    error_log("異常訊息: " . $errorMessage);
+    error_log("異常堆疊: " . $errorTrace);
+    error_log("異常類型: " . get_class($exception));
+    error_log("檔案: " . $exception->getFile() . " 行號: " . $exception->getLine());
+    
     if (ob_get_level() > 0) {
         @ob_clean(); // 使用 @ 抑制可能的警告
     }
+    
     http_response_code(500);
-    echo json_encode([
+    
+    // 在開發環境中提供更詳細的錯誤信息
+    $is_dev = (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
+    $is_debug = isset($_GET['debug']) || isset($_POST['debug']);
+    
+    $response = [
         'success' => false,
         'message' => '系統錯誤，請稍後再試'
-    ]);
+    ];
+    
+    if ($is_dev || $is_debug) {
+        $response['debug'] = [
+            'error_message' => $errorMessage,
+            'error_type' => get_class($exception),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine()
+        ];
+    }
+    
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
     if (ob_get_level() > 0) {
         @ob_end_flush();
     }
@@ -65,14 +96,24 @@ set_exception_handler('handleException');
 
 try {
     // 載入 session 配置
-    require_once '../session_config.php';
+    $session_config_path = __DIR__ . '/../session_config.php';
+    if (!file_exists($session_config_path)) {
+        throw new Exception("找不到 session_config.php 檔案: $session_config_path");
+    }
+    require_once $session_config_path;
     
-    // 載入 Gmail 郵件配置
-    require_once '../../backend/config/email_config.php';
+    // 載入 Gmail 郵件配置（可選，如果不存在不影響）
+    $email_config_path = __DIR__ . '/../../backend/config/email_config.php';
+    if (file_exists($email_config_path)) {
+        require_once $email_config_path;
+    } else {
+        error_log("警告: 找不到 email_config.php 檔案: $email_config_path，郵件功能可能無法使用");
+    }
     
     // 清除緩衝區中的任何意外輸出（使用 @ 抑制警告）
     @ob_clean();
 } catch (Exception $e) {
+    error_log("載入配置檔案時發生錯誤: " . $e->getMessage());
     handleException($e);
 }
 
@@ -226,8 +267,12 @@ $db_username = 'root';
 $db_password = '';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $dsn = "mysql:host=$host;dbname=$dbname;charset=utf8mb4";
+    $pdo = new PDO($dsn, $db_username, $db_password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false
+    ]);
     
     // 檢查並創建 enrollment_intention 表（如果不存在）
     $stmt = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -236,30 +281,88 @@ try {
         $createTableSQL = "CREATE TABLE enrollment_intention (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL COMMENT '姓名',
-            identity ENUM('學生', '家長') NOT NULL COMMENT '身分別',
-            gender ENUM('男', '女') DEFAULT NULL COMMENT '性別',
+            identity TINYINT(1) NOT NULL COMMENT '1=學生 , 2=家長',
+            gender TINYINT(1) DEFAULT NULL COMMENT '1=男 , 2=女',
             phone1 VARCHAR(20) NOT NULL COMMENT '聯絡電話1',
             phone2 VARCHAR(20) DEFAULT NULL COMMENT '聯絡電話2',
             email VARCHAR(100) DEFAULT NULL COMMENT '電子郵件',
-            intention1 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願一',
-            intention2 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願二',
-            intention3 VARCHAR(50) DEFAULT NULL COMMENT '就讀意願三',
-            system1 VARCHAR(20) DEFAULT NULL COMMENT '學制一',
-            system2 VARCHAR(20) DEFAULT NULL COMMENT '學制二',
-            system3 VARCHAR(20) DEFAULT NULL COMMENT '學制三',
-            junior_high VARCHAR(200) DEFAULT NULL COMMENT '就讀或畢業國中',
-            current_grade VARCHAR(20) DEFAULT NULL COMMENT '目前年級',
+            junior_high VARCHAR(20) DEFAULT NULL COMMENT '就讀或畢業國中，關聯school_data.school_code',
+            current_grade VARCHAR(20) DEFAULT NULL COMMENT '目前年級，關聯identity_options.code',
             line_id VARCHAR(100) DEFAULT NULL COMMENT 'LineID',
             facebook VARCHAR(200) DEFAULT NULL COMMENT 'Facebook',
-            recommended_teacher VARCHAR(100) DEFAULT NULL COMMENT '推薦老師',
+            recommended_teacher INT(11) DEFAULT NULL COMMENT '推薦老師關聯user.id',
             remarks TEXT DEFAULT NULL COMMENT '備註',
-            captcha VARCHAR(10) DEFAULT NULL COMMENT '驗證碼',
+            assigned_department VARCHAR(50) DEFAULT NULL,
+            assigned_teacher_id INT(11) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '建立時間',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新時間'
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新時間',
+            INDEX idx_recommended_teacher (recommended_teacher),
+            INDEX idx_assigned_teacher_id (assigned_teacher_id),
+            INDEX idx_junior_high (junior_high),
+            INDEX idx_current_grade (current_grade)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='就讀意願登錄表'";
         
         $pdo->exec($createTableSQL);
         error_log("已自動創建 enrollment_intention 資料表");
+    } else {
+        // 表已存在，不需要添加额外字段
+        // junior_high 和 current_grade 字段直接存储关联代码
+        error_log("enrollment_intention 表已存在，使用现有结构");
+    }
+    
+    // 檢查並創建 enrollment_choices 表（如果不存在）
+    $stmt = $pdo->query("SHOW TABLES LIKE 'enrollment_choices'");
+    if ($stmt->rowCount() == 0) {
+        // 表不存在，創建表（先不添加外鍵約束，避免依賴問題）
+        try {
+            $createChoicesTableSQL = "CREATE TABLE enrollment_choices (
+                enrollment_id INT(11) NOT NULL COMMENT '就讀意願記錄ID',
+                choice_order TINYINT(1) NOT NULL COMMENT '志願123',
+                department_code VARCHAR(50) DEFAULT NULL COMMENT '科系代碼關聯departments.code',
+                system_code VARCHAR(20) DEFAULT NULL COMMENT '學制代碼關聯education_systems.code',
+                PRIMARY KEY (enrollment_id, choice_order),
+                INDEX idx_enrollment_id (enrollment_id),
+                INDEX idx_department_code (department_code),
+                INDEX idx_system_code (system_code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='就讀意願選項列表'";
+            
+            $pdo->exec($createChoicesTableSQL);
+            error_log("已自動創建 enrollment_choices 資料表");
+            
+            // 嘗試添加外鍵約束（如果相關表存在）
+            try {
+                // 檢查 enrollment_intention 表是否存在
+                $check_table = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+                if ($check_table->rowCount() > 0) {
+                    $pdo->exec("ALTER TABLE enrollment_choices ADD CONSTRAINT fk_enrollment_id FOREIGN KEY (enrollment_id) REFERENCES enrollment_intention(id) ON DELETE CASCADE");
+                }
+            } catch (PDOException $e) {
+                error_log("添加 enrollment_id 外鍵約束失敗（可能已存在）: " . $e->getMessage());
+            }
+            
+            try {
+                // 檢查 departments 表是否存在
+                $check_table = $pdo->query("SHOW TABLES LIKE 'departments'");
+                if ($check_table->rowCount() > 0) {
+                    $pdo->exec("ALTER TABLE enrollment_choices ADD CONSTRAINT fk_department_code FOREIGN KEY (department_code) REFERENCES departments(code) ON DELETE SET NULL");
+                }
+            } catch (PDOException $e) {
+                error_log("添加 department_code 外鍵約束失敗（可能已存在）: " . $e->getMessage());
+            }
+            
+            try {
+                // 檢查 education_systems 表是否存在
+                $check_table = $pdo->query("SHOW TABLES LIKE 'education_systems'");
+                if ($check_table->rowCount() > 0) {
+                    $pdo->exec("ALTER TABLE enrollment_choices ADD CONSTRAINT fk_system_code FOREIGN KEY (system_code) REFERENCES education_systems(code) ON DELETE SET NULL");
+                }
+            } catch (PDOException $e) {
+                error_log("添加 system_code 外鍵約束失敗（可能已存在）: " . $e->getMessage());
+            }
+        } catch (PDOException $e) {
+            error_log("創建 enrollment_choices 表時發生錯誤: " . $e->getMessage());
+            // 不中斷執行，繼續處理
+        }
     }
 } catch (PDOException $e) {
     error_log("資料庫連接錯誤: " . $e->getMessage());
@@ -396,20 +499,27 @@ if (empty($junior_high)) {
     exit;
 }
 
-// 驗證是否從系統選項中選擇學校（格式應為：學校名稱 (縣市區)）
-// 如果用戶只是打字而沒有選擇，格式不會包含括號和縣市區信息
-if (!preg_match('/^.+ \(.+\)$/', $junior_high)) {
-    if (ob_get_level() > 0) {
-        @ob_clean();
+// 驗證是否從系統選項中選擇學校
+// junior_high 現在直接存儲 school_code，需要驗證 school_code 是否存在於資料庫中
+if (!empty($junior_high)) {
+    $verify_school_stmt = $pdo->prepare("SELECT school_code FROM school_data WHERE school_code = ? AND is_active = 1 LIMIT 1");
+    $verify_school_stmt->execute([$junior_high]);
+    $verify_school_result = $verify_school_stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$verify_school_result) {
+        // school_code 不存在於資料庫中，可能是用戶自行輸入的無效值
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
+        echo json_encode([
+            'success' => false,
+            'message' => '請從系統提供的選項中選擇學校，不能自行輸入'
+        ]);
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
     }
-    echo json_encode([
-        'success' => false,
-        'message' => '請從系統提供的選項中選擇學校，不能自行輸入'
-    ]);
-    if (ob_get_level() > 0) {
-        @ob_end_flush();
-    }
-    exit;
 }
 
 // 驗證碼檢查 - 必須與session中的驗證碼匹配
@@ -569,56 +679,255 @@ error_log("=== 驗證碼驗證成功 ===");
 unset($_SESSION['captcha_code']);
 
 try {
-    // 插入資料到資料庫
+    error_log("=== 開始處理表單數據 ===");
+    error_log("接收到的POST數據: " . print_r($_POST, true));
+    
+    // 轉換 identity：'學生'=1, '家長'=2
+    $identity_num = ($identity === '學生') ? 1 : (($identity === '家長') ? 2 : null);
+    if ($identity_num === null) {
+        error_log("身分別格式錯誤: identity=" . ($identity ?? 'NULL'));
+        throw new Exception("身分別格式錯誤: " . ($identity ?? 'NULL'));
+    }
+    
+    // 轉換 gender：'男'=1, '女'=2
+    $gender_num = null;
+    if (!empty($gender)) {
+        $gender_num = ($gender === '男') ? 1 : (($gender === '女') ? 2 : null);
+    }
+    
+    // 轉換推薦老師名字為 user.id
+    $recommended_teacher_id = null;
+    if (!empty($recommended_teacher)) {
+        // 先檢查是否已經是數字 ID
+        if (is_numeric($recommended_teacher)) {
+            // 驗證 ID 是否存在於 user 表中，且角色為老師
+            $verify_teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
+                                                  JOIN teacher t ON u.id = t.user_id 
+                                                  WHERE u.id = ? AND u.role = '老師' LIMIT 1");
+            $verify_teacher_stmt->execute([$recommended_teacher]);
+            $verify_teacher_result = $verify_teacher_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($verify_teacher_result) {
+                $recommended_teacher_id = (int)$verify_teacher_result['id'];
+            }
+        } else {
+            // 從 user 表查詢，通過 name 找到對應的 id（因為 teacher 表沒有 name 欄位）
+            $teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
+                                          JOIN teacher t ON u.id = t.user_id 
+                                          WHERE u.name = ? AND u.role = '老師' LIMIT 1");
+            $teacher_stmt->execute([$recommended_teacher]);
+            $teacher_result = $teacher_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($teacher_result) {
+                $recommended_teacher_id = (int)$teacher_result['id'];
+            }
+        }
+    }
+    
+    // junior_high 字段直接存储 school_code（用于外键关联）
+    // 前端已经传递了 school_code，直接验证并使用
+    $junior_high_code = null;
+    
+    if (!empty($junior_high)) {
+        // 验证 school_code 是否存在于数据库中
+        $verify_stmt = $pdo->prepare("SELECT school_code FROM school_data WHERE school_code = ? AND is_active = 1 LIMIT 1");
+        $verify_stmt->execute([$junior_high]);
+        $verify_result = $verify_stmt->fetch(PDO::FETCH_ASSOC);
+        if ($verify_result && !empty($verify_result['school_code'])) {
+            $junior_high_code = $verify_result['school_code'];
+        } else {
+            // 如果验证失败，可能是旧格式（学校名称），尝试转换
+            if (preg_match('/^(.+?)\s*\(/', $junior_high, $matches)) {
+                $school_name = trim($matches[1]);
+                $school_stmt = $pdo->prepare("SELECT school_code FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1");
+                $school_stmt->execute([$school_name]);
+                $school_result = $school_stmt->fetch(PDO::FETCH_ASSOC);
+                if ($school_result && !empty($school_result['school_code'])) {
+                    $junior_high_code = $school_result['school_code'];
+                }
+            }
+        }
+    }
+    
+    // 如果无法获取有效的 school_code，抛出错误
+    if (empty($junior_high_code)) {
+        throw new Exception("無法找到有效的學校代碼，請從系統選項中選擇學校");
+    }
+    
+    // current_grade 字段直接存储 identity_options.code（如 J1, J2, J3）
+    // 前端已经传递了 code，直接验证并使用
+    $current_grade_code = null;
+    
+    if (!empty($current_grade)) {
+        // 先檢查是否已經是 code（J1, J2, J3）
+        if (preg_match('/^J[1-3]$/', $current_grade)) {
+            // 驗證 code 是否存在於 identity_options 表中
+            $verify_grade_stmt = $pdo->prepare("SELECT code FROM identity_options WHERE code = ? LIMIT 1");
+            $verify_grade_stmt->execute([$current_grade]);
+            $verify_grade_result = $verify_grade_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($verify_grade_result) {
+                $current_grade_code = $current_grade;
+            }
+        } else {
+            // 如果是顯示名稱，查詢對應的 code
+            $grade_stmt = $pdo->prepare("SELECT code FROM identity_options WHERE name = ? LIMIT 1");
+            $grade_stmt->execute([$current_grade]);
+            $grade_result = $grade_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($grade_result) {
+                $current_grade_code = $grade_result['code'];
+            }
+        }
+    }
+    
+    // 如果 current_grade 有值但无法获取有效的 code，设为 NULL（允许为空）
+    // 但不抛出错误，因为这是可选字段
+    
+    // 轉換科系名稱為 departments.code
+    $getDepartmentCode = function($department_name) use ($pdo) {
+        if (empty($department_name) || $department_name === '無特定') {
+            return null;
+        }
+        $stmt = $pdo->prepare("SELECT code FROM departments WHERE name = ? LIMIT 1");
+        $stmt->execute([$department_name]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? $result['code'] : null;
+    };
+    
+    // 轉換學制名稱為 education_systems.code
+    $getSystemCode = function($system_name) use ($pdo) {
+        if (empty($system_name)) {
+            return null;
+        }
+        $stmt = $pdo->prepare("SELECT code FROM education_systems WHERE name = ? LIMIT 1");
+        $stmt->execute([$system_name]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? $result['code'] : null;
+    };
+    
+    // 插入資料到 enrollment_intention 表
+    // junior_high 直接存储 school_code，current_grade 直接存储 code
     $sql = "INSERT INTO enrollment_intention (
         name, identity, gender, phone1, phone2, email,
-        intention1, intention2, intention3,
-        system1, system2, system3,
         junior_high, current_grade,
         line_id, facebook, recommended_teacher, remarks,
-        captcha, created_at
+        created_at
     ) VALUES (
         :name, :identity, :gender, :phone1, :phone2, :email,
-        :intention1, :intention2, :intention3,
-        :system1, :system2, :system3,
         :junior_high, :current_grade,
         :line_id, :facebook, :recommended_teacher, :remarks,
-        :captcha, NOW()
+        NOW()
     )";
 
+    // 記錄 SQL 語句和參數（用於調試）
+    error_log("=== 準備執行 SQL ===");
+    error_log("SQL語句: " . $sql);
+    error_log("基本參數: name=$name, identity=$identity_num, gender=" . ($gender_num ?? 'NULL') . ", phone1=$phone1, email=$email");
+    error_log("關聯字段: junior_high(school_code)=" . ($junior_high_code ?? 'NULL') . ", current_grade(code)=" . ($current_grade_code ?? 'NULL') . ", recommended_teacher_id=" . ($recommended_teacher_id ?? 'NULL'));
+    
     $stmt = $pdo->prepare($sql);
     if ($stmt === false) {
         $errorInfo = $pdo->errorInfo();
         error_log("SQL準備失敗: " . print_r($errorInfo, true));
+        error_log("SQL語句: " . $sql);
+        
+        // 檢查資料表結構
+        try {
+            $cols = $pdo->query("SHOW COLUMNS FROM enrollment_intention")->fetchAll(PDO::FETCH_COLUMN);
+            error_log("enrollment_intention 表現有欄位: " . implode(', ', $cols));
+        } catch (Exception $e) {
+            error_log("無法檢查表結構: " . $e->getMessage());
+        }
+        
         throw new Exception("SQL準備失敗: " . ($errorInfo[2] ?? '未知錯誤'));
     }
     
-    $stmt->bindParam(':name', $name);
-    $stmt->bindParam(':identity', $identity);
-    $stmt->bindParam(':gender', $gender);
-    $stmt->bindParam(':phone1', $phone1);
-    $stmt->bindParam(':phone2', $phone2);
-    $stmt->bindParam(':email', $email);
-    $stmt->bindParam(':intention1', $intention1);
-    $stmt->bindParam(':intention2', $intention2);
-    $stmt->bindParam(':intention3', $intention3);
-    $stmt->bindParam(':system1', $system1);
-    $stmt->bindParam(':system2', $system2);
-    $stmt->bindParam(':system3', $system3);
-    $stmt->bindParam(':junior_high', $junior_high);
-    $stmt->bindParam(':current_grade', $current_grade);
-    $stmt->bindParam(':line_id', $line_id);
-    $stmt->bindParam(':facebook', $facebook);
-    $stmt->bindParam(':recommended_teacher', $recommended_teacher);
-    $stmt->bindParam(':remarks', $remarks);
-    $stmt->bindParam(':captcha', $captcha);
+    // 使用 bindValue 而不是 bindParam，特別是對於可能為 NULL 的值
+    $stmt->bindValue(':name', $name);
+    $stmt->bindValue(':identity', $identity_num, PDO::PARAM_INT);
+    
+    // gender 可能為 NULL
+    if ($gender_num !== null) {
+        $stmt->bindValue(':gender', $gender_num, PDO::PARAM_INT);
+    } else {
+        $stmt->bindValue(':gender', null, PDO::PARAM_NULL);
+    }
+    
+    $stmt->bindValue(':phone1', $phone1);
+    $stmt->bindValue(':phone2', $phone2 ? $phone2 : null, $phone2 ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    $stmt->bindValue(':email', $email);
+    // junior_high 直接存储 school_code
+    $stmt->bindValue(':junior_high', $junior_high_code ? $junior_high_code : null, $junior_high_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    // current_grade 直接存储 code
+    $stmt->bindValue(':current_grade', $current_grade_code ? $current_grade_code : null, $current_grade_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    $stmt->bindValue(':line_id', $line_id ? $line_id : null, $line_id ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    $stmt->bindValue(':facebook', $facebook ? $facebook : null, $facebook ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    
+    // recommended_teacher 可能為 NULL
+    if ($recommended_teacher_id !== null) {
+        $stmt->bindValue(':recommended_teacher', $recommended_teacher_id, PDO::PARAM_INT);
+    } else {
+        $stmt->bindValue(':recommended_teacher', null, PDO::PARAM_NULL);
+    }
+    
+    $stmt->bindValue(':remarks', $remarks ? $remarks : null, $remarks ? PDO::PARAM_STR : PDO::PARAM_NULL);
 
-    if ($stmt->execute()) {
-        // 準備郵件資料
+    try {
+        $executeResult = $stmt->execute();
+    } catch (PDOException $e) {
+        error_log("SQL執行異常: " . $e->getMessage());
+        error_log("SQL語句: " . $sql);
+        // 從 PDOStatement 獲取錯誤信息（如果可用）
+        $errorInfo = $stmt->errorInfo();
+        if ($errorInfo && $errorInfo[0] !== '00000') {
+            error_log("錯誤信息: " . print_r($errorInfo, true));
+        } else {
+            error_log("錯誤信息: " . $e->getMessage());
+        }
+        error_log("錯誤代碼: " . $e->getCode());
+        throw $e; // 重新拋出異常，讓外層的catch處理
+    }
+    
+    if ($executeResult) {
+        // 獲取剛插入的 enrollment_intention id
+        $enrollment_id = $pdo->lastInsertId();
+        
+        if (!$enrollment_id) {
+            error_log("警告: 插入成功但無法獲取 lastInsertId");
+            throw new Exception("無法獲取插入記錄的ID");
+        }
+        
+        // 插入志願資料到 enrollment_choices 表
+        $choices = [
+            ['order' => 1, 'department' => $intention1, 'system' => $system1],
+            ['order' => 2, 'department' => $intention2, 'system' => $system2],
+            ['order' => 3, 'department' => $intention3, 'system' => $system3]
+        ];
+        
+        $choice_sql = "INSERT INTO enrollment_choices (enrollment_id, choice_order, department_code, system_code) VALUES (:enrollment_id, :choice_order, :department_code, :system_code)";
+        $choice_stmt = $pdo->prepare($choice_sql);
+        
+        foreach ($choices as $choice) {
+            if (!empty($choice['department']) && $choice['department'] !== '無特定') {
+                $dept_code = $getDepartmentCode($choice['department']);
+                $sys_code = $getSystemCode($choice['system']);
+                
+                if ($dept_code) {
+                    try {
+                        $choice_stmt->bindValue(':enrollment_id', $enrollment_id, PDO::PARAM_INT);
+                        $choice_stmt->bindValue(':choice_order', $choice['order'], PDO::PARAM_INT);
+                        $choice_stmt->bindValue(':department_code', $dept_code, PDO::PARAM_STR);
+                        $choice_stmt->bindValue(':system_code', $sys_code ? $sys_code : null, $sys_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
+                        $choice_stmt->execute();
+                    } catch (PDOException $e) {
+                        // 記錄錯誤但不中斷流程
+                        error_log("插入志願資料失敗: " . $e->getMessage() . " - 志願: " . $choice['order']);
+                    }
+                }
+            }
+        }
+        // 準備郵件資料（轉換回文字格式用於顯示）
         $emailData = [
             'name' => $name,
-            'identity' => $identity,
-            'gender' => $gender,
+            'identity' => $identity, // 保持原始文字格式
+            'gender' => $gender, // 保持原始文字格式
             'phone1' => $phone1,
             'phone2' => $phone2,
             'email' => $email,
@@ -632,7 +941,7 @@ try {
             'current_grade' => $current_grade,
             'line_id' => $line_id,
             'facebook' => $facebook,
-            'recommended_teacher' => $recommended_teacher,
+            'recommended_teacher' => $recommended_teacher, // 保持原始名字格式
             'remarks' => $remarks
         ];
         
@@ -658,21 +967,60 @@ try {
             'message' => $message
         ]);
     } else {
+        // 執行失敗，獲取錯誤信息
+        $errorInfo = $stmt->errorInfo();
+        error_log("SQL執行失敗: " . print_r($errorInfo, true));
+        error_log("SQL語句: " . $sql);
+        error_log("綁定參數: name=$name, identity=$identity_num, gender=" . ($gender_num ?? 'NULL'));
+        
         if (ob_get_level() > 0) {
             @ob_clean();
         }
-        echo json_encode([
+        
+        $errorMsg = '提交失敗，請稍後再試';
+        $is_dev = (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
+        $response = [
             'success' => false,
-            'message' => '提交失敗，請稍後再試'
-        ]);
+            'message' => $errorMsg
+        ];
+        
+        if ($is_dev && !empty($errorInfo[2])) {
+            $response['debug'] = [
+                'sql_error' => $errorInfo[2],
+                'sql_state' => $errorInfo[0] ?? 'N/A',
+                'driver_code' => $errorInfo[1] ?? 'N/A'
+            ];
+        }
+        
+        echo json_encode($response);
     }
 
 } catch (PDOException $e) {
     // 記錄詳細錯誤信息
     $errorMessage = $e->getMessage();
     $errorCode = $e->getCode();
+    
+    // PDOException 的 errorInfo 是受保護的屬性，需要通過反射訪問
+    // 或者直接從異常消息中提取信息
+    $errorInfo = ['N/A', 'N/A', $errorMessage];
+    try {
+        $reflection = new ReflectionClass($e);
+        if ($reflection->hasProperty('errorInfo')) {
+            $property = $reflection->getProperty('errorInfo');
+            $property->setAccessible(true);
+            $errorInfoValue = $property->getValue($e);
+            if (is_array($errorInfoValue) && count($errorInfoValue) >= 3) {
+                $errorInfo = $errorInfoValue;
+            }
+        }
+    } catch (Exception $reflectionError) {
+        // 如果反射失敗，使用異常消息
+        error_log("無法通過反射獲取 errorInfo，使用異常消息");
+    }
+    
     error_log("就讀意願提交資料庫錯誤 [Code: $errorCode]: " . $errorMessage);
-    error_log("SQL State: " . $e->errorInfo[0] . ", Driver Code: " . ($e->errorInfo[1] ?? 'N/A'));
+    error_log("SQL State: " . ($errorInfo[0] ?? 'N/A') . ", Driver Code: " . ($errorInfo[1] ?? 'N/A') . ", Driver Message: " . ($errorInfo[2] ?? 'N/A'));
+    error_log("錯誤堆疊: " . $e->getTraceAsString());
     
     // 清除任何意外輸出（使用 @ 抑制警告）
     if (ob_get_level() > 0) {
@@ -681,19 +1029,38 @@ try {
     
     // 根據錯誤類型提供更友好的錯誤訊息
     $userMessage = '系統錯誤，請稍後再試';
+    $debugInfo = [];
+    $is_dev = (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false));
+    $is_debug = isset($_GET['debug']) || isset($_POST['debug']);
+    
     if (strpos($errorMessage, 'Table') !== false && strpos($errorMessage, "doesn't exist") !== false) {
         $userMessage = '資料表不存在，請聯繫系統管理員';
     } elseif (strpos($errorMessage, 'Duplicate entry') !== false) {
         $userMessage = '資料已存在，請勿重複提交';
-    } elseif (strpos($errorMessage, 'SQLSTATE') !== false) {
+    } elseif (strpos($errorMessage, 'SQLSTATE') !== false || strpos($errorMessage, 'SQL') !== false || strpos($errorMessage, 'column') !== false) {
         $userMessage = '資料庫操作失敗，請檢查資料格式';
     }
     
+    // 在開發環境或調試模式下提供詳細錯誤信息
+    if ($is_dev || $is_debug) {
+        $debugInfo = [
+            'error_message' => $errorMessage,
+            'error_code' => $errorCode,
+            'sql_state' => $errorInfo[0] ?? 'N/A',
+            'driver_code' => $errorInfo[1] ?? 'N/A',
+            'driver_message' => $errorInfo[2] ?? 'N/A'
+        ];
+    }
+    
     http_response_code(500);
-    echo json_encode([
+    $response = [
         'success' => false,
         'message' => $userMessage
-    ]);
+    ];
+    if (!empty($debugInfo)) {
+        $response['debug'] = $debugInfo;
+    }
+    echo json_encode($response);
 } catch (Exception $e) {
     // 記錄一般錯誤
     error_log("就讀意願提交一般錯誤: " . $e->getMessage());

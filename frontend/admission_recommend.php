@@ -9,26 +9,51 @@ require_once 'config/email_notification_config.php';
 
 $message = '';
 $messageType = '';
-$courses = []; 
+$departments = []; // 科系資料 (code => name)
+$grades = []; // 年級資料 (code => name)
 $search_results = [];
 $search_student_id = '';
 
-// 從資料庫撈取科系資料
+// 從資料庫撈取科系資料 (departments 表)
+// 推薦人科系和被推薦人科系（興趣）都關聯 departments.code
 try {
     $conn = getDatabaseConnection();
-    $sql = "SELECT course_name FROM admission_courses ORDER BY course_name";
+    $sql = "SELECT code, name FROM departments ORDER BY name";
     $result = $conn->query($sql);
     
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
-            $courses[] = $row['course_name'];
+            $departments[$row['code']] = $row['name'];
         }
     }
     $conn->close();
 } catch (Exception $e) {
     // 如果資料庫查詢失敗，使用預設科系
-    $courses = ['資訊管理科', '視光科', '幼兒保育科', '餐飲管理科', '觀光事業科'];
+    $departments = ['IM' => '資訊管理科', 'OPT' => '視光科', 'ECCE' => '嬰幼兒保育科'];
     error_log("無法從資料庫撈取科系資料: " . $e->getMessage());
+}
+
+// 從資料庫撈取年級資料 (identity_options 表)
+// 推薦人年級：只取專科年級 (F1-F5)
+// 被推薦學生年級：國三 (J3) 和已畢業
+try {
+    $conn = getDatabaseConnection();
+    // 只取專科年級 (F1-F5) 和國三 (J3)
+    $sql = "SELECT code, name FROM identity_options WHERE code IN ('F1', 'F2', 'F3', 'F4', 'F5', 'J3') ORDER BY code";
+    $result = $conn->query($sql);
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $grades[$row['code']] = $row['name'];
+        }
+    }
+    // 添加「已畢業」選項（不在 identity_options 表中）
+    $grades['GRADUATED'] = '已畢業';
+    $conn->close();
+} catch (Exception $e) {
+    // 如果資料庫查詢失敗，使用預設年級
+    $grades = ['F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五', 'J3' => '國三', 'GRADUATED' => '已畢業'];
+    error_log("無法從資料庫撈取年級資料: " . $e->getMessage());
 }
 
 // 處理通過 ID 查詢（用於後台管理系統）
@@ -37,7 +62,67 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
     try {
         $search_id = intval($_GET['id']);
         $conn = getDatabaseConnection();
-        $sql = "SELECT * FROM admission_recommendations WHERE id = ?";
+        
+        // 檢查表結構，決定使用哪種查詢方式
+        $has_recommender_table = false;
+        $has_recommended_table = false;
+        $table_check = $conn->query("SHOW TABLES LIKE 'recommender'");
+        if ($table_check && $table_check->num_rows > 0) {
+            $has_recommender_table = true;
+        }
+        $table_check = $conn->query("SHOW TABLES LIKE 'recommended'");
+        if ($table_check && $table_check->num_rows > 0) {
+            $has_recommended_table = true;
+        }
+        
+        if ($has_recommender_table && $has_recommended_table) {
+            // 使用新的表結構：recommender 和 recommended 表
+            $sql = "SELECT 
+                ar.*,
+                rec.name as recommender_name,
+                rec.id as recommender_student_id,
+                rec.phone as recommender_phone,
+                rec.email as recommender_email,
+                rec.grade as recommender_grade_code,
+                rec.department as recommender_department_code,
+                rg.name as recommender_grade_name,
+                rd.name as recommender_department_name,
+                red.name as student_name,
+                red.phone as student_phone,
+                red.email as student_email,
+                red.line_id as student_line_id,
+                red.grade as student_grade_code,
+                red.school as student_school_code,
+                sg.name as student_grade_name,
+                sd.name as student_school_name,
+                si.name as student_interest_name
+            FROM admission_recommendations ar
+            LEFT JOIN recommender rec ON ar.id = rec.recommendations_id
+            LEFT JOIN recommended red ON ar.id = red.recommendations_id
+            LEFT JOIN identity_options rg ON rec.grade = rg.code
+            LEFT JOIN departments rd ON rec.department = rd.code
+            LEFT JOIN identity_options sg ON red.grade = sg.code
+            LEFT JOIN school_data sd ON red.school = sd.school_code
+            LEFT JOIN departments si ON ar.student_interest = si.code
+            WHERE ar.id = ?";
+        } else {
+            // 使用舊的表結構：所有資料都在 admission_recommendations 表中
+            $sql = "SELECT 
+                ar.*,
+                rg.name as recommender_grade_name,
+                rd.name as recommender_department_name,
+                sg.name as student_grade_name,
+                si.name as student_interest_name,
+                sd.name as student_school_name
+            FROM admission_recommendations ar
+            LEFT JOIN identity_options rg ON ar.recommender_grade_code = rg.code
+            LEFT JOIN departments rd ON ar.recommender_department_code = rd.code
+            LEFT JOIN identity_options sg ON ar.student_grade_code = sg.code
+            LEFT JOIN departments si ON ar.student_interest_code = si.code
+            LEFT JOIN school_data sd ON ar.student_school_code = sd.school_code
+            WHERE ar.id = ?";
+        }
+        
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("i", $search_id);
         $stmt->execute();
@@ -66,7 +151,67 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
         $search_student_id = trim($_POST['search_student_id']);
         if (!empty($search_student_id)) {
             $conn = getDatabaseConnection();
-            $sql = "SELECT * FROM admission_recommendations WHERE recommender_student_id = ? ORDER BY created_at DESC";
+            
+            // 檢查表結構，決定使用哪種查詢方式
+            $has_recommender_table = false;
+            $has_recommended_table = false;
+            $table_check = $conn->query("SHOW TABLES LIKE 'recommender'");
+            if ($table_check && $table_check->num_rows > 0) {
+                $has_recommender_table = true;
+            }
+            $table_check = $conn->query("SHOW TABLES LIKE 'recommended'");
+            if ($table_check && $table_check->num_rows > 0) {
+                $has_recommended_table = true;
+            }
+            
+            if ($has_recommender_table && $has_recommended_table) {
+                // 使用新的表結構：從 recommender 表查詢推薦人學號
+                $sql = "SELECT 
+                    ar.*,
+                    rec.name as recommender_name,
+                    rec.id as recommender_student_id,
+                    rec.phone as recommender_phone,
+                    rec.email as recommender_email,
+                    rec.grade as recommender_grade_code,
+                    rec.department as recommender_department_code,
+                    rg.name as recommender_grade_name,
+                    rd.name as recommender_department_name,
+                    red.name as student_name,
+                    red.phone as student_phone,
+                    red.email as student_email,
+                    red.line_id as student_line_id,
+                    red.grade as student_grade_code,
+                    red.school as student_school_code,
+                    sg.name as student_grade_name,
+                    sd.name as student_school_name,
+                    si.name as student_interest_name
+                FROM admission_recommendations ar
+                LEFT JOIN recommender rec ON ar.id = rec.recommendations_id
+                LEFT JOIN recommended red ON ar.id = red.recommendations_id
+                LEFT JOIN identity_options rg ON rec.grade = rg.code
+                LEFT JOIN departments rd ON rec.department = rd.code
+                LEFT JOIN identity_options sg ON red.grade = sg.code
+                LEFT JOIN school_data sd ON red.school = sd.school_code
+                LEFT JOIN departments si ON ar.student_interest = si.code
+                WHERE rec.id = ? ORDER BY ar.created_at DESC";
+            } else {
+                // 使用舊的表結構：從 admission_recommendations 表查詢
+                $sql = "SELECT 
+                    ar.*,
+                    rg.name as recommender_grade_name,
+                    rd.name as recommender_department_name,
+                    sg.name as student_grade_name,
+                    si.name as student_interest_name,
+                    sd.name as student_school_name
+                FROM admission_recommendations ar
+                LEFT JOIN identity_options rg ON ar.recommender_grade_code = rg.code
+                LEFT JOIN departments rd ON ar.recommender_department_code = rd.code
+                LEFT JOIN identity_options sg ON ar.student_grade_code = sg.code
+                LEFT JOIN departments si ON ar.student_interest_code = si.code
+                LEFT JOIN school_data sd ON ar.student_school_code = sd.school_code
+                WHERE ar.recommender_student_id = ? ORDER BY ar.created_at DESC";
+            }
+            
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("s", $search_student_id);
             $stmt->execute();
@@ -99,6 +244,40 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
     try {
         $conn = getDatabaseConnection();
         
+        // 檢查資料表是否存在（不再自動添加欄位，只使用現有的表結構）
+        $table_check = $conn->query("SHOW TABLES LIKE 'admission_recommendations'");
+        if (!$table_check || $table_check->num_rows == 0) {
+            throw new Exception("資料表 'admission_recommendations' 不存在於資料庫 '" . DB_NAME . "' 中。請檢查資料表是否已創建。");
+        }
+        
+        // 檢查哪些欄位存在
+        $existing_columns = [];
+        $columns_result = $conn->query("SHOW COLUMNS FROM admission_recommendations");
+        if (!$columns_result) {
+            throw new Exception("無法查詢資料表結構: " . $conn->error . " (資料庫: " . DB_NAME . ", 資料表: admission_recommendations)");
+        }
+        while ($row = $columns_result->fetch_assoc()) {
+            $existing_columns[] = $row['Field'];
+        }
+        
+        // 調試：記錄現有欄位（僅在開發環境）
+        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+            error_log("資料庫: " . DB_NAME);
+            error_log("資料表: admission_recommendations");
+            error_log("資料表現有欄位: " . implode(', ', $existing_columns));
+        }
+        
+        // 如果沒有欄位，可能是資料表結構有問題
+        if (empty($existing_columns)) {
+            throw new Exception("資料表 'admission_recommendations' 沒有任何欄位。請檢查資料表結構。");
+        }
+        
+        // 注意：不再自動添加欄位，只使用現有的表結構
+        // 調試：記錄現有的欄位列表
+        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+            error_log("資料表現有欄位: " . implode(', ', $existing_columns));
+        }
+        
         // 驗證必填欄位
         $required_fields = [
             'recommender_name', 'recommender_student_id', 'recommender_grade', 
@@ -115,11 +294,122 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         }
         
         // 驗證就讀學校格式（必須從系統選項中選擇）
-        if (!empty($_POST['student_school'])) {
-            $student_school = $_POST['student_school'];
-            // 檢查格式是否為：學校名稱 (縣市區)
-            if (!preg_match('/^.+ \(.+\)$/', $student_school)) {
+        $student_school_code = null;
+        $student_school_name = '';
+        
+        // 調試：記錄提交的學校相關數據
+        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+            error_log("student_school_code: " . ($_POST['student_school_code'] ?? 'empty'));
+            error_log("student_school: " . ($_POST['student_school'] ?? 'empty'));
+        }
+        
+        // 優先從隱藏欄位讀取 school_code
+        if (!empty($_POST['student_school_code'])) {
+            $student_school_code = trim($_POST['student_school_code']);
+            // 查詢學校是否存在（不限制格式，只要在資料庫中存在即可）
+            $school_check = $conn->prepare("SELECT name, city, district FROM school_data WHERE school_code = ? LIMIT 1");
+            $school_check->bind_param("s", $student_school_code);
+            $school_check->execute();
+            $school_result = $school_check->get_result();
+            if ($school_result->num_rows > 0) {
+                // 學校存在於資料庫中，驗證通過
+                $school_row = $school_result->fetch_assoc();
+                $student_school_name = $school_row['name'] . ' (' . ($school_row['city'] ?? '') . ($school_row['district'] ?? '') . ')';
+                $school_check->close();
+                // 驗證通過，不再檢查其他條件
+            } else {
+                // 如果查不到，但 student_school 格式正確（"學校名稱 (縣市區)"），仍然允許
+                $school_check->close();
+                if (!empty($_POST['student_school']) && preg_match('/^.+ \(.+\)$/', trim($_POST['student_school']))) {
+                    // student_school 格式正確，允許通過
+                    $student_school_name = trim($_POST['student_school']);
+                    if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                        error_log("警告：找不到 school_code '$student_school_code' 對應的學校，但 student_school 格式正確，繼續處理。");
+                    }
+                } else {
+                    // 既找不到學校，格式也不正確
+                    if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                        error_log("錯誤：找不到 school_code '$student_school_code' 對應的學校，且 student_school 格式不正確。");
+                    }
+                    $missing_fields[] = 'student_school_invalid';
+                }
+            }
+        } elseif (!empty($_POST['student_school'])) {
+            // 向後兼容：從顯示的學校名稱解析
+            $student_school_input = trim($_POST['student_school']);
+            
+            // 檢查格式是否為 "學校名稱 (縣市區)"
+            if (preg_match('/^.+ \(.+\)$/', $student_school_input)) {
+                // 向後兼容：舊格式 "學校名稱 (縣市區)"
+                if (preg_match('/^(.+?) \(.+\)$/', $student_school_input, $matches)) {
+                    $school_name = trim($matches[1]);
+                    $school_check = $conn->prepare("SELECT school_code, name, city, district FROM school_data WHERE name = ? LIMIT 1");
+                    $school_check->bind_param("s", $school_name);
+                    $school_check->execute();
+                    $school_result = $school_check->get_result();
+                    if ($school_result->num_rows > 0) {
+                        $school_row = $school_result->fetch_assoc();
+                        $student_school_code = $school_row['school_code'];
+                        $student_school_name = $school_row['name'] . ' (' . ($school_row['city'] ?? '') . ($school_row['district'] ?? '') . ')';
+                    } else {
+                        // 如果查不到，但格式正確，仍然允許（可能是新學校或名稱不完全匹配）
+                        $student_school_name = $student_school_input;
+                        error_log("警告：找不到學校名稱 '$school_name' 對應的記錄，但格式正確，繼續處理");
+                    }
+                    $school_check->close();
+                } else {
+                    $missing_fields[] = 'student_school_invalid';
+                }
+            } else {
+                // 格式不符合任何已知格式
+                if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                    error_log("student_school 格式不符合: '$student_school_input'");
+                }
                 $missing_fields[] = 'student_school_invalid';
+            }
+        } else {
+            // 兩個欄位都為空，但用戶可能填寫了，檢查格式
+            if (!empty($_POST['student_school']) || !empty($_POST['student_school_code'])) {
+                // 檢查格式是否正確
+                $has_valid_format = false;
+                if (!empty($_POST['student_school_code'])) {
+                    // 如果有 school_code，檢查是否在資料庫中存在
+                    $check_code = trim($_POST['student_school_code']);
+                    $school_check = $conn->prepare("SELECT school_code FROM school_data WHERE school_code = ? LIMIT 1");
+                    $school_check->bind_param("s", $check_code);
+                    $school_check->execute();
+                    $school_result = $school_check->get_result();
+                    if ($school_result->num_rows > 0) {
+                        // school_code 存在於資料庫中
+                        $has_valid_format = true;
+                        $student_school_code = $check_code;
+                        $student_school_name = $_POST['student_school'] ?? '';
+                    }
+                    $school_check->close();
+                }
+                
+                // 如果 school_code 驗證失敗，檢查 student_school 格式
+                if (!$has_valid_format && !empty($_POST['student_school'])) {
+                    $school_input = trim($_POST['student_school']);
+                    if (preg_match('/^.+ \(.+\)$/', $school_input)) {
+                        // 格式正確（"學校名稱 (縣市區)"）
+                        $has_valid_format = true;
+                        $student_school_name = $school_input;
+                    }
+                }
+                
+                // 如果格式不正確，才標記為錯誤
+                if (!$has_valid_format) {
+                    if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                        error_log("學校格式驗證失敗 - student_school_code: " . ($_POST['student_school_code'] ?? 'empty') . ", student_school: " . ($_POST['student_school'] ?? 'empty'));
+                    }
+                    $missing_fields[] = 'student_school_invalid';
+                }
+            } else {
+                // 兩個欄位都為空
+                if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                    error_log("student_school_code 和 student_school 都為空");
+                }
             }
         }
         
@@ -173,20 +463,6 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $_POST['student_phone'] = $phone; // 標準化電話號碼格式
         }
         
-        // 插入資料
-        $sql = "INSERT INTO admission_recommendations (
-            recommender_name, recommender_student_id, recommender_grade, 
-            recommender_department, recommender_phone, recommender_email,
-            student_name, student_school, student_grade, 
-            student_phone, student_email, student_line_id,
-            recommendation_reason, student_interest, additional_info, proof_evidence
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            throw new Exception("SQL 準備失敗: " . $conn->error);
-        }
-        
         // 處理檔案上傳
         $proof_evidence_path = '';
         
@@ -218,35 +494,526 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             }
         }
         
-        // 準備變數，避免 bind_param 的引用問題
+        // 準備變數，獲取 code 值
+        $recommender_grade_code = $_POST['recommender_grade'] ?? '';
+        $recommender_department_code = $_POST['recommender_department'] ?? '';
+        $student_grade_code = $_POST['student_grade'] ?? '';
+        $student_interest_code = !empty($_POST['student_interest']) ? trim($_POST['student_interest']) : null;
+        
+        // 驗證 student_interest_code 是否在 departments 表中存在（如果提供了值）
+        if ($student_interest_code !== null && $student_interest_code !== '') {
+            $dept_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
+            $dept_check->bind_param("s", $student_interest_code);
+            $dept_check->execute();
+            $dept_result = $dept_check->get_result();
+            if ($dept_result->num_rows == 0) {
+                // 如果提供的 code 不在 departments 表中，設為 null
+                error_log("警告：student_interest_code '$student_interest_code' 不在 departments 表中，將設為 NULL");
+                $student_interest_code = null;
+            }
+            $dept_check->close();
+        }
+        
+        // 準備其他變數
         $student_grade = $_POST['student_grade'] ?? '';
         $student_email = $_POST['student_email'] ?? '';
         $student_line_id = $_POST['student_line_id'] ?? '';
         $student_interest = $_POST['student_interest'] ?? '';
         $additional_info = $_POST['additional_info'] ?? '';
         
-        $stmt->bind_param("ssssssssssssssss",
-            $_POST['recommender_name'],
-            $_POST['recommender_student_id'],
-            $_POST['recommender_grade'],
-            $_POST['recommender_department'],
-            $_POST['recommender_phone'],
-            $_POST['recommender_email'],
-            $_POST['student_name'],
-            $_POST['student_school'],
-            $student_grade,
-            $_POST['student_phone'],
-            $student_email,
-            $student_line_id,
-            $_POST['recommendation_reason'],
-            $student_interest,
-            $additional_info,
-            $proof_evidence_path
-        );
+        // 動態構建 INSERT 語句，只使用存在的欄位
+        $insert_fields = [];
+        $insert_values = [];
+        $insert_params = [];
+        $bind_types = '';
         
-        if ($stmt->execute()) {
-            // 獲取新插入的記錄ID
-            $recommendation_id = $conn->insert_id;
+        // 基本欄位（檢查是否存在）
+        if (in_array('recommender_name', $existing_columns)) {
+            $insert_fields[] = 'recommender_name';
+            $insert_values[] = $_POST['recommender_name'];
+            $bind_types .= 's';
+        }
+        
+        if (in_array('recommender_student_id', $existing_columns)) {
+            $insert_fields[] = 'recommender_student_id';
+            $insert_values[] = $_POST['recommender_student_id'];
+            $bind_types .= 's';
+        }
+        
+        // 推薦人年級（檢查舊欄位是否存在）
+        if (in_array('recommender_grade', $existing_columns)) {
+            $recommender_grade_name = $grades[$recommender_grade_code] ?? $recommender_grade_code;
+            $insert_fields[] = 'recommender_grade';
+            $insert_values[] = $recommender_grade_name;
+            $bind_types .= 's';
+        }
+        if (in_array('recommender_grade_code', $existing_columns)) {
+            $insert_fields[] = 'recommender_grade_code';
+            $insert_values[] = $recommender_grade_code;
+            $bind_types .= 's';
+        }
+        
+        // 推薦人科系
+        if (in_array('recommender_department', $existing_columns)) {
+            $recommender_department_name = $departments[$recommender_department_code] ?? $recommender_department_code;
+            $insert_fields[] = 'recommender_department';
+            $insert_values[] = $recommender_department_name;
+            $bind_types .= 's';
+        }
+        if (in_array('recommender_department_code', $existing_columns)) {
+            $insert_fields[] = 'recommender_department_code';
+            $insert_values[] = $recommender_department_code;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('recommender_phone', $existing_columns)) {
+            $insert_fields[] = 'recommender_phone';
+            $insert_values[] = $_POST['recommender_phone'];
+            $bind_types .= 's';
+        }
+        
+        if (in_array('recommender_email', $existing_columns)) {
+            $insert_fields[] = 'recommender_email';
+            $insert_values[] = $_POST['recommender_email'];
+            $bind_types .= 's';
+        }
+        
+        if (in_array('student_name', $existing_columns)) {
+            $insert_fields[] = 'student_name';
+            $insert_values[] = $_POST['student_name'];
+            $bind_types .= 's';
+        }
+        
+        // 學生學校
+        if (in_array('student_school', $existing_columns)) {
+            $insert_fields[] = 'student_school';
+            $insert_values[] = $student_school_name;
+            $bind_types .= 's';
+        }
+        if (in_array('student_school_code', $existing_columns)) {
+            $insert_fields[] = 'student_school_code';
+            $insert_values[] = $student_school_code;
+            $bind_types .= 's';
+        }
+        
+        // 學生年級
+        if (in_array('student_grade', $existing_columns)) {
+            if ($student_grade_code === 'GRADUATED') {
+                $student_grade_name = '已畢業';
+            } else {
+                $student_grade_name = $student_grade_code ? ($grades[$student_grade_code] ?? $student_grade_code) : '';
+            }
+            $insert_fields[] = 'student_grade';
+            $insert_values[] = $student_grade_name;
+            $bind_types .= 's';
+        }
+        if (in_array('student_grade_code', $existing_columns)) {
+            $insert_fields[] = 'student_grade_code';
+            $insert_values[] = $student_grade_code;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('student_phone', $existing_columns)) {
+            $insert_fields[] = 'student_phone';
+            $insert_values[] = $_POST['student_phone'];
+            $bind_types .= 's';
+        }
+        
+        if (in_array('student_email', $existing_columns)) {
+            $insert_fields[] = 'student_email';
+            $insert_values[] = $student_email;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('student_line_id', $existing_columns)) {
+            $insert_fields[] = 'student_line_id';
+            $insert_values[] = $student_line_id;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('recommendation_reason', $existing_columns)) {
+            $insert_fields[] = 'recommendation_reason';
+            $insert_values[] = $_POST['recommendation_reason'];
+            $bind_types .= 's';
+        }
+        
+        // 學生興趣
+        // 注意：根據錯誤信息，student_interest 字段有外鍵約束引用 departments.code
+        // 因此應該插入 code 而不是名稱，如果為空則插入 NULL
+        if (in_array('student_interest', $existing_columns)) {
+            // student_interest 字段有外鍵約束，應該插入 code
+            $insert_fields[] = 'student_interest';
+            // 如果為空，插入 NULL 而不是空字符串（外鍵約束要求）
+            $insert_values[] = ($student_interest_code !== null && $student_interest_code !== '') ? $student_interest_code : null;
+            $bind_types .= 's';
+        }
+        if (in_array('student_interest_code', $existing_columns)) {
+            $insert_fields[] = 'student_interest_code';
+            // 如果為空，插入 NULL 而不是空字符串
+            $insert_values[] = ($student_interest_code !== null && $student_interest_code !== '') ? $student_interest_code : null;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('additional_info', $existing_columns)) {
+            $insert_fields[] = 'additional_info';
+            $insert_values[] = $additional_info;
+            $bind_types .= 's';
+        }
+        
+        if (in_array('proof_evidence', $existing_columns)) {
+            $insert_fields[] = 'proof_evidence';
+            $insert_values[] = $proof_evidence_path;
+            $bind_types .= 's';
+        }
+        
+        // 確保至少有一些欄位要插入
+        if (empty($insert_fields)) {
+            throw new Exception("沒有可插入的欄位。請檢查資料表結構。");
+        }
+        
+        // 再次驗證所有要插入的欄位都存在（雙重檢查）
+        // 確保欄位和值的順序一致
+        $valid_fields = [];
+        $valid_values = [];
+        $valid_bind_types = '';
+        
+        // 只保留存在的欄位，保持欄位和值的對應關係
+        foreach ($insert_fields as $index => $field) {
+            if (in_array($field, $existing_columns)) {
+                $valid_fields[] = $field;
+                // 使用對應索引的值，確保順序一致
+                $valid_values[] = $insert_values[$index] ?? '';
+                $valid_bind_types .= 's';
+            } else {
+                error_log("警告：欄位 '$field' 不存在於資料表中，將被跳過");
+            }
+        }
+        
+        // 更新變數
+        $insert_fields = $valid_fields;
+        $insert_values = $valid_values;
+        $bind_types = $valid_bind_types;
+        
+        // 確保至少有一些欄位要插入
+        if (empty($insert_fields)) {
+            $error_msg = "沒有可插入的欄位。請檢查資料表結構。\n";
+            $error_msg .= "資料庫: " . DB_NAME . "\n";
+            $error_msg .= "資料表: admission_recommendations\n";
+            $error_msg .= "現有欄位: " . implode(', ', $existing_columns) . "\n";
+            $error_msg .= "嘗試插入的欄位: " . implode(', ', $valid_fields);
+            throw new Exception($error_msg);
+        }
+        
+        // 最終驗證：確保所有要插入的欄位都確實存在
+        $missing_in_final = array_diff($insert_fields, $existing_columns);
+        if (!empty($missing_in_final)) {
+            $error_msg = "錯誤：以下欄位在最終檢查時不存在於資料表中：\n";
+            $error_msg .= implode(', ', $missing_in_final) . "\n";
+            $error_msg .= "資料庫: " . DB_NAME . "\n";
+            $error_msg .= "資料表: admission_recommendations\n";
+            $error_msg .= "現有欄位: " . implode(', ', $existing_columns);
+            throw new Exception($error_msg);
+        }
+        
+        // 構建 SQL
+        $fields_str = implode(', ', $insert_fields);
+        $placeholders = implode(', ', array_fill(0, count($insert_fields), '?'));
+        $sql = "INSERT INTO admission_recommendations ($fields_str) VALUES ($placeholders)";
+        
+        // 調試：記錄要插入的欄位（僅在開發環境）
+        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+            error_log("資料庫: " . DB_NAME);
+            error_log("資料表: admission_recommendations");
+            error_log("要插入的欄位: " . implode(', ', $insert_fields));
+            error_log("現有欄位: " . implode(', ', $existing_columns));
+            error_log("SQL: " . $sql);
+        }
+        
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            // 提供更詳細的錯誤信息，包括實際表結構
+            $error_msg = "SQL 準備失敗: " . $conn->error;
+            $error_msg .= "\n\n資料庫: " . DB_NAME;
+            $error_msg .= "\n資料表: admission_recommendations";
+            $error_msg .= "\n\n實際資料表中的欄位: " . implode(', ', $existing_columns);
+            $error_msg .= "\n\n嘗試插入的欄位: " . implode(', ', $insert_fields);
+            $error_msg .= "\n\n缺少的欄位: " . implode(', ', array_diff($insert_fields, $existing_columns));
+            $error_msg .= "\n\nSQL 語句: " . $sql;
+            
+            // 如果錯誤訊息包含 "Unknown column"，提供更詳細的幫助
+            if (strpos($conn->error, 'Unknown column') !== false) {
+                $error_msg .= "\n\n提示：資料表結構可能與預期不同。";
+                $error_msg .= "\n請檢查資料表 'admission_recommendations' 的實際結構。";
+                $error_msg .= "\n預期的欄位應包括：recommender_name, recommender_student_id, recommender_grade, recommender_department 等。";
+            }
+            
+            throw new Exception($error_msg);
+        }
+        
+        // 使用 call_user_func_array 來動態綁定參數
+        // 處理 NULL 值：MySQLi 需要特殊處理 NULL 值
+        $bind_params = [$bind_types];
+        foreach ($insert_values as $value) {
+            $bind_params[] = $value;
+        }
+        $refs = [];
+        foreach ($bind_params as $key => $value) {
+            $refs[$key] = &$bind_params[$key];
+        }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        
+        if (!$stmt->execute()) {
+            // 執行失敗，提供詳細錯誤信息
+            $error_msg = "SQL 執行失敗: " . $stmt->error;
+            $error_msg .= "\n\n資料庫: " . DB_NAME;
+            $error_msg .= "\n資料表: admission_recommendations";
+            $error_msg .= "\n\n實際資料表中的欄位: " . implode(', ', $existing_columns);
+            $error_msg .= "\n\n嘗試插入的欄位: " . implode(', ', $insert_fields);
+            $error_msg .= "\n\n缺少的欄位: " . implode(', ', array_diff($insert_fields, $existing_columns));
+            $error_msg .= "\n\nSQL 語句: " . $sql;
+            
+            // 如果錯誤訊息包含 "Unknown column"，提供更詳細的幫助
+            if (strpos($stmt->error, 'Unknown column') !== false) {
+                $error_msg .= "\n\n提示：資料表結構可能與預期不同。";
+                $error_msg .= "\n請檢查資料表 'admission_recommendations' 的實際結構。";
+                $error_msg .= "\n預期的欄位應包括：recommender_name, recommender_student_id, recommender_grade, recommender_department 等。";
+            }
+            
+            throw new Exception($error_msg);
+        }
+        
+        // 獲取新插入的記錄ID
+        $recommendation_id = $conn->insert_id;
+        
+        if ($recommendation_id > 0) {
+            
+            // 插入推薦人資料到 recommender 表
+            try {
+                // 檢查 recommender 表是否存在
+                $table_check = $conn->query("SHOW TABLES LIKE 'recommender'");
+                if ($table_check && $table_check->num_rows > 0) {
+                    // 查詢 recommender 表的欄位
+                    $recommender_columns = [];
+                    $columns_result = $conn->query("SHOW COLUMNS FROM recommender");
+                    if ($columns_result) {
+                        while ($row = $columns_result->fetch_assoc()) {
+                            $recommender_columns[] = $row['Field'];
+                        }
+                    }
+                    
+                    // 構建插入 recommender 表的 SQL
+                    $recommender_fields = [];
+                    $recommender_values = [];
+                    $recommender_bind_types = '';
+                    
+                    if (in_array('recommendations_id', $recommender_columns)) {
+                        $recommender_fields[] = 'recommendations_id';
+                        $recommender_values[] = $recommendation_id;
+                        $recommender_bind_types .= 'i';
+                    }
+                    if (in_array('name', $recommender_columns)) {
+                        $recommender_fields[] = 'name';
+                        $recommender_values[] = $_POST['recommender_name'];
+                        $recommender_bind_types .= 's';
+                    }
+                    if (in_array('id', $recommender_columns)) {
+                        $recommender_fields[] = 'id';
+                        $recommender_values[] = $_POST['recommender_student_id'];
+                        $recommender_bind_types .= 's';
+                    }
+                    if (in_array('grade', $recommender_columns)) {
+                        $recommender_fields[] = 'grade';
+                        $recommender_values[] = $recommender_grade_code; // 關聯 identity_options.code
+                        $recommender_bind_types .= 's';
+                    }
+                    if (in_array('department', $recommender_columns)) {
+                        $recommender_fields[] = 'department';
+                        $recommender_values[] = $recommender_department_code; // 關聯 departments.code
+                        $recommender_bind_types .= 's';
+                    }
+                    if (in_array('phone', $recommender_columns)) {
+                        $recommender_fields[] = 'phone';
+                        $recommender_values[] = $_POST['recommender_phone'];
+                        $recommender_bind_types .= 's';
+                    }
+                    if (in_array('email', $recommender_columns)) {
+                        $recommender_fields[] = 'email';
+                        $recommender_values[] = $_POST['recommender_email'];
+                        $recommender_bind_types .= 's';
+                    }
+                    
+                    if (!empty($recommender_fields)) {
+                        $recommender_fields_str = implode(', ', $recommender_fields);
+                        $recommender_placeholders = implode(', ', array_fill(0, count($recommender_fields), '?'));
+                        $recommender_sql = "INSERT INTO recommender ($recommender_fields_str) VALUES ($recommender_placeholders)";
+                        
+                        $recommender_stmt = $conn->prepare($recommender_sql);
+                        if ($recommender_stmt) {
+                            $recommender_bind_params = array_merge([$recommender_bind_types], $recommender_values);
+                            $recommender_refs = [];
+                            foreach ($recommender_bind_params as $key => $value) {
+                                $recommender_refs[$key] = &$recommender_bind_params[$key];
+                            }
+                            call_user_func_array([$recommender_stmt, 'bind_param'], $recommender_refs);
+                            $recommender_stmt->execute();
+                            $recommender_stmt->close();
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("插入 recommender 表失敗: " . $e->getMessage());
+                // 不中斷主流程，只記錄錯誤
+            }
+            
+            // 插入被推薦人資料到 recommended 表
+            try {
+                // 檢查 recommended 表是否存在
+                $table_check = $conn->query("SHOW TABLES LIKE 'recommended'");
+                if ($table_check && $table_check->num_rows > 0) {
+                    // 查詢 recommended 表的欄位和約束
+                    $recommended_columns = [];
+                    $columns_result = $conn->query("SHOW COLUMNS FROM recommended");
+                    if ($columns_result) {
+                        while ($row = $columns_result->fetch_assoc()) {
+                            $recommended_columns[] = $row['Field'];
+                        }
+                    }
+                    
+                    // 構建插入 recommended 表的 SQL
+                    $recommended_fields = [];
+                    $recommended_values = [];
+                    $recommended_bind_types = '';
+                    
+                    if (in_array('recommendations_id', $recommended_columns)) {
+                        $recommended_fields[] = 'recommendations_id';
+                        $recommended_values[] = $recommendation_id;
+                        $recommended_bind_types .= 'i';
+                    }
+                    if (in_array('name', $recommended_columns)) {
+                        $recommended_fields[] = 'name';
+                        $recommended_values[] = $_POST['student_name'];
+                        $recommended_bind_types .= 's';
+                    }
+                    if (in_array('school', $recommended_columns)) {
+                        // 驗證 school_code 是否在 school_data 表中存在
+                        if ($student_school_code !== null && $student_school_code !== '') {
+                            $school_verify = $conn->prepare("SELECT school_code FROM school_data WHERE school_code = ? LIMIT 1");
+                            $school_verify->bind_param("s", $student_school_code);
+                            $school_verify->execute();
+                            $school_verify_result = $school_verify->get_result();
+                            if ($school_verify_result->num_rows > 0) {
+                                // school_code 存在，可以插入
+                                $recommended_fields[] = 'school';
+                                $recommended_values[] = $student_school_code; // 關聯 school_data.school_code
+                                $recommended_bind_types .= 's';
+                            } else {
+                                // school_code 不存在，如果欄位允許 NULL，插入 NULL
+                                error_log("警告：school_code '$student_school_code' 不在 school_data 表中，嘗試插入 NULL");
+                                $recommended_fields[] = 'school';
+                                $recommended_values[] = null;
+                                $recommended_bind_types .= 's';
+                            }
+                            $school_verify->close();
+                        } else {
+                            // school_code 為空，插入 NULL
+                            $recommended_fields[] = 'school';
+                            $recommended_values[] = null;
+                            $recommended_bind_types .= 's';
+                        }
+                    }
+                    if (in_array('grade', $recommended_columns)) {
+                        // 驗證 grade_code 是否在 identity_options 表中存在（如果不是 GRADUATED）
+                        if ($student_grade_code !== null && $student_grade_code !== '' && $student_grade_code !== 'GRADUATED') {
+                            $grade_verify = $conn->prepare("SELECT code FROM identity_options WHERE code = ? LIMIT 1");
+                            $grade_verify->bind_param("s", $student_grade_code);
+                            $grade_verify->execute();
+                            $grade_verify_result = $grade_verify->get_result();
+                            if ($grade_verify_result->num_rows > 0) {
+                                // grade_code 存在，可以插入
+                                $recommended_fields[] = 'grade';
+                                $recommended_values[] = $student_grade_code; // 關聯 identity_options.code
+                                $recommended_bind_types .= 's';
+                            } else {
+                                // grade_code 不存在，插入 NULL
+                                error_log("警告：grade_code '$student_grade_code' 不在 identity_options 表中，插入 NULL");
+                                $recommended_fields[] = 'grade';
+                                $recommended_values[] = null;
+                                $recommended_bind_types .= 's';
+                            }
+                            $grade_verify->close();
+                        } else {
+                            // GRADUATED 或為空，插入 NULL
+                            $recommended_fields[] = 'grade';
+                            $recommended_values[] = null;
+                            $recommended_bind_types .= 's';
+                        }
+                    }
+                    if (in_array('phone', $recommended_columns)) {
+                        $recommended_fields[] = 'phone';
+                        $recommended_values[] = $_POST['student_phone'];
+                        $recommended_bind_types .= 's';
+                    }
+                    if (in_array('email', $recommended_columns)) {
+                        $recommended_fields[] = 'email';
+                        $recommended_values[] = $student_email;
+                        $recommended_bind_types .= 's';
+                    }
+                    if (in_array('line_id', $recommended_columns)) {
+                        $recommended_fields[] = 'line_id';
+                        $recommended_values[] = $student_line_id;
+                        $recommended_bind_types .= 's';
+                    }
+                    
+                    if (!empty($recommended_fields)) {
+                        $recommended_fields_str = implode(', ', $recommended_fields);
+                        $recommended_placeholders = implode(', ', array_fill(0, count($recommended_fields), '?'));
+                        $recommended_sql = "INSERT INTO recommended ($recommended_fields_str) VALUES ($recommended_placeholders)";
+                        
+                        // 調試：記錄要插入的資料
+                        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                            error_log("插入 recommended 表 - SQL: " . $recommended_sql);
+                            error_log("插入 recommended 表 - 欄位: " . implode(', ', $recommended_fields));
+                            error_log("插入 recommended 表 - 值: " . print_r($recommended_values, true));
+                            error_log("插入 recommended 表 - recommendations_id: " . $recommendation_id);
+                            error_log("插入 recommended 表 - student_school_code: " . ($student_school_code ?? 'NULL'));
+                            error_log("插入 recommended 表 - student_grade_code: " . ($student_grade_code ?? 'NULL'));
+                        }
+                        
+                        $recommended_stmt = $conn->prepare($recommended_sql);
+                        if ($recommended_stmt) {
+                            $recommended_bind_params = array_merge([$recommended_bind_types], $recommended_values);
+                            $recommended_refs = [];
+                            foreach ($recommended_bind_params as $key => $value) {
+                                $recommended_refs[$key] = &$recommended_bind_params[$key];
+                            }
+                            call_user_func_array([$recommended_stmt, 'bind_param'], $recommended_refs);
+                            
+                            if (!$recommended_stmt->execute()) {
+                                error_log("插入 recommended 表執行失敗: " . $recommended_stmt->error);
+                                error_log("SQL: " . $recommended_sql);
+                                error_log("值: " . print_r($recommended_values, true));
+                            } else {
+                                if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+                                    error_log("插入 recommended 表成功，插入 ID: " . $conn->insert_id);
+                                }
+                            }
+                            $recommended_stmt->close();
+                        } else {
+                            error_log("插入 recommended 表準備失敗: " . $conn->error);
+                            error_log("SQL: " . $recommended_sql);
+                        }
+                    } else {
+                        error_log("插入 recommended 表：沒有可插入的欄位");
+                        error_log("recommended 表現有欄位: " . implode(', ', $recommended_columns));
+                    }
+                } else {
+                    error_log("插入 recommended 表：表不存在");
+                }
+            } catch (Exception $e) {
+                error_log("插入 recommended 表失敗: " . $e->getMessage());
+                error_log("錯誤堆疊: " . $e->getTraceAsString());
+                // 不中斷主流程，只記錄錯誤
+            }
             
             // 準備郵件資料
             // 確保使用台灣時區顯示時間
@@ -302,7 +1069,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             // 清空表單
             $_POST = array();
         } else {
-            throw new Exception("提交失敗: " . $stmt->error);
+            // 如果插入成功但沒有獲取到 ID，可能是資料表結構問題
+            throw new Exception("提交失敗：無法獲取插入記錄的 ID。請檢查資料表結構。");
         }
         
         $stmt->close();
@@ -532,11 +1300,11 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             </div>
             <div class="detail-item">
               <div class="detail-label">年級</div>
-              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_grade']); ?></div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_grade_name'] ?? $single_detail['recommender_grade'] ?? ''); ?></div>
             </div>
             <div class="detail-item">
               <div class="detail-label">科系</div>
-              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_department']); ?></div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['recommender_department_name'] ?? $single_detail['recommender_department'] ?? ''); ?></div>
             </div>
             <div class="detail-item">
               <div class="detail-label">聯絡電話</div>
@@ -563,11 +1331,26 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             </div>
             <div class="detail-item">
               <div class="detail-label">就讀學校</div>
-              <div class="detail-value"><?php echo htmlspecialchars($single_detail['student_school']); ?></div>
+              <div class="detail-value"><?php echo htmlspecialchars($single_detail['student_school_name'] ?? $single_detail['student_school'] ?? ''); ?></div>
             </div>
             <div class="detail-item">
               <div class="detail-label">年級</div>
-              <div class="detail-value"><?php echo !empty($single_detail['student_grade']) ? htmlspecialchars($single_detail['student_grade']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+              <div class="detail-value">
+                <?php 
+                $student_grade_display = '';
+                if (!empty($single_detail['student_grade_code'])) {
+                    // 如果是「已畢業」，特殊處理
+                    if ($single_detail['student_grade_code'] === 'GRADUATED') {
+                        $student_grade_display = '已畢業';
+                    } else {
+                        $student_grade_display = $single_detail['student_grade_name'] ?? $single_detail['student_grade'] ?? '';
+                    }
+                } else {
+                    $student_grade_display = $single_detail['student_grade_name'] ?? $single_detail['student_grade'] ?? '';
+                }
+                echo !empty($student_grade_display) ? htmlspecialchars($student_grade_display) : '<span style="color: #8c8c8c;">未填寫</span>';
+                ?>
+              </div>
             </div>
             <div class="detail-item">
               <div class="detail-label">聯絡電話</div>
@@ -579,7 +1362,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             </div>
             <div class="detail-item">
               <div class="detail-label">學生興趣</div>
-              <div class="detail-value"><?php echo !empty($single_detail['student_interest']) ? htmlspecialchars($single_detail['student_interest']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+              <div class="detail-value"><?php echo !empty($single_detail['student_interest_name'] ?? $single_detail['student_interest']) ? htmlspecialchars($single_detail['student_interest_name'] ?? $single_detail['student_interest']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
             </div>
           </div>
         </div>
@@ -718,8 +1501,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           <tbody>
             <?php foreach ($search_results as $result): ?>
             <tr class="result-row" 
-                data-student-name="<?php echo htmlspecialchars($result['student_name']); ?>"
-                data-school="<?php echo htmlspecialchars($result['student_school']); ?>">
+                data-student-name="<?php echo htmlspecialchars($result['student_name'] ?? ''); ?>"
+                data-school="<?php echo htmlspecialchars($result['student_school_name'] ?? $result['student_school'] ?? ''); ?>">
               <td><?php echo $result['id']; ?></td>
               <td>
                 <?php echo htmlspecialchars($result['recommender_name']); ?><br>
@@ -729,8 +1512,23 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 <?php echo htmlspecialchars($result['student_name']); ?><br>
                 <small><?php echo htmlspecialchars($result['student_email']); ?></small>
               </td>
-              <td><?php echo htmlspecialchars($result['student_school']); ?></td>
-              <td><?php echo htmlspecialchars($result['student_grade']); ?></td>
+              <td><?php echo htmlspecialchars($result['student_school_name'] ?? $result['student_school'] ?? ''); ?></td>
+              <td>
+                <?php 
+                $student_grade_display = '';
+                if (!empty($result['student_grade_code'])) {
+                    // 如果是「已畢業」，特殊處理
+                    if ($result['student_grade_code'] === 'GRADUATED') {
+                        $student_grade_display = '已畢業';
+                    } else {
+                        $student_grade_display = $result['student_grade_name'] ?? $result['student_grade'] ?? '';
+                    }
+                } else {
+                    $student_grade_display = $result['student_grade_name'] ?? $result['student_grade'] ?? '';
+                }
+                echo htmlspecialchars($student_grade_display);
+                ?>
+              </td>
               <td>
                 <span class="status status-<?php echo $result['status']; ?>">
                   <?php 
@@ -796,11 +1594,17 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <label for="recommender_grade"> <span class="required">*</span> 年級</label>
             <select id="recommender_grade" name="recommender_grade" required>
               <option value="">請選擇年級</option>
-              <option value="一年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '一年級') ? 'selected' : ''; ?>>一年級</option>
-              <option value="二年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '二年級') ? 'selected' : ''; ?>>二年級</option>
-              <option value="三年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '三年級') ? 'selected' : ''; ?>>三年級</option>
-              <option value="四年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '四年級') ? 'selected' : ''; ?>>四年級</option>
-              <option value="五年級" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === '五年級') ? 'selected' : ''; ?>>五年級</option>
+              <?php 
+              // 只顯示專科年級 (F1-F5) - 推薦人年級：一到五年級，關聯 identity_options.code
+              $recommender_grades = array_filter($grades, function($code) {
+                  return in_array($code, ['F1', 'F2', 'F3', 'F4', 'F5']);
+              }, ARRAY_FILTER_USE_KEY);
+              foreach ($recommender_grades as $code => $name): ?>
+                <option value="<?php echo htmlspecialchars($code); ?>" 
+                        <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === $code) ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars($name); ?>
+                </option>
+              <?php endforeach; ?>
             </select>
           </div>
           
@@ -808,10 +1612,12 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <label for="recommender_department"> <span class="required">*</span> 科系 </label>
             <select id="recommender_department" name="recommender_department" required>
               <option value="">請選擇科系</option>
-              <?php foreach ($courses as $course): ?>
-                <option value="<?php echo htmlspecialchars($course); ?>" 
-                        <?php echo (isset($_POST['recommender_department']) && $_POST['recommender_department'] === $course) ? 'selected' : ''; ?>>
-                  <?php echo htmlspecialchars($course); ?>
+              <?php 
+              // 推薦人科系：關聯 departments.code
+              foreach ($departments as $code => $name): ?>
+                <option value="<?php echo htmlspecialchars($code); ?>" 
+                        <?php echo (isset($_POST['recommender_department']) && $_POST['recommender_department'] === $code) ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars($name); ?>
                 </option>
               <?php endforeach; ?>
             </select>
@@ -819,7 +1625,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
 
         <div class="form-row">
-          <div class="form-group"><span class="required">*</span> 聯絡電話 </label>
+          <div class="form-group">
+            <label for="recommender_phone"><span class="required">*</span> 聯絡電話</label>
             <input type="tel" id="recommender_phone" name="recommender_phone" 
                    value="<?php echo isset($_POST['recommender_phone']) ? htmlspecialchars($_POST['recommender_phone']) : ''; ?>" 
                    pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required>
@@ -849,8 +1656,10 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <label for="student_school"> <span class="required">*</span> 就讀學校 </label>
             <div class="modern-search-container">
               <div class="search-input-wrapper">
+                <!-- 學校：關聯 school_data.school_code -->
                 <input type="text" id="student_school" name="student_school" placeholder="請輸入學校名稱..." autocomplete="off" required 
                        value="<?php echo isset($_POST['student_school']) ? htmlspecialchars($_POST['student_school']) : ''; ?>" />
+                <input type="hidden" id="student_school_code" name="student_school_code" value="<?php echo isset($_POST['student_school_code']) ? htmlspecialchars($_POST['student_school_code']) : ''; ?>" />
                 <div class="search-icon">
                   <i class="fas fa-search"></i>
                 </div>
@@ -874,8 +1683,21 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <label for="student_grade">年級（選填）</label>
             <select id="student_grade" name="student_grade">
               <option value="">請選擇年級</option>
-              <option value="國三" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '國三') ? 'selected' : ''; ?>>國三</option>
-              <option value="已畢業" <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === '已畢業') ? 'selected' : ''; ?>>已畢業</option>
+              <?php 
+              // 只顯示國三 (J3) 和已畢業 (GRADUATED) - 被推薦人年級：國三、已畢業，關聯 identity_options.code
+              $student_grades = [];
+              if (isset($grades['J3'])) {
+                  $student_grades['J3'] = $grades['J3']; // 國三，關聯 identity_options.code
+              }
+              if (isset($grades['GRADUATED'])) {
+                  $student_grades['GRADUATED'] = $grades['GRADUATED']; // 已畢業（特殊狀態）
+              }
+              foreach ($student_grades as $code => $name): ?>
+                <option value="<?php echo htmlspecialchars($code); ?>" 
+                        <?php echo (isset($_POST['student_grade']) && $_POST['student_grade'] === $code) ? 'selected' : ''; ?>>
+                  <?php echo htmlspecialchars($name); ?>
+                </option>
+              <?php endforeach; ?>
             </select>
           </div>
           
@@ -917,11 +1739,12 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           <label for="student_interest">學生興趣領域（選填）</label>
           <select id="student_interest" name="student_interest">
             <option value="">請選擇興趣領域</option>
-            <option value="不限定" <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === '不限定') ? 'selected' : ''; ?>>不限定</option>
-            <?php foreach ($courses as $course): ?>
-              <option value="<?php echo htmlspecialchars($course); ?>" 
-                      <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === $course) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($course); ?>
+            <?php 
+            // 被推薦人科系（興趣）：關聯 departments.code
+            foreach ($departments as $code => $name): ?>
+              <option value="<?php echo htmlspecialchars($code); ?>" 
+                      <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === $code) ? 'selected' : ''; ?>>
+                <?php echo htmlspecialchars($name); ?>
               </option>
             <?php endforeach; ?>
           </select>
@@ -1094,21 +1917,41 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 驗證就讀學校格式（必須從系統選項中選擇）
             const studentSchoolInput = document.getElementById('student_school');
+            const studentSchoolCodeInput = document.getElementById('student_school_code');
             if (studentSchoolInput) {
                 const studentSchool = studentSchoolInput.value.trim();
+                const studentSchoolCode = studentSchoolCodeInput ? studentSchoolCodeInput.value.trim() : '';
+                
                 if (studentSchool) {
-                    // 檢查格式是否為：學校名稱 (縣市區)
-                    const schoolFormatPattern = /^.+ \(.+\)$/;
-                    if (!schoolFormatPattern.test(studentSchool)) {
-                        e.preventDefault();
-                        alert('請從系統提供的選項中選擇學校，不能自行輸入');
-                        studentSchoolInput.focus();
-                        studentSchoolInput.style.borderColor = '#d32f2f';
-                        showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
-                        setTimeout(() => {
-                            studentSchoolInput.style.borderColor = '';
-                        }, 3000);
-                        return false;
+                    // 檢查是否有有效的 school_code（只要存在且不為空即可，不限制格式）
+                    if (studentSchoolCode) {
+                        // 有 school_code，檢查顯示格式是否為學校名稱 (縣市區)
+                        const schoolFormatPattern = /^.+ \(.+\)$/;
+                        if (!schoolFormatPattern.test(studentSchool)) {
+                            e.preventDefault();
+                            alert('請從系統提供的選項中選擇學校，不能自行輸入');
+                            studentSchoolInput.focus();
+                            studentSchoolInput.style.borderColor = '#d32f2f';
+                            showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+                            setTimeout(() => {
+                                studentSchoolInput.style.borderColor = '';
+                            }, 3000);
+                            return false;
+                        }
+                    } else {
+                        // 沒有 school_code，檢查格式是否為學校名稱 (縣市區)
+                        const schoolFormatPattern = /^.+ \(.+\)$/;
+                        if (!schoolFormatPattern.test(studentSchool)) {
+                            e.preventDefault();
+                            alert('請從系統提供的選項中選擇學校，不能自行輸入');
+                            studentSchoolInput.focus();
+                            studentSchoolInput.style.borderColor = '#d32f2f';
+                            showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+                            setTimeout(() => {
+                                studentSchoolInput.style.borderColor = '';
+                            }, 3000);
+                            return false;
+                        }
                     }
                 }
             }
@@ -1185,6 +2028,12 @@ document.addEventListener('DOMContentLoaded', function() {
             clearBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 schoolInput.value = '';
+                const schoolCodeInput = document.getElementById('student_school_code');
+                if (schoolCodeInput) {
+                    schoolCodeInput.value = '';
+                }
+                schoolInput.removeAttribute('data-school-code');
+                schoolInput.removeAttribute('data-school-name');
                 resultsDiv.classList.remove('show');
                 clearBtn.style.display = 'none';
                 clearSchoolError();
@@ -1240,7 +2089,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
                         }
                         
-                        return `<div class="search-result-item" onclick="selectSchool('${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}')">
+                        return `<div class="search-result-item" onclick="selectSchool('${school.school_code || ''}', '${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}')">
                             <i class="fas fa-school"></i>
                             <div class="school-info">
                                 <span class="school-name">${displayName}</span>
@@ -1326,13 +2175,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 檢查格式是否為：學校名稱 (縣市區)
-        const schoolFormatPattern = /^.+ \(.+\)$/;
-        if (!schoolFormatPattern.test(value)) {
-            // 只有在下拉選單隱藏時才顯示錯誤
-            showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+        // 檢查格式：優先檢查隱藏欄位的 school_code，或檢查顯示格式
+        const schoolCodeInput = document.getElementById('student_school_code');
+        const hasValidCode = schoolCodeInput && schoolCodeInput.value.trim().length > 0;
+        
+        if (hasValidCode) {
+            // 如果有 school_code（只要存在且不為空即可），檢查顯示格式是否為學校名稱 (縣市區)
+            const schoolFormatPattern = /^.+ \(.+\)$/;
+            if (!schoolFormatPattern.test(value)) {
+                // 只有在下拉選單隱藏時才顯示錯誤
+                showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+            } else {
+                clearSchoolError();
+            }
         } else {
-            clearSchoolError();
+            // 沒有 school_code，檢查格式是否為學校名稱 (縣市區)
+            const schoolFormatPattern = /^.+ \(.+\)$/;
+            if (!schoolFormatPattern.test(value)) {
+                // 只有在下拉選單隱藏時才顯示錯誤
+                showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+            } else {
+                clearSchoolError();
+            }
         }
     }
     
@@ -1343,20 +2207,46 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 清除搜尋
     function clearSchoolSearch() {
-        document.getElementById('student_school').value = '';
+        const schoolInput = document.getElementById('student_school');
+        const schoolCodeInput = document.getElementById('student_school_code');
+        
+        if (schoolInput) {
+            schoolInput.value = '';
+            schoolInput.removeAttribute('data-school-code');
+            schoolInput.removeAttribute('data-school-name');
+        }
+        if (schoolCodeInput) {
+            schoolCodeInput.value = '';
+        }
+        
         document.getElementById('schoolResults').classList.remove('show');
         document.getElementById('clearSchoolSearch').style.display = 'none';
         clearSchoolError();
     }
     
     // 選擇學校
-    function selectSchool(schoolName, city, district) {
-        const fullSchoolName = `${schoolName} (${city || ''}${district || ''})`;
+    function selectSchool(schoolCode, schoolName, city, district) {
         const schoolInput = document.getElementById('student_school');
-        schoolInput.value = fullSchoolName;
+        const schoolCodeInput = document.getElementById('student_school_code');
+        
+        // 顯示學校名稱（格式：學校名稱 (縣市區)）
+        const displayName = `${schoolName} (${city || ''}${district || ''})`;
+        schoolInput.value = displayName;
+        
+        // 保存 school_code 到隱藏欄位
+        if (schoolCodeInput) {
+            schoolCodeInput.value = schoolCode;
+        }
+        
+        // 同時保存到 data 屬性作為備份
+        schoolInput.setAttribute('data-school-code', schoolCode);
+        schoolInput.setAttribute('data-school-name', displayName);
         
         document.getElementById('schoolResults').classList.remove('show');
-        document.getElementById('clearSchoolSearch').style.display = 'block';
+        const clearBtn = document.getElementById('clearSchoolSearch');
+        if (clearBtn) {
+            clearBtn.style.display = 'block';
+        }
         
         // 清除錯誤提示（因為用戶已從系統選項中選擇）
         clearSchoolError();

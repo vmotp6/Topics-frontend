@@ -312,20 +312,36 @@ function ensureGroupChatMessagesTable($pdo) {
 // 獲取我的群組
 function getMyGroups($pdo, $currentUsername) {
     try {
-        // 獲取用戶參與的群組 - 使用 group_chat_members 表和 group_info 表 - 修復 collation 衝突
-        $sql = "SELECT gm.group_id as id, 
-                       COALESCE(gi.group_name, gm.group_id) as group_name, 
-                       COUNT(gm2.id) as member_count,
-                       COALESCE(gi.created_by, gm.member_username) as created_by,
-                       gi.department
-                FROM group_chat_members gm 
-                JOIN group_chat_members gm2 ON gm.group_id COLLATE utf8mb4_unicode_ci = gm2.group_id COLLATE utf8mb4_unicode_ci
-                LEFT JOIN group_info gi ON gm.group_id COLLATE utf8mb4_unicode_ci = gi.group_id COLLATE utf8mb4_unicode_ci
-                WHERE gm.member_username = ? COLLATE utf8mb4_unicode_ci
-                GROUP BY gm.group_id 
-                ORDER BY gm.joined_at DESC";
-        $stmt = $pdo->prepare($sql);
+        // 先獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
         $stmt->execute([$currentUsername]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode([
+                'success' => false,
+                'error' => '找不到當前用戶'
+            ]);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 獲取用戶參與的群組 - 使用正確的 INT 類型 ID
+        $sql = "SELECT gi.id as id, 
+                       gi.group_name, 
+                       COUNT(DISTINCT gm2.user) as member_count,
+                       u_creator.username as created_by,
+                       gi.created_at
+                FROM group_chat_members gm 
+                JOIN group_info gi ON gm.group_id = gi.id
+                LEFT JOIN group_chat_members gm2 ON gm.group_id = gm2.group_id
+                LEFT JOIN user u_creator ON gi.created_by = u_creator.id
+                WHERE gm.user = ?
+                GROUP BY gi.id, gi.group_name, u_creator.username, gi.created_at
+                ORDER BY gi.created_at DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$userId]);
         $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode([
@@ -358,45 +374,52 @@ function createGroup($pdo, $currentUsername, $currentRole) {
     $transactionStarted = false;
     
     try {
-        // 先禁用外鍵檢查，確保表創建過程順利
-        $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+        // 先獲取創建者的用戶 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$createdBy]);
+        $creator = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        try {
-            // 檢查並創建/修復群組資訊表（必須先創建，因為其他表可能引用它）
-            ensureGroupInfoTable($pdo);
-            
-            // 檢查並創建/修復群組成員表
-            ensureGroupChatMembersTable($pdo);
-            
-            // 檢查並創建/修復群組訊息表
-            ensureGroupChatMessagesTable($pdo);
-        } finally {
-            // 重新啟用外鍵檢查
-            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+        if (!$creator) {
+            echo json_encode(['success' => false, 'error' => '找不到創建者用戶']);
+            return;
         }
+        
+        $creatorId = $creator['id'];
         
         // 開始事務
         $pdo->beginTransaction();
         $transactionStarted = true;
         
-        // 創建群組 - 使用簡單的群組ID
-        $groupId = time() . '_' . rand(1000, 9999); // 生成唯一的群組ID
+        // 注意：不調用 ensure 函數，因為用戶要求不改數據庫格式
         
-        // 保存群組資訊
-        $sql = "INSERT INTO group_info (group_id, group_name, created_by, department, created_at) VALUES (?, ?, ?, ?, NOW())";
+        // 創建群組 - 使用 AUTO_INCREMENT 的 id
+        $sql = "INSERT INTO group_info (group_name, created_by, created_at) VALUES (?, ?, NOW())";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $groupName, $createdBy, $department]);
+        $stmt->execute([$groupName, $creatorId]);
+        
+        // 獲取新創建的群組 ID
+        $groupId = $pdo->lastInsertId();
         
         // 添加創建者為成員
-        $sql = "INSERT INTO group_chat_members (group_id, member_username, joined_at) VALUES (?, ?, NOW())";
+        $sql = "INSERT INTO group_chat_members (group_id, user, joined_at) VALUES (?, ?, NOW())";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $createdBy]);
+        $stmt->execute([$groupId, $creatorId]);
         
-        // 添加其他成員
+        // 添加其他成員 - 將 username 轉換為 user.id
         foreach ($members as $member) {
-            $sql = "INSERT INTO group_chat_members (group_id, member_username, joined_at) VALUES (?, ?, NOW())";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$groupId, $member['username']]);
+            if (isset($member['username'])) {
+                // 先獲取成員的用戶 ID
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+                $stmt->execute([$member['username']]);
+                $memberUser = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($memberUser && $memberUser['id'] != $creatorId) {
+                    // 避免重複添加創建者
+                    $sql = "INSERT IGNORE INTO group_chat_members (group_id, user, joined_at) VALUES (?, ?, NOW())";
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute([$groupId, $memberUser['id']]);
+                }
+            }
         }
         
         $pdo->commit();
@@ -412,7 +435,7 @@ function createGroup($pdo, $currentUsername, $currentRole) {
         // 只有在事務已開始時才回滾
         if ($transactionStarted) {
             try {
-        $pdo->rollBack();
+                $pdo->rollBack();
             } catch (PDOException $rollbackError) {
                 // 忽略回滾錯誤，記錄即可
                 error_log("回滾事務失敗: " . $rollbackError->getMessage());
@@ -431,8 +454,8 @@ function createGroup($pdo, $currentUsername, $currentRole) {
 function getGroupMessages($pdo) {
     $groupId = $_GET['group_id'] ?? '';
     
-    if (empty($groupId)) {
-        echo json_encode(['success' => false, 'error' => '缺少群組ID參數']);
+    if (empty($groupId) || !is_numeric($groupId)) {
+        echo json_encode(['success' => false, 'error' => '缺少有效的群組ID參數']);
         return;
     }
     
@@ -450,38 +473,31 @@ function getGroupMessages($pdo) {
             return;
         }
         
-        // 檢查表結構，自動適配
-        $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
-                            WHERE TABLE_SCHEMA = 'topics_good' 
-                            AND TABLE_NAME = 'group_chat_messages' 
-                            AND COLUMN_NAME IN ('from_user', 'user_id')");
-        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        // 使用正確的 INT 類型 ID 查詢
+        // from_user 是 INT 類型，外鍵到 user.id
+        // 注意：group_chat_messages 表沒有 id 欄位，使用組合鍵作為唯一標識
+        $sql = "SELECT CONCAT(gm.group_id, '_', gm.from_user, '_', UNIX_TIMESTAMP(gm.timestamp)) as id,
+                       gm.group_id, 
+                       u.username as from_user, 
+                       gm.message, 
+                       COALESCE(u.role, '用戶') as role, 
+                       gm.timestamp,
+                       u.name as from_user_name,
+                       u.id as from_user_id
+                FROM group_chat_messages gm 
+                LEFT JOIN user u ON gm.from_user = u.id 
+                WHERE gm.group_id = ?
+                ORDER BY gm.timestamp ASC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$groupId]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // 先檢查是否有任何訊息（用於調試）
-        $checkSql = "SELECT COUNT(*) as count FROM group_chat_messages WHERE group_id = ? COLLATE utf8mb4_unicode_ci";
+        $checkSql = "SELECT COUNT(*) as count FROM group_chat_messages WHERE group_id = ?";
         $checkStmt = $pdo->prepare($checkSql);
         $checkStmt->execute([$groupId]);
         $countResult = $checkStmt->fetch(PDO::FETCH_ASSOC);
         $messageCount = $countResult['count'] ?? 0;
-        
-        if (in_array('user_id', $columns)) {
-            // 使用正規化版本
-            $sql = "SELECT gm.id, gm.group_id, u.username as from_user, gm.message, gm.role, gm.timestamp, u.role as user_role 
-                    FROM group_chat_messages gm 
-                    LEFT JOIN user u ON gm.user_id = u.id 
-                    WHERE gm.group_id = ? COLLATE utf8mb4_unicode_ci
-                    ORDER BY gm.timestamp ASC";
-        } else {
-            // 使用舊版本 - 修復 collation 衝突
-            $sql = "SELECT gm.id, gm.group_id, gm.from_user, gm.message, gm.role, gm.timestamp, COALESCE(u.role, gm.role) as user_role 
-                    FROM group_chat_messages gm 
-                    LEFT JOIN user u ON gm.from_user COLLATE utf8mb4_unicode_ci = u.username COLLATE utf8mb4_unicode_ci
-                    WHERE gm.group_id = ? COLLATE utf8mb4_unicode_ci
-                    ORDER BY gm.timestamp ASC";
-        }
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId]);
-        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // 調試信息
         error_log("獲取群組訊息 - group_id: $groupId, 訊息數量: " . count($messages) . ", 資料庫計數: $messageCount");
@@ -492,8 +508,7 @@ function getGroupMessages($pdo) {
             'debug' => [
                 'group_id' => $groupId,
                 'message_count' => count($messages),
-                'db_count' => $messageCount,
-                'has_user_id_column' => in_array('user_id', $columns)
+                'db_count' => $messageCount
             ]
         ]);
         
@@ -515,18 +530,30 @@ function sendGroupMessage($pdo, $currentUsername, $currentRole) {
     $fromUser = $currentUsername;
     $role = $currentRole;
     
-    if (empty($groupId) || empty($fromUser) || empty($message)) {
-        echo json_encode(['success' => false, 'error' => '缺少必要參數']);
+    if (empty($groupId) || !is_numeric($groupId) || empty($fromUser) || empty($message)) {
+        echo json_encode(['success' => false, 'error' => '缺少必要參數或群組ID無效']);
         return;
     }
     
     try {
-        // 檢查用戶是否為群組成員 - 修復 collation 衝突
+        // 先獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$fromUser]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到指定的用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 檢查用戶是否為群組成員 - 使用 INT 類型的 ID
         $sql = "SELECT COUNT(*) FROM group_chat_members 
-                WHERE group_id = ? COLLATE utf8mb4_unicode_ci 
-                AND member_username = ? COLLATE utf8mb4_unicode_ci";
+                WHERE group_id = ? 
+                AND user = ?";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $fromUser]);
+        $stmt->execute([$groupId, $userId]);
         $isMember = $stmt->fetchColumn() > 0;
         
         if (!$isMember) {
@@ -534,46 +561,21 @@ function sendGroupMessage($pdo, $currentUsername, $currentRole) {
             return;
         }
         
-        // 檢查表結構，自動適配
-        $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
-                            WHERE TABLE_SCHEMA = 'topics_good' 
-                            AND TABLE_NAME = 'group_chat_messages' 
-                            AND COLUMN_NAME IN ('from_user', 'user_id')");
-        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        
-        if (in_array('user_id', $columns)) {
-            // 使用正規化版本：先將 username 轉換為 user_id - 修復 collation 衝突
-            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ? COLLATE utf8mb4_unicode_ci");
-            $stmt->execute([$fromUser]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            $userId = $user ? $user['id'] : null;
-            
-            if (!$userId) {
-                echo json_encode(['success' => false, 'error' => '找不到指定的用戶']);
-                return;
-            }
-            
-            $sql = "INSERT INTO group_chat_messages (group_id, user_id, message, role, timestamp) VALUES (?, ?, ?, ?, NOW())";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$groupId, $userId, $message, $role]);
-        } else {
-            // 使用舊版本
-            $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, role, timestamp) VALUES (?, ?, ?, ?, NOW())";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$groupId, $fromUser, $message, $role]);
-        }
-        
-        $messageId = $pdo->lastInsertId();
+        // 使用 INT 類型的 from_user（對應 user.id）
+        $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, timestamp) VALUES (?, ?, ?, NOW())";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$groupId, $userId, $message]);
         
         // 調試信息
-        error_log("群組訊息發送成功 - group_id: $groupId, from_user: $fromUser, message_id: $messageId");
+        error_log("群組訊息發送成功 - group_id: $groupId, from_user_id: $userId, from_user: $fromUser");
         
         echo json_encode([
             'success' => true,
             'message' => '訊息發送成功',
-            'id' => $messageId,
+            'id' => $groupId, // 注意：group_chat_messages 表沒有 id 欄位，所以返回 group_id
             'debug' => [
                 'group_id' => $groupId,
+                'from_user_id' => $userId,
                 'from_user' => $fromUser,
                 'role' => $role,
                 'message_length' => strlen($message)
@@ -597,18 +599,30 @@ function updateGroupName($pdo, $currentUsername) {
     // 使用 session 中的用戶名，不信任前端傳遞的值
     $username = $currentUsername;
     
-    if (empty($groupId) || empty($newName) || empty($username)) {
-        echo json_encode(['success' => false, 'error' => '缺少必要參數']);
+    if (empty($groupId) || !is_numeric($groupId) || empty($newName) || empty($username)) {
+        echo json_encode(['success' => false, 'error' => '缺少必要參數或群組ID無效']);
         return;
     }
     
     try {
-        // 檢查用戶是否為群組成員 - 修復 collation 衝突
+        // 先獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到當前用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 檢查用戶是否為群組成員 - 使用 INT 類型的 ID
         $sql = "SELECT COUNT(*) FROM group_chat_members 
-                WHERE group_id = ? COLLATE utf8mb4_unicode_ci 
-                AND member_username = ? COLLATE utf8mb4_unicode_ci";
+                WHERE group_id = ? 
+                AND user = ?";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $username]);
+        $stmt->execute([$groupId, $userId]);
         $isMember = $stmt->fetchColumn() > 0;
         
         if (!$isMember) {
@@ -616,23 +630,10 @@ function updateGroupName($pdo, $currentUsername) {
             return;
         }
         
-        // 檢查群組資訊是否存在，如果不存在則創建 - 修復 collation 衝突
-        $sql = "SELECT COUNT(*) FROM group_info WHERE group_id = ? COLLATE utf8mb4_unicode_ci";
+        // 更新群組名稱 - 使用 INT 類型的 id
+        $sql = "UPDATE group_info SET group_name = ? WHERE id = ?";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId]);
-        $exists = $stmt->fetchColumn() > 0;
-        
-        if ($exists) {
-            // 更新現有群組資訊
-            $sql = "UPDATE group_info SET group_name = ? WHERE group_id = ? COLLATE utf8mb4_unicode_ci";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$newName, $groupId]);
-        } else {
-            // 創建新的群組資訊記錄
-            $sql = "INSERT INTO group_info (group_id, group_name, created_by, created_at) VALUES (?, ?, ?, NOW())";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$groupId, $newName, $username]);
-        }
+        $stmt->execute([$newName, $groupId]);
         
         echo json_encode([
             'success' => true,

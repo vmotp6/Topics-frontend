@@ -7,18 +7,16 @@ header('Access-Control-Allow-Headers: Content-Type');
 // 載入 session 配置
 require_once '../session_config.php';
 
-// 資料庫連接
-$host = 'localhost';
-$dbname = 'topics_good';
-$db_username = 'root';
-$db_password = '';
+// 載入資料庫配置
+require_once '../config.php';
 
+// 資料庫連接（使用 config.php 中的配置）
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch(PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => '資料庫連接失敗']);
+    echo json_encode(['error' => '資料庫連接失敗: ' . $e->getMessage()]);
     exit;
 }
 
@@ -186,11 +184,38 @@ function findExistingSchoolIndex($matches, $uniqueKey) {
 // 從資料庫獲取國民中學資料
 function fetchJuniorHighSchools($pdo) {
     try {
-        $stmt = $pdo->prepare("SELECT name, city, district, type, school_code, address, phone, website, data_source FROM school_data WHERE type = '國民中學' AND is_active = 1 ORDER BY city, district, name");
+        // 根据实际表结构：school_code, name, city, district, address, phone, is_active
+        // 表中没有 type 字段，需要通过名称过滤国中数据
+        
+        // 查询所有启用的学校（根据名称过滤国中）
+        $query = "SELECT school_code, name, city, district, address, phone, is_active 
+                  FROM school_data 
+                  WHERE is_active = 1 
+                  AND (name LIKE '%國中%' OR name LIKE '%國民中學%' OR name LIKE '%附設國中部%')
+                  ORDER BY city, district, name";
+        
+        error_log("执行查询: " . $query);
+        
+        $stmt = $pdo->prepare($query);
         $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // 为每条记录添加 type 字段（用于兼容性）
+        foreach ($results as &$row) {
+            $row['type'] = '國民中學';
+            // 添加其他可能缺失的字段（设为null）
+            if (!isset($row['school_code'])) $row['school_code'] = null;
+            if (!isset($row['website'])) $row['website'] = null;
+            if (!isset($row['data_source'])) $row['data_source'] = null;
+        }
+        
+        error_log("fetchJuniorHighSchools: 找到 " . count($results) . " 条国民中学记录");
+        
+        return $results;
     } catch (PDOException $e) {
         error_log("獲取學校資料失敗: " . $e->getMessage());
+        error_log("SQL错误信息: " . $e->getMessage());
+        error_log("错误代码: " . $e->getCode());
         return [];
     }
 }
@@ -203,12 +228,19 @@ switch ($action) {
         $keyword = $_GET['keyword'] ?? '';
         $city = $_GET['city'] ?? '';
         
+        // 调试信息
+        error_log("API搜索请求: keyword=" . $keyword . ", city=" . $city);
+        
         if (strlen($keyword) < 2) {
             echo json_encode(['schools' => [], 'message' => '請輸入至少2個字元']);
             exit;
         }
         
         $schools = fetchJuniorHighSchools($pdo);
+        
+        // 调试信息
+        error_log("从数据库获取到 " . count($schools) . " 条学校记录");
+        
         $matches = [];
         $seen_schools = []; // 用於去重的陣列
         
@@ -227,7 +259,7 @@ switch ($action) {
             }
             
             // 2. 學校代碼匹配
-            if (stripos($school['school_code'], $keyword) !== false) {
+            if (!empty($school['school_code']) && stripos($school['school_code'], $keyword) !== false) {
                 $match = true;
             }
             
@@ -256,6 +288,17 @@ switch ($action) {
                 // 檢查是否已經存在相同的學校
                 if (!isset($seen_schools[$unique_key])) {
                     $seen_schools[$unique_key] = true;
+                    
+                    // 確保所有必需字段都存在
+                    if (!isset($school['district'])) $school['district'] = '';
+                    if (!isset($school['city'])) $school['city'] = '';
+                    if (!isset($school['name'])) $school['name'] = '';
+                    // 確保 school_code 存在
+                    if (!isset($school['school_code']) || empty($school['school_code'])) {
+                        error_log("警告: 學校沒有 school_code: " . $school['name']);
+                        // 如果沒有 school_code，跳過這條記錄
+                        continue;
+                    }
                     
                     // 選擇最佳的學校名稱顯示（優先選擇較短、較簡潔的名稱）
                     $school['display_name'] = $school['name'];
@@ -307,7 +350,11 @@ switch ($action) {
         // 限制結果數量
         $matches = array_slice($matches, 0, 20);
         
-        echo json_encode([
+        // 调试信息
+        error_log("搜索匹配结果: 找到 " . count($matches) . " 条匹配记录");
+        
+        // 确保返回正确的JSON格式
+        $response = [
             'schools' => $matches,
             'total' => count($matches),
             'keyword' => $keyword,
@@ -316,7 +363,16 @@ switch ($action) {
                 'unique_keys' => array_keys($seen_schools),
                 'deduplication_enabled' => true
             ]
-        ]);
+        ];
+        
+        // 如果启用调试模式，添加更多信息
+        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+            $response['debug']['all_schools_count'] = count($schools);
+            $response['debug']['matches_count'] = count($matches);
+            $response['debug']['first_school'] = !empty($schools) ? $schools[0] : null;
+        }
+        
+        echo json_encode($response, JSON_UNESCAPED_UNICODE);
         break;
         
     case 'cities':
@@ -335,17 +391,28 @@ switch ($action) {
         }
         
         try {
-            $stmt = $pdo->prepare("SELECT name, city, district, type, school_code FROM school_data WHERE city = ? AND type = '國民中學' AND is_active = 1 ORDER BY district, name");
+            // 根据实际表结构，没有 type 字段，通过名称过滤
+            $stmt = $pdo->prepare("SELECT school_code, name, city, district, address, phone 
+                                   FROM school_data 
+                                   WHERE city = ? 
+                                   AND is_active = 1 
+                                   AND (name LIKE '%國中%' OR name LIKE '%國民中學%' OR name LIKE '%附設國中部%')
+                                   ORDER BY district, name");
             $stmt->execute([$city]);
             $schools = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 添加 type 字段用于兼容性
+            foreach ($schools as &$school) {
+                $school['type'] = '國民中學';
+            }
             
             echo json_encode([
                 'schools' => $schools,
                 'city' => $city,
                 'total' => count($schools)
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
-            echo json_encode(['error' => '查詢失敗: ' . $e->getMessage()]);
+            echo json_encode(['error' => '查詢失敗: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
         break;
         
@@ -375,18 +442,29 @@ switch ($action) {
         }
         
         try {
-            $stmt = $pdo->prepare("SELECT name, city, district, type, school_code, address, phone, website FROM school_data WHERE name LIKE ? AND is_active = 1");
+            // 根据实际表结构查询
+            $stmt = $pdo->prepare("SELECT school_code, name, city, district, address, phone 
+                                   FROM school_data 
+                                   WHERE name LIKE ? 
+                                   AND is_active = 1 
+                                   AND (name LIKE '%國中%' OR name LIKE '%國民中學%' OR name LIKE '%附設國中部%')");
             $stmt->execute(["%$school_name%"]);
             $schools = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 添加 type 字段用于兼容性
+            foreach ($schools as &$school) {
+                $school['type'] = '國民中學';
+                if (!isset($school['website'])) $school['website'] = null;
+            }
             
             echo json_encode([
                 'school_name' => $school_name,
                 'found' => count($schools) > 0,
                 'count' => count($schools),
                 'schools' => $schools
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
         } catch (PDOException $e) {
-            echo json_encode(['error' => '查詢失敗: ' . $e->getMessage()]);
+            echo json_encode(['error' => '查詢失敗: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
         break;
         

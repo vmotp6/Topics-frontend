@@ -15,9 +15,12 @@ require_once __DIR__ . '/PHPMailer/src/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// 檢查登入狀態和角色
+// 檢查登入狀態和角色（支援角色代碼和中文名稱）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
-if (!$isLoggedIn || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+$user_role = $_SESSION['role'] ?? '';
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+
+if (!$isLoggedIn || !isset($_SESSION['role']) || !$is_teacher) {
 	header("Location: index.php");
 	exit;
 }
@@ -36,8 +39,9 @@ $default_teacher_name = '';
 $default_teacher_email = '';
 try {
 	// 從 teacher 表和 user 表獲取老師資訊
+	// 注意：name 欄位在 user 表中，不在 teacher 表中
 	$stmt = $pdo->prepare("
-		SELECT t.name, t.department, u.email 
+		SELECT u.name, t.department, u.email 
 		FROM teacher t
 		INNER JOIN user u ON t.user_id = u.id 
 		WHERE u.username = ?
