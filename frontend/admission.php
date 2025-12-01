@@ -8,9 +8,10 @@ require_once 'config.php';
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
-// 取得啟用的場次（包含最多人數和剩餘名額）
+// 取得啟用的場次（包含最多人數、已報名人數和剩餘名額）
 $sessions = [];
 $sessions_query = "SELECT s.id, s.session_name, s.session_date, s.session_type, s.max_participants,
+                          COUNT(a.id) as registered_count,
                           (s.max_participants - COUNT(a.id)) as remaining_spots
                    FROM admission_sessions s 
                    LEFT JOIN admission_applications a ON s.id = a.session_id 
@@ -245,21 +246,27 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
         }
     }
     
-    // 驗證電子郵件和申請ID的匹配
-    $verify_query = "SELECT id FROM admission_applications WHERE id = ? AND email = ?";
-    $verify_stmt = $conn->prepare($verify_query);
-    $verify_stmt->bind_param("is", $application_id, $email);
-    $verify_stmt->execute();
-    $verify_result = $verify_stmt->get_result();
-    
-    if ($verify_result->num_rows > 0) {
-        // 檢查新場次是否額滿
+    // 檢查第一科系和第二科系是否重複
+    if (!empty($new_course_priority_1) && !empty($new_course_priority_2) && $new_course_priority_1 === $new_course_priority_2) {
+        $message = "第一科系和第二科系不能相同，請選擇不同的科系。";
+        $messageType = "error";
+    } else {
+        // 驗證電子郵件和申請ID的匹配
+        $verify_query = "SELECT id FROM admission_applications WHERE id = ? AND email = ?";
+        $verify_stmt = $conn->prepare($verify_query);
+        $verify_stmt->bind_param("is", $application_id, $email);
+        $verify_stmt->execute();
+        $verify_result = $verify_stmt->get_result();
+        
+        if ($verify_result->num_rows > 0) {
+            // 檢查新場次是否額滿
         $session_check_query = "SELECT s.max_participants, 
-                                      (s.max_participants - COUNT(a.id)) as remaining_spots
+                                      (s.max_participants - COUNT(a.id)) as remaining_spots,
+                                      s.session_date
                                FROM admission_sessions s 
                                LEFT JOIN admission_applications a ON s.id = a.session_id 
                                WHERE s.id = ? AND s.is_active = 1
-                               GROUP BY s.id, s.max_participants";
+                               GROUP BY s.id, s.max_participants, s.session_date";
         $session_check_stmt = $conn->prepare($session_check_query);
         $session_check_stmt->bind_param("i", $new_session_id);
         $session_check_stmt->execute();
@@ -270,6 +277,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                 $message = "所選場次已額滿，請選擇其他場次。";
                 $messageType = "error";
             } else {
+                // 檢查該 email 是否在同一天已經有其他場次的報名（排除當前正在修改的報名記錄）
+                $duplicate_check_query = "SELECT COUNT(*) as count 
+                                           FROM admission_applications a
+                                           INNER JOIN admission_sessions s ON a.session_id = s.id
+                                           WHERE a.email = ? AND s.session_date = ? AND s.is_active = 1 AND a.id != ?";
+                $duplicate_check_stmt = $conn->prepare($duplicate_check_query);
+                $duplicate_check_stmt->bind_param("ssi", $email, $session_row['session_date'], $application_id);
+                $duplicate_check_stmt->execute();
+                $duplicate_check_result = $duplicate_check_stmt->get_result();
+                
+                if ($duplicate_row = $duplicate_check_result->fetch_assoc()) {
+                    if ($duplicate_row['count'] > 0) {
+                        $message = "您已經在同一天報名過其他場次，每人同一天只能報名一次。";
+                        $messageType = "error";
+                        $duplicate_check_stmt->close();
+                        $session_check_stmt->close();
+                        $verify_stmt->close();
+                        // 繼續執行，不進行更新
+                        goto skip_modify_update;
+                    }
+                }
+                $duplicate_check_stmt->close();
                 // 取得新場次資訊
                 $session_info_query = "SELECT session_name FROM admission_sessions WHERE id = ?";
                 $session_info_stmt = $conn->prepare($session_info_query);
@@ -385,11 +414,13 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
             $messageType = "error";
         }
         $session_check_stmt->close();
-    } else {
-        $message = "無效的申請記錄，無法修改。";
-        $messageType = "error";
+        } else {
+            $message = "無效的申請記錄，無法修改。";
+            $messageType = "error";
+        }
+        $verify_stmt->close();
+        skip_modify_update:
     }
-    $verify_stmt->close();
 }
 
 // 處理表單提交
@@ -407,11 +438,12 @@ if ($_POST && !isset($_POST['action'])) {
     // 驗證場次是否額滿
     if (!empty($_POST['session_choice'])) {
         $session_check_query = "SELECT s.max_participants, 
-                                      (s.max_participants - COUNT(a.id)) as remaining_spots
+                                      (s.max_participants - COUNT(a.id)) as remaining_spots,
+                                      s.session_date
                                FROM admission_sessions s 
                                LEFT JOIN admission_applications a ON s.id = a.session_id 
                                WHERE s.id = ? AND s.is_active = 1
-                               GROUP BY s.id, s.max_participants";
+                               GROUP BY s.id, s.max_participants, s.session_date";
         $session_check_stmt = $conn->prepare($session_check_query);
         $session_check_stmt->bind_param("i", $_POST['session_choice']);
         $session_check_stmt->execute();
@@ -420,6 +452,25 @@ if ($_POST && !isset($_POST['action'])) {
         if ($session_row = $session_check_result->fetch_assoc()) {
             if ($session_row['remaining_spots'] <= 0) {
                 $missing_fields[] = 'session_full';
+            } else {
+                // 檢查該 email 是否在同一天已經有其他場次的報名
+                if (!empty($_POST['email'])) {
+                    $duplicate_check_query = "SELECT COUNT(*) as count 
+                                               FROM admission_applications a
+                                               INNER JOIN admission_sessions s ON a.session_id = s.id
+                                               WHERE a.email = ? AND s.session_date = ? AND s.is_active = 1";
+                    $duplicate_check_stmt = $conn->prepare($duplicate_check_query);
+                    $duplicate_check_stmt->bind_param("ss", $_POST['email'], $session_row['session_date']);
+                    $duplicate_check_stmt->execute();
+                    $duplicate_check_result = $duplicate_check_stmt->get_result();
+                    
+                    if ($duplicate_row = $duplicate_check_result->fetch_assoc()) {
+                        if ($duplicate_row['count'] > 0) {
+                            $missing_fields[] = 'duplicate_same_day';
+                        }
+                    }
+                    $duplicate_check_stmt->close();
+                }
             }
         } else {
             $missing_fields[] = 'session_invalid';
@@ -516,6 +567,11 @@ if ($_POST && !isset($_POST['action'])) {
                     }
                 }
             }
+        }
+        
+        // 檢查第一科系和第二科系是否重複
+        if (!empty($course_priority_1) && !empty($course_priority_2) && $course_priority_1 === $course_priority_2) {
+            $missing_fields[] = 'duplicate_course';
         }
         
         // 確保資料庫連接有效
@@ -718,6 +774,8 @@ if ($_POST && !isset($_POST['action'])) {
             'session_choice' => '請選擇參加場次',
             'session_full' => '所選場次已額滿，請選擇其他場次',
             'session_invalid' => '所選場次無效，請重新選擇',
+            'duplicate_same_day' => '您已經在同一天報名過其他場次，每人同一天只能報名一次',
+            'duplicate_course' => '第一科系和第二科系不能相同，請選擇不同的科系',
             'receive_info' => '請選擇是否願意收到升學訊息',
             'captcha' => '請填寫驗證碼',
             'captcha_invalid' => '驗證碼錯誤'
@@ -980,7 +1038,8 @@ $conn->close();
                             <?php foreach ($sessions as $session): 
                                 $is_full = $session['remaining_spots'] <= 0;
                                 $session_display = $session['session_name'] . ($session['session_type'] === '線上' ? ' (線上)' : '');
-                                $spots_info = "（{$session['remaining_spots']}/{$session['max_participants']} 人）";
+                                $registered_count = $session['registered_count'] ?? 0;
+                                $spots_info = "（{$registered_count}/{$session['max_participants']} 人）";
                             ?>
                                 <label class="radio-item <?php echo $is_full ? 'disabled' : ''; ?>">
                                     <input type="radio" name="session_choice" value="<?php echo $session['id']; ?>" 
@@ -1283,6 +1342,18 @@ $conn->close();
                 alert('請至少選擇一個科系！');
                 document.getElementById('selectedCourses').scrollIntoView({ behavior: 'smooth' });
                 return false;
+            }
+
+            // 檢查第一科系和第二科系是否重複
+            if (selectedCourses.length >= 2) {
+                const course1 = typeof selectedCourses[0] === 'object' ? selectedCourses[0].code : selectedCourses[0];
+                const course2 = typeof selectedCourses[1] === 'object' ? selectedCourses[1].code : selectedCourses[1];
+                if (course1 === course2) {
+                    e.preventDefault();
+                    alert('第一科系和第二科系不能相同，請選擇不同的科系！');
+                    document.getElementById('selectedCourses').scrollIntoView({ behavior: 'smooth' });
+                    return false;
+                }
             }
 
             // 檢查是否選擇了額滿的場次
@@ -1683,6 +1754,58 @@ $conn->close();
                 
                 document.body.appendChild(modal);
                 console.log('Modal created and added to body');
+                
+                // 添加表單驗證：檢查第一科系和第二科系是否重複
+                const modifyForm = modal.querySelector('.modify-form');
+                const course1Select = modal.querySelector('select[name="new_course_priority_1"]');
+                const course2Select = modal.querySelector('select[name="new_course_priority_2"]');
+                
+                // 創建錯誤提示元素
+                let errorMessage = modal.querySelector('.course-duplicate-error');
+                if (!errorMessage) {
+                    errorMessage = document.createElement('div');
+                    errorMessage.className = 'course-duplicate-error';
+                    errorMessage.style.cssText = 'color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; display: none;';
+                    errorMessage.innerHTML = '<i class="fas fa-exclamation-circle"></i> 第一科系和第二科系不能相同，請選擇不同的科系';
+                    course2Select.parentElement.appendChild(errorMessage);
+                }
+                
+                // 檢查科系是否重複的函數
+                function checkCourseDuplicate() {
+                    const course1 = course1Select.value;
+                    const course2 = course2Select.value;
+                    
+                    if (course1 && course2 && course1 === course2) {
+                        errorMessage.style.display = 'block';
+                        course1Select.style.borderColor = '#d32f2f';
+                        course1Select.style.borderWidth = '2px';
+                        course2Select.style.borderColor = '#d32f2f';
+                        course2Select.style.borderWidth = '2px';
+                        return true; // 有重複
+                    } else {
+                        errorMessage.style.display = 'none';
+                        course1Select.style.borderColor = '';
+                        course1Select.style.borderWidth = '';
+                        course2Select.style.borderColor = '';
+                        course2Select.style.borderWidth = '';
+                        return false; // 沒有重複
+                    }
+                }
+                
+                // 當選擇改變時檢查
+                course1Select.addEventListener('change', checkCourseDuplicate);
+                course2Select.addEventListener('change', checkCourseDuplicate);
+                
+                // 表單提交時驗證
+                modifyForm.addEventListener('submit', function(e) {
+                    if (checkCourseDuplicate()) {
+                        e.preventDefault();
+                        alert('第一科系和第二科系不能相同，請選擇不同的科系！');
+                        course2Select.focus();
+                        return false;
+                    }
+                });
+                
             } catch (error) {
                 console.error('Error in showModifyForm:', error);
                 alert('開啟修改表單時發生錯誤，請重新整理頁面後再試。');
@@ -1699,7 +1822,8 @@ $conn->close();
                     sessions.forEach(session => {
                         const selected = session.id == currentSessionId ? 'selected' : '';
                         const sessionDisplay = session.session_name + (session.session_type === '線上' ? ' (線上)' : '');
-                        const spotsInfo = `（${session.remaining_spots}/${session.max_participants} 人）`;
+                        const registeredCount = session.registered_count || 0;
+                        const spotsInfo = `（${registeredCount}/${session.max_participants} 人）`;
                         const isFull = session.remaining_spots <= 0;
                         const fullText = isFull ? ' - 已滿' : '';
                         const disabled = isFull ? 'disabled' : '';
