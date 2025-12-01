@@ -388,8 +388,8 @@ try {
         <form id="profileForm" enctype="multipart/form-data">
             <!-- 基本資料 -->
             <div class="form-group">
-                <label for="name">姓名 <span style="color: #f5222d;">*</span></label>
-                <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name ?? ''); ?>" required>
+                <label for="name">姓名</label>
+                <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name ?? ''); ?>">
             </div>
             
             <!-- 學生專用欄位 -->
@@ -399,8 +399,8 @@ try {
             </div>
             
             <div class="form-group">
-                <label for="department">科系 <span style="color: #f5222d;">*</span></label>
-                <select id="department" name="department" required>
+                <label for="department">科系</label>
+                <select id="department" name="department">
                     <option value="" <?php echo empty($current_department ?? '') ? 'selected' : ''; ?>>請選擇科系</option>
                     <?php
                     // 從資料庫動態載入科系選項
@@ -449,8 +449,8 @@ try {
             </div>
             
             <div class="form-group">
-                <label for="phone">電話 <span style="color: #f5222d;">*</span></label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>" required>
+                <label for="phone">電話</label>
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>">
             </div>
             
             <button type="submit" class="submit-btn">儲存資料</button>
@@ -584,14 +584,6 @@ try {
             const name = document.getElementById('name') ? document.getElementById('name').value : '';
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
-            
-            // 驗證必填欄位
-            if (!name || !department || !phone) {
-                const messageDiv = document.getElementById('message');
-                messageDiv.className = 'message error';
-                messageDiv.textContent = '請填寫所有必填欄位（姓名、科系、電話）';
-                return;
-            }
             
             const formData = new FormData();
             formData.append('username', username);
