@@ -692,7 +692,7 @@ def register():
             # 插入新用戶（角色預設為學生，使用角色代碼 'STUDENT'）
             print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
-                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STUDENT')",
+                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STU')",
                 (username, hashed_password, email, name)
             )
             user_id = cursor.lastrowid

@@ -96,6 +96,36 @@ try {
     $message_id = $pdo->lastInsertId();
     error_log("消息保存成功，ID: {$message_id}");
     
+    // 自動將聯絡人保存到 user_contacts 表（雙向保存）
+    try {
+        // 創建聯絡人表（如果不存在）
+        $pdo->exec("CREATE TABLE IF NOT EXISTS user_contacts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL COMMENT '用戶ID',
+            contact_user_id INT NOT NULL COMMENT '聯絡人用戶ID',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_user_contact (user_id, contact_user_id),
+            INDEX idx_user_id (user_id),
+            INDEX idx_contact_user_id (contact_user_id),
+            FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+            FOREIGN KEY (contact_user_id) REFERENCES user(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        
+        // 保存發送者到接收者的聯絡人關係
+        $stmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+        $stmt->execute([$fromUserId, $toUserId]);
+        
+        // 保存接收者到發送者的聯絡人關係（雙向）
+        $stmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+        $stmt->execute([$toUserId, $fromUserId]);
+        
+        error_log("自動保存聯絡人關係: {$fromUserId} <-> {$toUserId}");
+    } catch (PDOException $e) {
+        error_log("保存聯絡人關係失敗: " . $e->getMessage());
+        // 不影響訊息保存，繼續執行
+    }
+    
     // 發送FCM推播通知
     $notification_sent = false;
     try {

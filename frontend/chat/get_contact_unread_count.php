@@ -80,28 +80,76 @@ try {
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
         // 獲取每個聯絡人的未讀訊息數量（使用舊版本）
-        // 如果表中有 is_read 欄位，使用它；否則查詢所有未讀訊息
-        $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+        // 檢查 from_user 和 to_user 字段的類型（INT 還是 VARCHAR）
+        $stmt = $pdo->query("SELECT DATA_TYPE FROM information_schema.COLUMNS 
                             WHERE TABLE_SCHEMA = 'topics_good' 
                             AND TABLE_NAME = 'private_chat_history' 
-                            AND COLUMN_NAME = 'is_read'");
-        $hasIsRead = $stmt->rowCount() > 0;
+                            AND COLUMN_NAME = 'from_user'");
+        $fromUserType = $stmt->fetch(PDO::FETCH_COLUMN);
+        $isIntType = ($fromUserType === 'int' || $fromUserType === 'tinyint' || $fromUserType === 'smallint' || $fromUserType === 'mediumint' || $fromUserType === 'bigint');
         
-        if ($hasIsRead) {
-            $sql = "SELECT from_user as username, COUNT(*) as unread_count
-                    FROM private_chat_history
-                    WHERE to_user = ? AND (is_read = 0 OR is_read IS NULL)
-                    GROUP BY from_user";
+        // 如果 from_user 和 to_user 是 INT 類型，需要將 username 轉換為 user.id
+        if ($isIntType) {
+            // 獲取當前用戶的 ID
+            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $currentUserId = $user ? $user['id'] : null;
+            
+            if (!$currentUserId) {
+                echo json_encode(['success' => true, 'unread_counts' => []]);
+                exit;
+            }
+            
+            // 檢查是否有 is_read 欄位
+            $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                WHERE TABLE_SCHEMA = 'topics_good' 
+                                AND TABLE_NAME = 'private_chat_history' 
+                                AND COLUMN_NAME = 'is_read'");
+            $hasIsRead = $stmt->rowCount() > 0;
+            
+            if ($hasIsRead) {
+                $sql = "SELECT u.username, COUNT(pch.id) as unread_count
+                        FROM private_chat_history pch
+                        LEFT JOIN user u ON pch.from_user = u.id
+                        WHERE pch.to_user = ? 
+                          AND (pch.is_read = 0 OR pch.is_read IS NULL)
+                        GROUP BY u.id, u.username";
+            } else {
+                // 如果沒有 is_read 欄位，假設所有訊息都是未讀
+                $sql = "SELECT u.username, COUNT(pch.id) as unread_count
+                        FROM private_chat_history pch
+                        LEFT JOIN user u ON pch.from_user = u.id
+                        WHERE pch.to_user = ?
+                        GROUP BY u.id, u.username";
+            }
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$currentUserId]);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } else {
-            // 如果沒有 is_read 欄位，假設所有訊息都是未讀（或需要其他邏輯）
-            $sql = "SELECT from_user as username, COUNT(*) as unread_count
-                    FROM private_chat_history
-                    WHERE to_user = ?
-                    GROUP BY from_user";
+            // 如果 from_user 和 to_user 是 VARCHAR 類型，直接使用 username
+            $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+                                WHERE TABLE_SCHEMA = 'topics_good' 
+                                AND TABLE_NAME = 'private_chat_history' 
+                                AND COLUMN_NAME = 'is_read'");
+            $hasIsRead = $stmt->rowCount() > 0;
+            
+            if ($hasIsRead) {
+                $sql = "SELECT from_user as username, COUNT(*) as unread_count
+                        FROM private_chat_history
+                        WHERE to_user = ? AND (is_read = 0 OR is_read IS NULL)
+                        GROUP BY from_user";
+            } else {
+                // 如果沒有 is_read 欄位，假設所有訊息都是未讀
+                $sql = "SELECT from_user as username, COUNT(*) as unread_count
+                        FROM private_chat_history
+                        WHERE to_user = ?
+                        GROUP BY from_user";
+            }
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$username]);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$username]);
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     // 轉換為以 username 為 key 的陣列

@@ -26,25 +26,177 @@ try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
+    // 創建聯絡人表（如果不存在）- 所有角色都需要
+    $pdo->exec("CREATE TABLE IF NOT EXISTS user_contacts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL COMMENT '用戶ID',
+        contact_user_id INT NOT NULL COMMENT '聯絡人用戶ID',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_user_contact (user_id, contact_user_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_contact_user_id (contact_user_id),
+        FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+        FOREIGN KEY (contact_user_id) REFERENCES user(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    
     // 檢查角色（支援代碼和中文名稱）
     $isStudent = ($role === 'STU' || $role === '學生' || $role === 'student');
     $isTeacher = ($role === 'TEA' || $role === '老師' || $role === 'teacher');
     $isStaff = ($role === 'STA' || $role === '學校行政人員' || $role === '行政人員');
     
+    // 調試：記錄角色信息
+    error_log("用戶角色檢查 - role: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStudent: " . ($isStudent ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'));
+    
+    // 獲取當前用戶ID（所有角色都需要）
+    $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+    $stmt->execute([$username]);
+    $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+    $currentUserId = $currentUser ? $currentUser['id'] : null;
+    
+    // ========== 自動同步聯絡人到 user_contacts 表 ==========
+    if ($currentUserId) {
+        try {
+            // TEA 角色：自動同步其他 TEA 用戶到 user_contacts
+            if ($isTeacher) {
+                error_log("TEA 角色登入，開始自動同步其他 TEA 用戶到 user_contacts 表");
+                
+                // 查詢所有其他 TEA 用戶
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE (role = 'TEA' OR role = '老師') AND id != ?");
+                $stmt->execute([$currentUserId]);
+                $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                
+                error_log("查詢到的其他 TEA 用戶 ID 列表: " . json_encode($teaUsers));
+                
+                if (!empty($teaUsers)) {
+                    // 檢查哪些已經存在於 user_contacts
+                    $placeholders = implode(',', array_fill(0, count($teaUsers), '?'));
+                    $checkStmt = $pdo->prepare("SELECT contact_user_id FROM user_contacts WHERE user_id = ? AND contact_user_id IN ($placeholders)");
+                    $checkStmt->execute(array_merge([$currentUserId], $teaUsers));
+                    $existingIds = $checkStmt->fetchAll(PDO::FETCH_COLUMN);
+                    
+                    error_log("已存在於 user_contacts 的 TEA 用戶 ID: " . json_encode($existingIds));
+                    
+                    // 找出需要新增的
+                    $newIds = array_diff($teaUsers, $existingIds);
+                    error_log("需要新增的 TEA 用戶 ID: " . json_encode($newIds));
+                    
+                    if (!empty($newIds)) {
+                        // 批量插入
+                        $insertStmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+                        $insertedCount = 0;
+                        foreach ($newIds as $teaId) {
+                            $result = $insertStmt->execute([$currentUserId, $teaId]);
+                            if ($insertStmt->rowCount() > 0) {
+                                $insertedCount++;
+                                error_log("成功插入聯絡人: user_id=" . $currentUserId . ", contact_user_id=" . $teaId);
+                            } else {
+                                error_log("插入失敗或已存在: user_id=" . $currentUserId . ", contact_user_id=" . $teaId);
+                            }
+                        }
+                        error_log("✅ TEA 角色：已自動同步 " . $insertedCount . " 位其他 TEA 用戶到 user_contacts 表");
+                    } else {
+                        error_log("✅ TEA 角色：所有其他 TEA 用戶已存在於 user_contacts 表");
+                    }
+                } else {
+                    error_log("⚠️ TEA 角色：沒有找到其他 TEA 用戶");
+                }
+            }
+            
+            // STU 角色：自動同步所有 TEA 用戶到 user_contacts
+            if ($isStudent) {
+                error_log("STU 角色登入，開始自動同步所有 TEA 用戶到 user_contacts 表");
+                
+                // 查詢所有 TEA 用戶
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師'");
+                $stmt->execute();
+                $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                
+                if (!empty($teaUsers)) {
+                    // 檢查哪些已經存在於 user_contacts
+                    $placeholders = implode(',', array_fill(0, count($teaUsers), '?'));
+                    $checkStmt = $pdo->prepare("SELECT contact_user_id FROM user_contacts WHERE user_id = ? AND contact_user_id IN ($placeholders)");
+                    $checkStmt->execute(array_merge([$currentUserId], $teaUsers));
+                    $existingIds = $checkStmt->fetchAll(PDO::FETCH_COLUMN);
+                    
+                    // 找出需要新增的
+                    $newIds = array_diff($teaUsers, $existingIds);
+                    
+                    if (!empty($newIds)) {
+                        // 批量插入
+                        $insertStmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+                        $insertedCount = 0;
+                        foreach ($newIds as $teaId) {
+                            $insertStmt->execute([$currentUserId, $teaId]);
+                            if ($insertStmt->rowCount() > 0) {
+                                $insertedCount++;
+                            }
+                        }
+                        error_log("✅ STU 角色：已自動同步 " . $insertedCount . " 位 TEA 用戶到 user_contacts 表");
+                    } else {
+                        error_log("✅ STU 角色：所有 TEA 用戶已存在於 user_contacts 表");
+                    }
+                } else {
+                    error_log("⚠️ STU 角色：沒有找到 TEA 用戶");
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("❌ 自動同步聯絡人失敗: " . $e->getMessage());
+        }
+    }
+    // ========== 自動同步結束 ==========
+    
     // 根據角色獲取不同的資料
     if ($isStudent) {
-        // 學生：只獲取所有老師（不顯示其他學生）
+        // 學生：從 user_contacts 表載入所有聯絡人（包括 TEA 和其他角色）
         $contacts = [];
         
-        // 獲取所有老師（包含頭像）- 支援代碼和中文角色名稱
-        $stmt = $pdo->prepare("SELECT t.user_id, COALESCE(u.name, u.username) as name, t.department, u.username, u.profile_picture, '老師' as contact_type
-                              FROM teacher t 
-                              JOIN user u ON t.user_id = u.id 
-                              WHERE (u.role = 'TEA' OR u.role = '老師')
-                              ORDER BY u.name, u.username");
-        $stmt->execute();
-        $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $contacts = array_merge($contacts, $allTeachers);
+        if ($currentUserId) {
+            // 從 user_contacts 表載入所有聯絡人（使用 contact_user_id）
+            // 查詢邏輯：uc.user_id = 當前用戶ID，uc.contact_user_id = 聯絡人ID
+            // 重要：載入所有角色，不僅僅是 TEA，因為用戶可能新增了其他角色的聯絡人
+            $stmt = $pdo->prepare("SELECT DISTINCT 
+                            uc.contact_user_id as user_id,  -- 使用 contact_user_id 作為聯絡人ID
+                            u.id as contact_user_table_id,  -- 聯絡人在 user 表中的實際 ID
+                            COALESCE(u.name, u.username, '未知用戶') as name,  -- 從 user 表獲取 name
+                            COALESCE(s.department, t.department, '未設定') as department,
+                            u.username,
+                            u.profile_picture,
+                            CASE 
+                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                ELSE '其他'
+                            END as contact_type,
+                            COALESCE(s.grade, '未設定') as grade,
+                            COALESCE(s.class_name, '未設定') as class_name
+                     FROM user_contacts uc
+                     LEFT JOIN user u ON uc.contact_user_id = u.id  -- 使用 LEFT JOIN 確保所有 contact_user_id 都被載入
+                     LEFT JOIN student s ON uc.contact_user_id = s.user_id
+                     LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
+                     WHERE uc.user_id = ?  -- 當前用戶的 ID
+                     ORDER BY 
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                         COALESCE(u.name, u.username, '未知用戶'), 
+                         u.username");
+            $stmt->execute([$currentUserId]);
+            $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            error_log("STU 載入邏輯確認：使用 uc.contact_user_id = u.id 來載入聯絡人，當前用戶ID: " . $currentUserId);
+            
+            error_log("STU 角色：從 user_contacts 表載入 " . count($contacts) . " 位聯絡人（包括所有角色）");
+            
+            // 調試：顯示載入的聯絡人詳情
+            if (!empty($contacts)) {
+                error_log("STU 載入的聯絡人詳情: " . json_encode($contacts, JSON_UNESCAPED_UNICODE));
+            } else {
+                error_log("⚠️ STU 角色：沒有載入到任何聯絡人，請檢查 user_contacts 表中是否有記錄");
+                // 調試：檢查 user_contacts 表中是否有記錄
+                $debugStmt = $pdo->prepare("SELECT * FROM user_contacts WHERE user_id = ?");
+                $debugStmt->execute([$currentUserId]);
+                $debugContacts = $debugStmt->fetchAll(PDO::FETCH_ASSOC);
+                error_log("user_contacts 表中的記錄: " . json_encode($debugContacts, JSON_UNESCAPED_UNICODE));
+            }
+        }
         
         // 如果沒有聯絡人，顯示空陣列
         if (empty($contacts)) {
@@ -117,19 +269,230 @@ try {
         } catch (PDOException $e) {
             error_log("獲取未讀消息聯絡人失敗: " . $e->getMessage());
         }
+        
+        // 注意：STU 角色的聯絡人已從 user_contacts 表載入，不需要再次載入
     } elseif ($isTeacher || $isStaff) {
-        // 老師和學校行政人員：只能看到傳過消息給他們的人（不直接顯示所有學生）
+        // 老師和學校行政人員：從 user_contacts 表載入聯絡人
         $contacts = [];
         
+        error_log("=== 進入老師/行政角色區塊 ===");
+        error_log("角色: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'));
+        error_log("當前用戶ID（外層）: " . ($currentUserId ?? 'null'));
+        
         try {
-            // 獲取當前用戶ID
-            $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
-            $stmt->execute([$username]);
-            $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
-            $currentUserId = $currentUser ? $currentUser['id'] : null;
+            // 創建聯絡人表（如果不存在）
+            $pdo->exec("CREATE TABLE IF NOT EXISTS user_contacts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL COMMENT '用戶ID',
+                contact_user_id INT NOT NULL COMMENT '聯絡人用戶ID',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_user_contact (user_id, contact_user_id),
+                INDEX idx_user_id (user_id),
+                INDEX idx_contact_user_id (contact_user_id),
+                FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+                FOREIGN KEY (contact_user_id) REFERENCES user(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            
+            // 使用外層已獲取的 $currentUserId（避免重複查詢導致不一致）
+            // 如果外層沒有，才重新查詢
+            if (!isset($currentUserId) || !$currentUserId) {
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+                $stmt->execute([$username]);
+                $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
+                $currentUserId = $currentUser ? $currentUser['id'] : null;
+                error_log("重新查詢 currentUserId: " . $currentUserId);
+            } else {
+                error_log("使用外層 currentUserId: " . $currentUserId);
+            }
+            
+            error_log("TEA/STA 角色區塊 - 最終使用的 currentUserId: " . $currentUserId . ", username: " . $username);
             
             if ($currentUserId) {
-                // 檢查表結構，判斷使用哪種查詢方式
+                // TEA/STA 角色：從 user_contacts 表載入聯絡人
+                error_log("開始載入聯絡人 - 角色: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", currentUserId: " . $currentUserId);
+                
+                // 先檢查 user_contacts 表中有多少記錄
+                $checkStmt = $pdo->prepare("SELECT COUNT(*) as count FROM user_contacts WHERE user_id = ?");
+                $checkStmt->execute([$currentUserId]);
+                $contactCount = $checkStmt->fetch(PDO::FETCH_ASSOC)['count'];
+                error_log("user_contacts 表中當前用戶的聯絡人記錄數: " . $contactCount);
+                
+                // 從 user_contacts 表載入所有聯絡人（使用 contact_user_id）
+                // 查詢邏輯：uc.user_id = 當前用戶ID，uc.contact_user_id = 聯絡人ID
+                // 重要：使用 LEFT JOIN 確保即使 user 表中沒有對應記錄也能載入 contact_user_id
+                $stmt = $pdo->prepare("SELECT DISTINCT 
+                            uc.contact_user_id as user_id,  -- 使用 contact_user_id 作為聯絡人ID
+                            u.id as contact_user_table_id,  -- 聯絡人在 user 表中的實際 ID（可能為 NULL）
+                            COALESCE(u.name, u.username, '未知用戶') as name,  -- 從 user 表獲取 name（teacher 和 student 表都沒有 name）
+                            COALESCE(s.department, t.department, '未設定') as department,
+                            COALESCE(u.username, 'unknown_' . uc.contact_user_id) as username,
+                            u.profile_picture,
+                            CASE 
+                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                ELSE '其他'
+                            END as contact_type,
+                            COALESCE(s.grade, '未設定') as grade,
+                            COALESCE(s.class_name, '未設定') as class_name
+                     FROM user_contacts uc
+                     LEFT JOIN user u ON uc.contact_user_id = u.id  -- 使用 LEFT JOIN 確保所有 contact_user_id 都被載入
+                     LEFT JOIN student s ON uc.contact_user_id = s.user_id
+                     LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
+                     WHERE uc.user_id = ?  -- 當前用戶的 ID
+                     ORDER BY 
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                         COALESCE(u.name, u.username, '未知用戶'), 
+                         COALESCE(u.username, 'unknown_' . uc.contact_user_id)");
+                $stmt->execute([$currentUserId]);
+                $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                error_log("=== 查詢執行完成 ===");
+                error_log("查詢找到 " . count($contacts) . " 位聯絡人");
+                error_log("當前用戶ID: " . $currentUserId);
+                error_log("載入邏輯確認：使用 uc.contact_user_id = u.id 來載入聯絡人");
+                
+                // 詳細調試：檢查資料庫中的實際記錄
+                $debugStmt = $pdo->prepare("SELECT uc.id, uc.user_id, uc.contact_user_id, u.id as user_table_id, u.username, u.name, u.role 
+                                           FROM user_contacts uc 
+                                           LEFT JOIN user u ON uc.contact_user_id = u.id 
+                                           WHERE uc.user_id = ?");
+                $debugStmt->execute([$currentUserId]);
+                $debugResults = $debugStmt->fetchAll(PDO::FETCH_ASSOC);
+                error_log("調試：user_contacts 表中的所有記錄（user_id=" . $currentUserId . "）: " . json_encode($debugResults, JSON_UNESCAPED_UNICODE));
+                
+                // 如果查詢結果為空，立即使用備用邏輯
+                if (count($contacts) === 0 && count($debugResults) > 0) {
+                    error_log("❌ JOIN 查詢失敗，使用備用邏輯構建聯絡人列表");
+                    $contacts = []; // 重置陣列
+                    
+                    foreach ($debugResults as $debugResult) {
+                        $contactUserId = $debugResult['contact_user_id'];
+                        
+                        if ($debugResult['user_table_id']) {
+                            // user 表中有對應記錄
+                            $userInfo = [
+                                'id' => $debugResult['user_table_id'],
+                                'username' => $debugResult['username'],
+                                'name' => $debugResult['name'],
+                                'role' => $debugResult['role']
+                            ];
+                            
+                            // 查詢 student 或 teacher 資訊
+                            $studentStmt = $pdo->prepare("SELECT department, grade, class_name FROM student WHERE user_id = ?");
+                            $studentStmt->execute([$contactUserId]);
+                            $studentInfo = $studentStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            $teacherStmt = $pdo->prepare("SELECT department FROM teacher WHERE user_id = ?");
+                            $teacherStmt->execute([$contactUserId]);
+                            $teacherInfo = $teacherStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            // 查詢 profile_picture
+                            $profileStmt = $pdo->prepare("SELECT profile_picture FROM user WHERE id = ?");
+                            $profileStmt->execute([$contactUserId]);
+                            $profileInfo = $profileStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            $contacts[] = [
+                                'user_id' => $contactUserId,
+                                'name' => $userInfo['name'] ?: $userInfo['username'],
+                                'username' => $userInfo['username'],
+                                'department' => $studentInfo['department'] ?? $teacherInfo['department'] ?? '未設定',
+                                'profile_picture' => $profileInfo['profile_picture'] ?? null,
+                                'contact_type' => ($userInfo['role'] === 'TEA' || $userInfo['role'] === '老師') ? '老師' : 
+                                                 (($userInfo['role'] === 'STU' || $userInfo['role'] === '學生') ? '學生' : '其他'),
+                                'grade' => $studentInfo['grade'] ?? '未設定',
+                                'class_name' => $studentInfo['class_name'] ?? '未設定'
+                            ];
+                        } else {
+                            // user 表中沒有對應記錄，至少顯示 contact_user_id
+                            $contacts[] = [
+                                'user_id' => $contactUserId,
+                                'name' => '未知用戶 (ID: ' . $contactUserId . ')',
+                                'username' => 'unknown_' . $contactUserId,
+                                'department' => '未設定',
+                                'profile_picture' => null,
+                                'contact_type' => '其他',
+                                'grade' => '未設定',
+                                'class_name' => '未設定'
+                            ];
+                        }
+                    }
+                    error_log("✅ 使用備用邏輯構建了 " . count($contacts) . " 位聯絡人");
+                }
+                
+                error_log("TEA/STA 角色：最終載入 " . count($contacts) . " 位聯絡人");
+                
+                if (count($contacts) > 0) {
+                    error_log("✅ 載入的聯絡人詳情: " . json_encode($contacts, JSON_UNESCAPED_UNICODE));
+                } else {
+                    error_log("❌ 警告：從 user_contacts 表載入的聯絡人為空，但記錄數為 " . $contactCount);
+                    if ($contactCount > 0) {
+                        error_log("❌ 問題：資料庫中有 " . $contactCount . " 筆記錄，但查詢結果為空！");
+                        error_log("❌ 可能原因：");
+                        error_log("   1. JOIN 條件失敗（contact_user_id 在 user 表中不存在）");
+                        error_log("   2. 查詢語法錯誤");
+                        error_log("   3. 變數作用域問題");
+                        
+                        // 嘗試直接查詢，不使用 JOIN
+                        $directStmt = $pdo->prepare("SELECT uc.contact_user_id as user_id FROM user_contacts uc WHERE uc.user_id = ?");
+                        $directStmt->execute([$currentUserId]);
+                        $directResults = $directStmt->fetchAll(PDO::FETCH_ASSOC);
+                        error_log("直接查詢 user_contacts（不使用 JOIN）結果: " . json_encode($directResults, JSON_UNESCAPED_UNICODE));
+                        
+                        // 如果直接查詢有結果，但 JOIN 查詢沒有，說明 JOIN 失敗
+                        if (count($directResults) > 0 && count($contacts) === 0) {
+                            error_log("❌ 確認：直接查詢有 " . count($directResults) . " 筆記錄，但 JOIN 查詢為空，說明 JOIN 失敗");
+                            error_log("❌ 嘗試使用直接查詢結果構建聯絡人列表");
+                            
+                            // 使用直接查詢結果構建聯絡人
+                            foreach ($directResults as $directResult) {
+                                $contactUserId = $directResult['user_id'];
+                                // 查詢該用戶的詳細資訊
+                                $userStmt = $pdo->prepare("SELECT u.id, u.username, u.name, u.role, u.profile_picture FROM user u WHERE u.id = ?");
+                                $userStmt->execute([$contactUserId]);
+                                $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                if ($userInfo) {
+                                    // 查詢 student 或 teacher 資訊
+                                    $studentStmt = $pdo->prepare("SELECT department, grade, class_name FROM student WHERE user_id = ?");
+                                    $studentStmt->execute([$contactUserId]);
+                                    $studentInfo = $studentStmt->fetch(PDO::FETCH_ASSOC);
+                                    
+                                    $teacherStmt = $pdo->prepare("SELECT department FROM teacher WHERE user_id = ?");
+                                    $teacherStmt->execute([$contactUserId]);
+                                    $teacherInfo = $teacherStmt->fetch(PDO::FETCH_ASSOC);
+                                    
+                                    $contacts[] = [
+                                        'user_id' => $contactUserId,
+                                        'name' => $userInfo['name'] ?: $userInfo['username'],
+                                        'username' => $userInfo['username'],
+                                        'department' => $studentInfo['department'] ?? $teacherInfo['department'] ?? '未設定',
+                                        'profile_picture' => $userInfo['profile_picture'],
+                                        'contact_type' => ($userInfo['role'] === 'TEA' || $userInfo['role'] === '老師') ? '老師' : 
+                                                         (($userInfo['role'] === 'STU' || $userInfo['role'] === '學生') ? '學生' : '其他'),
+                                        'grade' => $studentInfo['grade'] ?? '未設定',
+                                        'class_name' => $studentInfo['class_name'] ?? '未設定'
+                                    ];
+                                } else {
+                                    // 如果 user 表中沒有，至少顯示 contact_user_id
+                                    $contacts[] = [
+                                        'user_id' => $contactUserId,
+                                        'name' => '未知用戶 (ID: ' . $contactUserId . ')',
+                                        'username' => 'unknown_' . $contactUserId,
+                                        'department' => '未設定',
+                                        'profile_picture' => null,
+                                        'contact_type' => '其他',
+                                        'grade' => '未設定',
+                                        'class_name' => '未設定'
+                                    ];
+                                }
+                            }
+                            error_log("✅ 使用直接查詢結果構建了 " . count($contacts) . " 位聯絡人");
+                        }
+                    }
+                }
+                
+                // 獲取有傳過消息給當前用戶的人（用於排序和標記）
                 $stmt = $pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS 
                                     WHERE TABLE_SCHEMA = 'topics_good' 
                                     AND TABLE_NAME = 'private_chat_history' 
@@ -137,67 +500,88 @@ try {
                 $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 $useUserId = in_array('from_user_id', $columns) && in_array('to_user_id', $columns);
                 
+                $messagedUsers = [];
                 if ($useUserId) {
-                    // 使用正規化版本（user_id）- 獲取所有傳過消息給當前用戶的人
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(s.name, u.name, u.username) as name,
-                                COALESCE(s.department, t.department, '未設定') as department,
-                                u.username,
-                                u.profile_picture,
-                                CASE 
-                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
-                                    ELSE '其他'
-                                END as contact_type,
-                                COALESCE(s.grade, '未設定') as grade,
-                                COALESCE(s.class_name, '未設定') as class_name
+                                MAX(pch.timestamp) as last_message_time
                          FROM private_chat_history pch
                          JOIN user u ON pch.from_user_id = u.id
-                         LEFT JOIN student s ON u.id = s.user_id
-                         LEFT JOIN teacher t ON u.id = t.user_id
                          WHERE pch.to_user_id = ?
                            AND u.id != ?
-                         GROUP BY u.id, u.username
-                         ORDER BY MAX(pch.timestamp) DESC";
+                         GROUP BY u.id";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute([$currentUserId, $currentUserId]);
                 } else {
-                    // 使用舊版本（username）- 獲取所有傳過消息給當前用戶的人
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(s.name, u.name, u.username) as name,
-                                COALESCE(s.department, t.department, '未設定') as department,
-                                u.username,
-                                u.profile_picture,
-                                CASE 
-                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
-                                    ELSE '其他'
-                                END as contact_type,
-                                COALESCE(s.grade, '未設定') as grade,
-                                COALESCE(s.class_name, '未設定') as class_name
+                                MAX(pch.timestamp) as last_message_time
                          FROM private_chat_history pch
                          JOIN user u ON pch.from_user = u.username
-                         LEFT JOIN student s ON u.id = s.user_id
-                         LEFT JOIN teacher t ON u.id = t.user_id
                          WHERE pch.to_user = ?
                            AND u.username != ?
-                         GROUP BY u.id, u.username
-                         ORDER BY MAX(pch.timestamp) DESC";
+                         GROUP BY u.id";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute([$username, $username]);
                 }
                 
                 if ($stmt) {
-                    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $messagedUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    // 轉換為以 user_id 為 key 的陣列
+                    $messagedUsersMap = [];
+                    foreach ($messagedUsers as $mu) {
+                        $messagedUsersMap[$mu['user_id']] = $mu['last_message_time'];
+                    }
+                    
+                    // 為聯絡人添加最後訊息時間（用於排序）
+                    foreach ($contacts as &$contact) {
+                        $contact['last_message_time'] = $messagedUsersMap[$contact['user_id']] ?? null;
+                    }
+                    unset($contact);
+                    
+                    // 排序：有訊息的在前面（按時間降序），然後是其他聯絡人（按姓名）
+                    // TEA 聯絡人優先顯示
+                    usort($contacts, function($a, $b) {
+                        $aIsTea = ($a['contact_type'] ?? '') === '老師';
+                        $bIsTea = ($b['contact_type'] ?? '') === '老師';
+                        
+                        // TEA 優先
+                        if ($aIsTea && !$bIsTea) {
+                            return -1;
+                        } elseif (!$aIsTea && $bIsTea) {
+                            return 1;
+                        }
+                        
+                        // 有訊息的在前面
+                        if ($a['last_message_time'] && $b['last_message_time']) {
+                            return strtotime($b['last_message_time']) - strtotime($a['last_message_time']);
+                        } elseif ($a['last_message_time']) {
+                            return -1;
+                        } elseif ($b['last_message_time']) {
+                            return 1;
+                        } else {
+                            return strcmp($a['name'] ?? '', $b['name'] ?? '');
+                        }
+                    });
                 }
+                
+                // 注意：聯絡人已從 user_contacts 表載入，不再從 user 表載入其他用戶
+                
+                // 注意：聯絡人已從 user_contacts 表載入，不需要再次載入
+            } else {
+                error_log("currentUserId 為空，無法載入聯絡人");
             }
         } catch (PDOException $e) {
-            error_log("獲取聯絡人失敗: " . $e->getMessage());
+            error_log("❌ 獲取聯絡人失敗（老師/行政）: " . $e->getMessage());
+            error_log("❌ 錯誤堆疊: " . $e->getTraceAsString());
+            $contacts = []; // 確保 $contacts 是陣列
         }
         
-        // 如果沒有聯絡人，顯示空陣列
-        if (empty($contacts)) {
-            $contacts = [];
+        // 調試：記錄最終聯絡人數量（在輸出前）
+        error_log("=== TEA/STA 角色區塊結束 ===");
+        error_log("最終聯絡人數量（老師/行政）: " . count($contacts));
+        if (count($contacts) > 0) {
+            error_log("聯絡人 user_id 列表: " . json_encode(array_column($contacts, 'user_id'), JSON_UNESCAPED_UNICODE));
+        } else {
+            error_log("⚠️ 警告：聯絡人數量為 0！角色: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", username: " . $username);
         }
     } else {
         // 其他角色：只顯示傳過消息給他們的人
@@ -222,7 +606,7 @@ try {
                 if ($useUserId) {
                     // 使用正規化版本（user_id）- 獲取所有傳過消息給當前用戶的人
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(s.name, u.name, u.username) as name,
+                                COALESCE(u.name, u.username, '未知用戶') as name,  -- 從 user 表獲取 name（teacher 和 student 表都沒有 name）
                                 COALESCE(s.department, t.department, '未設定') as department,
                                 u.username,
                                 u.profile_picture,
@@ -246,7 +630,7 @@ try {
                 } else {
                     // 使用舊版本（username）- 獲取所有傳過消息給當前用戶的人
                     $sql = "SELECT DISTINCT u.id as user_id,
-                                COALESCE(s.name, u.name, u.username) as name,
+                                COALESCE(u.name, u.username, '未知用戶') as name,  -- 從 user 表獲取 name（teacher 和 student 表都沒有 name）
                                 COALESCE(s.department, t.department, '未設定') as department,
                                 u.username,
                                 u.profile_picture,
@@ -273,6 +657,69 @@ try {
                     $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 }
             }
+            
+            // 載入已保存的聯絡人（其他角色）- 從 user_contacts 表
+            if ($currentUserId) {
+                try {
+                    $stmt = $pdo->prepare("SELECT DISTINCT u.id as user_id,
+                                COALESCE(u.name, u.username, '未知用戶') as name,  -- 從 user 表獲取 name（teacher 和 student 表都沒有 name）
+                                COALESCE(s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                COALESCE(s.grade, '未設定') as grade,
+                                COALESCE(s.class_name, '未設定') as class_name
+                         FROM user_contacts uc
+                         JOIN user u ON uc.contact_user_id = u.id
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         WHERE uc.user_id = ?");
+                    $stmt->execute([$currentUserId]);
+                    $savedContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // 合併已保存的聯絡人（避免重複）
+                    $existingUserIds = array_column($contacts, 'user_id');
+                    foreach ($savedContacts as $savedContact) {
+                        if (!in_array($savedContact['user_id'], $existingUserIds)) {
+                            $contacts[] = $savedContact;
+                            $existingUserIds[] = $savedContact['user_id'];
+                        }
+                    }
+                    error_log("載入已保存聯絡人（其他角色），找到 " . count($savedContacts) . " 位，合併後總數: " . count($contacts));
+                } catch (PDOException $e) {
+                    error_log("載入已保存聯絡人失敗（其他角色）: " . $e->getMessage());
+                }
+                
+                // 如果有訊息記錄但未保存的聯絡人，自動保存到 user_contacts 表
+                if (!empty($contacts)) {
+                    try {
+                        // 獲取所有已保存的聯絡人ID
+                        $stmt = $pdo->prepare("SELECT contact_user_id FROM user_contacts WHERE user_id = ?");
+                        $stmt->execute([$currentUserId]);
+                        $savedContactIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                        
+                        // 為每個有訊息記錄但未保存的聯絡人創建記錄
+                        $insertStmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+                        $newContactsCount = 0;
+                        foreach ($contacts as $contact) {
+                            $contactUserId = $contact['user_id'] ?? null;
+                            if ($contactUserId && !in_array($contactUserId, $savedContactIds)) {
+                                $insertStmt->execute([$currentUserId, $contactUserId]);
+                                $newContactsCount++;
+                            }
+                        }
+                        if ($newContactsCount > 0) {
+                            error_log("自動保存 " . $newContactsCount . " 位有訊息記錄的聯絡人到 user_contacts 表（其他角色）");
+                        }
+                    } catch (PDOException $e) {
+                        error_log("自動保存聯絡人失敗（其他角色）: " . $e->getMessage());
+                    }
+                }
+            }
         } catch (PDOException $e) {
             error_log("獲取聯絡人失敗: " . $e->getMessage());
         }
@@ -281,9 +728,14 @@ try {
         if (empty($contacts)) {
             $contacts = [];
         }
+        
+        // 調試：記錄最終聯絡人數量
+        error_log("最終聯絡人數量（老師/行政）: " . count($contacts));
     }
     
     // 為每個聯絡人添加未讀消息數量，並按未讀消息數量排序
+    // 調試：記錄所有角色的最終聯絡人數量
+    error_log("所有角色最終聯絡人數量: " . count($contacts ?? []));
     try {
         // 確保 $contacts 是陣列
         if (!is_array($contacts)) {
@@ -400,10 +852,28 @@ try {
           </div>
         </div>
         
-        <!-- 搜尋框 -->
+        <!-- 搜尋和新增聯絡人區域 -->
         <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
-          <input type="text" id="contactSearch" placeholder="搜尋聯絡人姓名、科系或班級..." 
-                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <!-- 搜尋現有聯絡人 -->
+          <div style="margin-bottom: 10px;">
+            <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          </div>
+          
+          <!-- 新增聯絡人區域 -->
+          <div style="border-top: 1px solid #eee; padding-top: 10px;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
+                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
+            </div>
+            <!-- 搜尋結果區域 -->
+            <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
+              <div id="addContactResultsList" style="padding: 5px;"></div>
+            </div>
+          </div>
         </div>
         
         <!-- 群組列表 -->
@@ -464,10 +934,28 @@ try {
           </div>
         </div>
         
-        <!-- 搜尋框 -->
+        <!-- 搜尋和新增聯絡人區域 -->
         <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
-          <input type="text" id="contactSearch" placeholder="搜尋聯絡人姓名、科系或班級..." 
-                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <!-- 搜尋現有聯絡人 -->
+          <div style="margin-bottom: 10px;">
+            <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          </div>
+          
+          <!-- 新增聯絡人區域 -->
+          <div style="border-top: 1px solid #eee; padding-top: 10px;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
+                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
+            </div>
+            <!-- 搜尋結果區域 -->
+            <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
+              <div id="addContactResultsList" style="padding: 5px;"></div>
+            </div>
+          </div>
         </div>
         
         <!-- 群組列表 -->
@@ -545,10 +1033,28 @@ try {
           </div>
         </div>
         
-        <!-- 搜尋框 -->
+        <!-- 搜尋和新增聯絡人區域 -->
         <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
-          <input type="text" id="contactSearch" placeholder="搜尋聯絡人姓名、科系或班級..." 
-                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <!-- 搜尋現有聯絡人 -->
+          <div style="margin-bottom: 10px;">
+            <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          </div>
+          
+          <!-- 新增聯絡人區域 -->
+          <div style="border-top: 1px solid #eee; padding-top: 10px;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
+                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
+            </div>
+            <!-- 搜尋結果區域 -->
+            <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
+              <div id="addContactResultsList" style="padding: 5px;"></div>
+            </div>
+          </div>
         </div>
         
         <!-- 群組列表 -->
@@ -625,7 +1131,125 @@ try {
     // 分頁相關變數
     let currentPage = 1;
     const itemsPerPage = 10; // 每頁顯示的聯絡人數量
-    let allContacts = <?php echo json_encode($contacts ?? []); ?>;
+    let allContacts = <?php 
+        // 確保 $contacts 已正確初始化
+        if (!isset($contacts) || !is_array($contacts)) {
+            $contacts = [];
+        }
+        
+        // 調試：記錄傳遞到前端的聯絡人資料
+        error_log("=== 傳遞到前端的聯絡人資料 ===");
+        error_log("聯絡人總數: " . count($contacts));
+        if (count($contacts) > 0) {
+            error_log("前 3 位聯絡人: " . print_r(array_slice($contacts, 0, 3), true));
+        }
+        
+        // 調試：在頁面輸出聯絡人數量
+        error_log("=== 最終傳遞到前端的聯絡人資料 ===");
+        error_log("準備輸出到 JavaScript 的聯絡人數量: " . count($contacts));
+        $currentUserIdStr = isset($currentUserId) ? (string)$currentUserId : 'null';
+        error_log("當前用戶角色: " . $role . ", username: " . $username . ", currentUserId: " . $currentUserIdStr);
+        if (count($contacts) > 0) {
+            error_log("所有聯絡人 user_id: " . json_encode(array_column($contacts, 'user_id'), JSON_UNESCAPED_UNICODE));
+        } else {
+            error_log("❌ 警告：準備輸出到 JavaScript 的聯絡人數量為 0！");
+            // 最後一次檢查：直接查詢 user_contacts 表
+            if (isset($currentUserId) && $currentUserId) {
+                try {
+                    $finalCheckStmt = $pdo->prepare("SELECT contact_user_id FROM user_contacts WHERE user_id = ?");
+                    $finalCheckStmt->execute([$currentUserId]);
+                    $finalCheckResults = $finalCheckStmt->fetchAll(PDO::FETCH_COLUMN);
+                    error_log("最後檢查：user_contacts 表中 user_id=" . $currentUserId . " 的 contact_user_id 列表: " . json_encode($finalCheckResults, JSON_UNESCAPED_UNICODE));
+                    
+                    if (count($finalCheckResults) > 0 && count($contacts) === 0) {
+                        error_log("❌ 嚴重問題：資料庫中有 " . count($finalCheckResults) . " 筆記錄，但聯絡人陣列為空！");
+                        error_log("❌ 執行緊急修復：直接構建聯絡人列表");
+                        
+                        // 緊急修復：直接構建聯絡人列表
+                        foreach ($finalCheckResults as $contactUserId) {
+                            // 查詢 user 表
+                            $userStmt = $pdo->prepare("SELECT id, username, name, role, profile_picture FROM user WHERE id = ?");
+                            $userStmt->execute([$contactUserId]);
+                            $userInfo = $userStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            if ($userInfo) {
+                                // 查詢 student 或 teacher 資訊
+                                $studentStmt = $pdo->prepare("SELECT department, grade, class_name FROM student WHERE user_id = ?");
+                                $studentStmt->execute([$contactUserId]);
+                                $studentInfo = $studentStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                $teacherStmt = $pdo->prepare("SELECT department FROM teacher WHERE user_id = ?");
+                                $teacherStmt->execute([$contactUserId]);
+                                $teacherInfo = $teacherStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                $contacts[] = [
+                                    'user_id' => $contactUserId,
+                                    'name' => $userInfo['name'] ?: $userInfo['username'],
+                                    'username' => $userInfo['username'],
+                                    'department' => $studentInfo['department'] ?? $teacherInfo['department'] ?? '未設定',
+                                    'profile_picture' => $userInfo['profile_picture'],
+                                    'contact_type' => ($userInfo['role'] === 'TEA' || $userInfo['role'] === '老師') ? '老師' : 
+                                                     (($userInfo['role'] === 'STU' || $userInfo['role'] === '學生') ? '學生' : '其他'),
+                                    'grade' => $studentInfo['grade'] ?? '未設定',
+                                    'class_name' => $studentInfo['class_name'] ?? '未設定'
+                                ];
+                            } else {
+                                // 如果 user 表中沒有，至少顯示 contact_user_id
+                                $contacts[] = [
+                                    'user_id' => $contactUserId,
+                                    'name' => '未知用戶 (ID: ' . $contactUserId . ')',
+                                    'username' => 'unknown_' . $contactUserId,
+                                    'department' => '未設定',
+                                    'profile_picture' => null,
+                                    'contact_type' => '其他',
+                                    'grade' => '未設定',
+                                    'class_name' => '未設定'
+                                ];
+                            }
+                        }
+                        error_log("✅ 緊急修復完成：構建了 " . count($contacts) . " 位聯絡人");
+                    }
+                } catch (Exception $e) {
+                    error_log("最後檢查失敗: " . $e->getMessage());
+                }
+            }
+        }
+        echo json_encode($contacts, JSON_UNESCAPED_UNICODE); 
+    ?>;
+    console.log('=== 聯絡人載入調試 ===');
+    console.log('從 PHP 載入的聯絡人數量:', allContacts.length);
+    console.log('當前用戶角色:', role);
+    console.log('當前用戶名:', username);
+    console.log('所有聯絡人資料:', allContacts);
+    
+    // 檢查聯絡人資料結構
+    if (allContacts.length > 0) {
+      console.log('前 3 位聯絡人詳情:', allContacts.slice(0, 3));
+      
+      // 檢查是否有 user_id
+      const contactsWithUserId = allContacts.filter(c => c.user_id);
+      console.log('有 user_id 的聯絡人數量:', contactsWithUserId.length);
+      if (contactsWithUserId.length > 0) {
+        console.log('有 user_id 的聯絡人:', contactsWithUserId);
+      }
+      
+      // 檢查是否有 username
+      const contactsWithUsername = allContacts.filter(c => c.username);
+      console.log('有 username 的聯絡人數量:', contactsWithUsername.length);
+    } else {
+      console.warn('⚠️ 沒有載入到任何聯絡人！');
+      console.warn('請檢查 PHP 錯誤日誌中的聯絡人載入信息');
+    }
+    
+    // 調試：檢查是否有 TEA 聯絡人
+    const teaContacts = allContacts.filter(c => c.contact_type === '老師');
+    console.log('TEA 聯絡人數量:', teaContacts.length);
+    if (teaContacts.length > 0) {
+      console.log('TEA 聯絡人列表:', teaContacts);
+    } else {
+      console.warn('⚠️ 沒有找到 TEA 聯絡人！');
+      console.warn('請檢查 PHP 錯誤日誌中的調試訊息');
+    }
     let filteredContacts = [];
     let displayedContacts = [];
     
@@ -1501,39 +2125,6 @@ try {
           img.src = imageUrl;
           img.alt = '分享的圖片';
           img.style.cssText = 'max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; object-fit: contain;';
-          img.onerror = function() {
-            // 如果圖片載入失敗，嘗試其他可能的路徑
-            const originalUrl = message.message || messageText;
-            const fileName = originalUrl.split('/').pop();
-            const alternativePaths = [
-              '../share/' + fileName,
-              '/Topics-frontend/frontend/share/' + fileName,
-              '/frontend/share/' + fileName,
-              '/share/' + fileName,
-              '../../share/' + fileName
-            ];
-            
-            let tried = 0;
-            const tryNext = () => {
-              if (tried < alternativePaths.length) {
-                this.src = alternativePaths[tried++];
-              } else {
-                // 所有路徑都失敗，顯示錯誤訊息
-                this.style.display = 'none';
-                const errorDiv = document.createElement('div');
-                errorDiv.textContent = '圖片載入失敗';
-                errorDiv.style.cssText = 'color: #999; font-size: 12px; font-style: italic; padding: 5px;';
-                contentDiv.appendChild(errorDiv);
-                console.warn('圖片載入失敗，原始URL:', message.message, '嘗試的URL:', imageUrl, '替代路徑:', alternativePaths);
-              }
-            };
-            
-            this.onerror = tryNext;
-            tryNext();
-          };
-          img.onload = function() {
-            console.log('圖片載入成功:', imageUrl);
-          };
           img.onclick = function() {
             // 點擊圖片可以查看大圖
             window.open(this.src, '_blank');
@@ -1665,33 +2256,6 @@ try {
           img.src = imageUrl;
           img.alt = '分享的圖片';
           img.style.cssText = 'max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; object-fit: contain;';
-          img.onerror = function() {
-            const originalUrl = message.message || messageText;
-            const fileName = originalUrl.split('/').pop();
-            const alternativePaths = [
-              '../share/' + fileName,
-              '/Topics-frontend/frontend/share/' + fileName,
-              '/frontend/share/' + fileName,
-              '/share/' + fileName,
-              '../../share/' + fileName
-            ];
-            
-            let tried = 0;
-            const tryNext = () => {
-              if (tried < alternativePaths.length) {
-                this.src = alternativePaths[tried++];
-              } else {
-                this.style.display = 'none';
-                const errorDiv = document.createElement('div');
-                errorDiv.textContent = '圖片載入失敗';
-                errorDiv.style.cssText = 'color: #999; font-size: 12px; font-style: italic; padding: 5px;';
-                contentDiv.appendChild(errorDiv);
-              }
-            };
-            
-            this.onerror = tryNext;
-            tryNext();
-          };
           img.onclick = function() {
             window.open(this.src, '_blank');
           };
@@ -2120,6 +2684,12 @@ try {
             readContacts.add(contactUsername);
             saveReadContactsToStorage(); // 保存到 localStorage
             
+            // 更新 allContacts 中的未讀數量為 0
+            const contact = allContacts.find(c => c.username === contactUsername);
+            if (contact) {
+              contact.unread_count = 0;
+            }
+            
             // 立即更新該聯絡人的徽章狀態（完全隱藏）
             const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
             if (contactBadge) {
@@ -2127,6 +2697,9 @@ try {
               contactBadge.style.display = 'none'; // 完全隱藏
               contactBadge.style.visibility = 'hidden'; // 完全隱藏
             }
+            
+            // 重新排序聯絡人列表（已讀的會排到後面）
+            sortAndRenderContacts();
             
             // 清除該聯絡人的聊天記錄快取
             const cacheKey = `${username}-${contactUsername}`;
@@ -2155,6 +2728,12 @@ try {
           readContacts.add(contactUsername);
           saveReadContactsToStorage(); // 保存到 localStorage
           
+          // 更新 allContacts 中的未讀數量為 0
+          const contact = allContacts.find(c => c.username === contactUsername);
+          if (contact) {
+            contact.unread_count = 0;
+          }
+          
           // 即使沒有未讀訊息，也確保徽章被完全隱藏
           const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactUsername}"]`);
           if (contactBadge) {
@@ -2162,6 +2741,10 @@ try {
             contactBadge.style.display = 'none'; // 完全隱藏
             contactBadge.style.visibility = 'hidden'; // 完全隱藏
           }
+          
+          // 重新排序聯絡人列表（已讀的會排到後面）
+          sortAndRenderContacts();
+          
           return true;
         }
       } catch (error) {
@@ -2199,6 +2782,8 @@ try {
         const response = await fetch(`get_contact_unread_count.php?username=${encodeURIComponent(username)}`);
         const result = await response.json();
         
+        console.log('未讀數量 API 響應:', result);
+        
         if (result.success && result.unread_counts) {
           // 先隱藏所有徽章
           document.querySelectorAll('.unread-badge').forEach(badge => {
@@ -2220,13 +2805,24 @@ try {
             }));
           }
           
-          // 更新每個聯絡人的未讀數量
+          console.log('處理後的未讀數量數組:', unreadCountsArray);
+          
+          // 更新每個聯絡人的未讀數量，並更新 allContacts 中的 unread_count
           unreadCountsArray.forEach(item => {
             const contactId = item.username || item.contact_id;
             const unreadCount = parseInt(item.unread_count || 0);
             
+            console.log(`處理聯絡人 ${contactId}，未讀數量: ${unreadCount}`);
+            
+            // 更新 allContacts 中的未讀數量
+            const contact = allContacts.find(c => c.username === contactId);
+            if (contact) {
+              contact.unread_count = unreadCount;
+            }
+            
             if (unreadCount > 0) {
               const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contactId}"]`);
+              console.log(`查找徽章 - contactId: ${contactId}, 找到徽章:`, contactBadge);
               if (contactBadge) {
                 contactBadge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
                 contactBadge.setAttribute('data-count', unreadCount);
@@ -2238,13 +2834,90 @@ try {
                 if (unreadCount > 0) {
                   contactBadge.classList.add('pulse');
                 }
+                console.log(`✅ 已更新聯絡人 ${contactId} 的未讀徽章: ${unreadCount}`);
+              } else {
+                console.warn(`❌ 未找到聯絡人 ${contactId} 的徽章元素`);
+                // 調試：列出所有現有的徽章
+                const allBadges = document.querySelectorAll('.unread-badge');
+                console.log(`現有的徽章數量: ${allBadges.length}`);
+                allBadges.forEach((badge, index) => {
+                  console.log(`徽章 ${index}: data-contact-id="${badge.getAttribute('data-contact-id')}"`);
+                });
               }
             }
           });
+          
+          // 重新排序並重新渲染聯絡人列表（未讀消息的排在前面）
+          // 注意：sortAndRenderContacts 會調用 renderContacts，而 renderContacts 會延遲調用 updateContactUnreadCounts
+          // 所以我們需要避免循環調用，只在這裡調用一次排序和渲染
+          sortAndRenderContacts();
+        } else {
+          console.warn('未讀數量 API 響應失敗或無數據:', result);
         }
       } catch (error) {
         console.error('更新聯絡人未讀數量失敗:', error);
       }
+    }
+    
+    // 排序並重新渲染聯絡人列表（未讀消息的排在前面）
+    function sortAndRenderContacts() {
+      // 按未讀消息數量排序（有未讀消息的排在前面，未讀消息多的排在更前面）
+      allContacts.sort((a, b) => {
+        const aUnread = parseInt(a.unread_count || 0);
+        const bUnread = parseInt(b.unread_count || 0);
+        
+        // 先按未讀消息數量排序（降序）
+        if (bUnread !== aUnread) {
+          return bUnread - aUnread;
+        }
+        // 如果未讀消息數量相同，按名稱排序（升序）
+        const aName = (a.name || a.username || '').toLowerCase();
+        const bName = (b.name || b.username || '').toLowerCase();
+        return aName.localeCompare(bName);
+      });
+      
+      // 更新 filteredContacts
+      filteredContacts = [...allContacts];
+      currentPage = 1;
+      
+      // 重新渲染聯絡人列表
+      renderContacts();
+      updatePagination();
+      
+      // 渲染完成後，更新徽章顯示（不重新排序，只更新顯示）
+      setTimeout(() => {
+        updateBadgeDisplay();
+      }, 100);
+    }
+    
+    // 只更新徽章顯示，不重新排序和渲染（避免循環）
+    function updateBadgeDisplay() {
+      // 先隱藏所有徽章
+      document.querySelectorAll('.unread-badge').forEach(badge => {
+        badge.classList.remove('show', 'pulse', 'hiding');
+        badge.style.display = 'none';
+        badge.style.visibility = 'hidden';
+      });
+      
+      // 根據 allContacts 中的 unread_count 更新徽章
+      allContacts.forEach(contact => {
+        const unreadCount = parseInt(contact.unread_count || 0);
+        if (unreadCount > 0) {
+          const contactBadge = document.querySelector(`.unread-badge[data-contact-id="${contact.username}"]`);
+          if (contactBadge) {
+            contactBadge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+            contactBadge.setAttribute('data-count', unreadCount);
+            contactBadge.style.display = 'flex';
+            contactBadge.style.visibility = 'visible';
+            contactBadge.classList.add('show');
+            
+            // 如果未讀數量 > 0，添加脈衝動畫
+            if (unreadCount > 0) {
+              contactBadge.classList.add('pulse');
+            }
+          }
+        }
+      });
     }
     
     // 更新用戶活動時間
@@ -2501,8 +3174,15 @@ try {
             // 絕對路徑
             avatarSrc = contact.profile_picture;
           } else if (contact.profile_picture.startsWith('uploads/')) {
-            // 上傳的頭像，使用 ../uploads/
+            // 上傳的頭像，使用 ../uploads/（包括 uploads/avatars/）
             avatarSrc = '../' + contact.profile_picture;
+          } else if (contact.profile_picture.includes('avatars/')) {
+            // 如果包含 avatars/，確保路徑正確
+            if (contact.profile_picture.startsWith('avatars/')) {
+              avatarSrc = '../uploads/' + contact.profile_picture;
+            } else {
+              avatarSrc = '../' + contact.profile_picture;
+            }
           } else {
             // share 目錄的檔案，使用 ../share/
             avatarSrc = '../share/' + contact.profile_picture;
@@ -2540,8 +3220,11 @@ try {
         contactListItems.appendChild(li);
       });
       
-      // 更新未讀徽章
-      updateContactUnreadCounts();
+      // 不在此處調用 updateContactUnreadCounts，避免循環調用
+      // updateContactUnreadCounts 會調用 sortAndRenderContacts
+      // sortAndRenderContacts 會調用 renderContacts
+      // 如果這裡再調用 updateContactUnreadCounts，會造成循環
+      // 徽章更新應該在 sortAndRenderContacts 完成後通過 updateBadgeDisplay 處理
     }
     
     // HTML 轉義函數
@@ -2551,8 +3234,275 @@ try {
       return div.innerHTML;
     }
     
+    // 隱藏搜尋結果
+    function hideSearchResults() {
+      const searchResults = document.getElementById('searchResults');
+      if (searchResults) {
+        searchResults.style.display = 'none';
+      }
+    }
+    
+    // 新增聯絡人到列表
+    // 從 data 屬性直接新增聯絡人（新方法，避免編碼問題）
+    function addContactToListFromData(username, name, userData) {
+      console.log('=== 開始新增聯絡人 ===');
+      console.log('參數 - username:', username, 'name:', name);
+      console.log('userData:', userData);
+      console.log('userData.user_id:', userData?.user_id);
+      
+      if (!userData) {
+        console.error('❌ 無法新增聯絡人：userData 為空');
+        alert('無法新增聯絡人：缺少用戶資料');
+        return;
+      }
+      
+      if (!userData.user_id) {
+        console.error('❌ 無法新增聯絡人：缺少用戶ID');
+        console.error('userData 完整內容:', JSON.stringify(userData, null, 2));
+        alert('無法新增聯絡人：缺少用戶ID\n請檢查用戶資料是否完整');
+        return;
+      }
+      
+      // 檢查是否已經存在
+      const existingIndex = allContacts.findIndex(c => {
+        const cId = (c.user_id || c.username || '').toString();
+        const uId = (userData.user_id || username || '').toString();
+        return cId === uId || c.username === username;
+      });
+      
+      if (existingIndex !== -1) {
+        console.log('聯絡人已存在，跳過新增');
+        alert('該聯絡人已存在於列表中');
+        return;
+      }
+      
+      // 先保存到資料庫
+      const contactUserId = parseInt(userData.user_id);
+      if (isNaN(contactUserId) || contactUserId <= 0) {
+        console.error('❌ 無效的用戶ID:', userData.user_id);
+        alert('錯誤：無效的用戶ID');
+        return;
+      }
+      
+      // 發送請求保存到資料庫
+      const formData = new URLSearchParams();
+      formData.append('contact_user_id', contactUserId);
+      
+      console.log('準備發送 API 請求');
+      console.log('API URL: add_contact_api.php');
+      console.log('contact_user_id:', contactUserId);
+      console.log('formData:', formData.toString());
+      
+      fetch('add_contact_api.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      })
+      .then(response => {
+        console.log('API 響應狀態:', response.status, response.statusText);
+        console.log('響應 headers:', response.headers);
+        if (!response.ok) {
+          return response.text().then(text => {
+            console.error('API 響應錯誤內容:', text);
+            throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('API 響應數據:', data);
+        if (data.success) {
+          console.log('✅ 聯絡人已成功保存到資料庫', data);
+          // 添加到聯絡人列表
+          const newContact = {
+            user_id: contactUserId,
+            name: name || userData.name || username,
+            username: username,
+            department: userData.department || '未設定',
+            profile_picture: userData.profile_picture || null,
+            contact_type: userData.contact_type || '其他',
+            grade: userData.grade || '未設定',
+            class_name: userData.class_name || '未設定'
+          };
+          
+          console.log('準備添加到列表的新聯絡人:', newContact);
+          
+          allContacts.unshift(newContact); // 添加到開頭
+          filteredContacts = [...allContacts];
+          currentPage = 1;
+          renderContacts();
+          updatePagination();
+          
+          console.log('✅ 聯絡人已添加到列表，當前總數:', allContacts.length);
+          
+          // 隱藏搜尋結果
+          hideAddContactResults();
+          
+          // 顯示成功訊息
+          alert('聯絡人新增成功！');
+          
+          // 可選：自動選擇新增的聯絡人
+          setTimeout(() => {
+            selectContact(username, name);
+          }, 100);
+        } else {
+          console.error('❌ 新增聯絡人失敗:', data);
+          const errorMsg = '新增聯絡人失敗：' + (data.message || '未知錯誤');
+          const debugMsg = data.debug ? '\n調試信息: ' + JSON.stringify(data.debug, null, 2) : '';
+          alert(errorMsg + debugMsg);
+        }
+      })
+      .catch(error => {
+        console.error('❌ 新增聯絡人失敗（網路錯誤）:', error);
+        console.error('錯誤詳情:', error.stack);
+        console.error('錯誤訊息:', error.message);
+        alert('新增聯絡人失敗：網路錯誤\n' + error.message + '\n\n請檢查瀏覽器控制台以獲取更多信息');
+      });
+    }
+    
+    // 舊的函數（保留以向後兼容，但現在主要使用 addContactToListFromData）
+    function addContactToList(username, name, userDataStr) {
+      // 解析用戶資料
+      let userData;
+      try {
+        if (typeof userDataStr === 'string') {
+          // 嘗試 JSON 解析
+          try {
+            userData = JSON.parse(userDataStr.replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+          } catch (e1) {
+            console.error('JSON 解析失敗，嘗試從 DOM 獲取:', e1);
+            // 如果解析失敗，嘗試從 DOM 獲取
+            const btn = document.querySelector(`[data-username="${username}"] .add-contact-btn`);
+            if (btn) {
+              userData = {
+                user_id: btn.dataset.userId ? parseInt(btn.dataset.userId) : null,
+                username: username,
+                name: name,
+                department: btn.dataset.department || '未設定',
+                grade: btn.dataset.grade || '未設定',
+                class_name: btn.dataset.className || '未設定',
+                contact_type: btn.dataset.contactType || '其他',
+                profile_picture: btn.dataset.profilePicture || null
+              };
+            } else {
+              throw new Error('無法從 DOM 獲取用戶資料');
+            }
+          }
+        } else {
+          userData = userDataStr;
+        }
+        
+        console.log('解析後的用戶資料:', userData);
+        
+        // 調用新的函數
+        addContactToListFromData(username, name, userData);
+      } catch (e) {
+        console.error('解析用戶資料失敗:', e, '原始資料:', userDataStr);
+        alert('新增聯絡人失敗：資料格式錯誤 - ' + e.message);
+        return;
+      }
+      
+      // 檢查是否已經存在（使用字符串比較）
+      const existingIndex = allContacts.findIndex(c => {
+        const cId = (c.user_id || c.username || '').toString();
+        const uId = (userData.user_id || username || '').toString();
+        return cId === uId || c.username === username;
+      });
+      
+      if (existingIndex === -1) {
+        // 先保存到資料庫
+        const contactUserId = userData.user_id || null;
+        console.log('準備新增聯絡人 - userData:', userData, 'contactUserId:', contactUserId);
+        
+        if (!contactUserId) {
+          console.error('❌ 無法新增聯絡人：缺少用戶ID');
+          alert('無法新增聯絡人：缺少用戶ID');
+          return;
+        }
+        
+        // 發送請求保存到資料庫
+        const formData = new URLSearchParams();
+        formData.append('contact_user_id', contactUserId);
+        
+        console.log('發送 API 請求 - contact_user_id:', contactUserId);
+        
+        fetch('add_contact_api.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        })
+        .then(response => {
+          console.log('API 響應狀態:', response.status, response.statusText);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('API 響應數據:', data);
+          if (data.success) {
+            console.log('✅ 聯絡人已成功保存到資料庫', data);
+            // 添加到聯絡人列表
+            const newContact = {
+              user_id: userData.user_id || null,
+              name: name,
+              username: username,
+              department: userData.department || '未設定',
+              profile_picture: userData.profile_picture || null,
+              contact_type: userData.contact_type || '其他',
+              grade: userData.grade || '未設定',
+              class_name: userData.class_name || '未設定'
+            };
+            
+            allContacts.unshift(newContact); // 添加到開頭
+            filteredContacts = [...allContacts];
+            
+            // 更新顯示
+            currentPage = 1;
+            renderContacts();
+            updatePagination();
+            
+            // 隱藏新增聯絡人搜尋結果
+            hideAddContactResults();
+            
+            // 清空搜尋框
+            const addContactSearchInput = document.getElementById('addContactSearch');
+            if (addContactSearchInput) {
+              addContactSearchInput.value = '';
+            }
+            
+            // 顯示成功訊息
+            alert(`已新增 ${name} 到聯絡人列表`);
+            
+            // 自動選擇該聯絡人
+            setTimeout(() => {
+              selectContact(username, name);
+            }, 100);
+          } else {
+            console.error('❌ 新增聯絡人失敗:', data);
+            alert('新增聯絡人失敗：' + (data.message || '未知錯誤') + (data.debug ? '\n調試信息: ' + JSON.stringify(data.debug) : ''));
+          }
+        })
+        .catch(error => {
+          console.error('❌ 新增聯絡人失敗（網路錯誤）:', error);
+          console.error('錯誤詳情:', error.stack);
+          alert('新增聯絡人失敗：網路錯誤 - ' + error.message);
+        });
+      } else {
+        // 如果已存在，直接選擇
+        hideAddContactResults();
+        selectContact(username, name);
+      }
+    }
+    
     // 選擇聯絡人
     function selectContact(userId, userName) {
+      // 隱藏新增聯絡人搜尋結果
+      hideAddContactResults();
       const userItems = document.querySelectorAll('.user-item');
       userItems.forEach(item => {
         if (item && item.classList) {
@@ -2635,6 +3585,7 @@ try {
           console.log(`✅ ${userId} 的未讀訊息已標記為已讀`);
           readContacts.add(userId);
           saveReadContactsToStorage();
+          // markContactMessagesAsRead 已經更新了 allContacts 並重新排序，不需要再次調用 updateContactUnreadCounts
         }
       }).catch((error) => {
         console.error('標記聯絡人訊息為已讀時發生錯誤:', error);
@@ -2642,9 +3593,10 @@ try {
         saveReadContactsToStorage();
       });
       
-      setTimeout(() => {
-        updateContactUnreadCounts();
-      }, 800);
+      // 不需要再次調用 updateContactUnreadCounts，因為 markContactMessagesAsRead 已經處理了排序和徽章更新
+      // setTimeout(() => {
+      //   updateContactUnreadCounts();
+      // }, 800);
       
       loadChatHistory();
     }
@@ -2713,35 +3665,257 @@ try {
       }
     });
     
-    // 聯絡人搜尋功能（所有角色都可以使用）
+    // 1. 搜尋現有聯絡人功能（只過濾已載入的聯絡人列表）
     const contactSearchInput = document.getElementById('contactSearch');
+    
+    // 本地過濾聯絡人
+    function filterContactsLocally(searchTerm) {
+      if (searchTerm === '') {
+        filteredContacts = [...allContacts];
+      } else {
+        const searchLower = searchTerm.toLowerCase();
+        filteredContacts = allContacts.filter(contact => {
+          const name = (contact.name || '').toLowerCase();
+          const department = (contact.department || '').toLowerCase();
+          const grade = (contact.grade || '').toLowerCase();
+          const className = (contact.class_name || '').toLowerCase();
+          const contactType = (contact.contact_type || '').toLowerCase();
+          const username = (contact.username || '').toLowerCase();
+          
+          return name.includes(searchLower) || 
+                 department.includes(searchLower) || 
+                 grade.includes(searchLower) || 
+                 className.includes(searchLower) ||
+                 contactType.includes(searchLower) ||
+                 username.includes(searchLower);
+        });
+      }
+    }
+    
     if (contactSearchInput) {
       contactSearchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase().trim();
-        
-        if (searchTerm === '') {
-          filteredContacts = [...allContacts];
-        } else {
-          filteredContacts = allContacts.filter(contact => {
-            const name = (contact.name || '').toLowerCase();
-            const department = (contact.department || '').toLowerCase();
-            const grade = (contact.grade || '').toLowerCase();
-            const className = (contact.class_name || '').toLowerCase();
-            const contactType = (contact.contact_type || '').toLowerCase();
-            const username = (contact.username || '').toLowerCase();
-            
-            return name.includes(searchTerm) || 
-                   department.includes(searchTerm) || 
-                   grade.includes(searchTerm) || 
-                   className.includes(searchTerm) ||
-                   contactType.includes(searchTerm) ||
-                   username.includes(searchTerm);
-          });
-        }
-        
-        currentPage = 1; // 重置到第一頁
+        const searchTerm = this.value.trim();
+        filterContactsLocally(searchTerm);
+        currentPage = 1;
         renderContacts();
         updatePagination();
+      });
+    }
+    
+    // 2. 新增聯絡人功能（從資料庫搜尋並新增）
+    const addContactSearchInput = document.getElementById('addContactSearch');
+    const searchUserBtn = document.getElementById('searchUserBtn');
+    const addContactResults = document.getElementById('addContactResults');
+    const addContactResultsList = document.getElementById('addContactResultsList');
+    
+    // 隱藏新增聯絡人搜尋結果
+    function hideAddContactResults() {
+      if (addContactResults) {
+        addContactResults.style.display = 'none';
+      }
+    }
+    
+    // 搜尋用戶並顯示結果
+    async function searchUsersForAdd(keyword) {
+      if (!keyword || keyword.trim().length < 1) {
+        hideAddContactResults();
+        return;
+      }
+      
+      try {
+        const response = await fetch(`search_users_api.php?keyword=${encodeURIComponent(keyword.trim())}`);
+        const data = await response.json();
+        
+        if (data.success && data.users) {
+          // 檢查哪些用戶已經在聯絡人列表中
+          const existingUserIds = new Set();
+          allContacts.forEach(c => {
+            if (c.user_id) existingUserIds.add(c.user_id.toString());
+            if (c.username) existingUserIds.add(c.username);
+          });
+          
+          // 渲染搜尋結果
+          if (data.users.length === 0) {
+            addContactResultsList.innerHTML = '<div style="padding: 15px; text-align: center; color: #999;">未找到相關用戶</div>';
+          } else {
+            let html = '';
+            data.users.forEach(user => {
+              const userId = (user.user_id || user.username || '').toString();
+              const isInContacts = existingUserIds.has(userId) || existingUserIds.has(user.username);
+              const displayName = user.name || user.username;
+              // 修復圖片路徑：chat.php 在 frontend/chat/ 目錄
+              let avatarSrc = '';
+              if (user.profile_picture) {
+                if (user.profile_picture.startsWith('http://') || user.profile_picture.startsWith('https://')) {
+                  // 完整 URL（如 Google 頭像）
+                  avatarSrc = user.profile_picture;
+                } else if (user.profile_picture.startsWith('/')) {
+                  // 絕對路徑
+                  avatarSrc = user.profile_picture;
+                } else if (user.profile_picture.startsWith('uploads/')) {
+                  // 上傳的頭像，使用 ../uploads/（包括 uploads/avatars/）
+                  avatarSrc = '../' + user.profile_picture;
+                } else if (user.profile_picture.includes('avatars/')) {
+                  // 如果包含 avatars/，確保路徑正確
+                  if (user.profile_picture.startsWith('avatars/')) {
+                    avatarSrc = '../uploads/' + user.profile_picture;
+                  } else {
+                    avatarSrc = '../' + user.profile_picture;
+                  }
+                } else {
+                  // share 目錄的檔案，使用 ../share/
+                  avatarSrc = '../share/' + user.profile_picture;
+                }
+              } else {
+                // 預設頭像
+                avatarSrc = '../share/EIdROxGXsAE_LSs.jpg';
+              }
+              
+              html += `
+                <div class="add-contact-result-item" style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between;" 
+                     data-username="${escapeHtml(user.username)}" 
+                     data-name="${escapeHtml(displayName)}"
+                     data-user-id="${user.user_id || ''}">
+                  <div style="display: flex; align-items: center; flex: 1;">
+                    <img src="${avatarSrc}" alt="${escapeHtml(displayName)}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
+                    <div>
+                      <div style="font-weight: 500;">${escapeHtml(displayName)}</div>
+                      <div style="font-size: 12px; color: #666;">
+                        ${escapeHtml(user.contact_type || '')}${user.department && user.department !== '未設定' ? ' - ' + escapeHtml(user.department) : ''}
+                        ${user.grade && user.grade !== '未設定' ? ' - ' + escapeHtml(user.grade) : ''}
+                      </div>
+                      <div style="font-size: 11px; color: #999;">@${escapeHtml(user.username)}</div>
+                    </div>
+                  </div>
+                  ${!isInContacts ? `
+                    <button class="add-contact-btn" 
+                            data-username="${escapeHtml(user.username)}"
+                            data-name="${escapeHtml(displayName)}"
+                            data-user-id="${user.user_id || ''}"
+                            data-department="${escapeHtml(user.department || '未設定')}"
+                            data-grade="${escapeHtml(user.grade || '未設定')}"
+                            data-class-name="${escapeHtml(user.class_name || '未設定')}"
+                            data-contact-type="${escapeHtml(user.contact_type || '其他')}"
+                            data-profile-picture="${escapeHtml(user.profile_picture || '')}"
+                            style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; white-space: nowrap;">
+                      ➕ 新增
+                    </button>
+                  ` : `
+                    <span style="padding: 6px 12px; color: #4CAF50; font-size: 12px; margin-left: 10px; white-space: nowrap;">✓ 已存在</span>
+                  `}
+                </div>
+              `;
+            });
+            addContactResultsList.innerHTML = html;
+          }
+          
+          if (addContactResults) {
+            addContactResults.style.display = 'block';
+          }
+        } else {
+          addContactResultsList.innerHTML = '<div style="padding: 15px; text-align: center; color: #999;">搜尋失敗，請稍後再試</div>';
+          if (addContactResults) {
+            addContactResults.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('搜尋用戶失敗:', error);
+        addContactResultsList.innerHTML = '<div style="padding: 15px; text-align: center; color: #ff4444;">搜尋失敗：' + escapeHtml(error.message) + '</div>';
+        if (addContactResults) {
+          addContactResults.style.display = 'block';
+        }
+      }
+    }
+    
+    // 搜尋按鈕點擊事件
+    if (searchUserBtn) {
+      searchUserBtn.addEventListener('click', function() {
+        const keyword = addContactSearchInput ? addContactSearchInput.value.trim() : '';
+        if (keyword) {
+          searchUsersForAdd(keyword);
+        } else {
+          hideAddContactResults();
+        }
+      });
+    }
+    
+    // 搜尋框 Enter 鍵事件
+    if (addContactSearchInput) {
+      addContactSearchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          const keyword = this.value.trim();
+          if (keyword) {
+            searchUsersForAdd(keyword);
+          } else {
+            hideAddContactResults();
+          }
+        }
+      });
+    }
+    
+    // 使用事件委派處理「新增」按鈕點擊（避免 btoa 編碼問題）
+    if (addContactResultsList) {
+      console.log('✅ 事件委派已設置 - addContactResultsList');
+      addContactResultsList.addEventListener('click', function(e) {
+        console.log('點擊事件觸發 - target:', e.target, 'currentTarget:', e.currentTarget);
+        const btn = e.target.closest('.add-contact-btn');
+        console.log('找到按鈕:', btn);
+        
+        if (btn) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const username = btn.dataset.username || '';
+          const name = btn.dataset.name || '';
+          const userId = btn.dataset.userId || '';
+          
+          console.log('按鈕 data 屬性:', {
+            username: username,
+            name: name,
+            userId: userId,
+            department: btn.dataset.department,
+            grade: btn.dataset.grade,
+            className: btn.dataset.className,
+            contactType: btn.dataset.contactType,
+            profilePicture: btn.dataset.profilePicture
+          });
+          
+          // 從 data 屬性構建 userData 物件
+          const userData = {
+            user_id: userId ? parseInt(userId) : null,
+            username: username,
+            name: name,
+            department: btn.dataset.department || '未設定',
+            grade: btn.dataset.grade || '未設定',
+            class_name: btn.dataset.className || '未設定',
+            contact_type: btn.dataset.contactType || '其他',
+            profile_picture: btn.dataset.profilePicture || null
+          };
+          
+          console.log('從按鈕 data 屬性獲取的用戶資料:', userData);
+          
+          if (!userData.user_id) {
+            console.error('❌ 錯誤：user_id 為空或無效');
+            alert('錯誤：無法獲取用戶ID，請重新搜尋');
+            return;
+          }
+          
+          // 調用新增聯絡人函數
+          addContactToListFromData(username, name, userData);
+        } else {
+          console.log('點擊的不是新增按鈕');
+        }
+      });
+    } else {
+      console.error('❌ 找不到 addContactResultsList 元素，無法設置事件委派');
+    }
+    
+    // 清空搜尋時隱藏結果
+    if (addContactSearchInput) {
+      addContactSearchInput.addEventListener('input', function() {
+        if (this.value.trim() === '') {
+          hideAddContactResults();
+        }
       });
     }
     
@@ -2853,6 +4027,15 @@ try {
                 if (newMaxId > lastMessageId) {
                   lastMessageId = newMaxId;
                   console.log('發現新訊息，已更新顯示，最後訊息ID:', lastMessageId);
+                }
+                
+                // 如果有新消息且不是當前正在查看的聯絡人，更新未讀數量並重新排序
+                const newMessageFrom = result.messages[0].from_user || result.messages[0].from_username;
+                if (newMessageFrom && newMessageFrom !== currentUserId && newMessageFrom !== username) {
+                  // 更新未讀數量並重新排序聯絡人列表
+                  setTimeout(() => {
+                    updateContactUnreadCounts();
+                  }, 500);
                 }
               } catch (displayError) {
                 console.error('顯示新訊息時發生錯誤:', displayError);
