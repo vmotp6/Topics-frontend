@@ -609,12 +609,12 @@ $conn->close();
                                 <label><span class="required">*</span> 活動日期:</label>
                                 <input type="date" name="activity_date" value="<?php echo isset($_POST['activity_date']) ? htmlspecialchars($_POST['activity_date']) : ''; ?>" required>
                             </div>
-                            <div class="field-group <?php echo (isset($teacher_info) && !empty($teacher_info['department_name'])) ? 'readonly-field' : ''; ?>">
-                                <label><span class="required">*</span> 教師單位: 
+                            <div class="field-group teacher-unit-field <?php echo (isset($teacher_info) && !empty($teacher_info['department_name'])) ? 'readonly-field' : ''; ?>">
+                                <label style="white-space: nowrap;"><span class="required">*</span> 教師單位: 
                                     <?php if (isset($teacher_info) && !empty($teacher_info['department_name'])): ?>
-                                        <small style="color: #6c757d; font-style: italic;">(系統自動填入)</small>
+                                        <small style="color: #6c757d; font-style: italic; white-space: nowrap;">(系統自動填入)</small>
                                     <?php else: ?>
-                                        <small style="color: #856404; font-style: italic;">(請先填寫個人資料中的科系，或手動輸入)</small>
+                                        <small style="color: #856404; font-style: italic; white-space: nowrap;">(請填於個人資料中填寫科系或手動輸入)</small>
                                     <?php endif; ?>
                                 </label>
                                 <input type="text" name="teacher_unit" placeholder="請輸入教師單位" 
@@ -884,34 +884,85 @@ $conn->close();
     </div>
 
     <style>
+        /* 教師單位標籤不換行 */
+        .teacher-unit-field label {
+            white-space: nowrap !important;
+            flex-wrap: nowrap !important;
+        }
+        .teacher-unit-field label small {
+            white-space: nowrap !important;
+            display: inline !important;
+        }
+        
         /* RIC 功能樣式 */
         .ric-status-bar {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #7ac9c7 0%, #956dbd 100%);
             color: white;
-            padding: 12px 20px;
-            border-radius: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            z-index: 1000;
+            padding: 20px 30px;
+            border-radius: 30px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 20px rgba(122, 201, 199, 0.3);
+            z-index: 10000;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            transition: all 0.3s ease;
+            gap: 15px;
+            font-size: 20px;
+            font-weight: 600;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(30px) scale(0.9);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            min-width: 200px;
+            animation: pulse 2s infinite;
         }
         .ric-status-bar.show {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
+            animation: slideInBounce 0.5s ease-out, pulse 2s infinite 0.5s;
+        }
+        @keyframes slideInBounce {
+            0% {
+                transform: translateY(30px) scale(0.9);
+                opacity: 0;
+            }
+            60% {
+                transform: translateY(-5px) scale(1.05);
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 20px rgba(122, 201, 199, 0.3);
+            }
+            50% {
+                box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 30px rgba(122, 201, 199, 0.5);
+            }
         }
         .ric-status-bar.saving {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: linear-gradient(135deg, #7ac9c7 0%, #956dbd 100%);
         }
         .ric-status-bar.saved {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4), 0 0 20px rgba(40, 167, 69, 0.3);
+        }
+        .ric-status-bar.saved.show {
+            animation: slideInBounce 0.5s ease-out, pulseGreen 2s infinite 0.5s;
+        }
+        @keyframes pulseGreen {
+            0%, 100% {
+                box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4), 0 0 20px rgba(40, 167, 69, 0.3);
+            }
+            50% {
+                box-shadow: 0 8px 30px rgba(40, 167, 69, 0.5), 0 0 30px rgba(40, 167, 69, 0.5);
+            }
+        }
+        .ric-status-bar i {
+            font-size: 24px;
         }
         .form-progress {
             position: sticky;
@@ -1027,6 +1078,9 @@ $conn->close();
     </style>
 
     <script>
+        // 從 PHP 傳遞使用者 ID 到 JavaScript
+        const CURRENT_USER_ID = <?php echo isset($teacher_id) && $teacher_id ? json_encode($teacher_id) : 'null'; ?>;
+        
         // 禁用瀏覽器的自動滾動恢復功能，確保頁面總是從頂部開始
         if ('scrollRestoration' in history) {
             history.scrollRestoration = 'manual';
@@ -1175,7 +1229,15 @@ $conn->close();
         // ==================== RIC 核心功能 ====================
         
         // 表單資料管理（全局變量，確保函數可以訪問）
-        const FORM_STORAGE_KEY = 'activity_record_draft';
+        // 使用使用者 ID 來區分不同使用者的草稿
+        function getStorageKey() {
+            if (CURRENT_USER_ID) {
+                return 'activity_record_draft_' + CURRENT_USER_ID;
+            }
+            return 'activity_record_draft'; // 如果沒有使用者 ID，使用預設 key（向後相容）
+        }
+        
+        const FORM_STORAGE_KEY = getStorageKey();
         let autoSaveTimer = null;
         let isSubmitting = false;
         
@@ -1204,6 +1266,25 @@ $conn->close();
         document.addEventListener('DOMContentLoaded', function() {
             console.log('RIC 功能開始初始化...');
             
+            // 清除舊格式的草稿（如果存在且不屬於目前使用者）
+            if (CURRENT_USER_ID) {
+                const oldDraft = localStorage.getItem('activity_record_draft');
+                if (oldDraft) {
+                    try {
+                        const oldData = JSON.parse(oldDraft);
+                        // 如果舊草稿沒有 user_id 或 user_id 不匹配，清除它
+                        if (!oldData.user_id || oldData.user_id !== CURRENT_USER_ID) {
+                            console.log('🧹 清除舊格式的草稿或不屬於目前使用者的草稿');
+                            localStorage.removeItem('activity_record_draft');
+                        }
+                    } catch (e) {
+                        // 如果解析失敗，也清除舊草稿
+                        console.log('🧹 清除格式錯誤的舊草稿');
+                        localStorage.removeItem('activity_record_draft');
+                    }
+                }
+            }
+            
             // 檢查是否有成功提交的參數
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('success') === '1') {
@@ -1231,6 +1312,10 @@ $conn->close();
                 
                 // 清除草稿
                 localStorage.removeItem(FORM_STORAGE_KEY);
+                // 也清除舊格式的草稿（向後相容）
+                if (CURRENT_USER_ID) {
+                    localStorage.removeItem('activity_record_draft');
+                }
                 console.log('✅ 草稿已清除');
                 
                 // 刷新驗證碼圖片（因為服務器已生成新的驗證碼）
@@ -1319,8 +1404,23 @@ $conn->close();
                     return;
                 }
                 
-                console.log('✅ 找到草稿，準備載入...');
-                console.log('草稿內容:', JSON.parse(hasDraft));
+                // 檢查草稿是否屬於目前使用者
+                try {
+                    const draftData = JSON.parse(hasDraft);
+                    if (CURRENT_USER_ID && draftData.user_id && draftData.user_id !== CURRENT_USER_ID) {
+                        console.warn('⚠️ 草稿屬於其他使用者，自動清除舊草稿');
+                        localStorage.removeItem(FORM_STORAGE_KEY);
+                        // 也清除舊格式的草稿
+                        localStorage.removeItem('activity_record_draft');
+                        console.log('✅ 已清除其他使用者的草稿');
+                        return;
+                    }
+                    console.log('✅ 找到草稿，準備載入...');
+                    console.log('草稿內容:', draftData);
+                } catch (e) {
+                    console.error('❌ 解析草稿資料失敗:', e);
+                    return;
+                }
                 
                 // 檢查是否有伺服器端資料（PHP 回傳的資料）
                 // 如果表單已經有資料，可能是 PHP 回傳的，不應該覆蓋
@@ -1424,7 +1524,11 @@ $conn->close();
             if (type === 'saved') {
                 setTimeout(() => {
                     statusBar.classList.remove('show');
-                }, 2000);
+                }, 4000); // 從 2 秒增加到 4 秒，讓通知更明顯
+            } else if (type === 'info') {
+                setTimeout(() => {
+                    statusBar.classList.remove('show');
+                }, 3000); // 資訊類通知顯示 3 秒
             }
         }
         
@@ -1432,6 +1536,10 @@ $conn->close();
         
         // 防抖函數（全局）
         let saveTimeout = null;
+        // 控制通知顯示頻率（避免一直跳）
+        let lastNotificationTime = 0;
+        const NOTIFICATION_INTERVAL = 5000; // 5秒內只顯示一次通知
+        
         const debouncedSave = () => {
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(() => {
@@ -1703,21 +1811,27 @@ $conn->close();
                 // 靜默儲存，不顯示日誌
             }
             
-            // 記錄儲存時間
+            // 記錄儲存時間和使用者 ID
             draftData.saved_at = new Date().toISOString();
+            draftData.user_id = CURRENT_USER_ID; // 儲存使用者 ID 以便驗證
             
-            // 儲存到 localStorage（靜默儲存，不顯示提示）
+            // 儲存到 localStorage
             try {
                 const dataString = JSON.stringify(draftData);
                 localStorage.setItem(FORM_STORAGE_KEY, dataString);
-                // 靜默儲存，不顯示狀態提示
-                // 只在 console 記錄（用於調試）
+                // 如果有欄位被儲存，檢查是否需要顯示通知
                 if (fieldCount > 0) {
-                    console.log('✅ 草稿已自動儲存（靜默），包含 ' + fieldCount + ' 個有值的欄位');
+                    console.log('✅ 草稿已自動儲存，包含 ' + fieldCount + ' 個有值的欄位');
+                    // 控制通知頻率：只在距離上次通知超過指定時間後才顯示
+                    const now = Date.now();
+                    if (now - lastNotificationTime >= NOTIFICATION_INTERVAL) {
+                        showStatus('草稿已自動儲存', 'saved');
+                        lastNotificationTime = now;
+                    }
                 }
             } catch (e) {
                 console.error('❌ 儲存草稿失敗:', e);
-                // 只有失敗時才顯示提示
+                // 儲存失敗時顯示錯誤提示（失敗通知不受頻率限制）
                 showStatus('儲存失敗', 'info');
             }
             
@@ -1738,6 +1852,18 @@ $conn->close();
                 
                 const data = JSON.parse(draftData);
                 console.log('準備載入草稿資料:', data);
+                
+                // 檢查草稿是否屬於目前使用者
+                if (CURRENT_USER_ID && data.user_id && data.user_id !== CURRENT_USER_ID) {
+                    console.warn('⚠️ 草稿屬於其他使用者，自動清除舊草稿');
+                    localStorage.removeItem(FORM_STORAGE_KEY);
+                    // 也清除舊格式的草稿
+                    localStorage.removeItem('activity_record_draft');
+                    if (showMessage) {
+                        alert('草稿屬於其他使用者，已自動清除。請重新填寫表單。');
+                    }
+                    return false;
+                }
                 
                 // 檢查資料格式是否正確（應該包含活動紀錄表單的欄位）
                 const validFields = ['activity_date', 'teacher_unit', 'teacher_name', 'school_name', 
@@ -2546,6 +2672,10 @@ $conn->close();
             // 提交成功後清除草稿（在頁面重新載入時）
             setTimeout(() => {
                 localStorage.removeItem(FORM_STORAGE_KEY);
+                // 也清除舊格式的草稿（向後相容）
+                if (CURRENT_USER_ID) {
+                    localStorage.removeItem('activity_record_draft');
+                }
             }, 1000);
         });
         
