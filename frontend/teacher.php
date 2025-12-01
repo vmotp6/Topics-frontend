@@ -2,34 +2,63 @@
 // 載入 session 配置
 require_once 'session_config.php';
 
-// 處理Google登入回調（必須在登入檢查之前）
-if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
-    if (isset($_GET['username']) && isset($_GET['role'])) {
-        // 設定Session
-        $_SESSION['logged_in'] = true;
-        $_SESSION['username'] = $_GET['username'];
-        $_SESSION['role'] = $_GET['role'];
-        $_SESSION['login_method'] = 'google';
-        
-        // 重定向到相應頁面（避免URL參數顯示）
-        $redirect_url = 'index.php';
-        if ($_GET['role'] === '管理員') {
-            $redirect_url = 'admin_admission.php';
-        } elseif ($_GET['role'] === '老師') {
-            $redirect_url = 'teacher.php';
-        } elseif ($_GET['role'] === '學生') {
-            $redirect_url = 'student.php';
-        }
-        
-        header("Location: $redirect_url");
-        exit();
-    }
-}
-
-// 檢查登入狀態（與 header.php 保持一致）
+// 檢查登入狀態（與系統其他文件保持一致）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 如果 session 資料不完整，清除登入狀態
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    if (!isset($_SESSION['username']) || empty($_SESSION['username']) || 
+        !isset($_SESSION['role']) || empty($_SESSION['role'])) {
+        $_SESSION['logged_in'] = false;
+        $isLoggedIn = false;
+        // 清除不完整的 session 數據
+        unset($_SESSION['username']);
+        unset($_SESSION['role']);
+        unset($_SESSION['login_method']);
+    }
+}
+
+// 處理Google登入回調（必須在登入檢查之前）
+if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
+    if (isset($_GET['username']) && isset($_GET['role'])) {
+        // 驗證參數完整性
+        $username = trim($_GET['username']);
+        $role = trim($_GET['role']);
+        
+        // 確保參數不為空
+        if (!empty($username) && !empty($role)) {
+            // 設定Session
+            $_SESSION['logged_in'] = true;
+            $_SESSION['username'] = $username;
+            $_SESSION['role'] = $role;
+            $_SESSION['login_method'] = 'google';
+            
+            // 更新 session 活動時間
+            $_SESSION['last_activity'] = time();
+            
+            // 重定向到相應頁面（避免URL參數顯示）
+            $redirect_url = 'index.php';
+            if ($role === '管理員' || $role === 'ADM') {
+                $redirect_url = 'admin_admission.php';
+            } elseif ($role === '老師' || $role === 'TEA') {
+                $redirect_url = 'teacher.php';
+            } elseif ($role === '學生' || $role === 'STU') {
+                $redirect_url = 'senior_messages.php';
+            }
+            
+            header("Location: $redirect_url");
+            exit();
+        } else {
+            // 參數不完整，清除可能的錯誤 session
+            $_SESSION['logged_in'] = false;
+            unset($_SESSION['username']);
+            unset($_SESSION['role']);
+            unset($_SESSION['login_method']);
+        }
+    }
+}
 
 // 如果未登入，重定向到首頁
 if (!$isLoggedIn) {
@@ -37,8 +66,10 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師角色
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查是否為老師角色（支援角色代碼和中文名稱）
+$user_role = $_SESSION['role'] ?? '';
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+if (!$is_teacher) {
     header("Location: index.php");
     exit;
 }
@@ -948,7 +979,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
 			<div class="feature-card">
 				<div class="feature-icon">👨‍🎓</div>
 				<h3 class="feature-title">學生管理</h3>
-				<p class="feature-description">查看和管理分配給您的學生，進行聯絡和追蹤。</p>
+				<p class="feature-description">查看和管理分配給您的所有學生（包含就讀意願和推薦報名），進行聯絡和追蹤。</p>
 				<button onclick="openStudentManagement()" class="feature-link" style="border: none; cursor: pointer; width: 35%;">學生管理</button>
 			</div>
 		</div>
