@@ -1208,6 +1208,62 @@ $role = $_SESSION['role'] ?? '訪客';
             }
         }
 
+        // 更新就讀意願選項的可用性（防止重複選擇相同科系）
+        function updateIntentionOptions() {
+            const intention1 = document.getElementById('intention1');
+            const intention2 = document.getElementById('intention2');
+            const intention3 = document.getElementById('intention3');
+            
+            if (!intention1 || !intention2 || !intention3) return;
+            
+            // 獲取已選擇的科系（排除"無特定"）
+            const selected1 = intention1.value && intention1.value !== '無特定' ? intention1.value : null;
+            const selected2 = intention2.value && intention2.value !== '無特定' ? intention2.value : null;
+            const selected3 = intention3.value && intention3.value !== '無特定' ? intention3.value : null;
+            
+            // 更新 intention2 的選項
+            Array.from(intention2.options).forEach(option => {
+                const optionValue = option.value;
+                // "無特定" 選項始終可用
+                if (optionValue === '無特定') {
+                    option.disabled = false;
+                    return;
+                }
+                // 如果該科系已被 intention1 選擇，則禁用
+                if (optionValue === selected1) {
+                    option.disabled = true;
+                    // 如果當前選中的是這個被禁用的選項，則改為"無特定"
+                    if (intention2.value === optionValue) {
+                        intention2.value = '無特定';
+                        updateSystemOptions('intention2', 'system2');
+                    }
+                } else {
+                    option.disabled = false;
+                }
+            });
+            
+            // 更新 intention3 的選項
+            Array.from(intention3.options).forEach(option => {
+                const optionValue = option.value;
+                // "無特定" 選項始終可用
+                if (optionValue === '無特定') {
+                    option.disabled = false;
+                    return;
+                }
+                // 如果該科系已被 intention1 或 intention2 選擇，則禁用
+                if (optionValue === selected1 || optionValue === selected2) {
+                    option.disabled = true;
+                    // 如果當前選中的是這個被禁用的選項，則改為"無特定"
+                    if (intention3.value === optionValue) {
+                        intention3.value = '無特定';
+                        updateSystemOptions('intention3', 'system3');
+                    }
+                } else {
+                    option.disabled = false;
+                }
+            });
+        }
+
         document.addEventListener("DOMContentLoaded", function() {
             const pairs = [
                 { dep: "intention1", sys: "system1" },
@@ -1220,9 +1276,14 @@ $role = $_SESSION['role'] ?? '訪客';
                 if (depSelect) {
                     depSelect.addEventListener("change", function() {
                         updateSystemOptions(dep, sys);
+                        // 當任何就讀意願改變時，更新其他選項的可用性
+                        updateIntentionOptions();
                     });
                 }
             });
+            
+            // 頁面載入時也執行一次，確保初始狀態正確
+            updateIntentionOptions();
         });
     </script>
     
