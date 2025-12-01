@@ -32,8 +32,12 @@ $student_id = $_POST['student_id'] ?? '';
 $grade = $_POST['grade'] ?? '';
 $class_name = $_POST['class_name'] ?? '';
 
-// 驗證必填欄位
-if (empty($username) || empty($name) || empty($department) || empty($phone)) {
+// 檢查是否只有頭像上傳（沒有其他資料）
+$avatar_only = isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK && 
+               empty($name) && empty($department) && empty($phone);
+
+// 如果不是只上傳頭像，驗證必填欄位
+if (!$avatar_only && (empty($username) || empty($name) || empty($department) || empty($phone))) {
     echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（姓名、科系、電話）']);
     exit;
 }
@@ -239,6 +243,17 @@ try {
         $stmt_check->execute([$user_id]);
         $updated_path = $stmt_check->fetchColumn();
         error_log("資料庫驗證: 更新後的頭像路徑={$updated_path}");
+        
+        // 如果只是上傳頭像，直接返回成功
+        if ($avatar_only) {
+            echo json_encode([
+                'success' => true,
+                'message' => '頭像儲存成功',
+                'avatar_updated' => true,
+                'avatar_path' => $profile_picture_path
+            ]);
+            exit;
+        }
     }
     
     // 檢查 student 表是否有 email 欄位

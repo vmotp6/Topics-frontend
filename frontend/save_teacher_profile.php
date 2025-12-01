@@ -29,8 +29,12 @@ $name = $_POST['name'] ?? '';
 $department = $_POST['department'] ?? '';
 $phone = $_POST['phone'] ?? '';
 
-// 驗證必填欄位
-if (empty($username) || empty($department) || empty($phone)) {
+// 檢查是否只有頭像上傳（沒有其他資料）
+$avatar_only = isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK && 
+               empty($name) && empty($department) && empty($phone);
+
+// 如果不是只上傳頭像，驗證必填欄位
+if (!$avatar_only && (empty($username) || empty($department) || empty($phone))) {
     echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（科系、電話）']);
     exit;
 }
@@ -139,11 +143,14 @@ try {
     
     $user_id = $user_result['id'];
     
-    // 更新 user 表的 name（如果提供）
-    if (!empty($name)) {
-        $stmt = $pdo->prepare("UPDATE user SET name = ? WHERE id = ?");
-        $stmt->execute([$name, $user_id]);
-        error_log("資料庫更新姓名: username={$username}, name={$name}");
+    // 如果只是上傳頭像，跳過其他資料更新
+    if (!$avatar_only) {
+        // 更新 user 表的 name（如果提供）
+        if (!empty($name)) {
+            $stmt = $pdo->prepare("UPDATE user SET name = ? WHERE id = ?");
+            $stmt->execute([$name, $user_id]);
+            error_log("資料庫更新姓名: username={$username}, name={$name}");
+        }
     }
     
     // 將科系名稱轉換為代碼
@@ -181,6 +188,17 @@ try {
         $stmt_check->execute([$user_id]);
         $updated_path = $stmt_check->fetchColumn();
         error_log("資料庫驗證: 更新後的頭像路徑={$updated_path}");
+        
+        // 如果只是上傳頭像，直接返回成功
+        if ($avatar_only) {
+            echo json_encode([
+                'success' => true,
+                'message' => '頭像儲存成功',
+                'avatar_updated' => true,
+                'avatar_path' => $profile_picture_path
+            ]);
+            exit;
+        }
     }
     
     // 檢查 teacher 表是否存在該用戶的記錄

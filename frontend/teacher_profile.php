@@ -365,7 +365,9 @@ try {
                 <input type="file" id="avatarInput" accept="image/*" onchange="previewAvatar(this)">
                 選擇頭像
             </label>
+            <button type="button" id="saveAvatarBtn" class="submit-btn" style="margin-top: 10px; max-width: 150px; padding: 8px 16px; font-size: 14px; margin-left: auto; margin-right: auto; display: block;">儲存頭像</button>
             <div class="avatar-info">支援 JPG、PNG 格式，建議大小 200x200 像素</div>
+            <div id="avatarMessage"></div>
         </div>
         
         <?php if ($is_teacher && $is_auto_generated): ?>
@@ -554,6 +556,80 @@ try {
                 reader.readAsDataURL(input.files[0]);
             }
         }
+
+        // 單獨儲存頭像
+        document.getElementById('saveAvatarBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const avatarInput = document.getElementById('avatarInput');
+            if (!avatarInput || !avatarInput.files || !avatarInput.files[0]) {
+                const messageDiv = document.getElementById('avatarMessage');
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '請先選擇頭像';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('avatar', avatarInput.files[0]);
+            formData.append('username', '<?php echo isset($_SESSION['username']) ? $_SESSION['username'] : ''; ?>');
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            fetch('save_teacher_profile.php', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            })
+            .then(response => {
+                clearTimeout(timeoutId);
+                return response.json().then(data => {
+                    const messageDiv = document.getElementById('avatarMessage');
+                    if (response.ok && data.success) {
+                        messageDiv.className = 'message success';
+                        messageDiv.textContent = data.message || '頭像儲存成功';
+                        
+                        // 如果頭像已更新，更新預覽
+                        if (data.avatar_updated && data.avatar_path) {
+                            console.log('頭像已更新，新路徑:', data.avatar_path);
+                            const avatarPreview = document.getElementById('avatarPreview');
+                            if (avatarPreview) {
+                                const newSrc = data.avatar_path + '?t=' + new Date().getTime();
+                                console.log('更新頭像預覽，新 src:', newSrc);
+                                avatarPreview.src = newSrc;
+                                
+                                avatarPreview.onerror = function() {
+                                    console.error('頭像載入失敗，路徑:', newSrc);
+                                    this.src = 'share/EIdROxGXsAE_LSs.jpg';
+                                };
+                                
+                                avatarPreview.onload = function() {
+                                    console.log('頭像載入成功');
+                                };
+                            }
+                            // 1.5秒後重新載入頁面以確保所有地方都更新
+                            setTimeout(() => {
+                                console.log('重新載入頁面以顯示新頭像');
+                                window.location.reload();
+                            }, 1500);
+                        }
+                    } else {
+                        messageDiv.className = 'message error';
+                        messageDiv.textContent = data.message || '頭像儲存失敗，請稍後再試';
+                    }
+                });
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                const messageDiv = document.getElementById('avatarMessage');
+                messageDiv.className = 'message error';
+                if (error.name === 'AbortError') {
+                    messageDiv.textContent = '請求超時，請稍後再試';
+                } else {
+                    messageDiv.textContent = '頭像儲存失敗，請稍後再試';
+                }
+            });
+        });
 
         // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
         window.addEventListener('load', function() {
@@ -749,11 +825,7 @@ try {
             formData.append('class_name', className);
             <?php endif; ?>
             
-            // 如果有選擇新的頭像，加入表單
-            const avatarInput = document.getElementById('avatarInput');
-            if (avatarInput && avatarInput.files && avatarInput.files[0]) {
-                formData.append('avatar', avatarInput.files[0]);
-            }
+            // 頭像不再包含在個人資料表單中，已單獨處理
             
             // 使用 AbortController 來設置超時
             const controller = new AbortController();
