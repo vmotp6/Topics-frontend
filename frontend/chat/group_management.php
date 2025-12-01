@@ -63,6 +63,15 @@ try {
         case 'update_group_name':
             updateGroupName($pdo, $currentUsername);
             break;
+        case 'mark_group_as_read':
+            markGroupAsRead($pdo, $currentUsername);
+            break;
+        case 'mark_message_as_read':
+            markMessageAsRead($pdo, $currentUsername);
+            break;
+        case 'mark_messages_as_read':
+            markMessagesAsRead($pdo, $currentUsername);
+            break;
         default:
             echo json_encode(['success' => false, 'error' => '無效的動作']);
     }
@@ -251,7 +260,46 @@ function ensureGroupChatMessagesTable($pdo) {
             )";
             $pdo->exec($sql);
         } else {
-            // 表存在，檢查是否有 group_id 列
+            // 表存在，檢查並添加必要的欄位
+            $columns = $pdo->query("SHOW COLUMNS FROM group_chat_messages")->fetchAll(PDO::FETCH_COLUMN);
+            
+            // 檢查並添加 read_count 欄位
+            if (!in_array('read_count', $columns)) {
+                try {
+                    $pdo->exec("ALTER TABLE group_chat_messages ADD COLUMN read_count INT DEFAULT 0 AFTER timestamp");
+                } catch (PDOException $e) {
+                    error_log("添加 read_count 欄位失敗: " . $e->getMessage());
+                }
+            }
+            
+            // 檢查並添加 read_user_ids 欄位
+            if (!in_array('read_user_ids', $columns)) {
+                try {
+                    $pdo->exec("ALTER TABLE group_chat_messages ADD COLUMN read_user_ids TEXT DEFAULT NULL AFTER read_count");
+                } catch (PDOException $e) {
+                    error_log("添加 read_user_ids 欄位失敗: " . $e->getMessage());
+                }
+            }
+            
+            // 檢查並添加 total_members 欄位
+            if (!in_array('total_members', $columns)) {
+                try {
+                    $pdo->exec("ALTER TABLE group_chat_messages ADD COLUMN total_members INT DEFAULT 0 AFTER read_user_ids");
+                } catch (PDOException $e) {
+                    error_log("添加 total_members 欄位失敗: " . $e->getMessage());
+                }
+            }
+            
+            // 檢查並添加 last_read_update 欄位
+            if (!in_array('last_read_update', $columns)) {
+                try {
+                    $pdo->exec("ALTER TABLE group_chat_messages ADD COLUMN last_read_update TIMESTAMP NULL DEFAULT NULL AFTER total_members");
+                } catch (PDOException $e) {
+                    error_log("添加 last_read_update 欄位失敗: " . $e->getMessage());
+                }
+            }
+            
+            // 檢查是否有 group_id 列
             $stmt = $pdo->query("SHOW COLUMNS FROM group_chat_messages LIKE 'group_id'");
             if ($stmt->rowCount() == 0) {
                 // 如果沒有 group_id 列，嘗試添加
@@ -475,15 +523,19 @@ function getGroupMessages($pdo) {
         
         // 使用正確的 INT 類型 ID 查詢
         // from_user 是 INT 類型，外鍵到 user.id
-        // 注意：group_chat_messages 表沒有 id 欄位，使用組合鍵作為唯一標識
-        $sql = "SELECT CONCAT(gm.group_id, '_', gm.from_user, '_', UNIX_TIMESTAMP(gm.timestamp)) as id,
+        // 注意：group_chat_messages 表有 id 欄位
+        $sql = "SELECT gm.id,
                        gm.group_id, 
                        u.username as from_user, 
                        gm.message, 
                        COALESCE(u.role, '用戶') as role, 
                        gm.timestamp,
                        u.name as from_user_name,
-                       u.id as from_user_id
+                       u.id as from_user_id,
+                       COALESCE(gm.read_count, 0) as read_count,
+                       gm.read_user_ids,
+                       COALESCE(gm.total_members, 0) as total_members,
+                       gm.last_read_update
                 FROM group_chat_messages gm 
                 LEFT JOIN user u ON gm.from_user = u.id 
                 WHERE gm.group_id = ?
@@ -491,6 +543,17 @@ function getGroupMessages($pdo) {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$groupId]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // 解析 read_user_ids JSON 字符串為數組
+        foreach ($messages as &$msg) {
+            if (!empty($msg['read_user_ids'])) {
+                $readUserIds = json_decode($msg['read_user_ids'], true);
+                $msg['read_user_ids_array'] = is_array($readUserIds) ? $readUserIds : [];
+            } else {
+                $msg['read_user_ids_array'] = [];
+            }
+        }
+        unset($msg);
         
         // 先檢查是否有任何訊息（用於調試）
         $checkSql = "SELECT COUNT(*) as count FROM group_chat_messages WHERE group_id = ?";
@@ -561,24 +624,45 @@ function sendGroupMessage($pdo, $currentUsername, $currentRole) {
             return;
         }
         
+        // 獲取群組總成員數
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM group_chat_members WHERE group_id = ?");
+        $stmt->execute([$groupId]);
+        $memberCount = $stmt->fetch(PDO::FETCH_ASSOC);
+        $totalMembers = (int)($memberCount['total'] ?? 0);
+        
+        // 如果 total_members 為 0，至少應該是 1（發送者自己）
+        if ($totalMembers === 0) {
+            $totalMembers = 1;
+        }
+        
         // 使用 INT 類型的 from_user（對應 user.id）
-        $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, timestamp) VALUES (?, ?, ?, NOW())";
+        // 發送者自己已讀，所以 read_count 初始為 1，read_user_ids 包含發送者ID
+        $readUserIds = json_encode([$userId]);
+        $sql = "INSERT INTO group_chat_messages (group_id, from_user, message, timestamp, read_count, read_user_ids, total_members, last_read_update) 
+                VALUES (?, ?, ?, NOW(), 1, ?, ?, NOW())";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$groupId, $userId, $message]);
+        $stmt->execute([$groupId, $userId, $message, $readUserIds, $totalMembers]);
+        
+        // 獲取插入的訊息ID
+        $messageId = $pdo->lastInsertId();
         
         // 調試信息
-        error_log("群組訊息發送成功 - group_id: $groupId, from_user_id: $userId, from_user: $fromUser");
+        error_log("群組訊息發送成功 - message_id: $messageId, group_id: $groupId, from_user_id: $userId, from_user: $fromUser, total_members: $totalMembers");
         
         echo json_encode([
             'success' => true,
             'message' => '訊息發送成功',
-            'id' => $groupId, // 注意：group_chat_messages 表沒有 id 欄位，所以返回 group_id
+            'id' => $messageId,
+            'message_id' => $messageId,
+            'read_count' => 1,
+            'total_members' => $totalMembers,
             'debug' => [
                 'group_id' => $groupId,
                 'from_user_id' => $userId,
                 'from_user' => $fromUser,
                 'role' => $role,
-                'message_length' => strlen($message)
+                'message_length' => strlen($message),
+                'total_members' => $totalMembers
             ]
         ]);
         
@@ -647,5 +731,259 @@ function updateGroupName($pdo, $currentUsername) {
         ]);
     }
 }
-?>
+
+// 標記群組訊息為已讀
+function markGroupAsRead($pdo, $currentUsername) {
+    $groupId = $_POST['group_id'] ?? '';
+    
+    if (empty($groupId) || !is_numeric($groupId)) {
+        echo json_encode(['success' => false, 'error' => '缺少有效的群組ID']);
+        return;
+    }
+    
+    try {
+        // 獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$currentUsername]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到當前用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 檢查用戶是否為群組成員
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM group_chat_members WHERE group_id = ? AND user = ?");
+        $stmt->execute([$groupId, $userId]);
+        $isMember = $stmt->fetchColumn() > 0;
+        
+        if (!$isMember) {
+            echo json_encode(['success' => false, 'error' => '您不是該群組的成員']);
+            return;
+        }
+        
+        // 檢查並創建 group_read_status 表（如果不存在）
+        $stmt = $pdo->query("SHOW TABLES LIKE 'group_read_status'");
+        $tableExists = $stmt->rowCount() > 0;
+        
+        if (!$tableExists) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS group_read_status (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                group_id VARCHAR(255) NOT NULL,
+                user_id INT NOT NULL,
+                last_read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_group_user (group_id, user_id),
+                INDEX idx_group_id (group_id),
+                INDEX idx_user_id (user_id),
+                FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
+        
+        // 更新或插入最後讀取時間
+        $stmt = $pdo->prepare("INSERT INTO group_read_status (group_id, user_id, last_read_at) 
+                              VALUES (?, ?, NOW()) 
+                              ON DUPLICATE KEY UPDATE last_read_at = NOW()");
+        $stmt->execute([$groupId, $userId]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => '群組已標記為已讀'
+        ]);
+        
+    } catch(PDOException $e) {
+        error_log("標記群組為已讀失敗: " . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'error' => '標記群組為已讀失敗: ' . $e->getMessage()
+        ]);
+    }
+}
+
+// 標記單條群組訊息為已讀
+function markMessageAsRead($pdo, $currentUsername) {
+    $messageId = $_POST['message_id'] ?? '';
+    
+    if (empty($messageId) || !is_numeric($messageId)) {
+        echo json_encode(['success' => false, 'error' => '缺少有效的訊息ID']);
+        return;
+    }
+    
+    try {
+        // 獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$currentUsername]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到當前用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 獲取訊息資訊
+        $stmt = $pdo->prepare("SELECT group_id, read_user_ids, total_members FROM group_chat_messages WHERE id = ?");
+        $stmt->execute([$messageId]);
+        $message = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$message) {
+            echo json_encode(['success' => false, 'error' => '找不到指定的訊息']);
+            return;
+        }
+        
+        // 檢查用戶是否為群組成員
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM group_chat_members WHERE group_id = ? AND user = ?");
+        $stmt->execute([$message['group_id'], $userId]);
+        $isMember = $stmt->fetchColumn() > 0;
+        
+        if (!$isMember) {
+            echo json_encode(['success' => false, 'error' => '您不是該群組的成員']);
+            return;
+        }
+        
+        // 解析已讀用戶ID列表
+        $readUserIds = [];
+        if (!empty($message['read_user_ids'])) {
+            $readUserIds = json_decode($message['read_user_ids'], true);
+            if (!is_array($readUserIds)) {
+                $readUserIds = [];
+            }
+        }
+        
+        // 如果用戶已經讀過，不重複計算
+        if (!in_array($userId, $readUserIds)) {
+            $readUserIds[] = $userId;
+            $readCount = count($readUserIds);
+            $readUserIdsJson = json_encode($readUserIds);
+            
+            // 更新訊息已讀狀態
+            $stmt = $pdo->prepare("UPDATE group_chat_messages 
+                                  SET read_count = ?, 
+                                      read_user_ids = ?, 
+                                      last_read_update = NOW() 
+                                  WHERE id = ?");
+            $stmt->execute([$readCount, $readUserIdsJson, $messageId]);
+            
+            echo json_encode([
+                'success' => true,
+                'read_count' => $readCount,
+                'total_members' => (int)($message['total_members'] ?? 0),
+                'message' => '訊息已標記為已讀'
+            ]);
+        } else {
+            // 用戶已經讀過，返回當前狀態
+            echo json_encode([
+                'success' => true,
+                'read_count' => count($readUserIds),
+                'total_members' => (int)($message['total_members'] ?? 0),
+                'message' => '訊息已讀'
+            ]);
+        }
+        
+    } catch(PDOException $e) {
+        error_log("標記訊息為已讀失敗: " . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'error' => '標記訊息為已讀失敗: ' . $e->getMessage()
+        ]);
+    }
+}
+
+// 批量標記群組訊息為已讀
+function markMessagesAsRead($pdo, $currentUsername) {
+    $messageIdsJson = $_POST['message_ids'] ?? '[]';
+    $messageIds = json_decode($messageIdsJson, true);
+    
+    if (empty($messageIds) || !is_array($messageIds)) {
+        echo json_encode(['success' => false, 'error' => '缺少有效的訊息ID列表']);
+        return;
+    }
+    
+    try {
+        // 獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$currentUsername]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到當前用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        $updatedMessages = [];
+        
+        // 批量處理每條訊息
+        foreach ($messageIds as $messageId) {
+            if (!is_numeric($messageId)) continue;
+            
+            // 獲取訊息資訊
+            $stmt = $pdo->prepare("SELECT group_id, read_user_ids, total_members FROM group_chat_messages WHERE id = ?");
+            $stmt->execute([$messageId]);
+            $message = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$message) continue;
+            
+            // 檢查用戶是否為群組成員
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM group_chat_members WHERE group_id = ? AND user = ?");
+            $stmt->execute([$message['group_id'], $userId]);
+            $isMember = $stmt->fetchColumn() > 0;
+            
+            if (!$isMember) continue;
+            
+            // 解析已讀用戶ID列表
+            $readUserIds = [];
+            if (!empty($message['read_user_ids'])) {
+                $readUserIds = json_decode($message['read_user_ids'], true);
+                if (!is_array($readUserIds)) {
+                    $readUserIds = [];
+                }
+            }
+            
+            // 如果用戶已經讀過，跳過
+            if (in_array($userId, $readUserIds)) {
+                $updatedMessages[] = [
+                    'message_id' => $messageId,
+                    'read_count' => count($readUserIds),
+                    'total_members' => (int)($message['total_members'] ?? 0)
+                ];
+                continue;
+            }
+            
+            // 添加用戶到已讀列表
+            $readUserIds[] = $userId;
+            $readCount = count($readUserIds);
+            $readUserIdsJson = json_encode($readUserIds);
+            
+            // 更新訊息已讀狀態
+            $stmt = $pdo->prepare("UPDATE group_chat_messages 
+                                  SET read_count = ?, 
+                                      read_user_ids = ?, 
+                                      last_read_update = NOW() 
+                                  WHERE id = ?");
+            $stmt->execute([$readCount, $readUserIdsJson, $messageId]);
+            
+            $updatedMessages[] = [
+                'message_id' => $messageId,
+                'read_count' => $readCount,
+                'total_members' => (int)($message['total_members'] ?? 0)
+            ];
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'updated_messages' => $updatedMessages,
+            'message' => '訊息已標記為已讀'
+        ]);
+        
+    } catch(PDOException $e) {
+        error_log("批量標記訊息為已讀失敗: " . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'error' => '批量標記訊息為已讀失敗: ' . $e->getMessage()
+        ]);
+    }
+}
 

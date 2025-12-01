@@ -847,8 +847,6 @@ try {
           <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
           <div style="margin-top: 10px;">
             <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
-            <button id="notificationSettingsBtn" style="margin-right: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔔 通知設定</button>
-            <button id="colorPickerBtn" style="padding: 8px 16px; background: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎨 配色方案</button>
           </div>
         </div>
         
@@ -929,8 +927,6 @@ try {
           <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
           <div style="margin-top: 10px;">
             <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
-            <button id="notificationSettingsBtn" style="margin-right: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔔 通知設定</button>
-            <button id="colorPickerBtn" style="padding: 8px 16px; background: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎨 配色方案</button>
           </div>
         </div>
         
@@ -1028,8 +1024,6 @@ try {
           <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
           <div style="margin-top: 10px;">
             <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
-            <button id="notificationSettingsBtn" style="margin-right: 5px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔔 通知設定</button>
-            <button id="colorPickerBtn" style="padding: 8px 16px; background: #6f42c1; color: white; border: none; border-radius: 4px; cursor: pointer;">🎨 配色方案</button>
           </div>
         </div>
         
@@ -1308,7 +1302,26 @@ try {
     async function loadGroups() {
       try {
         const response = await fetch('group_management.php?action=get_my_groups&username=' + username);
-        const result = await response.json();
+        
+        // 檢查響應狀態
+        if (!response.ok) {
+          throw new Error('HTTP錯誤: ' + response.status);
+        }
+        
+        // 獲取響應文本以便調試
+        const responseText = await response.text();
+        console.log('群組API響應文本:', responseText.substring(0, 200));
+        
+        // 嘗試解析JSON
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('JSON解析失敗:', parseError);
+          console.error('響應內容:', responseText);
+          alert('載入群組失敗: 伺服器回應格式錯誤');
+          return;
+        }
         
         if (result.success && result.groups) {
           const groupsContainer = document.getElementById('groupsContainer');
@@ -1321,10 +1334,17 @@ try {
             groupItem.dataset.groupName = group.group_name;
             groupItem.dataset.chatType = 'group';
             
+            // 獲取未讀數量（如果有的話）
+            const unreadCount = parseInt(group.unread_count || 0);
+            const badgeHtml = unreadCount > 0 
+              ? `<span class="unread-badge" data-group-id="${group.id}" data-count="${unreadCount}" style="display: flex;">${unreadCount > 99 ? '99+' : unreadCount}</span>`
+              : `<span class="unread-badge" data-group-id="${group.id}" style="display: none;"></span>`;
+            
             groupItem.innerHTML = `
               <div class="user-avatar" style="background: #4CAF50;">
                 <i class="fas fa-users" style="font-size: 16px;">👥</i>
               </div>
+              ${badgeHtml}
               <div class="user-info">
                 <div class="user-name" id="group-name-${group.id}">${group.group_name}</div>
                 <div class="user-role">${group.member_count} 位成員</div>
@@ -1343,9 +1363,79 @@ try {
             
             groupsContainer.appendChild(groupItem);
           });
+          
+          // 載入群組未讀數量
+          await updateGroupUnreadCounts();
+        } else if (result.error) {
+          console.error('載入群組失敗:', result.error);
+          alert('載入群組失敗: ' + result.error);
         }
       } catch (error) {
         console.error('載入群組失敗:', error);
+        alert('載入群組失敗: ' + (error.message || '未知錯誤'));
+      }
+    }
+    
+    // 更新所有群組的未讀訊息數量
+    async function updateGroupUnreadCounts() {
+      try {
+        const response = await fetch(`get_group_unread_count.php?username=${encodeURIComponent(username)}`);
+        const result = await response.json();
+        
+        console.log('群組未讀數量 API 響應:', result);
+        
+        if (result.success && result.unread_counts) {
+          // 更新每個群組的未讀徽章
+          Object.keys(result.unread_counts).forEach(groupId => {
+            const unreadCount = parseInt(result.unread_counts[groupId] || 0);
+            const badge = document.querySelector(`.unread-badge[data-group-id="${groupId}"]`);
+            
+            if (badge) {
+              if (unreadCount > 0) {
+                badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+                badge.setAttribute('data-count', unreadCount);
+                badge.style.display = 'flex';
+                badge.style.visibility = 'visible';
+                badge.classList.add('show', 'pulse');
+              } else {
+                badge.style.display = 'none';
+                badge.style.visibility = 'hidden';
+                badge.classList.remove('show', 'pulse');
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('更新群組未讀數量失敗:', error);
+      }
+    }
+    
+    // 標記群組訊息為已讀
+    async function markGroupAsRead(groupId) {
+      try {
+        // 更新資料庫中的最後讀取時間
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `action=mark_group_as_read&group_id=${groupId}`
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          console.log('群組已標記為已讀:', groupId);
+        }
+        
+        // 隱藏徽章
+        const badge = document.querySelector(`.unread-badge[data-group-id="${groupId}"]`);
+        if (badge) {
+          badge.style.display = 'none';
+          badge.style.visibility = 'hidden';
+          badge.classList.remove('show', 'pulse');
+        }
+      } catch (error) {
+        console.error('標記群組為已讀失敗:', error);
       }
     }
     
@@ -1365,6 +1455,9 @@ try {
       if (currentElement && currentElement.classList) {
         currentElement.classList.add('active');
       }
+      
+      // 標記群組為已讀
+      markGroupAsRead(groupId);
       
       // 檢查是否切換到不同的群組
       if (currentGroupId !== groupId || currentChatType !== 'group') {
@@ -1473,7 +1566,26 @@ try {
         const response = await fetch('group_management.php?action=get_group_messages&group_id=' + currentGroupId);
         console.log('群組訊息API響應:', response);
         
-        const result = await response.json();
+        // 檢查響應狀態
+        if (!response.ok) {
+          throw new Error('HTTP錯誤: ' + response.status);
+        }
+        
+        // 獲取響應文本以便調試
+        const responseText = await response.text();
+        console.log('群組訊息API響應文本:', responseText.substring(0, 200));
+        
+        // 嘗試解析JSON
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('JSON解析失敗:', parseError);
+          console.error('響應內容:', responseText);
+          alert('載入群組訊息失敗: 伺服器回應格式錯誤');
+          return;
+        }
+        
         console.log('群組訊息API結果:', result);
         
         if (result.success) {
@@ -1483,7 +1595,16 @@ try {
           
           if (result.messages && result.messages.length > 0) {
             displayGroupMessages(result.messages, append);
-            // 注意：由於 group_chat_messages 表沒有 id 欄位，id 是組合字符串
+            
+            // 批量標記所有不是自己發送的訊息為已讀
+            const unreadMessageIds = result.messages
+              .filter(msg => msg.from_user !== username && msg.id)
+              .map(msg => parseInt(msg.id));
+            
+            if (unreadMessageIds.length > 0) {
+              markGroupMessagesAsRead(unreadMessageIds);
+            }
+            
             // 使用最後一條訊息的時間戳作為 lastMessageId
             if (result.messages.length > 0) {
               const lastMsg = result.messages[result.messages.length - 1];
@@ -1501,6 +1622,7 @@ try {
         }
       } catch (error) {
         console.error('載入群組聊天記錄失敗:', error);
+        alert('載入群組訊息失敗: ' + (error.message || '未知錯誤'));
       }
     }
     
@@ -1565,11 +1687,26 @@ try {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
+        
+        // 已讀狀態顯示（類似 LINE）
+        const readCount = parseInt(message.read_count || 0);
+        let readStatusHtml = '';
+        
+        // 只有自己發送的訊息才顯示已讀狀態，且已讀人數大於0
+        if (message.from_user === username && readCount > 0) {
+          readStatusHtml = `
+            <div class="read-status-group" style="font-size: 11px; color: #999; margin-top: 4px; text-align: right;">
+              <span class="read-count-text">${readCount} 已讀</span>
+            </div>
+          `;
+        }
+        
         contentDiv.innerHTML = `
           <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
             ${escapeHtml(message.from_user || '未知用戶')} (${escapeHtml(message.role || '用戶')})
           </div>
           <div>${escapeHtml(message.message || '')}</div>
+          ${readStatusHtml}
         `;
         
         const timeDiv = document.createElement('div');
@@ -1579,6 +1716,7 @@ try {
         contentDiv.appendChild(timeDiv);
         messageDiv.appendChild(contentDiv);
         chatMessages.appendChild(messageDiv);
+        
       });
       
       // 如果有新訊息，滾動到底部
@@ -1587,27 +1725,106 @@ try {
       }
     }
     
+    // 標記單條群組訊息為已讀
+    async function markGroupMessageAsRead(messageId) {
+      try {
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `action=mark_message_as_read&message_id=${messageId}`
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          // 更新顯示的已讀狀態
+          updateMessageReadStatus(messageId, result.read_count, result.total_members);
+        }
+      } catch (error) {
+        console.error('標記訊息為已讀失敗:', error);
+      }
+    }
+    
+    // 批量標記群組訊息為已讀
+    async function markGroupMessagesAsRead(messageIds) {
+      if (!messageIds || messageIds.length === 0) return;
+      
+      try {
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `action=mark_messages_as_read&message_ids=${JSON.stringify(messageIds)}`
+        });
+        
+        const result = await response.json();
+        if (result.success && result.updated_messages) {
+          // 更新所有已讀訊息的顯示狀態
+          result.updated_messages.forEach(msg => {
+            updateMessageReadStatus(msg.message_id, msg.read_count, msg.total_members);
+          });
+        }
+      } catch (error) {
+        console.error('批量標記訊息為已讀失敗:', error);
+      }
+    }
+    
+    // 更新訊息顯示的已讀狀態
+    function updateMessageReadStatus(messageId, readCount, totalMembers) {
+      const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (!messageDiv) return;
+      
+      const contentDiv = messageDiv.querySelector('.message-content');
+      if (!contentDiv) return;
+      
+      // 如果已讀人數為0，隱藏已讀狀態
+      if (readCount <= 0) {
+        const readStatusDiv = contentDiv.querySelector('.read-status-group');
+        if (readStatusDiv) {
+          readStatusDiv.remove();
+        }
+        return;
+      }
+      
+      // 查找或創建已讀狀態元素
+      let readStatusDiv = contentDiv.querySelector('.read-status-group');
+      if (!readStatusDiv) {
+        readStatusDiv = document.createElement('div');
+        readStatusDiv.className = 'read-status-group';
+        readStatusDiv.style.cssText = 'font-size: 11px; color: #999; margin-top: 4px; text-align: right;';
+        const timeDiv = contentDiv.querySelector('.message-time');
+        if (timeDiv) {
+          contentDiv.insertBefore(readStatusDiv, timeDiv);
+        } else {
+          contentDiv.appendChild(readStatusDiv);
+        }
+      }
+      
+      readStatusDiv.innerHTML = `
+        <span class="read-count-text">${readCount} 已讀</span>
+      `;
+    }
+    
+    // 更新已存在訊息的已讀狀態
+    function updateExistingMessagesReadStatus(messages) {
+      messages.forEach(message => {
+        // 只更新自己發送的訊息的已讀狀態
+        if (message.from_user === username && message.id) {
+          const readCount = parseInt(message.read_count || 0);
+          const totalMembers = parseInt(message.total_members || 0);
+          // 只顯示已讀人數，不顯示總成員數
+          updateMessageReadStatus(message.id, readCount, totalMembers);
+        }
+      });
+    }
+    
     // 建立群組按鈕事件
     const createGroupBtn = document.getElementById('createGroupBtn');
     if (createGroupBtn) {
       createGroupBtn.addEventListener('click', function() {
         showCreateGroupModal();
-      });
-    }
-    
-    // 通知設定按鈕事件
-    const notificationSettingsBtn = document.getElementById('notificationSettingsBtn');
-    if (notificationSettingsBtn) {
-      notificationSettingsBtn.addEventListener('click', function() {
-        showNotificationSettings();
-      });
-    }
-    
-    // 配色方案按鈕事件
-    const colorPickerBtn = document.getElementById('colorPickerBtn');
-    if (colorPickerBtn) {
-      colorPickerBtn.addEventListener('click', function() {
-        window.open('color_picker.php', '_blank', 'width=800,height=600');
       });
     }
     
@@ -1621,36 +1838,87 @@ try {
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.5);
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(4px);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 1000;
+        animation: fadeIn 0.2s ease-out;
       `;
       
+      // 添加動畫樣式
+      if (!document.getElementById('modalAnimationStyle')) {
+        const style = document.createElement('style');
+        style.id = 'modalAnimationStyle';
+        style.textContent = `
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
       modal.innerHTML = `
-        <div style="background: white; padding: 20px; border-radius: 8px; width: 500px; max-height: 90vh; overflow-y: auto;">
-          <h3 style="margin-top: 0;">建立群組</h3>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">群組名稱：</label>
-            <input type="text" id="groupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+        <div style="background: white; padding: 0; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out;">
+          <!-- 標題區域 -->
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px 28px; color: white;">
+            <h3 style="margin: 0; font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 24px;">👥</span>
+              <span>建立群組</span>
+            </h3>
           </div>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">搜尋成員：</label>
-            <input type="text" id="memberSearch" placeholder="搜尋姓名、科系或班級..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-          </div>
-          <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 5px; font-weight: bold;">選擇成員：</label>
-            <div id="memberSelection" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 5px; border-radius: 4px;">
-              ${generateMemberCheckboxes()}
+          
+          <!-- 內容區域 -->
+          <div style="padding: 28px;">
+            <!-- 群組名稱 -->
+            <div style="margin-bottom: 24px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">群組名稱</label>
+              <input type="text" id="groupName" placeholder="請輸入群組名稱..." 
+                     style="width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; box-sizing: border-box; font-size: 14px; transition: all 0.3s ease; outline: none;"
+                     onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                     onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
             </div>
-            <div style="margin-top: 10px; font-size: 12px; color: #666;">
-              已選擇 <span id="selectedMemberCount">0</span> 位成員
+            
+            <!-- 搜尋成員 -->
+            <div style="margin-bottom: 24px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">搜尋成員</label>
+              <div style="position: relative;">
+                <input type="text" id="memberSearch" placeholder="搜尋姓名、科系或班級..." 
+                       style="width: 100%; padding: 12px 16px 12px 44px; border: 2px solid #e0e0e0; border-radius: 8px; box-sizing: border-box; font-size: 14px; transition: all 0.3s ease; outline: none;"
+                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                       onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #999; font-size: 16px;">🔍</span>
+              </div>
             </div>
-          </div>
-          <div style="text-align: right; margin-top: 20px;">
-            <button onclick="closeCreateGroupModal()" style="margin-right: 10px; padding: 8px 16px; background: #ccc; color: #333; border: none; border-radius: 4px; cursor: pointer;">取消</button>
-            <button onclick="createGroup()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立</button>
+            
+            <!-- 選擇成員 -->
+            <div style="margin-bottom: 24px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">選擇成員</label>
+              <div id="memberSelection" style="max-height: 350px; overflow-y: auto; border: 2px solid #e0e0e0; padding: 12px; margin-top: 8px; border-radius: 8px; background: #fafafa;">
+                ${generateMemberCheckboxes()}
+              </div>
+              <div style="margin-top: 12px; font-size: 13px; color: #666; display: flex; align-items: center; gap: 6px;">
+                <span style="color: #667eea; font-weight: 600;">已選擇 <span id="selectedMemberCount" style="color: #667eea;">0</span> 位成員</span>
+              </div>
+            </div>
+            
+            <!-- 按鈕區域 -->
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+              <button onclick="closeCreateGroupModal()" 
+                      style="padding: 12px 24px; background: #f5f5f5; color: #666; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease;"
+                      onmouseover="this.style.background='#e0e0e0'"
+                      onmouseout="this.style.background='#f5f5f5'">取消</button>
+              <button onclick="createGroup()" 
+                      style="padding: 12px 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);"
+                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(102, 126, 234, 0.4)'"
+                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'">建立</button>
+            </div>
           </div>
         </div>
       `;
@@ -1675,7 +1943,7 @@ try {
       let html = '';
       
       if (contacts.length === 0) {
-        return '<p style="color: #999; text-align: center; padding: 20px;">暫無聯絡人可選擇</p>';
+        return '<div style="color: #999; text-align: center; padding: 40px 20px;"><div style="font-size: 48px; margin-bottom: 12px;">👤</div><div style="font-size: 14px;">暫無聯絡人可選擇</div></div>';
       }
       
       contacts.forEach(contact => {
@@ -1688,11 +1956,17 @@ try {
         const searchableText = `${displayName} ${role} ${department} ${grade} ${className}`.toLowerCase();
         
         html += `
-          <div class="member-item" data-search-text="${searchableText}" style="margin: 8px 0; padding: 8px; border: 1px solid #eee; border-radius: 4px; display: flex; align-items: center;">
-            <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}" style="margin-right: 10px; cursor: pointer;" onchange="updateSelectedMemberCount()">
+          <div class="member-item" data-search-text="${searchableText}" 
+               style="margin: 6px 0; padding: 12px; border: 2px solid #e8e8e8; border-radius: 8px; display: flex; align-items: center; background: white; transition: all 0.2s ease; cursor: pointer;"
+               onmouseover="this.style.borderColor='#667eea'; this.style.backgroundColor='#f8f9ff'; this.style.transform='translateX(4px)'"
+               onmouseout="this.style.borderColor='#e8e8e8'; this.style.backgroundColor='white'; this.style.transform='translateX(0)'"
+               onclick="document.getElementById('member_${contact.username}').click()">
+            <input type="checkbox" id="member_${contact.username}" value="${contact.username}" data-role="${role}" 
+                   style="margin-right: 12px; cursor: pointer; width: 18px; height: 18px; accent-color: #667eea;" 
+                   onchange="updateSelectedMemberCount(); this.closest('.member-item').style.borderColor = this.checked ? '#667eea' : '#e8e8e8'; this.closest('.member-item').style.backgroundColor = this.checked ? '#f8f9ff' : 'white';">
             <label for="member_${contact.username}" style="flex: 1; cursor: pointer; margin: 0;">
-              <div style="font-weight: 500;">${escapeHtml(displayName)}</div>
-              <div style="font-size: 12px; color: #666;">${escapeHtml(role)}${department ? ' - ' + escapeHtml(department) : ''}${additionalInfo}</div>
+              <div style="font-weight: 600; color: #333; margin-bottom: 4px; font-size: 14px;">${escapeHtml(displayName)}</div>
+              <div style="font-size: 12px; color: #888;">${escapeHtml(role)}${department ? ' - ' + escapeHtml(department) : ''}${additionalInfo}</div>
             </label>
           </div>
         `;
@@ -1722,8 +1996,8 @@ try {
         if (memberSelection && !memberSelection.querySelector('.no-results')) {
           const noResults = document.createElement('div');
           noResults.className = 'no-results';
-          noResults.style.cssText = 'text-align: center; padding: 20px; color: #999;';
-          noResults.textContent = '找不到符合條件的成員';
+          noResults.style.cssText = 'text-align: center; padding: 40px 20px; color: #999; font-size: 14px;';
+          noResults.innerHTML = '<div style="font-size: 48px; margin-bottom: 12px;">🔍</div><div>找不到符合條件的成員</div>';
           memberSelection.appendChild(noResults);
         }
       } else {
@@ -2431,50 +2705,13 @@ try {
           if (result.success) {
             input.value = '';
             updateSendButtonState(); // 清空後更新按鈕狀態
-            console.log('群組訊息發送成功，訊息ID:', result.id);
+            console.log('群組訊息發送成功');
             
-            // 立即將新訊息添加到顯示中
-            const chatMessages = document.getElementById('chatMessages');
-            if (chatMessages && result.id) {
-              const messageDiv = document.createElement('div');
-              messageDiv.className = 'message sent';
-              messageDiv.dataset.messageId = result.id;
-              
-              const contentDiv = document.createElement('div');
-              contentDiv.className = 'message-content';
-              contentDiv.innerHTML = `
-                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
-                  ${username} (${role})
-                </div>
-                <div>${escapeHtml(message)}</div>
-              `;
-              
-              const timeDiv = document.createElement('div');
-              timeDiv.className = 'message-time';
-              timeDiv.textContent = new Date().toLocaleString();
-              
-              contentDiv.appendChild(timeDiv);
-              messageDiv.appendChild(contentDiv);
-              chatMessages.appendChild(messageDiv);
-              
-              // 滾動到底部
-              chatMessages.scrollTop = chatMessages.scrollHeight;
-              
-              // 更新 lastMessageId（使用當前時間戳，因為消息表沒有 id 欄位）
-              lastMessageId = Date.now();
-              console.log('已更新 lastMessageId:', lastMessageId);
-            }
-            
-            // 立即重新載入以確保資料庫已更新（使用追加模式不會清除已顯示的訊息）
-            setTimeout(() => {
-              // 使用追加模式重新載入，這樣不會清除剛剛添加的訊息
-              loadGroupChatHistory(true);
-            }, 300);
-            
-            // 再次載入以確保同步（如果第一次載入失敗）
+            // 重新載入訊息列表（使用追加模式，避免重複）
+            // 延遲一點時間確保資料庫已更新
             setTimeout(() => {
               loadGroupChatHistory(true);
-            }, 1000);
+            }, 200);
           } else {
             console.error('群組訊息發送失敗:', result.error);
             alert('發送失敗: ' + (result.error || '未知錯誤'));
@@ -3987,6 +4224,13 @@ try {
       console.log('快取清理完成');
     }, 5 * 60 * 1000);
     
+    // 定期更新群組未讀數量（每10秒更新一次）
+    setInterval(async () => {
+      if (document.getElementById('groupsContainer')) {
+        await updateGroupUnreadCounts();
+      }
+    }, 10000);
+    
     // 輪詢新訊息
     setInterval(async () => {
       if (currentChatType === 'group' && currentGroupId) {
@@ -3996,12 +4240,35 @@ try {
           const result = await response.json();
           
           if (result.success && result.messages) {
-            const newMessages = result.messages.filter(m => (parseInt(m.id) || 0) > lastMessageId);
+            // 使用時間戳來比較，因為群組訊息的ID是組合字符串
+            const currentTime = lastMessageId || 0;
+            const newMessages = result.messages.filter(m => {
+              const msgTime = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+              return msgTime > currentTime;
+            });
+            
             if (newMessages.length > 0) {
               // 使用追加模式，只顯示新訊息
               displayGroupMessages(newMessages, true);
-              lastMessageId = Math.max(...result.messages.map(m => parseInt(m.id) || 0));
+              
+              // 批量標記新訊息為已讀（如果不是自己發送的）
+              const unreadMessageIds = newMessages
+                .filter(msg => msg.from_user !== username && msg.id)
+                .map(msg => parseInt(msg.id));
+              
+              if (unreadMessageIds.length > 0) {
+                markGroupMessagesAsRead(unreadMessageIds);
+              }
+              
+              // 更新最後訊息時間戳
+              const lastMsg = newMessages[newMessages.length - 1];
+              if (lastMsg.timestamp) {
+                lastMessageId = new Date(lastMsg.timestamp).getTime();
+              }
             }
+            
+            // 更新已存在訊息的已讀狀態
+            updateExistingMessagesReadStatus(result.messages);
           }
         } catch (error) {
           console.error('檢查群組新訊息失敗:', error);
@@ -4057,3 +4324,4 @@ try {
 </body>
 </html>
 
+聯絡人列表
