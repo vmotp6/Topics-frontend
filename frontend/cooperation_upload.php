@@ -32,9 +32,7 @@ try {
                               ORDER BY t.department, u.name");
         $stmt->execute();
         $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        error_log("老師資料查詢結果數量: " . count($teachers));
     } catch (PDOException $e) {
-        error_log("查詢老師資料失敗: " . $e->getMessage());
         $teachers = [];
     }
     
@@ -280,8 +278,8 @@ $role = $_SESSION['role'] ?? '訪客';
                     </div>
 
                     <div class="form-group">
-                        <label for="current_grade">請選擇目前年級....</label>
-                        <select id="current_grade" name="current_grade">
+                        <label for="current_grade"><span class="required">*</span>請選擇目前年級....</label>
+                        <select id="current_grade" name="current_grade" required>
                             <option value="">請選擇年級</option>
                             <?php foreach ($grades as $grade): ?>
                                 <option value="<?php echo htmlspecialchars($grade['code']); ?>">
@@ -325,12 +323,6 @@ $role = $_SESSION['role'] ?? '訪客';
                             <?php endif; ?>
                         </select>
                         <div class="help-text">可選擇推薦您的老師，或留空</div>
-                        <?php if (isset($_GET['debug'])): ?>
-                            <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                                調試：teachers 數量 = <?php echo count($teachers ?? []); ?>, 
-                                db_error = <?php echo !empty($db_error) ? '有錯誤' : '無錯誤'; ?>
-                            </div>
-                        <?php endif; ?>
                     </div>
 
                     <!-- 備註 -->
@@ -460,40 +452,45 @@ $role = $_SESSION['role'] ?? '訪客';
 
             // 從API獲取搜尋結果
             fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('API 請求失敗: ' + response.status);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     console.log('搜尋結果:', data); // 調試信息
-                    if (data.schools && data.schools.length > 0) {
-                        // 检查数据中是否包含 school_code
-                        console.log('第一所学校数据示例:', data.schools[0]);
-                        
-                        resultsDiv.innerHTML = data.schools.map(school => {
+                    
+                    // 過濾掉沒有 school_code 的學校
+                    const validSchools = (data.schools || []).filter(school => {
+                        return school && school.school_code && school.school_code.trim() !== '';
+                    });
+                    
+                    if (validSchools.length > 0) {
+                        resultsDiv.innerHTML = validSchools.map(school => {
                             // 如果有多個名稱，顯示整合資訊
-                            let displayName = school.name;
+                            let displayName = school.name || '未命名學校';
                             let additionalInfo = '';
                             
                             if (school.all_names && school.all_names.length > 1) {
                                 additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
                             }
                             
-                            // 确保 school_code 存在，如果不存在则记录错误并跳过
-                            const schoolCode = school.school_code || '';
-                            if (!schoolCode) {
-                                console.warn('警告: 学校没有 school_code，跳过:', school);
-                                return ''; // 返回空字符串，不显示这个选项
-                            }
+                            const schoolCode = school.school_code;
+                            const city = school.city || '';
+                            const district = school.district || '';
                             
-                            // 使用 data 属性存储数据，避免 onclick 中的转义问题
+                            // 使用 data 屬性存儲數據，避免 onclick 中的轉義問題
                             return `<div class="search-result-item" 
-                                     data-school-name="${school.name.replace(/"/g, '&quot;')}" 
-                                     data-city="${(school.city || '').replace(/"/g, '&quot;')}" 
-                                     data-district="${(school.district || '').replace(/"/g, '&quot;')}" 
+                                     data-school-name="${displayName.replace(/"/g, '&quot;')}" 
+                                     data-city="${city.replace(/"/g, '&quot;')}" 
+                                     data-district="${district.replace(/"/g, '&quot;')}" 
                                      data-school-code="${schoolCode.replace(/"/g, '&quot;')}"
                                      onclick="selectSchoolFromElement(this)">
                                 <i class="fas fa-school"></i>
                                 <div class="school-info">
                                     <span class="school-name">${displayName}</span>
-                                    <span class="school-location">${school.city} ${school.district}</span>
+                                    <span class="school-location">${city} ${district}</span>
                                     ${additionalInfo}
                                 </div>
                             </div>`;
@@ -502,10 +499,14 @@ $role = $_SESSION['role'] ?? '訪客';
                         if (data.total > 20) {
                             resultsDiv.innerHTML += `<div class="search-result-item more-results">還有 ${data.total - 20} 個結果...</div>`;
                         }
+                        
+                        // 確保下拉選單顯示
+                        resultsDiv.classList.add('show');
                         // 當下拉選單顯示時，清除錯誤提示
                         clearSchoolError();
                     } else {
                         resultsDiv.innerHTML = '<div class="search-result-item">找不到匹配的學校</div>';
+                        resultsDiv.classList.add('show');
                         // 即使找不到結果，下拉選單仍然顯示，所以清除錯誤提示
                         clearSchoolError();
                     }
@@ -513,6 +514,7 @@ $role = $_SESSION['role'] ?? '訪客';
                 .catch(error => {
                     console.error('搜尋錯誤:', error);
                     resultsDiv.innerHTML = '<div class="search-result-item">搜尋失敗，請稍後再試</div>';
+                    resultsDiv.classList.add('show');
                     // 即使搜尋失敗，下拉選單仍然顯示，所以清除錯誤提示
                     clearSchoolError();
                 });
@@ -565,8 +567,8 @@ $role = $_SESSION['role'] ?? '訪客';
             const schoolCode = hiddenInput.value.trim();
             const resultsDiv = document.getElementById('schoolResults');
             
-            // 调试信息
-            console.log('validateSchoolInput 被调用:', {
+            // 調試資訊
+            console.log('validateSchoolInput 被調用:', {
                 value: value,
                 schoolCode: schoolCode,
                 resultsDivShowing: resultsDiv && resultsDiv.classList.contains('show')
@@ -585,16 +587,16 @@ $role = $_SESSION['role'] ?? '訪客';
             }
             
             // 檢查是否有選擇 school_code（表示用戶已從系統選項中選擇）
-            // 如果有 school_code，说明用户已经选择了，清除错误
+            // 如果有 school_code，說明用戶已經選擇了，清除錯誤
             if (schoolCode && schoolCode.trim() !== '') {
                 clearSchoolError();
                 return;
             }
             
-            // 如果没有 school_code 但有显示值，说明用户可能是手动输入的
-            // 但只有在确实有输入值且没有 school_code 时才显示错误
+            // 如果沒有 school_code 但有顯示值，說明用戶可能是手動輸入的
+            // 但只有在確實有輸入值且沒有 school_code 時才顯示錯誤
             if (value && !schoolCode) {
-                console.warn('验证失败: 有显示值但没有 school_code');
+                console.warn('驗證失敗: 有顯示值但沒有 school_code');
                 showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
             } else {
                 clearSchoolError();
@@ -627,14 +629,14 @@ $role = $_SESSION['role'] ?? '訪客';
         
         // 選擇學校
         function selectSchool(schoolName, city, district, schoolCode) {
-            // 直接存储 school_code 到 junior_high 字段（用于外键关联）
-            // 同时保存显示名称用于验证和显示
+            // 直接儲存 school_code 到 junior_high 欄位（用於外鍵關聯）
+            // 同時保存顯示名稱用於驗證和顯示
             const fullSchoolName = `${schoolName} (${city}${district})`;
             
-            // 调试信息
-            console.log('选择学校:', { schoolName, city, district, schoolCode });
+            // 調試資訊
+            console.log('選擇學校:', { schoolName, city, district, schoolCode });
             
-            // 检查 schoolCode 是否存在
+            // 檢查 schoolCode 是否存在
             if (!schoolCode || schoolCode.trim() === '') {
                 console.error('錯誤: school_code 為空！', { schoolName, city, district, schoolCode });
                 alert('錯誤：無法獲取學校代碼，請重新選擇學校');
@@ -649,13 +651,13 @@ $role = $_SESSION['role'] ?? '訪客';
                 return;
             }
             
-            juniorHighInput.value = schoolCode.trim(); // 直接存储 school_code
-            juniorHighDisplayInput.value = fullSchoolName; // 保存显示名称用于验证
+            juniorHighInput.value = schoolCode.trim(); // 直接儲存 school_code
+            juniorHighDisplayInput.value = fullSchoolName; // 保存顯示名稱用於驗證
             document.getElementById('schoolResults').classList.remove('show');
             document.getElementById('clearSearch').style.display = 'block';
             
-            // 调试：验证值是否设置成功
-            console.log('设置后的值:', {
+            // 調試：驗證值是否設置成功
+            console.log('設置後的值:', {
                 junior_high: juniorHighInput.value,
                 junior_high_display: juniorHighDisplayInput.value
             });
@@ -698,21 +700,21 @@ $role = $_SESSION['role'] ?? '訪客';
             const phone1 = document.getElementById('phone1').value.trim();
             const phone2 = document.getElementById('phone2').value.trim();
             
-            // 获取学校字段值（调试）
+            // 獲取學校欄位值（調試）
             const juniorHighElement = document.getElementById('junior_high');
             const juniorHighDisplayElement = document.getElementById('junior_high_display');
             
             if (!juniorHighElement) {
-                console.error('错误: 找不到 junior_high 元素');
+                console.error('錯誤: 找不到 junior_high 元素');
             }
             if (!juniorHighDisplayElement) {
-                console.error('错误: 找不到 junior_high_display 元素');
+                console.error('錯誤: 找不到 junior_high_display 元素');
             }
             
-            const juniorHigh = juniorHighElement ? juniorHighElement.value.trim() : ''; // 这是 school_code
+            const juniorHigh = juniorHighElement ? juniorHighElement.value.trim() : ''; // 這是 school_code
             const juniorHighDisplay = juniorHighDisplayElement ? juniorHighDisplayElement.value.trim() : '';
             
-            console.log('表单提交时获取的值:', {
+            console.log('表單提交時獲取的值:', {
                 juniorHighElement: juniorHighElement,
                 juniorHighDisplayElement: juniorHighDisplayElement,
                 juniorHigh: juniorHigh,
@@ -787,10 +789,9 @@ $role = $_SESSION['role'] ?? '訪客';
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
             }
-            
             // 驗證就讀或畢業國中（必須有 school_code，表示已從系統選項中選擇）
-            // 调试信息
-            console.log('验证学校字段:', {
+            // 調試資訊
+            console.log('驗證學校欄位:', {
                 juniorHigh: juniorHigh,
                 juniorHighLength: juniorHigh ? juniorHigh.length : 0,
                 juniorHighDisplay: juniorHighDisplay,
@@ -802,9 +803,9 @@ $role = $_SESSION['role'] ?? '訪客';
                 juniorHighTrimmedIsEmpty: juniorHigh ? juniorHigh.trim() === '' : true
             });
             
-            // 检查 school_code 是否存在且不为空
+            // 檢查 school_code 是否存在且不為空
             if (!juniorHigh) {
-                console.error('验证失败: juniorHigh 为空或未定义');
+                console.error('驗證失敗: juniorHigh 為空或未定義');
                 messageDiv.className = 'error';
                 messageDiv.textContent = '請從系統提供的選項中選擇學校，不能自行輸入';
                 messageDiv.style.display = 'block';
@@ -830,7 +831,19 @@ $role = $_SESSION['role'] ?? '訪客';
                 return;
             }
             
-            console.log('学校验证通过:', trimmedJuniorHigh);
+            console.log('學校驗證通過:', trimmedJuniorHigh);
+
+            // 驗證目前年級（必填）
+            const currentGrade = document.getElementById('current_grade').value.trim();
+            if (!currentGrade) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = '請選擇目前年級';
+                messageDiv.style.display = 'block';
+                document.getElementById('current_grade').focus();
+                document.getElementById('current_grade').style.borderColor = '#d32f2f';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
             
             // 驗證驗證碼格式（前端額外驗證）
             const captchaInput = document.getElementById('captchaInput');
@@ -1013,7 +1026,7 @@ $role = $_SESSION['role'] ?? '訪客';
                 
                 // 只允許輸入數字
                 phoneInput.addEventListener('input', function(e) {
-                    // 移除非數字字符
+                    // 移除非數字字元
                     this.value = this.value.replace(/[^0-9]/g, '');
                     
                     // 限制最大長度為10

@@ -700,24 +700,30 @@ try {
     if (!empty($recommended_teacher)) {
         // 先檢查是否已經是數字 ID
         if (is_numeric($recommended_teacher)) {
-            // 驗證 ID 是否存在於 user 表中，且角色為老師
+            // 驗證 ID 是否存在於 user 表中，且角色為老師（TEA）
             $verify_teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
                                                   JOIN teacher t ON u.id = t.user_id 
-                                                  WHERE u.id = ? AND u.role = '老師' LIMIT 1");
+                                                  WHERE u.id = ? AND u.role = 'TEA' LIMIT 1");
             $verify_teacher_stmt->execute([$recommended_teacher]);
             $verify_teacher_result = $verify_teacher_stmt->fetch(PDO::FETCH_ASSOC);
             if ($verify_teacher_result) {
                 $recommended_teacher_id = (int)$verify_teacher_result['id'];
+                error_log("推薦老師驗證成功: ID=" . $recommended_teacher_id);
+            } else {
+                error_log("推薦老師驗證失敗: ID=" . $recommended_teacher . " 不存在或角色不是 TEA");
             }
         } else {
             // 從 user 表查詢，通過 name 找到對應的 id（因為 teacher 表沒有 name 欄位）
             $teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
                                           JOIN teacher t ON u.id = t.user_id 
-                                          WHERE u.name = ? AND u.role = '老師' LIMIT 1");
+                                          WHERE u.name = ? AND u.role = 'TEA' LIMIT 1");
             $teacher_stmt->execute([$recommended_teacher]);
             $teacher_result = $teacher_stmt->fetch(PDO::FETCH_ASSOC);
             if ($teacher_result) {
                 $recommended_teacher_id = (int)$teacher_result['id'];
+                error_log("推薦老師驗證成功: 名稱=" . $recommended_teacher . ", ID=" . $recommended_teacher_id);
+            } else {
+                error_log("推薦老師驗證失敗: 名稱=" . $recommended_teacher . " 不存在或角色不是 TEA");
             }
         }
     }
@@ -820,7 +826,8 @@ try {
     error_log("=== 準備執行 SQL ===");
     error_log("SQL語句: " . $sql);
     error_log("基本參數: name=$name, identity=$identity_num, gender=" . ($gender_num ?? 'NULL') . ", phone1=$phone1, email=$email");
-    error_log("關聯字段: junior_high(school_code)=" . ($junior_high_code ?? 'NULL') . ", current_grade(code)=" . ($current_grade_code ?? 'NULL') . ", recommended_teacher_id=" . ($recommended_teacher_id ?? 'NULL'));
+    error_log("關聯字段: junior_high(school_code)=" . ($junior_high_code ?? 'NULL') . ", current_grade(code)=" . ($current_grade_code ?? 'NULL'));
+    error_log("推薦老師處理: 原始值=" . ($recommended_teacher ?? 'NULL') . ", 轉換後ID=" . ($recommended_teacher_id ?? 'NULL'));
     
     $stmt = $pdo->prepare($sql);
     if ($stmt === false) {

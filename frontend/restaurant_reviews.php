@@ -8,6 +8,23 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
+// 如果 session 資料不完整，清除登入狀態
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    if (!isset($_SESSION['username']) || empty($_SESSION['username']) || 
+        !isset($_SESSION['role']) || empty($_SESSION['role'])) {
+        $_SESSION['logged_in'] = false;
+        $isLoggedIn = false;
+    }
+}
+
+// 檢查是否從登出頁面跳轉過來，如果是且未登入則跳轉到首頁
+if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'logout') !== false) {
+    if (!$isLoggedIn) {
+        header("Location: index.php");
+        exit;
+    }
+}
+
 // 獲取參數
 $message_id = isset($_GET['message_id']) ? (int)$_GET['message_id'] : 0;
 $restaurant_name = isset($_GET['restaurant']) ? urldecode($_GET['restaurant']) : '';
@@ -801,6 +818,63 @@ try {
                 });
             });
         });
+        
+        // 檢查登入狀態並在失效時跳轉
+        (function() {
+            // 記錄初始登入狀態（從 PHP 傳遞）
+            const initialLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+            let lastCheckedLoggedIn = initialLoggedIn;
+            
+            // 檢查登入狀態的函數
+            function checkLoginStatus() {
+                fetch('api/check_session.php', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 如果之前是登入狀態，但現在不是了，則跳轉到首頁
+                    if (lastCheckedLoggedIn && !data.logged_in) {
+                        console.log('登入狀態已失效，跳轉到首頁');
+                        alert('您的登入狀態已失效，將跳轉到首頁');
+                        window.location.href = 'index.php';
+                        return;
+                    }
+                    
+                    // 更新最後檢查的狀態
+                    lastCheckedLoggedIn = data.logged_in;
+                })
+                .catch(error => {
+                    console.error('檢查登入狀態失敗:', error);
+                });
+            }
+            
+            // 頁面載入時檢查一次
+            if (initialLoggedIn) {
+                // 延遲一點檢查，確保 session 已完全載入
+                setTimeout(checkLoginStatus, 1000);
+            }
+            
+            // 定期檢查登入狀態（每30秒檢查一次）
+            if (initialLoggedIn) {
+                setInterval(checkLoginStatus, 30000);
+            }
+            
+            // 監聽頁面可見性變化，當頁面重新可見時檢查
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && initialLoggedIn) {
+                    checkLoginStatus();
+                }
+            });
+            
+            // 監聽 focus 事件，當視窗重新獲得焦點時檢查
+            window.addEventListener('focus', function() {
+                if (initialLoggedIn) {
+                    checkLoginStatus();
+                }
+            });
+        })();
     </script>
     
     <?php include("share/footer.php"); ?>

@@ -118,6 +118,18 @@ body.page-body {
     background: #e3e3ef69;
 }
 
+#toggleRecordsBtn{
+    background:rgb(225 156 106 / 90%) 0%;
+    color: white; 
+    border: none; 
+    padding: 12px 25px; 
+    border-radius: 8px; 
+    cursor: pointer; font-size: 1.1em; 
+    font-weight: bold;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.2); 
+    transition: all 0.3s ease;
+}
+
 /* 訊息提示 */
 .form-message {
     padding: 20px;
@@ -410,7 +422,7 @@ textarea {
 }
 
 .file-input-group input[type="file"]::-webkit-file-upload-button {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #7ac9c7 0%;
     color: white;
     border: none;
     padding: 8px 16px;
@@ -423,7 +435,7 @@ textarea {
 }
 
 .file-input-group input[type="file"]::-webkit-file-upload-button:hover {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #4e7d7cad 0%;
     transform: scale(1.05);
 }
 
@@ -470,7 +482,7 @@ textarea {
 }
 
 .add-file-btn {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #956dbd 100%;
     color: white;
     border: none;
     padding: 14px 28px;
@@ -509,7 +521,7 @@ textarea {
 }
 
 .add-file-btn:hover {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #4e7d7cad 0%;
     transform: translateY(-2px) scale(1.02);
     box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
 }
@@ -688,7 +700,7 @@ textarea {
 }
 
 .submit-btn {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #956dbd 100%;
     color: white;
     border: none;
     padding: 18px 50px;
@@ -708,7 +720,7 @@ textarea {
 .submit-btn:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 25px rgba(108, 122, 237, 0.4);
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background: #4e7d7cad 0%;
 }
 
 .submit-btn:active {

@@ -217,16 +217,48 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   max-height: 300px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 9999;
   display: none;
   margin-top: 2px;
 }
 
 .cooperation-page-wrapper .modern-search-results.show {
-  display: block;
+  display: block !important;
+}
+
+/* 確保搜尋結果容器可見 */
+.modern-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e1e8ed;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 9999;
+  display: none;
+  margin-top: 2px;
+}
+
+.modern-search-results.show {
+  display: block !important;
 }
 
 .cooperation-page-wrapper .search-result-item {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f3f4;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 確保搜尋結果項目可見 */
+.search-result-item {
   padding: 12px 15px;
   cursor: pointer;
   border-bottom: 1px solid #f1f3f4;
@@ -468,6 +500,3 @@
   color: #d32f2f;
   font-weight: bold;
 }
-/ *   7_6R�f�e�_�S  * / 
- 
- 
