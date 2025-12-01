@@ -43,14 +43,64 @@ try {
     die("資料庫連接失敗: " . $e->getMessage());
 }
 
-// 檢查留言權限（所有登入的學生都可以發布留言）
+// 檢查留言權限（只有 @stu.ukn.edu.tw 的 email 可以留言）
 $can_post_message = false;
 $user_role = $_SESSION['role'] ?? '';
-// 只驗證角色代碼 'STU'
-if ($isLoggedIn && isset($_SESSION['role']) && $user_role === 'STU') {
-    // 只要身分是「學生」就可以發布留言，不需要檢查email
-    $can_post_message = true;
-    $permission_result = ['has_permission' => true, 'message' => '您有留言權限'];
+$user_email = null;
+$current_user_avatar = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
+
+if ($isLoggedIn && isset($_SESSION['username'])) {
+    try {
+        // 從資料庫查詢用戶的 email 和頭像
+        $stmt = $pdo->prepare("SELECT email, profile_picture FROM user WHERE username = ? LIMIT 1");
+        $stmt->execute([$_SESSION['username']]);
+        $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user_result) {
+            // 獲取用戶頭像（優先順序：上傳的頭像 > Google 頭像 > 預設頭像）
+            if (!empty($user_result['profile_picture'])) {
+                $profile_picture = $user_result['profile_picture'];
+                
+                // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+                if (strpos($profile_picture, 'uploads/') === 0) {
+                    // 上傳的頭像，優先使用
+                    $current_user_avatar = getCorrectPath($profile_picture);
+                } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                    // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
+                    $current_user_avatar = $profile_picture;
+                } else {
+                    // share 目錄的檔案，使用 getResourcePath
+                    $current_user_avatar = getResourcePath($profile_picture);
+                }
+            }
+            
+            // 檢查留言權限
+            if (!empty($user_result['email'])) {
+                $user_email = $user_result['email'];
+                // 只有 @stu.ukn.edu.tw 的 email 可以留言
+                if (strpos($user_email, '@stu.ukn.edu.tw') !== false) {
+                    $can_post_message = true;
+                    $permission_result = ['has_permission' => true, 'message' => '您有留言權限'];
+                } else {
+                    // email 不是 @stu.ukn.edu.tw，沒有留言權限
+                    $can_post_message = false;
+                    $permission_result = ['has_permission' => false, 'error' => '只有 @stu.ukn.edu.tw 的學生帳號可以留言'];
+                }
+            } else {
+                // 如果找不到 email，沒有留言權限
+                $can_post_message = false;
+                $permission_result = ['has_permission' => false, 'error' => '您的帳號沒有設定 email，無法留言'];
+            }
+        } else {
+            // 如果找不到用戶資料
+            $can_post_message = false;
+            $permission_result = ['has_permission' => false, 'error' => '找不到用戶資料'];
+        }
+    } catch(PDOException $e) {
+        error_log("查詢用戶資料失敗: " . $e->getMessage());
+        $can_post_message = false;
+        $permission_result = ['has_permission' => false, 'error' => '查詢用戶資料失敗，請稍後再試'];
+    }
 } else {
     $permission_result = ['has_permission' => false, 'error' => '請先登入'];
 }
@@ -273,34 +323,78 @@ try {
             $message['user_liked'] = false;
         }
         
-        // 獲取作者頭像
+        // 獲取作者頭像（優先順序：上傳的頭像 > Google 頭像 > 預設頭像）
         $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg'); // 預設頭像
-        if (!empty($message['author_email'])) {
+        
+        // 優先使用 user_id 查詢用戶頭像（最準確）
+        if (!empty($message['user_id'])) {
             try {
-                // 使用 email 查詢用戶頭像
+                $stmt = $pdo->prepare("SELECT profile_picture FROM user WHERE id = ? LIMIT 1");
+                $stmt->execute([$message['user_id']]);
+                $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($user_result && !empty($user_result['profile_picture'])) {
+                    $profile_picture = $user_result['profile_picture'];
+                    
+                    // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+                    if (strpos($profile_picture, 'uploads/') === 0) {
+                        // 上傳的頭像，優先使用
+                        $avatar_src = getCorrectPath($profile_picture);
+                    } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                        // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
+                        $avatar_src = $profile_picture;
+                    } else {
+                        // share 目錄的檔案，使用 getResourcePath
+                        $avatar_src = getResourcePath($profile_picture);
+                    }
+                }
+            } catch(PDOException $e) {
+                error_log("獲取留言作者頭像失敗 (user_id): " . $e->getMessage());
+            }
+        }
+        
+        // 如果 user_id 查詢失敗或沒有結果，使用 SQL 查詢中已獲取的 profile_picture
+        if ($avatar_src === getResourcePath('EIdROxGXsAE_LSs.jpg') && !empty($message['author_profile_picture'])) {
+            $profile_picture = $message['author_profile_picture'];
+            
+            // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+            if (strpos($profile_picture, 'uploads/') === 0) {
+                // 上傳的頭像，優先使用
+                $avatar_src = getCorrectPath($profile_picture);
+            } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
+                $avatar_src = $profile_picture;
+            } else {
+                // share 目錄的檔案，使用 getResourcePath
+                $avatar_src = getResourcePath($profile_picture);
+            }
+        }
+        
+        // 如果還是沒有，使用 email 查詢（備用方案）
+        if ($avatar_src === getResourcePath('EIdROxGXsAE_LSs.jpg') && !empty($message['author_email'])) {
+            try {
                 $stmt = $pdo->prepare("SELECT profile_picture FROM user WHERE email = ? OR username = ? LIMIT 1");
                 $stmt->execute([$message['author_email'], $message['author_email']]);
                 $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($user_result && !empty($user_result['profile_picture'])) {
-                    // 檢查是否為完整URL或相對路徑
-                    if (filter_var($user_result['profile_picture'], FILTER_VALIDATE_URL)) {
-                        // 完整 URL（如 Google 頭像），直接使用
-                        $avatar_src = $user_result['profile_picture'];
+                    $profile_picture = $user_result['profile_picture'];
+                    
+                    // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+                    if (strpos($profile_picture, 'uploads/') === 0) {
+                        // 上傳的頭像，優先使用
+                        $avatar_src = getCorrectPath($profile_picture);
+                    } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                        // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
+                        $avatar_src = $profile_picture;
                     } else {
-                        // 相對路徑
-                        if (strpos($user_result['profile_picture'], 'uploads/') === 0) {
-                            // 上傳的頭像，使用 getCorrectPath
-                            $avatar_src = getCorrectPath($user_result['profile_picture']);
-                        } else {
-                            // share 目錄的檔案，使用 getResourcePath
-                            $avatar_src = getResourcePath($user_result['profile_picture']);
-                        }
+                        // share 目錄的檔案，使用 getResourcePath
+                        $avatar_src = getResourcePath($profile_picture);
                     }
                 }
             } catch(PDOException $e) {
-                error_log("獲取留言作者頭像失敗: " . $e->getMessage());
+                error_log("獲取留言作者頭像失敗 (email): " . $e->getMessage());
             }
         }
+        
         $message['author_avatar'] = $avatar_src;
     }
 } catch(PDOException $e) {

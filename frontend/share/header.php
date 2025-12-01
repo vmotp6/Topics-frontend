@@ -992,19 +992,18 @@ function getActiveClass($targetFile) {
                              }
                              
                              if (!empty($row['profile_picture'])) {
-                                 // 檢查是否為完整URL或相對路徑
-                                 if (filter_var($row['profile_picture'], FILTER_VALIDATE_URL)) {
-                                     // 完整 URL（如 Google 頭像），直接使用
-                                     $avatar_src = $row['profile_picture'];
+                                 $profile_picture = $row['profile_picture'];
+                                 
+                                 // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+                                 if (strpos($profile_picture, 'uploads/') === 0) {
+                                     // 上傳的頭像，優先使用
+                                     $avatar_src = getCorrectPath($profile_picture);
+                                 } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                                     // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
+                                     $avatar_src = $profile_picture;
                                  } else {
-                                     // 相對路徑
-                                     if (strpos($row['profile_picture'], 'uploads/') === 0) {
-                                         // 上傳的頭像，使用 getCorrectPath 而不是 getResourcePath
-                                         $avatar_src = getCorrectPath($row['profile_picture']);
-                                     } else {
-                                         // share 目錄的檔案，使用 getResourcePath
-                                         $avatar_src = getResourcePath($row['profile_picture']);
-                                     }
+                                     // share 目錄的檔案，使用 getResourcePath
+                                     $avatar_src = getResourcePath($profile_picture);
                                  }
                              }
                          }

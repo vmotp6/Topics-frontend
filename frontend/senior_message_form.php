@@ -14,9 +14,39 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為學生角色（只驗證角色代碼 'STU'）
-$user_role = $_SESSION['role'] ?? '';
-if (!isset($_SESSION['role']) || $user_role !== 'STU') {
+// 檢查留言權限（只有 @stu.ukn.edu.tw 的 email 可以留言）
+if (!isset($_SESSION['username'])) {
+    header("Location: index.php");
+    exit;
+}
+
+try {
+    $host = 'localhost';
+    $dbname = 'topics_good';
+    $username = 'root';
+    $password = '';
+    
+    $pdo_check = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo_check->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    $stmt = $pdo_check->prepare("SELECT email FROM user WHERE username = ? LIMIT 1");
+    $stmt->execute([$_SESSION['username']]);
+    $user_result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // 檢查 email 是否存在且為 @stu.ukn.edu.tw
+    if (!$user_result || empty($user_result['email'])) {
+        header("Location: index.php");
+        exit;
+    }
+    
+    $user_email = $user_result['email'];
+    // 只有 @stu.ukn.edu.tw 的 email 可以留言
+    if (strpos($user_email, '@stu.ukn.edu.tw') === false) {
+        header("Location: index.php");
+        exit;
+    }
+} catch(PDOException $e) {
+    // 如果查詢失敗，跳轉到首頁
     header("Location: index.php");
     exit;
 }
@@ -194,6 +224,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 $success_message = $result['message'];
                 // 清空表單
                 $_POST = [];
+                // 重定向到留言板
+                header("Location: senior_messages.php?success=1");
+                exit;
             } else {
                 $form_error = $result['error'];
             }
@@ -219,9 +252,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             $success_message = $result['message'];
             // 清空表單
             $_POST = [];
-            // 重定向到留言板（可選）
-            // header("Location: senior_messages.php?success=1");
-            // exit;
+            // 重定向到留言板
+            header("Location: senior_messages.php?success=1");
+            exit;
         } else {
             $form_error = $result['error'];
             // 記錄詳細錯誤信息以便調試
