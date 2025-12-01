@@ -207,10 +207,47 @@ def google_callback():
                 existing_user = cursor.fetchone()
                 
                 if existing_user:
+                    user_id, username, role_code = existing_user
+                    
+                    # 驗證現有角色代碼是否有效（存在於 role_types 表中）
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    valid_role = cursor.fetchone()
+                    
+                    # 如果角色代碼無效，修正為有效的角色代碼
+                    if not valid_role:
+                        print(f"⚠️  發現無效的角色代碼 '{role_code}'，嘗試修正")
+                        # 優先順序：STU -> STUDENT -> MEMBER -> 第一個可用的角色
+                        fallback_codes = ['STU', 'STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        new_role_code = None
+                        for code in fallback_codes:
+                            cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
+                            if cursor.fetchone():
+                                new_role_code = code
+                                print(f"✅ 修正為角色代碼: {new_role_code}")
+                                break
+                        
+                        # 如果還是找不到，查詢第一個可用的角色
+                        if not new_role_code:
+                            cursor.execute("SELECT code FROM role_types LIMIT 1")
+                            result = cursor.fetchone()
+                            if result:
+                                new_role_code = result[0]
+                                print(f"✅ 使用第一個可用的角色代碼: {new_role_code}")
+                            else:
+                                print(f"❌ 錯誤：role_types 表為空，無法更新用戶")
+                                return jsonify({"error": "系統錯誤：角色類型表為空，請聯繫管理員"}), 500
+                        
+                        if new_role_code:
+                            cursor.execute(
+                                "UPDATE user SET role = %s WHERE id = %s",
+                                (new_role_code, user_id)
+                            )
+                            role_code = new_role_code
+                    
                     # 檢查現有頭像是否為本地上傳的
                     cursor.execute(
                         "SELECT profile_picture FROM user WHERE id = %s",
-                        (existing_user[0],)
+                        (user_id,)
                     )
                     current_picture = cursor.fetchone()
                     current_picture_path = current_picture[0] if current_picture and current_picture[0] else None
@@ -221,25 +258,79 @@ def google_callback():
                         # 保留本地上傳的頭像，只更新其他資訊
                         cursor.execute(
                             "UPDATE user SET google_id = %s, email = %s WHERE id = %s",
-                            (google_id, email, existing_user[0])
+                            (google_id, email, user_id)
                         )
-                        print(f"更新現有用戶（保留本地上傳頭像）: {existing_user[1]}")
+                        print(f"更新現有用戶（保留本地上傳頭像）: {username}")
                     else:
                         # 沒有頭像或頭像是 Google URL，更新為新的 Google 頭像
                         cursor.execute(
                             "UPDATE user SET google_id = %s, profile_picture = %s, email = %s WHERE id = %s",
-                            (google_id, picture, email, existing_user[0])
+                            (google_id, picture, email, user_id)
                         )
-                        print(f"更新現有用戶（更新 Google 頭像）: {existing_user[1]}")
+                        print(f"更新現有用戶（更新 Google 頭像）: {username}")
                     
-                    user_id, username, role = existing_user
+                    # 從 role_types 表查詢角色名稱
+                    cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
+                    role_result = cursor.fetchone()
+                    # 如果查不到，根據 role_code 判斷預設名稱
+                    if role_result:
+                        role = role_result[0]
+                    elif role_code == 'STU' or role_code == 'STUDENT':
+                        role = '學生'
+                    elif role_code == 'TEACHER':
+                        role = '老師'
+                    elif role_code == 'ADMIN':
+                        role = '管理員'
+                    else:
+                        role = '學生'  # 預設為學生
                 else:
                     # 創建新用戶
                     username = name or email.split('@')[0]
                     
-                    # 所有新註冊用戶都設為學生（老師身分由後端管理員手動設定）
-                    role = '學生'
+                    # 所有新註冊用戶都設為學生（使用角色代碼 'STU'）
+                    role_code = 'STU'
                     print(f"新用戶預設設為學生: {email}")
+                    
+                    # 驗證 role_code 是否存在於 role_types 表中
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    valid_role = cursor.fetchone()
+                    
+                    # 如果 'STU' 不存在，嘗試查找其他可用的角色代碼
+                    if not valid_role:
+                        print(f"⚠️  角色代碼 '{role_code}' 不存在於 role_types 表中，嘗試查找可用的角色")
+                        # 優先順序：STU -> STUDENT -> MEMBER -> 第一個可用的角色
+                        fallback_codes = ['STU', 'STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        role_code = None
+                        for code in fallback_codes:
+                            cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
+                            if cursor.fetchone():
+                                role_code = code
+                                print(f"✅ 使用角色代碼: {role_code}")
+                                break
+                        
+                        # 如果還是找不到，查詢第一個可用的角色
+                        if not role_code:
+                            cursor.execute("SELECT code FROM role_types LIMIT 1")
+                            result = cursor.fetchone()
+                            if result:
+                                role_code = result[0]
+                                print(f"✅ 使用第一個可用的角色代碼: {role_code}")
+                            else:
+                                # 如果 role_types 表是空的，這是一個嚴重的資料庫問題
+                                print(f"❌ 錯誤：role_types 表為空，無法創建用戶")
+                                return jsonify({"error": "系統錯誤：角色類型表為空，請聯繫管理員"}), 500
+                    
+                    # 再次確認 role_code 不是 None 且有效
+                    if not role_code:
+                        print(f"❌ 錯誤：role_code 為 None，無法創建用戶")
+                        return jsonify({"error": "系統錯誤：無法確定用戶角色，請聯繫管理員"}), 500
+                    
+                    # 最後一次驗證 role_code 是否存在
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    final_check = cursor.fetchone()
+                    if not final_check:
+                        print(f"❌ 錯誤：role_code '{role_code}' 在插入前驗證失敗")
+                        return jsonify({"error": f"系統錯誤：角色代碼 '{role_code}' 無效，請聯繫管理員"}), 500
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -251,13 +342,29 @@ def google_callback():
                         username = f"{original_username}_{counter}"
                         counter += 1
                     
+                    print(f"✅ 準備插入新用戶: username={username}, role_code={role_code}")
                     cursor.execute(
                         """INSERT INTO user (username, name, email, google_id, role, password, profile_picture) 
                            VALUES (%s, %s, %s, %s, %s, '', %s)""",
-                        (username, name, email, google_id, role, picture)
+                        (username, name, email, google_id, role_code, picture)
                     )
                     user_id = cursor.lastrowid
-                    print(f"創建新用戶: {username}, ID: {user_id}")
+                    print(f"✅ 創建新用戶成功: {username}, ID: {user_id}, role: {role_code}")
+                    
+                    # 獲取角色名稱以便重定向（從 role_types 表查詢）
+                    cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
+                    role_result = cursor.fetchone()
+                    # 如果查不到，根據 role_code 判斷預設名稱
+                    if role_result:
+                        role = role_result[0]
+                    elif role_code == 'STU' or role_code == 'STUDENT':
+                        role = '學生'
+                    elif role_code == 'TEACHER':
+                        role = '老師'
+                    elif role_code == 'ADMIN':
+                        role = '管理員'
+                    else:
+                        role = '學生'  # 預設為學生
                     
                     # 同步插入 student 表
                     try:
@@ -278,15 +385,20 @@ def google_callback():
                 del google_states[state]
                 
                 # 重定向到前端頁面
-                if role == '管理員':
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role={role}"
-                elif role == '老師':
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
-                elif role == '學生':
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role={role}"
+                # 確保學生角色正確識別（無論是從資料庫查到的名稱還是預設值）
+                print(f"🔍 角色判斷: role='{role}', role_code='{role_code if 'role_code' in locals() else 'N/A'}'")
+                
+                if role == '管理員' or (role_code if 'role_code' in locals() else None) == 'ADMIN':
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role=管理員"
+                elif role == '老師' or (role_code if 'role_code' in locals() else None) == 'TEACHER':
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role=老師"
+                elif role == '學生' or (role_code if 'role_code' in locals() else None) in ['STU', 'STUDENT']:
+                    # 學生統一跳轉到 student.php
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role=學生"
                 else:
-                    # 預設重定向到聊天系統登入頁面
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/chat/google_chat_integration.php?google_login=success&username={username}&role={role}"
+                    # 預設當作學生處理
+                    print(f"⚠️  未識別的角色 '{role}'，預設當作學生處理")
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role=學生"
                 
                 print(f"重定向到: {redirect_url}")
                 return redirect(redirect_url)

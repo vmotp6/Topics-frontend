@@ -236,10 +236,67 @@ def google_callback():
                 existing_user = cursor.fetchone()
                 
                 if existing_user:
+                    user_id, username, role_code = existing_user
+                    
+                    # 驗證現有角色代碼是否有效（存在於 role_types 表中）
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    valid_role = cursor.fetchone()
+                    
+                    # 調試：列出所有可用的角色代碼
+                    cursor.execute("SELECT code, name FROM role_types")
+                    all_roles = cursor.fetchall()
+                    print(f"📋 資料庫中所有可用的角色: {[f'{r[0]} ({r[1]})' for r in all_roles]}")
+                    print(f"📋 當前用戶的角色代碼: {role_code}")
+                    
+                    # 如果角色代碼無效，修正為有效的角色代碼
+                    if not valid_role:
+                        print(f"⚠️  發現無效的角色代碼 '{role_code}'，嘗試修正")
+                        # 優先順序：STUDENT -> MEMBER -> 第一個可用的角色
+                        fallback_codes = ['STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        new_role_code = None
+                        for code in fallback_codes:
+                            cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
+                            if cursor.fetchone():
+                                new_role_code = code
+                                print(f"✅ 修正為角色代碼: {new_role_code}")
+                                break
+                        
+                        # 如果還是找不到，查詢第一個可用的角色
+                        if not new_role_code:
+                            cursor.execute("SELECT code FROM role_types LIMIT 1")
+                            result = cursor.fetchone()
+                            if result:
+                                new_role_code = result[0]
+                                print(f"✅ 使用第一個可用的角色代碼: {new_role_code}")
+                            else:
+                                # 如果 role_types 表是空的，這是一個嚴重的資料庫問題
+                                print(f"❌ 錯誤：role_types 表為空，無法更新用戶")
+                                return jsonify({"error": "系統錯誤：角色類型表為空，請聯繫管理員"}), 500
+                        
+                        # 再次確認 new_role_code 不是 None 且有效
+                        if not new_role_code:
+                            print(f"❌ 錯誤：無法找到有效的角色代碼來修正用戶 {user_id}")
+                            return jsonify({"error": "系統錯誤：無法確定用戶角色，請聯繫管理員"}), 500
+                        
+                        # 最後一次驗證 new_role_code 是否存在
+                        cursor.execute("SELECT code FROM role_types WHERE code = %s", (new_role_code,))
+                        final_check = cursor.fetchone()
+                        if not final_check:
+                            print(f"❌ 錯誤：new_role_code '{new_role_code}' 在更新前驗證失敗")
+                            return jsonify({"error": f"系統錯誤：角色代碼 '{new_role_code}' 無效，請聯繫管理員"}), 500
+                        
+                        print(f"✅ 準備更新用戶角色: user_id={user_id}, old_role={role_code}, new_role={new_role_code}")
+                        cursor.execute(
+                            "UPDATE user SET role = %s WHERE id = %s",
+                            (new_role_code, user_id)
+                        )
+                        role_code = new_role_code
+                        print(f"✅ 用戶角色更新成功: user_id={user_id}, role={role_code}")
+                    
                     # 檢查現有頭像是否為本地上傳的
                     cursor.execute(
                         "SELECT profile_picture FROM user WHERE id = %s",
-                        (existing_user[0],)
+                        (user_id,)
                     )
                     current_picture = cursor.fetchone()
                     current_picture_path = current_picture[0] if current_picture and current_picture[0] else None
@@ -250,18 +307,16 @@ def google_callback():
                         # 保留本地上傳的頭像，只更新其他資訊
                         cursor.execute(
                             "UPDATE user SET google_id = %s, email = %s WHERE id = %s",
-                            (google_id, email, existing_user[0])
+                            (google_id, email, user_id)
                         )
-                        print(f"更新現有用戶（保留本地上傳頭像）: {existing_user[1]}")
+                        print(f"更新現有用戶（保留本地上傳頭像）: {username}")
                     else:
                         # 沒有頭像或頭像是 Google URL，更新為新的 Google 頭像
                         cursor.execute(
                             "UPDATE user SET google_id = %s, profile_picture = %s, email = %s WHERE id = %s",
-                            (google_id, picture, email, existing_user[0])
+                            (google_id, picture, email, user_id)
                         )
-                        print(f"更新現有用戶（更新 Google 頭像）: {existing_user[1]}")
-                    
-                    user_id, username, role_code = existing_user
+                        print(f"更新現有用戶（更新 Google 頭像）: {username}")
                     
                     # 從 role_types 表查詢角色名稱
                     cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
@@ -271,9 +326,44 @@ def google_callback():
                     # 創建新用戶
                     username = name or email.split('@')[0]
                     
-                    # 所有新註冊用戶都設為學生（使用角色代碼 'STU'）
-                    role_code = 'STU'
+                    # 所有新註冊用戶都設為學生（使用角色代碼 'STUDENT'）
+                    role_code = 'STUDENT'
                     print(f"新用戶預設設為學生: {email}")
+                    
+                    # 驗證 role_code 是否存在於 role_types 表中
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    valid_role = cursor.fetchone()
+                    
+                    # 調試：列出所有可用的角色代碼
+                    cursor.execute("SELECT code, name FROM role_types")
+                    all_roles = cursor.fetchall()
+                    print(f"📋 資料庫中所有可用的角色: {[f'{r[0]} ({r[1]})' for r in all_roles]}")
+                    print(f"📋 準備使用的角色代碼: {role_code}")
+                    
+                    # 如果 'STUDENT' 不存在，嘗試查找其他可用的角色代碼
+                    if not valid_role:
+                        print(f"⚠️  角色代碼 '{role_code}' 不存在於 role_types 表中，嘗試查找可用的角色")
+                        # 優先順序：STUDENT -> MEMBER -> 第一個可用的角色
+                        fallback_codes = ['STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        role_code = None
+                        for code in fallback_codes:
+                            cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
+                            if cursor.fetchone():
+                                role_code = code
+                                print(f"✅ 使用角色代碼: {role_code}")
+                                break
+                        
+                        # 如果還是找不到，查詢第一個可用的角色
+                        if not role_code:
+                            cursor.execute("SELECT code FROM role_types LIMIT 1")
+                            result = cursor.fetchone()
+                            if result:
+                                role_code = result[0]
+                                print(f"✅ 使用第一個可用的角色代碼: {role_code}")
+                            else:
+                                # 如果 role_types 表是空的，這是一個嚴重的資料庫問題
+                                print(f"❌ 錯誤：role_types 表為空，無法創建用戶")
+                                return jsonify({"error": "系統錯誤：角色類型表為空，請聯繫管理員"}), 500
                     
                     # 確保用戶名唯一
                     original_username = username
@@ -285,25 +375,38 @@ def google_callback():
                         username = f"{original_username}_{counter}"
                         counter += 1
                     
+                    # 再次確認 role_code 不是 None 且有效
+                    if not role_code:
+                        print(f"❌ 錯誤：role_code 為 None，無法創建用戶")
+                        return jsonify({"error": "系統錯誤：無法確定用戶角色，請聯繫管理員"}), 500
+                    
+                    # 最後一次驗證 role_code 是否存在
+                    cursor.execute("SELECT code FROM role_types WHERE code = %s", (role_code,))
+                    final_check = cursor.fetchone()
+                    if not final_check:
+                        print(f"❌ 錯誤：role_code '{role_code}' 在插入前驗證失敗")
+                        return jsonify({"error": f"系統錯誤：角色代碼 '{role_code}' 無效，請聯繫管理員"}), 500
+                    
+                    print(f"✅ 準備插入新用戶: username={username}, role_code={role_code}")
                     cursor.execute(
                         """INSERT INTO user (username, name, email, google_id, role, password, profile_picture) 
                            VALUES (%s, %s, %s, %s, %s, '', %s)""",
                         (username, name, email, google_id, role_code, picture)
                     )
                     user_id = cursor.lastrowid
-                    print(f"創建新用戶: {username}, ID: {user_id}")
+                    print(f"✅ 創建新用戶成功: {username}, ID: {user_id}, role: {role_code}")
                     
-                    # 同步插入 student 表（根據正規化結構）
+                    # 同步插入 student_normalized 表（根據正規化結構）
                     try:
                         cursor.execute(
-                            """INSERT INTO student (user_id, email) 
-                               VALUES (%s, %s)""",
-                            (user_id, email)
+                            """INSERT INTO student_normalized (user_id, name, email) 
+                               VALUES (%s, %s, %s)""",
+                            (user_id, name or username, email)
                         )
                         print(f"✅ 已同步創建學生資料: user_id={user_id}")
                     except Exception as student_error:
-                        # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
-                        print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
+                        # 如果 student_normalized 表插入失敗，記錄錯誤但不影響註冊流程
+                        print(f"⚠️  插入 student_normalized 表失敗（但用戶已創建）: {student_error}")
                     
                     # 獲取角色名稱以便重定向（從 role_types 表查詢）
                     cursor.execute("SELECT name FROM role_types WHERE code = %s", (role_code,))
@@ -331,8 +434,21 @@ def google_callback():
                 return redirect(redirect_url)
                 
         except Exception as e:
-            print(f"資料庫操作錯誤: {e}")
-            return jsonify({"error": "用戶資料處理失敗"}), 500
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"❌ 資料庫操作錯誤: {e}")
+            print(f"詳細錯誤資訊:\n{error_details}")
+            
+            # 檢查是否為外鍵約束錯誤
+            error_str = str(e)
+            if 'foreign key' in error_str.lower() or 'role_types' in error_str.lower():
+                return jsonify({
+                    "error": f"用戶資料處理失敗: 角色設定錯誤。請確認 role_types 表中有有效的角色代碼。詳細錯誤: {error_str}"
+                }), 500
+            else:
+                return jsonify({
+                    "error": f"用戶資料處理失敗: {error_str}"
+                }), 500
         finally:
             conn.close()
             
@@ -573,26 +689,26 @@ def register():
                 import hashlib
                 hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
             
-            # 插入新用戶（角色預設為學生，使用角色代碼 'STU'）
+            # 插入新用戶（角色預設為學生，使用角色代碼 'STUDENT'）
             print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
-                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STU')",
+                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STUDENT')",
                 (username, hashed_password, email, name)
             )
             user_id = cursor.lastrowid
             print(f"✅ 已插入 user 表: user_id={user_id}")
             
-            # 同步插入 student 表（根據正規化結構，student 表只有 user_id, student_id, department, grade, class_name, email, phone）
+            # 同步插入 student_normalized 表（根據正規化結構）
             try:
                 cursor.execute(
-                    """INSERT INTO student (user_id, email) 
-                       VALUES (%s, %s)""",
-                    (user_id, email)
+                    """INSERT INTO student_normalized (user_id, name, email) 
+                       VALUES (%s, %s, %s)""",
+                    (user_id, name, email)
                 )
                 print(f"✅ 已同步創建學生資料: user_id={user_id}")
             except Exception as student_error:
-                # 如果 student 表插入失敗，記錄錯誤但不影響註冊流程
-                print(f"⚠️  插入 student 表失敗（但用戶已創建）: {student_error}")
+                # 如果 student_normalized 表插入失敗，記錄錯誤但不影響註冊流程
+                print(f"⚠️  插入 student_normalized 表失敗（但用戶已創建）: {student_error}")
             
             # 提交事務
             conn.commit()
@@ -1074,46 +1190,43 @@ def get_student_profile(username):
             
             # 查詢學生個人資料
             sql_get_profile = """
-                SELECT student_id, department, grade, class_name, email, phone 
-                FROM student 
-                WHERE user_id = %s
+                SELECT s.student_id, d.code as department_code, d.name as department_name,
+                       g.code as grade_code, g.name as grade_name,
+                       s.class_name, s.email, s.phone 
+                FROM student_normalized s
+                LEFT JOIN departments d ON s.department_id = d.id
+                LEFT JOIN grades g ON s.grade_id = g.id
+                WHERE s.user_id = %s
             """
             cursor.execute(sql_get_profile, (user_id,))
             profile = cursor.fetchone()
             
             if profile:
-                # 如果有科系代碼，從 departments 表查詢科系名稱
-                department_name = None
-                if profile[1]:  # department code
-                    cursor.execute("SELECT name FROM departments WHERE code = %s", (profile[1],))
-                    dept_result = cursor.fetchone()
-                    department_name = dept_result[0] if dept_result else profile[1]
+                # 從查詢結果中獲取科系和年級資訊（已經 JOIN 了）
+                department_code = profile[1] if profile[1] else None
+                department_name = profile[2] if profile[2] else None
+                grade_code = profile[3] if profile[3] else None
+                grade_name_from_db = profile[4] if profile[4] else None
                 
-                # 如果有年級代碼，從 identity_options 表查詢年級名稱
-                grade_name = None
-                if profile[2]:  # grade code
-                    cursor.execute("SELECT name FROM identity_options WHERE code = %s", (profile[2],))
-                    grade_result = cursor.fetchone()
-                    grade_name_from_db = grade_result[0] if grade_result else profile[2]
-                    # 將代碼轉換為顯示名稱（直接使用資料庫中的名稱：專一、專二、專三、專四、專五、國一、國二、國三）
-                    grade_display_mapping = {
-                        'F1': '專一', 'F2': '專二', 'F3': '專三', 'F4': '專四', 'F5': '專五',
-                        'J1': '國一', 'J2': '國二', 'J3': '國三',
-                        'H1': '高一', 'H2': '高二', 'H3': '高三'
-                    }
-                    # 優先使用代碼映射，如果沒有則使用資料庫中的名稱
-                    grade_name = grade_display_mapping.get(profile[2], grade_name_from_db)
+                # 將代碼轉換為顯示名稱（直接使用資料庫中的名稱：專一、專二、專三、專四、專五、國一、國二、國三）
+                grade_display_mapping = {
+                    'F1': '專一', 'F2': '專二', 'F3': '專三', 'F4': '專四', 'F5': '專五',
+                    'J1': '國一', 'J2': '國二', 'J3': '國三',
+                    'H1': '高一', 'H2': '高二', 'H3': '高三'
+                }
+                # 優先使用代碼映射，如果沒有則使用資料庫中的名稱
+                grade_name = grade_display_mapping.get(grade_code, grade_name_from_db) if grade_code else ''
                 
                 return jsonify({
                     "name": user_name,
-                    "email": profile[4] if profile[4] else user_email,  # 優先使用 student 表的 email
+                    "email": profile[6] if profile[6] else user_email,  # 優先使用 student_normalized 表的 email
                     "student_id": profile[0] if profile[0] else '',
-                    "department": profile[1] if profile[1] else '',  # 返回代碼
+                    "department": department_code if department_code else '',  # 返回代碼
                     "department_name": department_name if department_name else '',  # 返回名稱
-                    "grade": profile[2] if profile[2] else '',  # 返回代碼
+                    "grade": grade_code if grade_code else '',  # 返回代碼
                     "grade_name": grade_name if grade_name else '',  # 返回名稱
-                    "class_name": profile[3] if profile[3] else '',
-                    "phone": profile[5] if profile[5] else ''
+                    "class_name": profile[5] if profile[5] else '',
+                    "phone": profile[7] if profile[7] else ''
                 }), 200
             else:
                 # 如果沒有學生資料，返回基本資訊
@@ -1237,23 +1350,45 @@ def save_student_profile():
             # 使用 email（如果提供），否則使用 user 表的 email
             final_email = email if email else user_email
             
-            # 檢查是否已有個人資料
-            sql_check = "SELECT COUNT(*) FROM student WHERE user_id = %s"
+            # 將 department_code 轉換為 department_id（正規化後使用 ID）
+            department_id = None
+            if department_code:
+                cursor.execute("SELECT id FROM departments WHERE code = %s", (department_code,))
+                dept_result = cursor.fetchone()
+                if dept_result:
+                    department_id = dept_result[0]
+            
+            # 將 grade_code 轉換為 grade_id（正規化後使用 ID）
+            grade_id = None
+            if grade_code:
+                cursor.execute("SELECT id FROM grades WHERE code = %s", (grade_code,))
+                grade_result = cursor.fetchone()
+                if grade_result:
+                    grade_id = grade_result[0]
+            
+            # 獲取用戶名稱（student_normalized 表需要 name 欄位）
+            cursor.execute("SELECT name FROM user WHERE id = %s", (user_id,))
+            user_name_result = cursor.fetchone()
+            user_name = user_name_result[0] if user_name_result else name if name else ''
+            
+            # 檢查是否已有個人資料（使用 student_normalized 表）
+            sql_check = "SELECT COUNT(*) FROM student_normalized WHERE user_id = %s"
             cursor.execute(sql_check, (user_id,))
             exists = cursor.fetchone()[0] > 0
             
             if exists:
                 # 更新現有資料
                 sql_update = """
-                    UPDATE student 
-                    SET student_id = %s, department = %s, grade = %s, 
+                    UPDATE student_normalized 
+                    SET name = %s, student_id = %s, department_id = %s, grade_id = %s, 
                         class_name = %s, email = %s, phone = %s 
                     WHERE user_id = %s
                 """
                 cursor.execute(sql_update, (
+                    user_name,
                     student_id if student_id else None,
-                    department_code if department_code else None,
-                    grade_code if grade_code else None,
+                    department_id,
+                    grade_id,
                     class_name if class_name else None,
                     final_email if final_email else None,
                     phone if phone else None,
@@ -1262,14 +1397,15 @@ def save_student_profile():
             else:
                 # 新增資料
                 sql_insert = """
-                    INSERT INTO student (user_id, student_id, department, grade, class_name, email, phone) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO student_normalized (user_id, name, student_id, department_id, grade_id, class_name, email, phone) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql_insert, (
                     user_id,
+                    user_name,
                     student_id if student_id else None,
-                    department_code if department_code else None,
-                    grade_code if grade_code else None,
+                    department_id,
+                    grade_id,
                     class_name if class_name else None,
                     final_email if final_email else None,
                     phone if phone else None
