@@ -630,6 +630,15 @@ if (!$is_teacher) {
 			background: #138496;
 		}
 
+		.btn-view-logs {
+			background: #6c757d;
+			color: white;
+		}
+
+		.btn-view-logs:hover {
+			background: #5a6268;
+		}
+
 		.loading {
 			text-align: center;
 			padding: 40px;
@@ -647,6 +656,119 @@ if (!$is_teacher) {
 			font-size: 48px;
 			margin-bottom: 16px;
 			color: #ccc;
+		}
+
+		/* 聯絡資訊模態視窗樣式 */
+		.contact-info-item {
+			background: white;
+			border-radius: 8px;
+			padding: 14px 16px;
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			border: 1px solid #e0e0e0;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+			width: 100%;
+			box-sizing: border-box;
+			transition: box-shadow 0.2s;
+		}
+
+		.contact-info-item:hover {
+			box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+		}
+
+		.contact-info-icon {
+			width: 36px;
+			height: 36px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			background: #f8f9fa;
+			border-radius: 8px;
+		}
+
+		.contact-info-icon i {
+			font-size: 20px;
+		}
+
+		.contact-info-content {
+			flex: 1;
+			min-width: 120px;
+			overflow: visible;
+			padding-right: 12px;
+		}
+
+		.contact-info-label {
+			font-size: 13px;
+			color: #999;
+			margin-bottom: 4px;
+			white-space: nowrap;
+		}
+
+		.contact-info-value {
+			font-size: 16px;
+			color: #333;
+			font-weight: 500;
+			word-break: break-all;
+			line-height: 1.5;
+			white-space: normal;
+		}
+
+		.contact-info-value.contact-info-empty {
+			color: #999;
+		}
+
+		.contact-info-copy-btn {
+			background: #f5f5f5;
+			border: none;
+			padding: 0;
+			width: 32px;
+			height: 32px;
+			border-radius: 6px;
+			cursor: pointer;
+			color: #666;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: all 0.2s;
+			flex-shrink: 0;
+			position: relative;
+		}
+
+		.contact-info-copy-btn:hover {
+			background: #e8e8e8;
+			color: #333;
+			transform: scale(1.05);
+		}
+
+		.contact-info-copy-btn:active {
+			transform: scale(0.95);
+		}
+
+		.contact-info-copy-btn i {
+			font-size: 14px;
+		}
+
+		.contact-info-copy-btn::after {
+			content: '複製';
+			position: absolute;
+			bottom: -24px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: rgba(0, 0, 0, 0.8);
+			color: white;
+			padding: 4px 8px;
+			border-radius: 4px;
+			font-size: 11px;
+			white-space: nowrap;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.2s;
+		}
+
+		.contact-info-copy-btn:hover::after {
+			opacity: 1;
 		}
 
 		/* 響應式設計 */
@@ -1084,18 +1206,29 @@ if (!$is_teacher) {
 			studentList.innerHTML = '<div class="loading">載入中...</div>';
 
 			try {
-				// 先測試基本 API 功能
-				console.log('測試基本 API 功能...');
-				const testResponse = await fetch('api/test_api.php');
-				const testData = await testResponse.json();
-				console.log('測試 API 結果:', testData);
+				// 直接載入學生資料
+				const response = await fetch('api/teacher_students_api.php');
 				
-				if (!testData.success) {
-					throw new Error('基本 API 測試失敗：' + testData.message);
+				// 檢查回應狀態
+				if (!response.ok) {
+					// 如果回應不是 JSON，嘗試讀取文字內容
+					const text = await response.text();
+					console.error('API 回應錯誤:', {
+						status: response.status,
+						statusText: response.statusText,
+						content: text.substring(0, 200)
+					});
+					throw new Error(`伺服器錯誤 (${response.status}): ${response.statusText}`);
 				}
 				
-				// 如果基本測試通過，再載入學生資料
-				const response = await fetch('api/teacher_students_api.php');
+				// 檢查 Content-Type 是否為 JSON
+				const contentType = response.headers.get('content-type');
+				if (!contentType || !contentType.includes('application/json')) {
+					const text = await response.text();
+					console.error('回應不是 JSON 格式:', text.substring(0, 200));
+					throw new Error('伺服器回應格式錯誤，請檢查 API 端點');
+				}
+				
 				const data = await response.json();
 
 				if (data.success) {
@@ -1186,9 +1319,12 @@ if (!$is_teacher) {
 					</div>
 
 					<div class="student-actions">
-						<button class="action-btn btn-contact" onclick="contactStudent('${student.phone1}', '${student.name}')">
-							<i class="fas fa-phone"></i> 聯絡
+						<button class="action-btn btn-contact" onclick="showContactInfo('${student.name}', '${student.phone1 || ''}', '${student.phone2 || ''}', '${student.email || ''}', '${student.line_id || ''}', '${student.facebook || ''}')">
+							<i class="fas fa-phone"></i> 聯絡資訊
 						</button>
+                        <button class="action-btn btn-view-logs" onclick="viewContactLogs(${student.id}, '${student.name}')">
+                            <i class="fas fa-history"></i> 查看聯絡紀錄
+                        </button>
                         <button class="action-btn btn-notes" onclick="openAddContactLog(${student.id}, '${student.name}')">
                             <i class="fas fa-sticky-note"></i> 新增聯絡紀錄
                         </button>
@@ -1209,12 +1345,126 @@ if (!$is_teacher) {
 			displayStudents(filteredStudents);
 		}
 
-		// 聯絡學生
-		function contactStudent(phone, name) {
-			if (confirm(`是否要聯絡 ${name}？\n電話：${phone}`)) {
-				// 這裡可以添加實際的聯絡功能，比如打開電話應用或發送簡訊
-				window.open(`tel:${phone}`);
+		// 顯示聯絡資訊
+		function showContactInfo(name, phone1, phone2, email, lineId, facebook) {
+			// 更新模態視窗內容
+			document.getElementById('contactInfoStudentName').textContent = name;
+			
+			// 清空並重建聯絡資訊列表
+			const contactInfoList = document.getElementById('contactInfoList');
+			contactInfoList.innerHTML = '';
+			
+			// 電話一
+			if (phone1) {
+				contactInfoList.innerHTML += `
+					<div class="contact-info-item">
+						<div class="contact-info-icon">
+							<i class="fas fa-phone" style="color: #1890ff;"></i>
+						</div>
+						<div class="contact-info-content">
+							<div class="contact-info-label">聯絡電話一</div>
+							<div class="contact-info-value">${escapeHtml(phone1)}</div>
+						</div>
+						<button class="contact-info-copy-btn" onclick="copyToClipboard('${escapeHtml(phone1)}')" title="複製">
+							<i class="fas fa-copy"></i>
+						</button>
+					</div>
+				`;
 			}
+			
+			// 電話二
+			if (phone2) {
+				contactInfoList.innerHTML += `
+					<div class="contact-info-item">
+						<div class="contact-info-icon">
+							<i class="fas fa-phone" style="color: #1890ff;"></i>
+						</div>
+						<div class="contact-info-content">
+							<div class="contact-info-label">聯絡電話二</div>
+							<div class="contact-info-value">${escapeHtml(phone2)}</div>
+						</div>
+						<button class="contact-info-copy-btn" onclick="copyToClipboard('${escapeHtml(phone2)}')" title="複製">
+							<i class="fas fa-copy"></i>
+						</button>
+					</div>
+				`;
+			}
+			
+			// Line ID
+			if (lineId) {
+				contactInfoList.innerHTML += `
+					<div class="contact-info-item">
+						<div class="contact-info-icon">
+							<i class="fab fa-line" style="color: #00c300; font-size: 24px;"></i>
+						</div>
+						<div class="contact-info-content">
+							<div class="contact-info-label">Line ID</div>
+							<div class="contact-info-value">${escapeHtml(lineId)}</div>
+						</div>
+						<button class="contact-info-copy-btn" onclick="copyToClipboard('${escapeHtml(lineId)}')" title="複製">
+							<i class="fas fa-copy"></i>
+						</button>
+					</div>
+				`;
+			}
+			
+			// Email
+			contactInfoList.innerHTML += `
+				<div class="contact-info-item">
+					<div class="contact-info-icon">
+						<i class="fas fa-envelope" style="color: #1890ff;"></i>
+					</div>
+					<div class="contact-info-content">
+						<div class="contact-info-label">Email</div>
+						<div class="contact-info-value ${email ? '' : 'contact-info-empty'}">${email ? escapeHtml(email) : '無'}</div>
+					</div>
+					${email ? `<button class="contact-info-copy-btn" onclick="copyToClipboard('${escapeHtml(email)}')" title="複製">
+						<i class="fas fa-copy"></i>
+					</button>` : ''}
+				</div>
+			`;
+			
+			// Facebook
+			if (facebook) {
+				contactInfoList.innerHTML += `
+					<div class="contact-info-item">
+						<div class="contact-info-icon">
+							<i class="fab fa-facebook" style="color: #1877f2;"></i>
+						</div>
+						<div class="contact-info-content">
+							<div class="contact-info-label">Facebook</div>
+							<div class="contact-info-value">${escapeHtml(facebook)}</div>
+						</div>
+						<button class="contact-info-copy-btn" onclick="copyToClipboard('${escapeHtml(facebook)}')" title="複製">
+							<i class="fas fa-copy"></i>
+						</button>
+					</div>
+				`;
+			}
+			
+			// 顯示模態視窗
+			document.getElementById('contactInfoModal').style.display = 'flex';
+		}
+		
+		// 複製到剪貼簿
+		function copyToClipboard(text) {
+			navigator.clipboard.writeText(text).then(() => {
+				// 顯示提示
+				const toast = document.createElement('div');
+				toast.textContent = '已複製到剪貼簿';
+				toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #52c41a; color: white; padding: 12px 24px; border-radius: 6px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+				document.body.appendChild(toast);
+				setTimeout(() => {
+					toast.remove();
+				}, 2000);
+			}).catch(err => {
+				alert('複製失敗：' + err);
+			});
+		}
+		
+		// 關閉聯絡資訊模態視窗
+		function closeContactInfoModal() {
+			document.getElementById('contactInfoModal').style.display = 'none';
 		}
 
 		// 添加學生備註
@@ -1236,6 +1486,45 @@ if (!$is_teacher) {
 		// 搜尋功能
 		document.getElementById('studentSearch').addEventListener('input', searchStudents);
 	</script>
+
+    <!-- 聯絡資訊模態視窗 -->
+    <div id="contactInfoModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; background: #f5f5f5; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background: white; border-radius: 12px 12px 0 0; padding: 20px 24px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #333; font-size: 18px; font-weight: 600;">聯絡資訊 - <span id="contactInfoStudentName"></span></h3>
+                <span class="close" onclick="closeContactInfoModal()" style="font-size: 28px; color: #999; cursor: pointer; line-height: 1;">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div id="contactInfoList" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- 聯絡資訊項目將在這裡動態生成 -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #e0e0e0; display: flex; justify-content: center; background: white; border-radius: 0 0 12px 12px;">
+                <button onclick="closeContactInfoModal()" style="background: #f5f5f5; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; color: #333; font-size: 14px; font-weight: 500;">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看聯絡紀錄模態視窗 -->
+    <div id="viewContactLogsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>聯絡紀錄</h3>
+                <span class="close" onclick="closeViewContactLogs()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div style="margin-bottom: 16px; font-weight: 600; color: #003366; font-size: 16px;">
+                    學生：<span id="viewLogsStudentName"></span>
+                </div>
+                <div id="contactLogsList" style="max-height: 500px; overflow-y: auto;">
+                    <!-- 聯絡紀錄列表將在這裡顯示 -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #e0e0e0; display:flex; justify-content:flex-end;">
+                <button class="btn-cancel" onclick="closeViewContactLogs()" style="background:#f5f5f5; border:none; padding:8px 16px; border-radius:6px;">關閉</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 聯絡紀錄新增模態視窗 -->
     <div id="addContactLogModal" class="modal" style="display: none;">
@@ -1262,12 +1551,8 @@ if (!$is_teacher) {
                     </div>
                 </div>
                 <div style="margin-top: 16px;">
-                    <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">聯絡結果</label>
-                    <textarea id="contactResult" rows="4" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
-                </div>
-                <div style="margin-top: 16px;">
-                    <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">後續追蹤備註（選填）</label>
-                    <textarea id="followUpNotes" rows="3" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+                    <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px;">聯絡紀錄</label>
+                    <textarea id="contactNotes" rows="6" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;" placeholder="請填寫聯絡內容和結果..."></textarea>
                 </div>
             </div>
             <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid #e0e0e0; display:flex; justify-content:flex-end; gap:10px;">
@@ -1286,8 +1571,7 @@ if (!$is_teacher) {
             const today = new Date().toISOString().slice(0, 10);
             document.getElementById('contactDate').value = today;
             document.getElementById('contactMethod').value = '電話';
-            document.getElementById('contactResult').value = '';
-            document.getElementById('followUpNotes').value = '';
+            document.getElementById('contactNotes').value = '';
             document.getElementById('addContactLogModal').style.display = 'flex';
         }
 
@@ -1300,11 +1584,20 @@ if (!$is_teacher) {
             if (!currentContactStudentId) return;
             const contact_date = document.getElementById('contactDate').value;
             const contact_method = document.getElementById('contactMethod').value;
-            const contact_result = document.getElementById('contactResult').value.trim();
-            const follow_up_notes = document.getElementById('followUpNotes').value.trim();
+            const notes = document.getElementById('contactNotes').value.trim();
 
-            if (!contact_result) {
-                alert('請填寫聯絡結果');
+            if (!contact_date) {
+                alert('請選擇聯絡日期');
+                return;
+            }
+
+            if (!contact_method) {
+                alert('請選擇聯絡方式');
+                return;
+            }
+
+            if (!notes) {
+                alert('請填寫聯絡紀錄');
                 return;
             }
 
@@ -1313,17 +1606,20 @@ if (!$is_teacher) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        student_id: currentContactStudentId,
+                        enrollment_id: currentContactStudentId,
                         contact_date,
-                        contact_method,
-                        contact_result,
-                        follow_up_notes
+                        method: contact_method,
+                        notes
                     })
                 });
                 const data = await resp.json();
                 if (data.success) {
                     alert('已新增聯絡紀錄');
                     closeAddContactLog();
+                    // 如果查看聯絡紀錄視窗是打開的，自動刷新
+                    if (currentViewLogsStudentId === currentContactStudentId) {
+                        loadContactLogs(currentViewLogsStudentId);
+                    }
                 } else {
                     alert('新增失敗：' + (data.message || '未知錯誤'));
                 }
@@ -1336,6 +1632,115 @@ if (!$is_teacher) {
         document.getElementById('addContactLogModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeAddContactLog();
+            }
+        });
+
+        // 查看聯絡紀錄
+        let currentViewLogsStudentId = null;
+        let currentViewLogsStudentName = null;
+
+        function viewContactLogs(studentId, studentName) {
+            currentViewLogsStudentId = studentId;
+            currentViewLogsStudentName = studentName;
+            document.getElementById('viewLogsStudentName').textContent = studentName;
+            document.getElementById('viewContactLogsModal').style.display = 'flex';
+            loadContactLogs(studentId);
+        }
+
+        function closeViewContactLogs() {
+            document.getElementById('viewContactLogsModal').style.display = 'none';
+            currentViewLogsStudentId = null;
+            currentViewLogsStudentName = null;
+        }
+
+        async function loadContactLogs(studentId) {
+            const logsList = document.getElementById('contactLogsList');
+            logsList.innerHTML = '<div class="loading">載入中...</div>';
+
+            try {
+                const response = await fetch(`api/contact_logs_api.php?enrollment_id=${studentId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`伺服器錯誤 (${response.status})`);
+                }
+
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error('伺服器回應格式錯誤');
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.logs) {
+                    if (data.logs.length === 0) {
+                        logsList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <p>目前尚無聯絡紀錄</p>
+                            </div>
+                        `;
+                    } else {
+                        logsList.innerHTML = data.logs.map(log => {
+                            const contactDate = log.contact_date || log.created_at?.split(' ')[0] || '未知';
+                            const method = log.method || '未知';
+                            const notes = log.notes || log.result || '';
+                            const createdDate = log.created_at ? new Date(log.created_at).toLocaleString('zh-TW') : '';
+
+                            return `
+                                <div class="contact-log-item" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #fff;">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                        <div>
+                                            <div style="font-weight: 600; color: #003366; margin-bottom: 4px;">${contactDate}</div>
+                                            <div style="font-size: 13px; color: #666;">
+                                                <span style="background: #e3f2fd; color: #1976d2; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${method}</span>
+                                            </div>
+                                        </div>
+                                        ${createdDate ? `<div style="font-size: 12px; color: #999;">建立時間：${createdDate}</div>` : ''}
+                                    </div>
+                                    <div style="color: #333; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(notes)}</div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                } else {
+                    logsList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>載入失敗：${data.message || '未知錯誤'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('載入聯絡紀錄錯誤:', error);
+                logsList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>載入失敗，請稍後再試</p>
+                        <p style="font-size: 12px; color: #999;">錯誤詳情：${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // HTML 轉義函數
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 點擊模態外關閉
+        document.getElementById('viewContactLogsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeViewContactLogs();
+            }
+        });
+
+        // 點擊外部關閉聯絡資訊模態視窗
+        document.getElementById('contactInfoModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeContactInfoModal();
             }
         });
     </script>

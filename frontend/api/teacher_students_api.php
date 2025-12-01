@@ -1,4 +1,7 @@
 <?php
+// 設定 JSON 回應標頭
+header('Content-Type: application/json; charset=utf-8');
+
 // 載入 session 配置
 require_once '../session_config.php';
 
@@ -15,7 +18,10 @@ $debug_info = [
     'is_logged_in' => $isLoggedIn
 ];
 
-if (!$isLoggedIn || $_SESSION['role'] !== '老師') {
+// 檢查角色：接受 '老師' 或 'TEA'
+$isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA');
+
+if (!$isLoggedIn || !$isTeacher) {
     http_response_code(403);
     echo json_encode([
         'success' => false, 
@@ -39,10 +45,10 @@ try {
     // 獲取當前老師的用戶ID
     $username = $_SESSION['username'];
     $teacher_stmt = $conn->prepare("
-        SELECT u.id, u.username, t.name, t.department 
+        SELECT u.id, u.username, u.name, t.department 
         FROM user u 
         LEFT JOIN teacher t ON u.id = t.user_id 
-        WHERE u.username = ? AND u.role = '老師'
+        WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA')
     ");
     $teacher_stmt->bind_param("s", $username);
     $teacher_stmt->execute();
@@ -57,6 +63,7 @@ try {
     $teacher_id = $teacher['id'];
     
     // 獲取分配給此老師的就讀意願學生列表
+    // 注意：intention 和 system 欄位不存在於 enrollment_intention 表，需從 enrollment_choices 表獲取
     $students_stmt = $conn->prepare("
         SELECT 
             ei.id,
@@ -66,12 +73,12 @@ try {
             ei.phone1,
             ei.phone2,
             ei.email,
-            ei.intention1,
-            ei.intention2,
-            ei.intention3,
-            ei.system1,
-            ei.system2,
-            ei.system3,
+            NULL as intention1,
+            NULL as intention2,
+            NULL as intention3,
+            NULL as system1,
+            NULL as system2,
+            NULL as system3,
             ei.junior_high,
             ei.current_grade,
             ei.line_id,
@@ -79,11 +86,10 @@ try {
             ei.remarks,
             ei.assigned_teacher_id,
             ei.created_at,
-            al.assigned_at,
-            al.assigned_by,
+            ei.updated_at as assigned_at,
+            NULL as assigned_by,
             'enrollment_intention' as source_type
         FROM enrollment_intention ei
-        LEFT JOIN assignment_logs al ON ei.id = al.student_id
         WHERE ei.assigned_teacher_id = ?
         ORDER BY ei.created_at DESC
     ");
@@ -92,41 +98,72 @@ try {
     $students_result = $students_stmt->get_result();
     $enrollment_students = $students_result->fetch_all(MYSQLI_ASSOC);
     
-    // 獲取分配給此老師的招生推薦學生列表
-    $recommendations_stmt = $conn->prepare("
-        SELECT 
-            ar.id,
-            ar.student_name as name,
-            '學生' as identity,
-            NULL as gender,
-            ar.student_phone as phone1,
-            NULL as phone2,
-            ar.student_email as email,
-            ar.student_interest as intention1,
-            NULL as intention2,
-            NULL as intention3,
-            NULL as system1,
-            NULL as system2,
-            NULL as system3,
-            ar.student_school as junior_high,
-            ar.student_grade as current_grade,
-            ar.student_line_id as line_id,
-            NULL as facebook,
-            ar.additional_info as remarks,
-            ar.assigned_teacher_id,
-            ar.created_at,
-            ral.assigned_at,
-            ral.assigned_by,
-            'admission_recommendations' as source_type
-        FROM admission_recommendations ar
-        LEFT JOIN recommendation_assignment_logs ral ON ar.id = ral.recommendation_id
-        WHERE ar.assigned_teacher_id = ?
-        ORDER BY ar.created_at DESC
-    ");
-    $recommendations_stmt->bind_param("i", $teacher_id);
-    $recommendations_stmt->execute();
-    $recommendations_result = $recommendations_stmt->get_result();
-    $recommendation_students = $recommendations_result->fetch_all(MYSQLI_ASSOC);
+    // 檢查 admission_recommendations 表是否有 assigned_teacher_id 欄位
+    $check_column = $conn->query("SHOW COLUMNS FROM admission_recommendations LIKE 'assigned_teacher_id'");
+    $has_assigned_teacher_id = $check_column && $check_column->num_rows > 0;
+    
+    // 檢查是否有 recommended 表（包含學生資訊）
+    $check_recommended_table = $conn->query("SHOW TABLES LIKE 'recommended'");
+    $has_recommended_table = $check_recommended_table && $check_recommended_table->num_rows > 0;
+    
+    // 檢查是否有 recommendation_assignment_logs 表
+    $check_ral_table = $conn->query("SHOW TABLES LIKE 'recommendation_assignment_logs'");
+    $has_ral_table = $check_ral_table && $check_ral_table->num_rows > 0;
+    
+    $recommendation_students = [];
+    
+    // 只有當 assigned_teacher_id 欄位存在時才查詢
+    if ($has_assigned_teacher_id) {
+        if ($has_recommended_table) {
+            // 使用 recommended 表獲取學生資訊
+            $recommendations_stmt = $conn->prepare("
+                SELECT 
+                    ar.id,
+                    COALESCE(red.name, '') as name,
+                    '學生' as identity,
+                    NULL as gender,
+                    COALESCE(red.phone, '') as phone1,
+                    NULL as phone2,
+                    COALESCE(red.email, '') as email,
+                    ar.student_interest as intention1,
+                    NULL as intention2,
+                    NULL as intention3,
+                    NULL as system1,
+                    NULL as system2,
+                    NULL as system3,
+                    COALESCE(red.school, '') as junior_high,
+                    COALESCE(red.grade, '') as current_grade,
+                    COALESCE(red.line_id, '') as line_id,
+                    NULL as facebook,
+                    ar.additional_info as remarks,
+                    ar.assigned_teacher_id,
+                    ar.created_at,
+                    " . ($has_ral_table ? "ral.assigned_at" : "NULL as assigned_at") . ",
+                    " . ($has_ral_table ? "ral.assigned_by" : "NULL as assigned_by") . ",
+                    'admission_recommendations' as source_type
+                FROM admission_recommendations ar
+                LEFT JOIN recommended red ON ar.id = red.recommendations_id
+                " . ($has_ral_table ? "LEFT JOIN recommendation_assignment_logs ral ON ar.id = ral.recommendation_id AND ral.teacher_id = ?" : "") . "
+                WHERE ar.assigned_teacher_id = ?
+                ORDER BY ar.created_at DESC
+            ");
+            if ($has_ral_table) {
+                $recommendations_stmt->bind_param("ii", $teacher_id, $teacher_id);
+            } else {
+                $recommendations_stmt->bind_param("i", $teacher_id);
+            }
+        } else {
+            // 如果沒有 recommended 表，嘗試從 admission_recommendations 表直接獲取（如果欄位存在）
+            // 但根據 SQL 檔案，admission_recommendations 表沒有這些欄位，所以返回空陣列
+            $recommendation_students = [];
+        }
+        
+        if (isset($recommendations_stmt)) {
+            $recommendations_stmt->execute();
+            $recommendations_result = $recommendations_stmt->get_result();
+            $recommendation_students = $recommendations_result->fetch_all(MYSQLI_ASSOC);
+        }
+    }
     
     // 合併兩個列表
     $students = array_merge($enrollment_students, $recommendation_students);
