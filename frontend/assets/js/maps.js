@@ -15,6 +15,7 @@ class CampusMap {
         this.geocoder = null;
         this.currentMode = 'driving';
         this.isMotorcycle = false;
+        this.currentInfoWindow = null; // 保存當前打開的 InfoWindow
         this.campusLocation = {
             'name': '康寧大學台北校區',
             'address': '台北市內湖區康寧路三段75巷137號',
@@ -220,7 +221,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -261,7 +268,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -302,7 +315,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -343,7 +362,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -384,7 +409,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -425,7 +456,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -1120,7 +1157,13 @@ class CampusMap {
             });
 
             marker.addListener('click', () => {
+                // 關閉之前打開的 InfoWindow
+                if (this.currentInfoWindow) {
+                    this.currentInfoWindow.close();
+                }
+                // 打開新的 InfoWindow 並保存引用
                 infoWindow.open(this.map, marker);
+                this.currentInfoWindow = infoWindow;
                 // 如果是推薦餐廳，直接顯示詳情；否則選擇餐廳
                 if (restaurant.is_recommended && restaurant.recommendation_id) {
                     this.showRestaurantDetails(restaurant, index);
@@ -1194,7 +1237,13 @@ class CampusMap {
                     </div>
                 `
             });
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, this.restaurantMarkers[index]);
+            this.currentInfoWindow = infoWindow;
         }
     }
     
@@ -2340,7 +2389,13 @@ class CampusMap {
                             });
                             
                             turnMarker.addListener('click', () => {
+                                // 關閉之前打開的 InfoWindow
+                                if (this.currentInfoWindow) {
+                                    this.currentInfoWindow.close();
+                                }
+                                // 打開新的 InfoWindow 並保存引用
                                 infoWindow.open(this.map, turnMarker);
+                                this.currentInfoWindow = infoWindow;
                             });
                             
                             this.routeMarkers.push(turnMarker);
@@ -2640,7 +2695,13 @@ class CampusMap {
         
         // 點擊標記顯示信息窗口
         restaurantMarker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, restaurantMarker);
+            this.currentInfoWindow = infoWindow;
         });
         
         // 移動地圖到餐廳位置
@@ -2649,7 +2710,13 @@ class CampusMap {
         
         // 自動打開信息窗口
         setTimeout(() => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, restaurantMarker);
+            this.currentInfoWindow = infoWindow;
         }, 500);
         
         // 自動規劃路線（延遲一下確保地圖和界面已完全載入）
