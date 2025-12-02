@@ -484,6 +484,94 @@ if (!$hasIntention) {
     exit;
 }
 
+// 驗證學制選擇（如果科系有學制選項，必須選擇學制）
+$validateSystemForDepartment = function($department_name, $system_value, $choice_number) use ($pdo) {
+    if (empty($department_name) || $department_name === '無特定') {
+        return null; // 無特定不需要驗證
+    }
+    
+    // 查詢科系的可用學制
+    try {
+        $stmt = $pdo->prepare("SELECT available_systems FROM departments WHERE name = ? LIMIT 1");
+        $stmt->execute([$department_name]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result && !empty($result['available_systems'])) {
+            $available_systems = json_decode($result['available_systems'], true);
+            
+            // 如果科系有學制選項，必須選擇學制
+            if (is_array($available_systems) && count($available_systems) > 0) {
+                if (empty($system_value)) {
+                    return "請選擇「就讀意願{$choice_number}」的學制";
+                }
+                
+                // 驗證選擇的學制是否在可用學制列表中
+                if (!in_array($system_value, $available_systems)) {
+                    return "「就讀意願{$choice_number}」選擇的學制無效";
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("查詢科系學制失敗: " . $e->getMessage());
+        // 查詢失敗時不阻擋提交，但記錄錯誤
+    }
+    
+    return null; // 驗證通過
+};
+
+// 檢查每個就讀意願的學制（system1, system2, system3 已在前面獲取）
+$system_error = null;
+if (!empty($intention1) && $intention1 !== '無特定') {
+    $system_error = $validateSystemForDepartment($intention1, $system1, '一');
+    if ($system_error) {
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
+        echo json_encode([
+            'success' => false,
+            'message' => $system_error
+        ]);
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
+    }
+}
+
+if (!empty($intention2) && $intention2 !== '無特定') {
+    $system_error = $validateSystemForDepartment($intention2, $system2, '二');
+    if ($system_error) {
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
+        echo json_encode([
+            'success' => false,
+            'message' => $system_error
+        ]);
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
+    }
+}
+
+if (!empty($intention3) && $intention3 !== '無特定') {
+    $system_error = $validateSystemForDepartment($intention3, $system3, '三');
+    if ($system_error) {
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
+        echo json_encode([
+            'success' => false,
+            'message' => $system_error
+        ]);
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
+    }
+}
+
 // 驗證就讀或畢業國中（必填）
 if (empty($junior_high)) {
     if (ob_get_level() > 0) {

@@ -132,7 +132,7 @@ function getActiveClass($targetFile) {
   .navbar-links {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     flex-wrap: wrap;
     overflow: visible;
     flex: 1;
@@ -309,13 +309,14 @@ function getActiveClass($targetFile) {
     color: #2c3e50;
     text-decoration: none;
     font-weight: 600;
-    font-size: 1rem;
-    padding: 10px 15px;
+    font-size: 0.95rem;
+    padding: 8px 12px;
     border-radius: 8px;
     transition: all 0.3s ease;
     position: relative;
     white-space: nowrap;
     min-width: fit-content;
+    flex-shrink: 0;
   }
 
   .navbar-links a:hover {
@@ -613,7 +614,7 @@ function getActiveClass($targetFile) {
     }
 
     .navbar-links {
-      gap: 15px;
+      gap: 12px;
       padding: 0 15px;
       max-width: calc(100vw - 250px);
     }
@@ -636,7 +637,7 @@ function getActiveClass($targetFile) {
     }
 
     .navbar-links {
-      gap: 12px;
+      gap: 10px;
       padding: 0 10px;
     }
 
@@ -930,10 +931,12 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
       <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
       <a href="<?php echo getCorrectPath('mobile_junior.php'); ?>" class="<?php echo getActiveClass('mobile_junior.php'); ?>">國中招生報名網頁</a>
+      <!-- 在校生留言板 - 未登入時也可見 -->
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php else: ?>
       <!-- 僅登入用戶可見的連結 -->
       <?php if ($isLoggedIn && $is_header_student): ?>
-      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">學長姐留言板</a>
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php endif; ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
@@ -1073,6 +1076,8 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
       <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
       <a href="<?php echo getCorrectPath('mobile_junior.php'); ?>" class="<?php echo getActiveClass('mobile_junior.php'); ?>">國中招生報名網頁</a>
+      <!-- 在校生留言板 - 未登入時也可見 -->
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php else: ?>
       <!-- 僅登入用戶可見的連結 -->
       <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
@@ -1080,7 +1085,7 @@ function getActiveClass($targetFile) {
     <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_mobile_student): ?>
-      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>">在校生留言板</a>
+      <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php endif; ?>
     
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>

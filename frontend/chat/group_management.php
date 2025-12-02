@@ -63,6 +63,9 @@ try {
         case 'update_group_name':
             updateGroupName($pdo, $currentUsername);
             break;
+        case 'delete_group':
+            deleteGroup($pdo, $currentUsername);
+            break;
         case 'mark_group_as_read':
             markGroupAsRead($pdo, $currentUsername);
             break;
@@ -728,6 +731,91 @@ function updateGroupName($pdo, $currentUsername) {
         echo json_encode([
             'success' => false,
             'error' => '更新群組名稱失敗: ' . $e->getMessage()
+        ]);
+    }
+}
+
+// 刪除群組
+function deleteGroup($pdo, $currentUsername) {
+    $groupId = $_POST['group_id'] ?? '';
+    
+    if (empty($groupId) || !is_numeric($groupId)) {
+        echo json_encode(['success' => false, 'error' => '缺少有效的群組ID']);
+        return;
+    }
+    
+    try {
+        // 獲取當前用戶的 ID
+        $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+        $stmt->execute([$currentUsername]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => '找不到當前用戶']);
+            return;
+        }
+        
+        $userId = $user['id'];
+        
+        // 檢查群組是否存在
+        $stmt = $pdo->prepare("SELECT created_by FROM group_info WHERE id = ?");
+        $stmt->execute([$groupId]);
+        $group = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$group) {
+            echo json_encode(['success' => false, 'error' => '找不到該群組']);
+            return;
+        }
+        
+        // 檢查用戶是否為群組創建者
+        if ($group['created_by'] != $userId) {
+            echo json_encode(['success' => false, 'error' => '只有群組創建者才能刪除群組']);
+            return;
+        }
+        
+        // 開始事務
+        $pdo->beginTransaction();
+        
+        try {
+            // 刪除群組訊息
+            $stmt = $pdo->prepare("DELETE FROM group_chat_messages WHERE group_id = ?");
+            $stmt->execute([$groupId]);
+            
+            // 刪除群組成員
+            $stmt = $pdo->prepare("DELETE FROM group_chat_members WHERE group_id = ?");
+            $stmt->execute([$groupId]);
+            
+            // 刪除群組讀取狀態（如果表存在）
+            try {
+                $stmt = $pdo->prepare("DELETE FROM group_read_status WHERE group_id = ?");
+                $stmt->execute([$groupId]);
+            } catch(PDOException $e) {
+                // 如果表不存在，忽略錯誤
+                error_log("刪除群組讀取狀態失敗（可能表不存在）: " . $e->getMessage());
+            }
+            
+            // 刪除群組資訊
+            $stmt = $pdo->prepare("DELETE FROM group_info WHERE id = ?");
+            $stmt->execute([$groupId]);
+            
+            // 提交事務
+            $pdo->commit();
+            
+            echo json_encode([
+                'success' => true,
+                'message' => '群組已成功刪除'
+            ]);
+            
+        } catch(PDOException $e) {
+            // 回滾事務
+            $pdo->rollBack();
+            throw $e;
+        }
+        
+    } catch(PDOException $e) {
+        echo json_encode([
+            'success' => false,
+            'error' => '刪除群組失敗: ' . $e->getMessage()
         ]);
     }
 }

@@ -311,8 +311,6 @@ require_once 'config.php';
         </button>
     </div>
 
-    <?php include 'share/footer.php'; ?>
-
     <!-- Google Maps API -->
     <script>
         // 從後端獲取 Google Maps API Key
@@ -371,6 +369,58 @@ require_once 'config.php';
                 console.log('CampusMap 實例存在');
             } else {
                 console.warn('CampusMap 實例尚未創建');
+            }
+            
+            // 檢查 URL 參數，如果包含 show_nearby=true，自動顯示附近餐廳
+            const urlParams = new URLSearchParams(window.location.search);
+            const showNearby = urlParams.get('show_nearby');
+            const restaurantLat = urlParams.get('lat');
+            const restaurantLng = urlParams.get('lng');
+            const restaurantName = urlParams.get('restaurant');
+            
+            if (showNearby === 'true') {
+                // 等待地圖初始化完成後再觸發
+                const checkAndShowRestaurants = setInterval(function() {
+                    if (typeof campusMap !== 'undefined' && campusMap && campusMap.map) {
+                        clearInterval(checkAndShowRestaurants);
+                        
+                        // 如果有餐廳座標，先將地圖中心移動到該位置
+                        if (restaurantLat && restaurantLng) {
+                            const lat = parseFloat(restaurantLat);
+                            const lng = parseFloat(restaurantLng);
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                                campusMap.map.setCenter({ lat: lat, lng: lng });
+                                campusMap.map.setZoom(15);
+                                
+                                // 添加餐廳標記
+                                if (restaurantName) {
+                                    new google.maps.Marker({
+                                        position: { lat: lat, lng: lng },
+                                        map: campusMap.map,
+                                        title: restaurantName,
+                                        icon: {
+                                            url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // 觸發顯示附近餐廳
+                        const showRestaurantsBtn = document.getElementById('show-restaurants-btn');
+                        if (showRestaurantsBtn) {
+                            // 延遲一點時間確保地圖已完全載入
+                            setTimeout(function() {
+                                showRestaurantsBtn.click();
+                            }, 500);
+                        }
+                    }
+                }, 100);
+                
+                // 設置超時，避免無限等待
+                setTimeout(function() {
+                    clearInterval(checkAndShowRestaurants);
+                }, 10000);
             }
         });
     </script>

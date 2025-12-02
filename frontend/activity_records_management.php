@@ -688,7 +688,7 @@ $conn->close();
          }
         
         .header-section {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background:  #956dbd 100%;
             color: white;
             padding: 30px;
             border-radius: 15px;
@@ -757,7 +757,7 @@ $conn->close();
         }
         
         .records-table th {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background:  #a964a0 80%;
             color: white;
             padding: 15px 10px;
             text-align: left;
@@ -834,7 +834,7 @@ $conn->close();
         }
         
         .btn-primary {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background:  #956dbd 100%;
             color: white;
             border: none;
             padding: 10px 20px;
@@ -978,7 +978,7 @@ $conn->close();
         }
         
         .back-btn {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background:  #4e7d7cad 0%;
             color: white;
             padding: 12px 25px;
             text-decoration: none;

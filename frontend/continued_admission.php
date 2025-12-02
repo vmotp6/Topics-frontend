@@ -201,6 +201,8 @@ foreach ($courses as $course) {
               <div class="modern-search-container">
                 <div class="search-input-wrapper">
                   <input type="text" name="school_name" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required>
+                  <input type="hidden" id="school_code" name="school_code" value="">
+                  <input type="hidden" id="school_city_actual" name="school_city_actual" value="">
                   <div class="search-icon">
                     <i class="fas fa-search"></i>
                   </div>
@@ -215,6 +217,9 @@ foreach ($courses as $course) {
               </div>
               <div id="school_name_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
                 <i class="fas fa-exclamation-circle"></i> <span id="school_name_error_text">請從系統提供的選項中選擇學校，不能自行輸入</span>
+              </div>
+              <div id="school_city_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                <i class="fas fa-exclamation-circle"></i> <span id="school_city_mismatch_error_text">就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市</span>
               </div>
             </div>
           </div>
@@ -1227,6 +1232,23 @@ foreach ($courses as $course) {
           console.error(`⚠️ 警告：FormData 中的字段數量 (${foundInFormData}) 與 selectedChoices 數量 (${selectedChoices.length}) 不匹配！`);
         }
         
+        // 驗證縣市與學校是否一致
+        if (!validateCitySchoolMatch()) {
+          // 如果驗證失敗（縣市不一致），阻止提交
+          const originalText = submitBtn ? submitBtn.textContent : '';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText || '提交';
+          }
+          // 滾動到錯誤位置
+          const schoolCitySelect = document.getElementById('school_city');
+          if (schoolCitySelect) {
+            schoolCitySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            schoolCitySelect.focus();
+          }
+          return;
+        }
+        
         // 繼續提交流程
         continueSubmit(formData, submitBtn);
       }
@@ -1806,10 +1828,24 @@ foreach ($courses as $course) {
         clearBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           schoolInput.value = '';
+          const schoolCodeInput = document.getElementById('school_code');
+          const schoolCityActualInput = document.getElementById('school_city_actual');
+          if (schoolCodeInput) schoolCodeInput.value = '';
+          if (schoolCityActualInput) schoolCityActualInput.value = '';
           resultsDiv.classList.remove('show');
           clearBtn.style.display = 'none';
           clearSchoolError();
+          clearCityMismatchError();
           schoolInput.focus();
+        });
+      }
+      
+      // 為縣市下拉選單添加 change 事件監聽器
+      const schoolCitySelect = document.getElementById('school_city');
+      if (schoolCitySelect) {
+        schoolCitySelect.addEventListener('change', function() {
+          // 當用戶手動改變縣市時，驗證是否與選擇的學校一致
+          validateCitySchoolMatch();
         });
       }
       
@@ -1859,7 +1895,8 @@ foreach ($courses as $course) {
                 additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
               }
               
-              return `<div class="search-result-item" onclick="selectSchool('${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}')">
+              const schoolCode = school.school_code || '';
+              return `<div class="search-result-item" onclick="selectSchool('${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}', '${schoolCode.replace(/'/g, "\\'")}')">
                 <i class="fas fa-school"></i>
                 <div class="school-info">
                   <span class="school-name">${displayName}</span>
@@ -1960,9 +1997,34 @@ foreach ($courses as $course) {
       validateSchoolInput();
     }
     
+    // 縣市名稱對應表（處理「臺」vs「台」等變體）
+    const cityNameMap = {
+      '臺北市': '台北市',
+      '台北市': '台北市',
+      '臺中市': '台中市',
+      '台中市': '台中市',
+      '臺南市': '台南市',
+      '台南市': '台南市',
+      '臺東縣': '台東縣',
+      '台東縣': '台東縣'
+    };
+    
+    // 標準化縣市名稱
+    function normalizeCityName(city) {
+      if (!city) return '';
+      // 先檢查對應表
+      if (cityNameMap[city]) {
+        return cityNameMap[city];
+      }
+      // 處理「臺」轉「台」
+      return city.replace(/臺/g, '台');
+    }
+    
     // 選擇學校
-    function selectSchool(schoolName, city, district) {
+    function selectSchool(schoolName, city, district, schoolCode) {
       const schoolInput = document.getElementById('school_name');
+      const schoolCodeInput = document.getElementById('school_code');
+      const schoolCityActualInput = document.getElementById('school_city_actual');
       const schoolCitySelect = document.getElementById('school_city');
       const resultsDiv = document.getElementById('schoolResults');
       const clearBtn = document.getElementById('clearSchoolSearch');
@@ -1973,15 +2035,50 @@ foreach ($courses as $course) {
         schoolInput.value = fullSchoolName;
       }
       
-      // 自動設置縣市（如果匹配）
+      // 存儲學校代碼和實際縣市
+      if (schoolCodeInput && schoolCode) {
+        schoolCodeInput.value = schoolCode;
+      }
+      if (schoolCityActualInput && city) {
+        schoolCityActualInput.value = city;
+      }
+      
+      // 自動設置縣市（精確匹配）
       if (schoolCitySelect && city) {
-        // 嘗試找到匹配的縣市選項
+        const normalizedCity = normalizeCityName(city);
         const options = schoolCitySelect.options;
+        let matched = false;
+        
+        // 優先精確匹配
         for (let i = 0; i < options.length; i++) {
-          if (options[i].value === city || options[i].text.includes(city)) {
+          const optionValue = normalizeCityName(options[i].value);
+          const optionText = normalizeCityName(options[i].text);
+          
+          if (optionValue === normalizedCity || optionText === normalizedCity) {
             schoolCitySelect.value = options[i].value;
+            matched = true;
             break;
           }
+        }
+        
+        // 如果精確匹配失敗，嘗試包含匹配
+        if (!matched) {
+          for (let i = 0; i < options.length; i++) {
+            const optionValue = normalizeCityName(options[i].value);
+            const optionText = normalizeCityName(options[i].text);
+            
+            if (optionValue.includes(normalizedCity) || normalizedCity.includes(optionValue) ||
+                optionText.includes(normalizedCity) || normalizedCity.includes(optionText)) {
+              schoolCitySelect.value = options[i].value;
+              matched = true;
+              break;
+            }
+          }
+        }
+        
+        // 如果匹配成功，清除縣市不一致錯誤
+        if (matched) {
+          clearCityMismatchError();
         }
       }
       
@@ -1997,6 +2094,87 @@ foreach ($courses as $course) {
       
       // 清除錯誤提示（因為用戶已從系統選項中選擇）
       clearSchoolError();
+    }
+    
+    // 清除縣市不一致錯誤
+    function clearCityMismatchError() {
+      const errorDiv = document.getElementById('school_city_mismatch_error');
+      const citySelect = document.getElementById('school_city');
+      if (errorDiv) {
+        errorDiv.style.display = 'none';
+      }
+      if (citySelect) {
+        citySelect.style.borderColor = '';
+        citySelect.style.borderWidth = '';
+        citySelect.style.boxShadow = '';
+      }
+    }
+    
+    // 顯示縣市不一致錯誤
+    function showCityMismatchError(message) {
+      const errorDiv = document.getElementById('school_city_mismatch_error');
+      const errorText = document.getElementById('school_city_mismatch_error_text');
+      const citySelect = document.getElementById('school_city');
+      
+      if (errorDiv && errorText) {
+        errorText.textContent = message || '就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市';
+        errorDiv.style.display = 'block';
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+          errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+      }
+      
+      if (citySelect) {
+        citySelect.style.borderColor = '#d32f2f';
+        citySelect.style.borderWidth = '2px';
+        citySelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+      }
+    }
+    
+    // 驗證縣市與學校是否一致
+    function validateCitySchoolMatch() {
+      const schoolCitySelect = document.getElementById('school_city');
+      const schoolCityActualInput = document.getElementById('school_city_actual');
+      const schoolInput = document.getElementById('school_name');
+      
+      if (!schoolCitySelect || !schoolCityActualInput || !schoolInput) {
+        return true; // 如果元素不存在，跳過驗證
+      }
+      
+      const selectedCity = schoolCitySelect.value;
+      const actualCity = schoolCityActualInput.value;
+      const schoolName = schoolInput.value.trim();
+      
+      // 如果沒有選擇學校，不需要驗證
+      if (!schoolName || !actualCity) {
+        clearCityMismatchError();
+        return true;
+      }
+      
+      // 標準化縣市名稱後比較
+      const normalizedSelected = normalizeCityName(selectedCity);
+      const normalizedActual = normalizeCityName(actualCity);
+      
+      if (normalizedSelected && normalizedActual && normalizedSelected !== normalizedActual) {
+        // 縣市不一致，自動修正
+        const options = schoolCitySelect.options;
+        for (let i = 0; i < options.length; i++) {
+          const optionValue = normalizeCityName(options[i].value);
+          if (optionValue === normalizedActual) {
+            schoolCitySelect.value = options[i].value;
+            showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，已自動更新為正確的縣市');
+            return false; // 已自動修正，但返回 false 表示需要用戶確認
+          }
+        }
+        // 如果找不到匹配的選項，顯示錯誤
+        showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，請選擇正確的縣市');
+        return false;
+      }
+      
+      // 縣市一致，清除錯誤
+      clearCityMismatchError();
+      return true;
     }
     
     // 將函數暴露到全局作用域

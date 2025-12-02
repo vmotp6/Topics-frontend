@@ -289,16 +289,38 @@ try {
     // 從 school_name 中提取學校代碼（格式：學校名稱 (縣市區)）
     // 需要從 school_data 表中查找對應的 school_code
     $school_code = '';
+    $school_city_actual = '';
     if (!empty($school_name)) {
         // 提取學校名稱（去除括號部分）
         $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
-        // 查詢學校代碼（必須存在且不為空）
-        $school_query = "SELECT school_code FROM school_data WHERE name = ? AND school_code IS NOT NULL AND school_code != '' AND is_active = 1 LIMIT 1";
+        // 查詢學校代碼和縣市（必須存在且不為空）
+        $school_query = "SELECT school_code, city FROM school_data WHERE name = ? AND school_code IS NOT NULL AND school_code != '' AND is_active = 1 LIMIT 1";
         $school_stmt = $pdo->prepare($school_query);
         $school_stmt->execute([$school_name_only]);
         $school_result = $school_stmt->fetch(PDO::FETCH_ASSOC);
         if ($school_result && !empty($school_result['school_code'])) {
             $school_code = $school_result['school_code'];
+            $school_city_actual = $school_result['city'] ?? '';
+            
+            // 驗證縣市與學校是否一致
+            if (!empty($school_city) && !empty($school_city_actual)) {
+                // 標準化縣市名稱（處理「臺」vs「台」等變體）
+                $normalizeCity = function($city) {
+                    if (empty($city)) return '';
+                    // 處理常見變體
+                    $city = str_replace('臺', '台', $city);
+                    return trim($city);
+                };
+                
+                $normalized_selected = $normalizeCity($school_city);
+                $normalized_actual = $normalizeCity($school_city_actual);
+                
+                if ($normalized_selected !== $normalized_actual) {
+                    // 縣市不一致，自動修正為學校實際所在的縣市
+                    $school_city = $school_city_actual;
+                    error_log("警告：用戶選擇的縣市 ({$normalized_selected}) 與學校實際所在縣市 ({$normalized_actual}) 不一致，已自動修正為 {$school_city_actual}");
+                }
+            }
         } else {
             // 如果找不到學校，拋出錯誤（因為外鍵約束要求有效的 school_code）
             throw new Exception("找不到學校 '{$school_name_only}' 的有效代碼，請從系統提供的選項中選擇學校");

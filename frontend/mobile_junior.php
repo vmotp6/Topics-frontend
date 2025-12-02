@@ -196,6 +196,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 驗證學校代號必須存在
         $result_message = '請從系統提供的選項中選擇學校，不能自行輸入';
         $result_type = 'error';
+    } elseif (!empty($school_name) && !empty($city)) {
+        // 驗證縣市與學校是否一致
+        // 從學校名稱中提取學校名稱（去除括號部分）
+        $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
+        
+        // 查詢學校實際所在的縣市和區/鄉鎮市
+        try {
+            $school_check_stmt = $pdo->prepare("SELECT city, district FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1");
+            $school_check_stmt->execute([$school_name_only]);
+            $school_result = $school_check_stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($school_result) {
+                $school_city_actual = $school_result['city'] ?? '';
+                $school_district_actual = $school_result['district'] ?? '';
+                    
+                    // 標準化縣市名稱（處理「臺」vs「台」等變體）
+                    $normalizeCity = function($city) {
+                        if (empty($city)) return '';
+                        $city = str_replace('臺', '台', $city);
+                        return trim($city);
+                    };
+                    
+                    // 驗證並修正縣市
+                    if (!empty($school_city_actual)) {
+                        $normalized_selected = $normalizeCity($city);
+                        $normalized_actual = $normalizeCity($school_city_actual);
+                        
+                        if ($normalized_selected !== $normalized_actual) {
+                            // 縣市不一致，自動修正為學校實際所在的縣市
+                            $city = $school_city_actual;
+                            error_log("警告：用戶選擇的縣市 ({$normalized_selected}) 與學校實際所在縣市 ({$normalized_actual}) 不一致，已自動修正為 {$school_city_actual}");
+                        }
+                    }
+                    
+                    // 驗證並修正區/鄉鎮市
+                    if (!empty($school_district_actual) && !empty($district) && $district !== $school_district_actual) {
+                        // 區/鄉鎮市不一致，自動修正為學校實際所在的區/鄉鎮市
+                        $district = $school_district_actual;
+                        error_log("警告：用戶選擇的區/鄉鎮市 ({$district}) 與學校實際所在區/鄉鎮市 ({$school_district_actual}) 不一致，已自動修正為 {$school_district_actual}");
+                    }
+                }
+        } catch (PDOException $e) {
+            error_log("查詢學校縣市失敗: " . $e->getMessage());
+            // 查詢失敗時不阻擋提交，但記錄錯誤
+        }
     } elseif ($captcha === '') {
         $result_message = '請輸入驗證碼。';
         $result_type = 'error';
@@ -592,8 +637,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             color: #2c3e50;
         }
         
-        .field-group input[name="city"],
-        .field-group input[name="district"],
+        .field-group select[name="city"],
+        .field-group select[name="district"],
         .field-group input[name="school_address"] {
             width: 100%;
             padding: 12px 15px;
@@ -606,8 +651,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             font-family: 'Microsoft JhengHei', sans-serif;
         }
         
-        .field-group input[name="city"]:focus,
-        .field-group input[name="district"]:focus,
+        .field-group select[name="city"]:focus,
+        .field-group select[name="district"]:focus,
         .field-group input[name="school_address"]:focus {
             outline: none;
             border-color: #667eea;
@@ -997,7 +1042,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label>學校地址</label>
-                            <input type="text" name="school_address" placeholder="請輸入完整地址（選填）" 
+                            <input type="text" name="school_address" id="school_address" placeholder="將根據縣市和區/鄉鎮市自動產生" readonly
                                    value="<?php 
                                    $school_address_value = '';
                                    if ($application_data) {
@@ -1008,6 +1053,12 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    echo $school_address_value;
                                    ?>" />
                         </div>
+                    </div>
+                    <div id="city_school_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                        <i class="fas fa-exclamation-circle"></i> <span id="city_school_mismatch_error_text">就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市</span>
+                    </div>
+                    <div id="district_school_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                        <i class="fas fa-exclamation-circle"></i> <span id="district_school_mismatch_error_text">區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，系統已自動更新為正確的區/鄉鎮市</span>
                     </div>
                 </div>
 
@@ -1243,6 +1294,31 @@ function checkRequiredFields() {
 
 // 頁面載入時初始化輸入框視覺效果和學校搜尋
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化縣市和區/鄉鎮市下拉選單
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    
+    if (citySelect) {
+        // 縣市改變時更新區/鄉鎮市選項
+        citySelect.addEventListener('change', function() {
+            updateDistricts();
+            validateCitySchoolMatch();
+        });
+        
+        // 如果有預設值，初始化區/鄉鎮市選項
+        if (citySelect.value) {
+            updateDistricts();
+        }
+    }
+    
+    if (districtSelect) {
+        // 區/鄉鎮市改變時更新學校地址並驗證
+        districtSelect.addEventListener('change', function() {
+            updateSchoolAddress();
+            validateCitySchoolMatch();
+        });
+    }
+    
     // 綁定學校搜尋事件
     const schoolSearchInput = document.getElementById('school_name');
     const clearSchoolBtn = document.getElementById('clearSchoolSearch');
@@ -1406,6 +1482,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (form) {
         form.addEventListener('submit', function(e) {
+            // 驗證縣市與學校是否一致
+            if (!validateCitySchoolMatch()) {
+                e.preventDefault();
+                const citySelect = document.getElementById('citySelect');
+                if (citySelect) {
+                    citySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    citySelect.focus();
+                }
+                return false;
+            }
+            
             // 防止重複提交
             if (isSubmitting) {
                 e.preventDefault();
@@ -1552,7 +1639,7 @@ function performSchoolSearch() {
                         <i class="fas fa-school"></i>
                         <div class="school-info">
                             <span class="school-name">${displayName}</span>
-                            <span class="school-location">${school.city} ${school.district}</span>
+                            <span class="school-location">${school.city || ''} ${school.district || ''}</span>
                             ${additionalInfo}
                         </div>
                     </div>`;
@@ -1658,6 +1745,275 @@ function clearSchoolSearch() {
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'none';
     clearSchoolError();
+    clearCityMismatchError();
+    clearDistrictMismatchError();
+}
+
+// 台灣縣市和區/鄉鎮市對應資料
+const cityDistrictsMap = {
+    '台北市': ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區'],
+    '新北市': ['板橋區', '三重區', '中和區', '永和區', '新莊區', '新店區', '樹林區', '鶯歌區', '三峽區', '淡水區', '汐止區', '瑞芳區', '土城區', '蘆洲區', '五股區', '泰山區', '林口區', '深坑區', '石碇區', '坪林區', '三芝區', '石門區', '八里區', '平溪區', '雙溪區', '貢寮區', '金山區', '萬里區', '烏來區'],
+    '桃園市': ['桃園區', '中壢區', '大溪區', '楊梅區', '蘆竹區', '大園區', '龜山區', '八德區', '龍潭區', '平鎮區', '新屋區', '觀音區', '復興區'],
+    '台中市': ['中區', '東區', '南區', '西區', '北區', '西屯區', '南屯區', '北屯區', '豐原區', '東勢區', '大甲區', '清水區', '沙鹿區', '梧棲區', '后里區', '神岡區', '潭子區', '大雅區', '新社區', '石岡區', '外埔區', '大安區', '烏日區', '大肚區', '龍井區', '霧峰區', '太平區', '大里區', '和平區'],
+    '台南市': ['中西區', '東區', '南區', '北區', '安平區', '安南區', '永康區', '歸仁區', '新化區', '左鎮區', '玉井區', '楠西區', '南化區', '仁德區', '關廟區', '龍崎區', '官田區', '麻豆區', '佳里區', '西港區', '七股區', '將軍區', '學甲區', '北門區', '新營區', '後壁區', '白河區', '東山區', '六甲區', '下營區', '柳營區', '鹽水區', '善化區', '大內區', '山上區', '新市區', '安定區'],
+    '高雄市': ['新興區', '前金區', '苓雅區', '鹽埕區', '鼓山區', '旗津區', '前鎮區', '三民區', '左營區', '楠梓區', '小港區', '仁武區', '大社區', '岡山區', '路竹區', '阿蓮區', '田寮區', '燕巢區', '橋頭區', '梓官區', '彌陀區', '永安區', '湖內區', '鳳山區', '大寮區', '林園區', '鳥松區', '大樹區', '旗山區', '美濃區', '六龜區', '內門區', '杉林區', '甲仙區', '桃源區', '那瑪夏區', '茂林區', '茄萣區'],
+    '基隆市': ['仁愛區', '信義區', '中正區', '中山區', '安樂區', '暖暖區', '七堵區'],
+    '新竹市': ['東區', '北區', '香山區'],
+    '嘉義市': ['東區', '西區'],
+    '新竹縣': ['竹北市', '湖口鄉', '新豐鄉', '新埔鎮', '關西鎮', '芎林鄉', '寶山鄉', '竹東鎮', '五峰鄉', '橫山鄉', '尖石鄉', '北埔鄉', '峨眉鄉'],
+    '苗栗縣': ['苗栗市', '苑裡鎮', '通霄鎮', '竹南鎮', '頭份市', '後龍鎮', '卓蘭鎮', '大湖鄉', '公館鄉', '銅鑼鄉', '南庄鄉', '頭屋鄉', '三義鄉', '西湖鄉', '造橋鄉', '三灣鄉', '獅潭鄉', '泰安鄉'],
+    '彰化縣': ['彰化市', '鹿港鎮', '和美鎮', '線西鄉', '伸港鄉', '福興鄉', '秀水鄉', '花壇鄉', '芬園鄉', '員林市', '溪湖鎮', '田中鎮', '大村鄉', '埔鹽鄉', '埔心鄉', '永靖鄉', '社頭鄉', '二水鄉', '北斗鎮', '二林鎮', '田尾鄉', '埤頭鄉', '芳苑鄉', '大城鄉', '竹塘鄉', '溪州鄉'],
+    '南投縣': ['南投市', '埔里鎮', '草屯鎮', '竹山鎮', '集集鎮', '名間鄉', '鹿谷鄉', '中寮鄉', '魚池鄉', '國姓鄉', '水里鄉', '信義鄉', '仁愛鄉'],
+    '雲林縣': ['斗六市', '斗南鎮', '虎尾鎮', '西螺鎮', '土庫鎮', '北港鎮', '古坑鄉', '大埤鄉', '莿桐鄉', '林內鄉', '二崙鄉', '崙背鄉', '麥寮鄉', '東勢鄉', '褒忠鄉', '台西鄉', '元長鄉', '四湖鄉', '口湖鄉', '水林鄉'],
+    '嘉義縣': ['太保市', '朴子市', '布袋鎮', '大林鎮', '民雄鄉', '溪口鄉', '新港鄉', '六腳鄉', '東石鄉', '義竹鄉', '鹿草鄉', '水上鄉', '中埔鄉', '竹崎鄉', '梅山鄉', '番路鄉', '大埔鄉', '阿里山鄉'],
+    '屏東縣': ['屏東市', '潮州鎮', '東港鎮', '恆春鎮', '萬丹鄉', '長治鄉', '麟洛鄉', '九如鄉', '里港鄉', '鹽埔鄉', '高樹鄉', '萬巒鄉', '內埔鄉', '竹田鄉', '新埤鄉', '枋寮鄉', '新園鄉', '崁頂鄉', '林邊鄉', '南州鄉', '佳冬鄉', '琉球鄉', '車城鄉', '滿州鄉', '枋山鄉', '三地門鄉', '霧台鄉', '瑪家鄉', '泰武鄉', '來義鄉', '春日鄉', '獅子鄉', '牡丹鄉'],
+    '宜蘭縣': ['宜蘭市', '頭城鎮', '礁溪鄉', '壯圍鄉', '員山鄉', '羅東鎮', '三星鄉', '大同鄉', '五結鄉', '冬山鄉', '蘇澳鎮', '南澳鄉'],
+    '花蓮縣': ['花蓮市', '鳳林鎮', '玉里鎮', '新城鄉', '吉安鄉', '壽豐鄉', '光復鄉', '豐濱鄉', '瑞穗鄉', '富里鄉', '秀林鄉', '萬榮鄉', '卓溪鄉'],
+    '台東縣': ['台東市', '成功鎮', '關山鎮', '卑南鄉', '鹿野鄉', '池上鄉', '東河鄉', '長濱鄉', '太麻里鄉', '大武鄉', '綠島鄉', '海端鄉', '延平鄉', '金峰鄉', '達仁鄉', '蘭嶼鄉'],
+    '澎湖縣': ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'],
+    '金門縣': ['金城鎮', '金湖鎮', '金沙鎮', '金寧鄉', '烈嶼鄉', '烏坵鄉'],
+    '連江縣': ['南竿鄉', '北竿鄉', '莒光鄉', '東引鄉']
+};
+
+// 縣市名稱對應表（處理「臺」vs「台」等變體）
+const cityNameMap = {
+    '臺北市': '台北市',
+    '台北市': '台北市',
+    '臺中市': '台中市',
+    '台中市': '台中市',
+    '臺南市': '台南市',
+    '台南市': '台南市',
+    '臺東縣': '台東縣',
+    '台東縣': '台東縣'
+};
+
+// 標準化縣市名稱
+function normalizeCityName(city) {
+    if (!city) return '';
+    if (cityNameMap[city]) {
+        return cityNameMap[city];
+    }
+    return city.replace(/臺/g, '台');
+}
+
+// 更新區/鄉鎮市選項
+function updateDistricts(preserveValue = false) {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolAddressInput = document.getElementById('school_address');
+    
+    if (!citySelect || !districtSelect) return;
+    
+    const selectedCity = citySelect.value;
+    const currentDistrict = preserveValue ? districtSelect.value : '';
+    districtSelect.innerHTML = '<option value="">請選擇區/鄉鎮市</option>';
+    
+    if (selectedCity && cityDistrictsMap[selectedCity]) {
+        const districts = cityDistrictsMap[selectedCity];
+        districts.forEach(district => {
+            const option = document.createElement('option');
+            option.value = district;
+            option.textContent = district;
+            if (preserveValue && district === currentDistrict) {
+                option.selected = true;
+            }
+            districtSelect.appendChild(option);
+        });
+    }
+    
+    // 如果沒有保留值，清空學校地址
+    if (!preserveValue) {
+        schoolAddressInput.value = '';
+    } else if (currentDistrict && selectedCity) {
+        // 如果保留了值，更新學校地址
+        updateSchoolAddress();
+    }
+}
+
+// 更新學校地址
+function updateSchoolAddress() {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolAddressInput = document.getElementById('school_address');
+    
+    if (!citySelect || !districtSelect || !schoolAddressInput) return;
+    
+    const city = citySelect.value;
+    const district = districtSelect.value;
+    
+    if (city && district) {
+        schoolAddressInput.value = city + district;
+    } else {
+        schoolAddressInput.value = '';
+    }
+}
+
+// 清除縣市不一致錯誤
+function clearCityMismatchError() {
+    const errorDiv = document.getElementById('city_school_mismatch_error');
+    const citySelect = document.getElementById('citySelect');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    if (citySelect) {
+        citySelect.style.borderColor = '';
+        citySelect.style.borderWidth = '';
+        citySelect.style.boxShadow = '';
+    }
+}
+
+// 清除區/鄉鎮市不一致錯誤
+function clearDistrictMismatchError() {
+    const errorDiv = document.getElementById('district_school_mismatch_error');
+    const districtSelect = document.getElementById('districtSelect');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    if (districtSelect) {
+        districtSelect.style.borderColor = '';
+        districtSelect.style.borderWidth = '';
+        districtSelect.style.boxShadow = '';
+    }
+}
+
+// 顯示縣市不一致錯誤
+function showCityMismatchError(message) {
+    const errorDiv = document.getElementById('city_school_mismatch_error');
+    const errorText = document.getElementById('city_school_mismatch_error_text');
+    const citySelect = document.getElementById('citySelect');
+    
+    if (errorDiv && errorText) {
+        errorText.textContent = message || '就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市';
+        errorDiv.style.display = 'block';
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+            errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+    }
+    
+    if (citySelect) {
+        citySelect.style.borderColor = '#d32f2f';
+        citySelect.style.borderWidth = '2px';
+        citySelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+    }
+    
+    // 3秒後自動清除錯誤提示和紅色框框
+    setTimeout(() => {
+        clearCityMismatchError();
+    }, 3000);
+}
+
+// 顯示區/鄉鎮市不一致錯誤
+function showDistrictMismatchError(message) {
+    const errorDiv = document.getElementById('district_school_mismatch_error');
+    const errorText = document.getElementById('district_school_mismatch_error_text');
+    const districtSelect = document.getElementById('districtSelect');
+    
+    if (errorDiv && errorText) {
+        errorText.textContent = message || '區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，系統已自動更新為正確的區/鄉鎮市';
+        errorDiv.style.display = 'block';
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+            errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+    }
+    
+    if (districtSelect) {
+        districtSelect.style.borderColor = '#d32f2f';
+        districtSelect.style.borderWidth = '2px';
+        districtSelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+    }
+    
+    // 3秒後自動清除錯誤提示和紅色框框
+    setTimeout(() => {
+        clearDistrictMismatchError();
+    }, 3000);
+}
+
+// 驗證縣市與學校是否一致
+function validateCitySchoolMatch() {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolCityActualInput = document.getElementById('school_city_actual');
+    const schoolDistrictActualInput = document.getElementById('school_district_actual');
+    const schoolInput = document.getElementById('school_name');
+    
+    if (!citySelect || !schoolCityActualInput || !schoolInput) {
+        return true;
+    }
+    
+    const selectedCity = citySelect.value;
+    const selectedDistrict = districtSelect ? districtSelect.value : '';
+    const actualCity = schoolCityActualInput.value;
+    const actualDistrict = schoolDistrictActualInput ? schoolDistrictActualInput.value : '';
+    const schoolName = schoolInput.value.trim();
+    
+    if (!schoolName || !actualCity) {
+        clearCityMismatchError();
+        clearDistrictMismatchError();
+        return true;
+    }
+    
+    let hasError = false;
+    
+    // 驗證縣市
+    const normalizedSelected = normalizeCityName(selectedCity);
+    const normalizedActual = normalizeCityName(actualCity);
+    
+    if (normalizedSelected && normalizedActual && normalizedSelected !== normalizedActual) {
+        const options = citySelect.options;
+        for (let i = 0; i < options.length; i++) {
+            const optionValue = normalizeCityName(options[i].value);
+            if (optionValue === normalizedActual) {
+                citySelect.value = options[i].value;
+                updateDistricts();
+                showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，已自動更新為正確的縣市');
+                hasError = true;
+                break;
+            }
+        }
+        if (!hasError) {
+            showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，請選擇正確的縣市');
+            hasError = true;
+        }
+    } else {
+        clearCityMismatchError();
+    }
+    
+    // 驗證區/鄉鎮市
+    if (districtSelect && actualDistrict && selectedDistrict && selectedDistrict !== actualDistrict) {
+        // 檢查區/鄉鎮市是否在當前縣市的選項中
+        const districtOptions = districtSelect.options;
+        let districtFound = false;
+        for (let i = 0; i < districtOptions.length; i++) {
+            if (districtOptions[i].value === actualDistrict) {
+                districtFound = true;
+                break;
+            }
+        }
+        
+        if (districtFound) {
+            // 如果區/鄉鎮市在選項中，自動更新
+            districtSelect.value = actualDistrict;
+            updateSchoolAddress();
+            showDistrictMismatchError('區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，已自動更新為正確的區/鄉鎮市');
+            hasError = true;
+        } else {
+            // 如果區/鄉鎮市不在選項中，手動添加
+            const option = document.createElement('option');
+            option.value = actualDistrict;
+            option.textContent = actualDistrict;
+            option.selected = true;
+            districtSelect.appendChild(option);
+            updateSchoolAddress();
+            showDistrictMismatchError('區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，已自動更新為正確的區/鄉鎮市');
+            hasError = true;
+        }
+    } else {
+        clearDistrictMismatchError();
+    }
+    
+    return !hasError;
 }
 
 // 選擇學校
@@ -1695,10 +2051,13 @@ function selectSchool(schoolCode, schoolName, city, district) {
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'block';
     
-    // 清除錯誤提示（因為用戶已從系統選項中選擇）
     clearSchoolError();
+    clearCityMismatchError();
+    clearDistrictMismatchError();
     
-    // 觸發必填欄位檢查
+    // 驗證縣市和區/鄉鎮市是否一致
+    validateCitySchoolMatch();
+    
     if (typeof checkRequiredFields === 'function') {
         checkRequiredFields();
     }

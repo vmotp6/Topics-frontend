@@ -196,6 +196,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         } elseif (empty($restaurant_rating)) {
             $form_error = '請選擇餐廳評分';
         } else {
+            // 如果標題為空，使用餐廳名稱作為標題
+            if (empty($title)) {
+                $title = $restaurant_name;
+            }
+            
             // 準備留言資料（包含餐廳信息）
             $messageData = [
                 'title' => $title,
@@ -695,14 +700,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                     <!-- 餐廳推薦專用欄位 -->
                     <div id="restaurant-fields" style="display: <?php echo ($_POST['message_type'] ?? '') === '推薦餐廳' ? 'block' : 'none'; ?>;">
                         <div class="form-group">
-                            <label for="restaurant_name">餐廳名稱 <span class="required">*</span></label>
-                            <input type="text" id="restaurant_name" name="restaurant_name" 
-                                   value="<?php echo htmlspecialchars($_POST['restaurant_name'] ?? ''); ?>" 
-                                   placeholder="例如：薩爾溫滇緬泰食堂">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="restaurant_search">搜尋餐廳位置</label>
+                            <label for="restaurant_search">搜尋餐廳位置 <span class="required">*</span></label>
                             <div style="display: flex; gap: 8px; align-items: stretch;">
                                 <input type="text" id="restaurant_search" 
                                        placeholder="輸入餐廳名稱或地址搜尋..." 
@@ -713,6 +711,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                                 </button>
                             </div>
                             <div id="restaurant-results" style="margin-top: 10px; max-height: 200px; overflow-y: auto; display: none;"></div>
+                            <small style="color: var(--secondary-text); font-size: 0.9rem; display: block; margin-top: 5px;">搜尋並選擇餐廳後，將自動填入所有餐廳資訊</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="restaurant_name">餐廳名稱 <span class="required">*</span></label>
+                            <input type="text" id="restaurant_name" name="restaurant_name" 
+                                   value="<?php echo htmlspecialchars($_POST['restaurant_name'] ?? ''); ?>" 
+                                   placeholder="選擇餐廳後自動填入">
                         </div>
                         
                         <div class="form-group">
@@ -884,6 +890,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                         restaurantRating.focus();
                         return false;
                     }
+                    
+                    // 如果標題為空，自動使用餐廳名稱作為標題
+                    if (!titleValue || titleValue.trim() === '') {
+                        title.value = restaurantName.value.trim();
+                        console.log('標題為空，自動使用餐廳名稱作為標題:', restaurantName.value.trim());
+                    }
                 }
                 
                 // 提交成功後清除草稿
@@ -922,6 +934,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             const restaurantAddress = document.getElementById('restaurant_address');
             const restaurantRating = document.getElementById('restaurant_rating');
             const restaurantName = document.getElementById('restaurant_name');
+            const titleInput = document.getElementById('title');
             
             if (messageType === '推薦餐廳') {
                 restaurantFields.style.display = 'block';
@@ -929,6 +942,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 if (restaurantAddress) restaurantAddress.setAttribute('required', 'required');
                 if (restaurantRating) restaurantRating.setAttribute('required', 'required');
                 if (restaurantName) restaurantName.setAttribute('required', 'required');
+                
+                // 如果餐廳名稱已有值，自動填入標題
+                if (restaurantName && restaurantName.value.trim() && titleInput) {
+                    const currentTitle = titleInput.value.trim();
+                    // 如果標題為空，或標題等於之前的餐廳名稱，則更新標題
+                    if (!currentTitle || currentTitle === restaurantName.value.trim()) {
+                        titleInput.value = restaurantName.value.trim();
+                    }
+                }
             } else {
                 restaurantFields.style.display = 'none';
                 // 隱藏時移除必填屬性，避免瀏覽器驗證錯誤
@@ -937,6 +959,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 if (restaurantName) restaurantName.removeAttribute('required');
             }
         }
+        
+        // 監聽餐廳名稱變化，自動更新標題
+        document.addEventListener('DOMContentLoaded', function() {
+            const restaurantName = document.getElementById('restaurant_name');
+            const messageType = document.getElementById('message_type');
+            const titleInput = document.getElementById('title');
+            
+            if (restaurantName && messageType && titleInput) {
+                // 記錄之前的餐廳名稱，用於判斷是否需要更新標題
+                let previousRestaurantName = restaurantName.value.trim();
+                
+                restaurantName.addEventListener('input', function() {
+                    const currentMessageType = messageType.value;
+                    const currentRestaurantName = restaurantName.value.trim();
+                    const currentTitle = titleInput.value.trim();
+                    
+                    // 如果是推薦餐廳類型，且標題為空或標題等於之前的餐廳名稱
+                    if (currentMessageType === '推薦餐廳') {
+                        if (!currentTitle || currentTitle === previousRestaurantName) {
+                            titleInput.value = currentRestaurantName;
+                        }
+                        previousRestaurantName = currentRestaurantName;
+                    }
+                });
+            }
+        });
         
         // 初始化時檢查
         document.addEventListener('DOMContentLoaded', function() {
@@ -956,6 +1004,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
         let autocomplete;
         let placesService;
         let geocoder;
+        
+        // 統一的餐廳資訊填充函數
+        function fillRestaurantInfo(place) {
+            if (!place || !place.geometry) return;
+            
+            const restaurantName = place.name || '';
+            const titleInput = document.getElementById('title');
+            const messageType = document.getElementById('message_type');
+            const restaurantNameInput = document.getElementById('restaurant_name');
+            const searchInput = document.getElementById('restaurant_search');
+            
+            // 記錄之前的餐廳名稱
+            const previousRestaurantName = restaurantNameInput.value.trim();
+            
+            // 填充所有表單欄位
+            restaurantNameInput.value = restaurantName;
+            document.getElementById('restaurant_address').value = place.formatted_address || '';
+            document.getElementById('restaurant_lat').value = place.geometry.location.lat();
+            document.getElementById('restaurant_lng').value = place.geometry.location.lng();
+            document.getElementById('restaurant_place_id').value = place.place_id || '';
+            
+            // 更新搜索框顯示餐廳名稱
+            if (searchInput) {
+                searchInput.value = restaurantName;
+            }
+            
+            // 如果是推薦餐廳類型，自動將餐廳名稱填入標題
+            if (messageType && messageType.value === '推薦餐廳' && titleInput && restaurantName) {
+                const currentTitle = titleInput.value.trim();
+                // 如果標題為空，或標題等於之前的餐廳名稱，則更新標題
+                if (!currentTitle || currentTitle === previousRestaurantName) {
+                    titleInput.value = restaurantName;
+                }
+            }
+            
+            // 如果有評分，自動填入（四捨五入到最接近的整數）
+            if (place.rating !== undefined && place.rating !== null) {
+                const rating = Math.round(place.rating);
+                const ratingSelect = document.getElementById('restaurant_rating');
+                if (ratingSelect) {
+                    ratingSelect.value = rating;
+                }
+            }
+            
+            // 如果有價格等級，自動填入
+            if (place.price_level !== undefined && place.price_level !== null) {
+                const priceLevelSelect = document.getElementById('price_level');
+                if (priceLevelSelect) {
+                    priceLevelSelect.value = place.price_level;
+                }
+            }
+            
+            // 檢查是否有外送服務
+            if (place.types && place.types.includes('meal_delivery')) {
+                console.log('此餐廳提供外送服務');
+            }
+            
+            // 隱藏搜索結果
+            const resultsDiv = document.getElementById('restaurant-results');
+            if (resultsDiv) {
+                resultsDiv.style.display = 'none';
+            }
+        }
         
         function initRestaurantSearch() {
             if (typeof google === 'undefined' || !google.maps) {
@@ -978,34 +1089,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
             placesService = new google.maps.places.PlacesService(map);
             geocoder = new google.maps.Geocoder();
             
-            // 當選擇餐廳時
+            // 當選擇餐廳時（使用自動完成）
             autocomplete.addListener('place_changed', function() {
                 const place = autocomplete.getPlace();
-                if (place.geometry) {
-                    // 填充表單欄位
-                    document.getElementById('restaurant_name').value = place.name || '';
-                    document.getElementById('restaurant_address').value = place.formatted_address || '';
-                    document.getElementById('restaurant_lat').value = place.geometry.location.lat();
-                    document.getElementById('restaurant_lng').value = place.geometry.location.lng();
-                    document.getElementById('restaurant_place_id').value = place.place_id || '';
-                    
-                    // 如果有評分，自動填入
-                    if (place.rating) {
-                        const rating = Math.round(place.rating);
-                        document.getElementById('restaurant_rating').value = rating;
-                    }
-                    
-                    // 如果有價格等級，自動填入
-                    if (place.price_level !== undefined) {
-                        document.getElementById('price_level').value = place.price_level;
-                    }
-                    
-                    // 檢查是否有外送服務
-                    if (place.types && place.types.includes('meal_delivery')) {
-                        // 如果有外送，可以提示用戶填寫外送評分
-                        console.log('此餐廳提供外送服務');
-                    }
-                }
+                fillRestaurantInfo(place);
             });
         }
         
@@ -1048,25 +1135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                         `;
                         
                         item.addEventListener('click', function() {
-                            // 填充表單
-                            document.getElementById('restaurant_name').value = place.name || '';
-                            document.getElementById('restaurant_address').value = place.formatted_address || '';
-                            document.getElementById('restaurant_lat').value = place.geometry.location.lat();
-                            document.getElementById('restaurant_lng').value = place.geometry.location.lng();
-                            document.getElementById('restaurant_place_id').value = place.place_id || '';
-                            
-                            if (place.rating) {
-                                const rating = Math.round(place.rating);
-                                document.getElementById('restaurant_rating').value = rating;
-                            }
-                            
-                            if (place.price_level !== undefined) {
-                                document.getElementById('price_level').value = place.price_level;
-                            }
-                            
-                            // 隱藏結果
-                            resultsDiv.style.display = 'none';
-                            searchInput.value = place.name;
+                            // 使用統一的填充函數
+                            fillRestaurantInfo(place);
                         });
                         
                         item.addEventListener('mouseenter', function() {

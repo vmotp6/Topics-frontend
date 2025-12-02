@@ -570,7 +570,7 @@ $conn->close();
                 </h4>
 
                 <button type="button" id="toggleRecordsBtn" class="toggle-records-btn" onclick="window.location.href='activity_records_management.php'" 
-                        style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
+                        style="background: rgb(225 156 106 / 90%) 0% ; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: all 0.3s ease;">
                     <i class="fas fa-cogs" id="recordsIcon"></i> 
                     <span id="recordsText">進入活動記錄管理</span>
                     <?php if (!empty($activity_records)): ?>
@@ -910,17 +910,20 @@ $conn->close();
             gap: 15px;
             font-size: 20px;
             font-weight: 600;
-            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out, visibility 0.4s;
             opacity: 0;
+            visibility: hidden;
             transform: translateY(30px) scale(0.9);
             border: 2px solid rgba(255, 255, 255, 0.3);
             min-width: 200px;
-            animation: pulse 2s infinite;
+            pointer-events: none;
         }
         .ric-status-bar.show {
             opacity: 1;
+            visibility: visible;
             transform: translateY(0) scale(1);
             animation: slideInBounce 0.5s ease-out, pulse 2s infinite 0.5s;
+            pointer-events: auto;
         }
         @keyframes slideInBounce {
             0% {
@@ -1510,7 +1513,40 @@ $conn->close();
         // 顯示狀態訊息
         function showStatus(message, type = 'info') {
             const statusBar = document.getElementById('ric-status-bar');
-            if (!statusBar) return;
+            if (!statusBar) {
+                // 如果狀態欄不存在，嘗試初始化
+                initRIC();
+                // 再次獲取狀態欄
+                const newStatusBar = document.getElementById('ric-status-bar');
+                if (!newStatusBar) {
+                    console.warn('無法創建狀態欄，使用 alert 顯示訊息');
+                    alert(message);
+                    return;
+                }
+                // 使用新創建的狀態欄
+                const icons = {
+                    saving: '<i class="fas fa-spinner fa-spin"></i>',
+                    saved: '<i class="fas fa-check-circle"></i>',
+                    info: '<i class="fas fa-info-circle"></i>'
+                };
+                
+                newStatusBar.className = `ric-status-bar show ${type}`;
+                newStatusBar.innerHTML = `${icons[type] || icons.info} <span>${message}</span>`;
+                // 確保顯示時明確設置 visibility 和 opacity
+                newStatusBar.style.visibility = 'visible';
+                newStatusBar.style.opacity = '1';
+                
+                // 確保所有類型的訊息都會在指定時間後自動消失
+                setTimeout(() => {
+                    newStatusBar.classList.remove('show');
+                    // 等待 transition 完成後確保完全隱藏
+                    setTimeout(() => {
+                        newStatusBar.style.opacity = '';
+                        newStatusBar.style.visibility = '';
+                    }, 400);
+                }, 3000); // 所有訊息顯示 3 秒後自動消失
+                return;
+            }
             
             const icons = {
                 saving: '<i class="fas fa-spinner fa-spin"></i>',
@@ -1520,16 +1556,25 @@ $conn->close();
             
             statusBar.className = `ric-status-bar show ${type}`;
             statusBar.innerHTML = `${icons[type] || icons.info} <span>${message}</span>`;
+            // 確保顯示時明確設置 visibility 和 opacity
+            statusBar.style.visibility = 'visible';
+            statusBar.style.opacity = '1';
             
-            if (type === 'saved') {
-                setTimeout(() => {
-                    statusBar.classList.remove('show');
-                }, 4000); // 從 2 秒增加到 4 秒，讓通知更明顯
-            } else if (type === 'info') {
-                setTimeout(() => {
-                    statusBar.classList.remove('show');
-                }, 3000); // 資訊類通知顯示 3 秒
+            // 清除之前的定時器（如果存在）
+            if (statusBar._hideTimeout) {
+                clearTimeout(statusBar._hideTimeout);
             }
+            
+            // 設置新的定時器，確保訊息在指定時間後自動消失
+            statusBar._hideTimeout = setTimeout(() => {
+                statusBar.classList.remove('show');
+                // 等待 transition 完成後清除 inline style，讓 CSS 類正常工作
+                setTimeout(() => {
+                    statusBar.style.opacity = '';
+                    statusBar.style.visibility = '';
+                }, 400);
+                statusBar._hideTimeout = null;
+            }, 3000); // 所有訊息顯示 3 秒後自動消失
         }
         
         // ==================== 自動儲存功能 ====================
