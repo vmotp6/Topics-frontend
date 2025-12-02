@@ -64,7 +64,8 @@ try {
 
 // 處理表單送出
 $result_message = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// 只有當不是快速新增聯絡人時，才處理發送通知表單
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_GET['add_contact'])) {
 	$teacher_name = isset($_POST['teacher_name']) ? trim($_POST['teacher_name']) : '';
 	$teacher_email = isset($_POST['teacher_email']) ? trim($_POST['teacher_email']) : '';
 	$subject = isset($_POST['subject']) ? trim($_POST['subject']) : '';
@@ -304,6 +305,158 @@ try {
 	<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 	<link rel="stylesheet" href="assets/csp/admission.css">
 	<link rel="stylesheet" href="assets/csp/mobile_teacher.css">
+	<style>
+		/* 聯絡人維護搜尋樣式 */
+		.modern-search-container-contact {
+			position: relative;
+			width: 100%;
+		}
+		
+		.search-input-wrapper-contact {
+			position: relative;
+			display: flex;
+			align-items: center;
+		}
+		
+		.search-input-wrapper-contact input {
+			width: 100%;
+			padding: 12px 45px 12px 15px;
+			border: 2px solid #e1e8ed;
+			border-radius: 8px;
+			font-size: 1rem;
+			transition: all 0.3s ease;
+			box-sizing: border-box;
+		}
+		
+		.search-input-wrapper-contact input:focus {
+			outline: none;
+			border-color: #667eea;
+			box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+		}
+		
+		.search-icon-contact {
+			position: absolute;
+			right: 15px;
+			color: #6c757d;
+			pointer-events: none;
+			z-index: 1;
+		}
+		
+		.clear-btn-contact {
+			position: absolute;
+			right: 40px;
+			color: #999;
+			cursor: pointer;
+			z-index: 2;
+			padding: 4px;
+		}
+		
+		.clear-btn-contact:hover {
+			color: #333;
+		}
+		
+		.modern-search-results-contact {
+			position: absolute;
+			top: 100%;
+			left: 0;
+			right: 0;
+			background: white;
+			border: 1px solid #e1e8ed;
+			border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+			max-height: 300px;
+			overflow-y: auto;
+			z-index: 1000;
+			display: none;
+			margin-top: 2px;
+		}
+		
+		.modern-search-results-contact.show {
+			display: block;
+		}
+		
+		.search-result-item-contact {
+			padding: 12px 15px;
+			cursor: pointer;
+			border-bottom: 1px solid #f1f3f4;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			transition: background-color 0.2s ease;
+		}
+		
+		.search-result-item-contact:last-child {
+			border-bottom: none;
+		}
+		
+		.search-result-item-contact:hover {
+			background-color: #f8f9fa;
+		}
+		
+		.search-result-item-contact i {
+			color: #667eea;
+			font-size: 0.9rem;
+		}
+		
+		.school-info-contact {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		
+		.school-name-contact {
+			font-weight: 600;
+			color: #333;
+			font-size: 14px;
+		}
+		
+		.school-location-contact {
+			font-size: 12px;
+			color: #666;
+		}
+		
+		.search-result-item-contact.more-results {
+			background-color: #f8f9fa;
+			color: #666;
+			font-size: 12px;
+			cursor: default;
+			text-align: center;
+			font-style: italic;
+		}
+		
+		.search-result-item-contact.more-results:hover {
+			background-color: #f8f9fa;
+		}
+		
+		.help-text-contact {
+			margin-top: 8px;
+			font-size: 12px;
+			color: #666;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		
+		.help-text-contact i {
+			color: #667eea;
+		}
+		
+		.field-error-contact {
+			animation: slideDown 0.3s ease;
+		}
+		
+		@keyframes slideDown {
+			from {
+				opacity: 0;
+				transform: translateY(-10px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+	</style>
 </head>
 <body>
 	<?php include("share/header.php"); ?>
@@ -445,34 +598,30 @@ try {
 		<div class="form-container" style="margin-top:20px;">
 			<div class="form-section">
 				<h3><i class="fas fa-address-book"></i> 聯絡人維護（快速新增）</h3>
-				<?php
-				// 取得學校列表供下拉選單使用
-				$schoolsList = [];
-				try {
-					$stmt = $pdo->query("SELECT school_code, name, city, district FROM school_data WHERE is_active = 1 ORDER BY city, district, name");
-					$schoolsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
-				} catch (PDOException $e) {
-					$schoolsList = [];
-					error_log("取得學校列表失敗: " . $e->getMessage());
-				}
-				?>
 				<form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?add_contact=1" id="addContactForm">
 					<div class="form-row">
 						<div class="field-group">
 							<label><span class="required">*</span> 學校</label>
-							<?php if (!empty($schoolsList)): ?>
-								<select name="school_code" id="school_code_select" required style="width:100%;">
-									<option value="">-- 請選擇學校 --</option>
-									<?php foreach ($schoolsList as $school): ?>
-										<option value="<?php echo htmlspecialchars($school['school_code'], ENT_QUOTES, 'UTF-8'); ?>" 
-											data-name="<?php echo htmlspecialchars($school['name'], ENT_QUOTES, 'UTF-8'); ?>">
-											<?php echo htmlspecialchars($school['name'] . ' (' . $school['school_code'] . ')', ENT_QUOTES, 'UTF-8'); ?>
-										</option>
-									<?php endforeach; ?>
-								</select>
-							<?php else: ?>
-								<input type="text" name="school_code" placeholder="學校代碼（例如：TP009）" required />
-							<?php endif; ?>
+							<div class="modern-search-container-contact">
+								<div class="search-input-wrapper-contact">
+									<input type="text" id="contact_school_search" name="contact_school_search" placeholder="請輸入學校名稱..." autocomplete="off" required 
+										   value="<?php echo isset($_POST['contact_school_search']) ? htmlspecialchars($_POST['contact_school_search']) : ''; ?>" />
+									<input type="hidden" id="contact_school_code" name="school_code" value="<?php echo isset($_POST['school_code']) ? htmlspecialchars($_POST['school_code']) : ''; ?>" />
+									<div class="search-icon-contact">
+										<i class="fas fa-search"></i>
+									</div>
+									<div class="clear-btn-contact" id="clearContactSchoolSearch" style="display: none;">
+										<i class="fas fa-times"></i>
+									</div>
+								</div>
+								<div id="contactSchoolResults" class="modern-search-results-contact"></div>
+							</div>
+							<div class="help-text-contact">
+								<i class="fas fa-info-circle"></i> 輸入學校名稱即可即時搜尋，請從搜尋結果中選擇學校（不能自行輸入）
+							</div>
+							<div id="contact_school_error" class="field-error-contact" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px;">
+								<i class="fas fa-exclamation-circle"></i> <span id="contact_school_error_text">請從系統提供的選項中選擇學校，不能自行輸入</span>
+							</div>
 						</div>
 						<div class="field-group">
 							<label>聯絡人姓名</label>
@@ -502,7 +651,24 @@ try {
 				<?php
 				// 快速新增聯絡人處理
 				if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['add_contact'])) {
+					// 優先從隱藏欄位讀取 school_code
 					$school_code = trim($_POST['school_code'] ?? '');
+					$contact_school_search = trim($_POST['contact_school_search'] ?? '');
+					
+					// 如果沒有 school_code，但 contact_school_search 有值，嘗試解析
+					if (empty($school_code) && !empty($contact_school_search)) {
+						// 檢查格式是否為 "學校名稱 (縣市區)"
+						if (preg_match('/^(.+?) \(.+\)$/', $contact_school_search, $matches)) {
+							$school_name = trim($matches[1]);
+							$checkSchool = $pdo->prepare("SELECT school_code FROM school_data WHERE name = ? LIMIT 1");
+							$checkSchool->execute([$school_name]);
+							$schoolRow = $checkSchool->fetch(PDO::FETCH_ASSOC);
+							if ($schoolRow) {
+								$school_code = $schoolRow['school_code'];
+							}
+						}
+					}
+					
 					$contact_name = trim($_POST['contact_name'] ?? '');
 					$email = trim($_POST['email'] ?? '');
 					$phone = trim($_POST['phone'] ?? '');
@@ -552,10 +718,37 @@ try {
 								$school_name_display = $schoolNameRow['name'] ?? $school_code;
 								
 								$msg = '已' . $action . '聯絡人（學校：' . htmlspecialchars($school_name_display, ENT_QUOTES, 'UTF-8') . '，Email：' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '）';
-								echo '<div class="message success"><i class="fas fa-check-circle"></i> ' . $msg . '</div>';
+								echo '<div id="contactAddSuccessMsg" class="message success"><i class="fas fa-check-circle"></i> ' . $msg . '</div>';
 								
-								// 重新載入頁面以顯示新聯絡人
-								echo '<script>setTimeout(function(){ window.location.href = "' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '"; }, 1500);</script>';
+								// 清空表單並滾動到成功訊息位置
+								echo '<script>
+									(function() {
+										// 清空表單
+										var form = document.getElementById("addContactForm");
+										if (form) {
+											form.reset();
+											// 清除隱藏欄位
+											var schoolCodeInput = document.getElementById("contact_school_code");
+											var schoolSearchInput = document.getElementById("contact_school_search");
+											if (schoolCodeInput) schoolCodeInput.value = "";
+											if (schoolSearchInput) schoolSearchInput.value = "";
+											// 隱藏清除按鈕
+											var clearBtn = document.getElementById("clearContactSchoolSearch");
+											if (clearBtn) clearBtn.style.display = "none";
+											// 隱藏搜尋結果
+											var resultsDiv = document.getElementById("contactSchoolResults");
+											if (resultsDiv) resultsDiv.classList.remove("show");
+										}
+										
+										// 滾動到成功訊息位置
+										setTimeout(function() {
+											var successMsg = document.getElementById("contactAddSuccessMsg");
+											if (successMsg) {
+												successMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+											}
+										}, 100);
+									})();
+								</script>';
 							} else {
 								echo '<div class="message warning"><i class="fas fa-info-circle"></i> 操作完成，但未影響任何記錄（可能資料已存在）</div>';
 							}
@@ -755,5 +948,312 @@ try {
 	</div>
 </main>
     <?php include("share/footer.php"); ?>
+	
+	<script>
+	// 聯絡人維護 - 學校搜尋功能
+	document.addEventListener('DOMContentLoaded', function() {
+		function initializeContactSchoolSearch() {
+			const schoolInput = document.getElementById('contact_school_search');
+			const resultsDiv = document.getElementById('contactSchoolResults');
+			const clearBtn = document.getElementById('clearContactSchoolSearch');
+			
+			if (!schoolInput || !resultsDiv) {
+				return;
+			}
+			
+			// 防抖函數
+			let searchTimeout;
+			const debounceSearch = (callback, delay) => {
+				clearTimeout(searchTimeout);
+				searchTimeout = setTimeout(callback, delay);
+			};
+			
+			// 輸入事件監聽
+			schoolInput.addEventListener('input', function() {
+				const keyword = this.value.trim();
+				
+				// 顯示/隱藏清除按鈕
+				if (clearBtn) {
+					clearBtn.style.display = keyword.length > 0 ? 'block' : 'none';
+				}
+				
+				if (keyword.length === 0) {
+					resultsDiv.classList.remove('show');
+					clearContactSchoolError();
+					return;
+				}
+				
+				// 防抖搜尋
+				debounceSearch(() => {
+					performContactSchoolSearch(keyword);
+				}, 300);
+			});
+			
+			// 失去焦點時立即驗證
+			schoolInput.addEventListener('blur', function() {
+				clearTimeout(schoolInput.validationTimeout);
+				schoolInput.validationTimeout = setTimeout(validateContactSchoolInputImmediate, 200);
+			});
+			
+			// 清除按鈕點擊
+			if (clearBtn) {
+				clearBtn.addEventListener('click', function(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					clearContactSchoolSearch();
+				});
+			}
+			
+			// 鍵盤事件
+			schoolInput.addEventListener('keydown', function(e) {
+				if (e.key === 'Escape') {
+					clearContactSchoolSearch();
+				}
+			});
+			
+			// 如果有初始值，顯示清除按鈕
+			if (schoolInput.value) {
+				if (clearBtn) {
+					clearBtn.style.display = 'block';
+				}
+			}
+		}
+		
+		// 執行學校搜尋
+		function performContactSchoolSearch(keyword) {
+			const resultsDiv = document.getElementById('contactSchoolResults');
+			const schoolInput = document.getElementById('contact_school_search');
+			
+			if (keyword.length < 2) {
+				resultsDiv.innerHTML = '<div class="search-result-item-contact">請輸入至少2個字元</div>';
+				resultsDiv.classList.add('show');
+				clearContactSchoolError();
+				return;
+			}
+			
+			// 顯示載入中
+			resultsDiv.innerHTML = '<div class="search-result-item-contact"><i class="fas fa-spinner fa-spin"></i> 搜尋中...</div>';
+			resultsDiv.classList.add('show');
+			clearContactSchoolError();
+			
+			// 從API獲取搜尋結果
+			fetch(`api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}&v=20241014-4`)
+				.then(response => response.json())
+				.then(data => {
+					if (data.schools && data.schools.length > 0) {
+						resultsDiv.innerHTML = data.schools.map(school => {
+							let displayName = school.name;
+							let additionalInfo = '';
+							
+							if (school.all_names && school.all_names.length > 1) {
+								additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
+							}
+							
+							return `<div class="search-result-item-contact" onclick="selectContactSchool('${school.school_code || ''}', '${school.name.replace(/'/g, "\\'")}', '${school.city || ''}', '${school.district || ''}')">
+								<i class="fas fa-school"></i>
+								<div class="school-info-contact">
+									<span class="school-name-contact">${displayName}</span>
+									<span class="school-location-contact">${school.city || ''} ${school.district || ''}</span>
+									${additionalInfo}
+								</div>
+							</div>`;
+						}).join('');
+						
+						if (data.total > 20) {
+							resultsDiv.innerHTML += `<div class="search-result-item-contact more-results">還有 ${data.total - 20} 個結果...</div>`;
+						}
+						clearContactSchoolError();
+					} else {
+						resultsDiv.innerHTML = '<div class="search-result-item-contact">找不到匹配的學校</div>';
+						clearContactSchoolError();
+					}
+				})
+				.catch(error => {
+					console.error('搜尋錯誤:', error);
+					resultsDiv.innerHTML = '<div class="search-result-item-contact">搜尋失敗，請稍後再試</div>';
+					clearContactSchoolError();
+				});
+		}
+		
+		// 清除學校輸入錯誤提示
+		function clearContactSchoolError() {
+			const errorDiv = document.getElementById('contact_school_error');
+			const input = document.getElementById('contact_school_search');
+			if (errorDiv) {
+				errorDiv.style.display = 'none';
+			}
+			if (input) {
+				input.style.borderColor = '';
+				input.style.borderWidth = '';
+				input.style.boxShadow = '';
+			}
+		}
+		
+		// 顯示學校輸入錯誤提示
+		function showContactSchoolError(message) {
+			const errorDiv = document.getElementById('contact_school_error');
+			const errorText = document.getElementById('contact_school_error_text');
+			const input = document.getElementById('contact_school_search');
+			
+			if (errorDiv && errorText) {
+				errorText.textContent = message || '請從系統提供的選項中選擇學校，不能自行輸入';
+				errorDiv.style.display = 'block';
+				errorDiv.style.animation = 'none';
+				setTimeout(() => {
+					errorDiv.style.animation = 'slideDown 0.3s ease';
+				}, 10);
+			}
+			
+			if (input) {
+				input.style.borderColor = '#d32f2f';
+				input.style.borderWidth = '2px';
+				input.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+			}
+		}
+		
+		// 驗證學校輸入格式
+		function validateContactSchoolInput() {
+			const input = document.getElementById('contact_school_search');
+			if (!input) return;
+			
+			const value = input.value.trim();
+			const resultsDiv = document.getElementById('contactSchoolResults');
+			
+			// 如果為空，不顯示錯誤（由required屬性處理）
+			if (!value) {
+				clearContactSchoolError();
+				return;
+			}
+			
+			// 如果下拉選單正在顯示，表示用戶還在選擇中，不顯示錯誤
+			if (resultsDiv && resultsDiv.classList.contains('show')) {
+				clearContactSchoolError();
+				return;
+			}
+			
+			// 檢查格式：優先檢查隱藏欄位的 school_code
+			const schoolCodeInput = document.getElementById('contact_school_code');
+			const hasValidCode = schoolCodeInput && schoolCodeInput.value.trim().length > 0;
+			
+			if (hasValidCode) {
+				// 如果有 school_code，檢查顯示格式是否為學校名稱 (縣市區)
+				const schoolFormatPattern = /^.+ \(.+\)$/;
+				if (!schoolFormatPattern.test(value)) {
+					showContactSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+				} else {
+					clearContactSchoolError();
+				}
+			} else {
+				// 沒有 school_code，檢查格式是否為學校名稱 (縣市區)
+				const schoolFormatPattern = /^.+ \(.+\)$/;
+				if (!schoolFormatPattern.test(value)) {
+					showContactSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+				} else {
+					clearContactSchoolError();
+				}
+			}
+		}
+		
+		// 立即驗證（不延遲）- 用於失去焦點時
+		function validateContactSchoolInputImmediate() {
+			validateContactSchoolInput();
+		}
+		
+		// 清除搜尋
+		function clearContactSchoolSearch() {
+			const schoolInput = document.getElementById('contact_school_search');
+			const schoolCodeInput = document.getElementById('contact_school_code');
+			
+			if (schoolInput) {
+				schoolInput.value = '';
+				schoolInput.removeAttribute('data-school-code');
+				schoolInput.removeAttribute('data-school-name');
+			}
+			if (schoolCodeInput) {
+				schoolCodeInput.value = '';
+			}
+			
+			document.getElementById('contactSchoolResults').classList.remove('show');
+			document.getElementById('clearContactSchoolSearch').style.display = 'none';
+			clearContactSchoolError();
+		}
+		
+		// 選擇學校
+		function selectContactSchool(schoolCode, schoolName, city, district) {
+			const schoolInput = document.getElementById('contact_school_search');
+			const schoolCodeInput = document.getElementById('contact_school_code');
+			
+			// 顯示學校名稱（格式：學校名稱 (縣市區)）
+			const displayName = `${schoolName} (${city || ''}${district || ''})`;
+			schoolInput.value = displayName;
+			
+			// 保存 school_code 到隱藏欄位
+			if (schoolCodeInput) {
+				schoolCodeInput.value = schoolCode;
+			}
+			
+			// 同時保存到 data 屬性作為備份
+			schoolInput.setAttribute('data-school-code', schoolCode);
+			schoolInput.setAttribute('data-school-name', displayName);
+			
+			document.getElementById('contactSchoolResults').classList.remove('show');
+			const clearBtn = document.getElementById('clearContactSchoolSearch');
+			if (clearBtn) {
+				clearBtn.style.display = 'block';
+			}
+			
+			// 清除錯誤提示（因為用戶已從系統選項中選擇）
+			clearContactSchoolError();
+		}
+		
+		// 將函數暴露到全局作用域
+		window.selectContactSchool = selectContactSchool;
+		
+		// 點擊其他地方隱藏搜尋結果
+		document.addEventListener('click', function(e) {
+			if (!e.target.closest('.modern-search-container-contact')) {
+				const resultsDiv = document.getElementById('contactSchoolResults');
+				if (resultsDiv && resultsDiv.classList.contains('show')) {
+					resultsDiv.classList.remove('show');
+					// 當下拉選單隱藏時，驗證輸入
+					setTimeout(validateContactSchoolInput, 100);
+				}
+			}
+		});
+		
+		// 表單提交驗證
+		const addContactForm = document.getElementById('addContactForm');
+		if (addContactForm) {
+			addContactForm.addEventListener('submit', function(e) {
+				const schoolCodeInput = document.getElementById('contact_school_code');
+				const schoolInput = document.getElementById('contact_school_search');
+				
+				if (!schoolCodeInput || !schoolCodeInput.value.trim()) {
+					e.preventDefault();
+					showContactSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+					if (schoolInput) {
+						schoolInput.focus();
+					}
+					return false;
+				}
+				
+				// 驗證格式
+				validateContactSchoolInput();
+				const schoolCode = schoolCodeInput.value.trim();
+				if (!schoolCode) {
+					e.preventDefault();
+					showContactSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+					if (schoolInput) {
+						schoolInput.focus();
+					}
+					return false;
+				}
+			});
+		}
+		
+		// 初始化學校搜尋功能
+		initializeContactSchoolSearch();
+	});
+	</script>
 </body>
 </html>
