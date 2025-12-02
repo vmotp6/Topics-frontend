@@ -688,6 +688,18 @@ $role = $_SESSION['role'] ?? '訪客';
             }
         });
 
+        // 科系對應學制設定（需要在表單驗證前定義）
+        const departmentSystems = {
+            "護理科": ["五專"],
+            "嬰幼兒保育科": ["五專", "四技"],
+            "視光科": ["五專"],
+            "數位影視動畫科": ["五專"],
+            "資訊管理科": ["五專"],
+            "企業管理科": ["五專", "四技"],
+            "應用外語科": ["五專"],
+            "長期照護學系": ["四技"]
+        };
+
         // 表單提交處理
         document.getElementById('enrollmentForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -788,6 +800,51 @@ $role = $_SESSION['role'] ?? '訪客';
                 // 滾動到頂部
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
+            }
+            
+            // 驗證學制選擇（如果科系有學制選項，必須選擇學制）
+            const system1 = document.getElementById('system1').value.trim();
+            const system2 = document.getElementById('system2').value.trim();
+            const system3 = document.getElementById('system3').value.trim();
+            
+            // 檢查每個就讀意願的學制
+            if (intention1 && intention1 !== '無特定' && departmentSystems[intention1]) {
+                const systems = departmentSystems[intention1];
+                if (systems.length > 0 && !system1) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = '請選擇「就讀意願一」的學制';
+                    messageDiv.style.display = 'block';
+                    document.getElementById('system1').focus();
+                    document.getElementById('system1').style.borderColor = '#d32f2f';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+            }
+            
+            if (intention2 && intention2 !== '無特定' && departmentSystems[intention2]) {
+                const systems = departmentSystems[intention2];
+                if (systems.length > 0 && !system2) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = '請選擇「就讀意願二」的學制';
+                    messageDiv.style.display = 'block';
+                    document.getElementById('system2').focus();
+                    document.getElementById('system2').style.borderColor = '#d32f2f';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+            }
+            
+            if (intention3 && intention3 !== '無特定' && departmentSystems[intention3]) {
+                const systems = departmentSystems[intention3];
+                if (systems.length > 0 && !system3) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = '請選擇「就讀意願三」的學制';
+                    messageDiv.style.display = 'block';
+                    document.getElementById('system3').focus();
+                    document.getElementById('system3').style.borderColor = '#d32f2f';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
             }
             // 驗證就讀或畢業國中（必須有 school_code，表示已從系統選項中選擇）
             // 調試資訊
@@ -1174,17 +1231,15 @@ $role = $_SESSION['role'] ?? '訪客';
         });
        // (你的其他JS程式碼：像驗證碼、搜尋、送出表單的程式...)
 
-        // 科系對應學制設定
-        const departmentSystems = {
-            "護理科": ["五專"],
-            "嬰幼兒保育科": ["五專", "四技"],
-            "視光科": ["五專"],
-            "數位影視動畫科": ["五專"],
-            "資訊管理科": ["五專"],
-            "企業管理科": ["五專", "四技"],
-            "應用外語科": ["五專"],
-            "長期照護學系": ["四技"]
-        };
+        // 清除學制錯誤樣式
+        function clearSystemError(systemSelectId) {
+            const systemSelect = document.getElementById(systemSelectId);
+            if (systemSelect) {
+                systemSelect.style.borderColor = '';
+                systemSelect.style.borderWidth = '';
+                systemSelect.style.boxShadow = '';
+            }
+        }
 
         function updateSystemOptions(departmentSelectId, systemSelectId) {
             const department = document.getElementById(departmentSelectId).value;
@@ -1206,6 +1261,9 @@ $role = $_SESSION['role'] ?? '訪客';
                     systemSelect.value = systems[0];
                 }
             }
+            
+            // 當學制選項更新時，清除錯誤樣式
+            clearSystemError(systemSelectId);
         }
 
         // 更新就讀意願選項的可用性（防止重複選擇相同科系）
@@ -1278,6 +1336,15 @@ $role = $_SESSION['role'] ?? '訪客';
                         updateSystemOptions(dep, sys);
                         // 當任何就讀意願改變時，更新其他選項的可用性
                         updateIntentionOptions();
+                    });
+                }
+                
+                // 為學制下拉選單添加 change 事件，選擇後清除錯誤樣式
+                const sysSelect = document.getElementById(sys);
+                if (sysSelect) {
+                    sysSelect.addEventListener("change", function() {
+                        // 當用戶選擇學制後，清除錯誤樣式
+                        clearSystemError(sys);
                     });
                 }
             });
