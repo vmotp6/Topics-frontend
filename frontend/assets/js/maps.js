@@ -15,6 +15,7 @@ class CampusMap {
         this.geocoder = null;
         this.currentMode = 'driving';
         this.isMotorcycle = false;
+        this.currentInfoWindow = null; // 保存當前打開的 InfoWindow
         this.campusLocation = {
             'name': '康寧大學台北校區',
             'address': '台北市內湖區康寧路三段75巷137號',
@@ -220,7 +221,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -261,7 +268,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -302,7 +315,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -343,7 +362,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -384,7 +409,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -425,7 +456,13 @@ class CampusMap {
         });
 
         marker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, marker);
+            this.currentInfoWindow = infoWindow;
         });
 
         this.markers.push(marker);
@@ -548,13 +585,31 @@ class CampusMap {
 
         try {
             // 同時獲取 Google Maps 餐廳和推薦餐廳
+            console.log('🍽️ 開始獲取餐廳數據...');
             const [googleRestaurants, recommendedRestaurants] = await Promise.all([
                 this.fetchGoogleRestaurants(),
                 this.fetchRecommendedRestaurants()
             ]);
             
+            console.log('📍 Google Maps 餐廳數量:', googleRestaurants.length);
+            console.log('⭐ 推薦餐廳數量:', recommendedRestaurants.length);
+            
+            if (recommendedRestaurants.length > 0) {
+                console.log('⭐ 推薦餐廳列表:', recommendedRestaurants.map(r => r.name));
+            } else {
+                console.warn('⚠️ 沒有找到推薦餐廳，請確認：');
+                console.warn('  1. 是否有在留言板發布「推薦餐廳」類型的留言');
+                console.warn('  2. 留言是否包含餐廳名稱或標題');
+                console.warn('  3. 可以打開瀏覽器開發者工具查看 API 響應');
+            }
+            
             // 合併餐廳列表，優先顯示推薦餐廳，去除重複
             const mergedRestaurants = this.mergeRestaurants(googleRestaurants, recommendedRestaurants);
+            console.log('✅ 合併後餐廳數量:', mergedRestaurants.length);
+            console.log('⭐ 合併後推薦餐廳數量:', mergedRestaurants.filter(r => r.is_recommended).length);
+            
+            // 處理需要地理編碼的推薦餐廳
+            await this.geocodeRecommendedRestaurants(mergedRestaurants);
             
             // 獲取每個餐廳的詳細信息（包括外送評價）
             await this.fetchRestaurantDetails(mergedRestaurants);
@@ -564,8 +619,9 @@ class CampusMap {
             this.addRestaurantMarkers(mergedRestaurants);
             
         } catch (error) {
-            console.error('搜尋餐廳失敗:', error);
-            restaurantsContent.innerHTML = '<p class="error-text">搜尋餐廳時發生錯誤，請稍後再試。</p>';
+            console.error('❌ 搜尋餐廳失敗:', error);
+            console.error('錯誤詳情:', error.stack);
+            restaurantsContent.innerHTML = '<p class="error-text">搜尋餐廳時發生錯誤，請稍後再試。請打開瀏覽器控制台查看詳細錯誤信息。</p>';
         }
     }
     
@@ -592,16 +648,45 @@ class CampusMap {
     async fetchRecommendedRestaurants() {
         try {
             // 使用相對路徑，確保從 frontend 目錄正確訪問
-            const response = await fetch('api/get_recommended_restaurants.php');
-            const data = await response.json();
+            const apiUrl = 'api/get_recommended_restaurants.php';
+            console.log('開始獲取推薦餐廳，API URL:', apiUrl);
             
-            if (data.success && data.restaurants) {
-                console.log('獲取到推薦餐廳:', data.restaurants.length, '間');
-                return data.restaurants;
+            const response = await fetch(apiUrl);
+            console.log('API 響應狀態:', response.status, response.statusText);
+            
+            if (!response.ok) {
+                console.error('API 響應錯誤:', response.status, response.statusText);
+                return [];
             }
-            return [];
+            
+            const data = await response.json();
+            console.log('API 返回數據:', data);
+            console.log('API 返回數據類型:', typeof data);
+            console.log('data.success:', data.success);
+            console.log('data.restaurants:', data.restaurants);
+            console.log('data.restaurants 類型:', Array.isArray(data.restaurants));
+            
+            if (data.success && Array.isArray(data.restaurants)) {
+                console.log('✓ 獲取到推薦餐廳:', data.restaurants.length, '間');
+                if (data.restaurants.length > 0) {
+                    console.log('推薦餐廳列表:', data.restaurants);
+                } else {
+                    console.warn('推薦餐廳列表為空');
+                }
+                return data.restaurants;
+            } else {
+                console.warn('API 返回失敗或沒有餐廳:', data);
+                console.warn('錯誤詳情:', data.error || '未知錯誤');
+                // 即使 success 為 false，也嘗試返回 restaurants 陣列（如果存在）
+                if (Array.isArray(data.restaurants)) {
+                    console.log('雖然 success 為 false，但返回 restaurants 陣列:', data.restaurants.length, '間');
+                    return data.restaurants;
+                }
+                return [];
+            }
         } catch (error) {
-            console.error('獲取推薦餐廳失敗:', error);
+            console.error('✗ 獲取推薦餐廳失敗:', error);
+            console.error('錯誤詳情:', error.message, error.stack);
             return [];
         }
     }
@@ -612,65 +697,202 @@ class CampusMap {
         const seenNames = new Set();
         const seenPlaces = new Set();
         
-        // 優先添加推薦餐廳
+        console.log('開始合併餐廳列表...');
+        console.log('推薦餐廳:', recommendedRestaurants);
+        console.log('Google Maps 餐廳:', googleRestaurants);
+        
+        // 優先添加推薦餐廳（即使沒有座標也要添加，稍後會進行地理編碼）
         recommendedRestaurants.forEach(restaurant => {
-            const name = restaurant.name.toLowerCase().trim();
-            const placeId = restaurant.place_id;
+            const name = restaurant.name ? restaurant.name.toLowerCase().trim() : '';
+            const placeId = restaurant.place_id || '';
             
-            if (!seenNames.has(name) && !seenPlaces.has(placeId)) {
-                seenNames.add(name);
-                seenPlaces.add(placeId);
-                merged.push(restaurant);
+            // 推薦餐廳優先添加，即使名稱或 place_id 重複也要添加（因為是推薦的）
+            if (name) {
+                if (!seenNames.has(name) && !seenPlaces.has(placeId)) {
+                    seenNames.add(name);
+                    if (placeId) seenPlaces.add(placeId);
+                    merged.push(restaurant);
+                    console.log('添加推薦餐廳:', restaurant.name);
+                } else {
+                    // 即使重複，如果是推薦餐廳也優先添加（替換掉 Google Maps 的）
+                    const existingIndex = merged.findIndex(r => 
+                        (r.name && r.name.toLowerCase().trim() === name) || 
+                        (r.place_id && r.place_id === placeId)
+                    );
+                    if (existingIndex >= 0 && !merged[existingIndex].is_recommended) {
+                        console.log('用推薦餐廳替換 Google Maps 餐廳:', restaurant.name);
+                        merged[existingIndex] = restaurant;
+                    } else if (existingIndex < 0) {
+                        merged.push(restaurant);
+                        console.log('添加推薦餐廳（即使重複）:', restaurant.name);
+                    }
+                }
             }
         });
         
         // 添加 Google Maps 餐廳（排除已存在的）
         googleRestaurants.forEach(restaurant => {
-            const name = restaurant.name.toLowerCase().trim();
-            const placeId = restaurant.place_id;
+            const name = restaurant.name ? restaurant.name.toLowerCase().trim() : '';
+            const placeId = restaurant.place_id || '';
             
-            if (!seenNames.has(name) && !seenPlaces.has(placeId)) {
+            if (name && !seenNames.has(name) && !seenPlaces.has(placeId)) {
                 seenNames.add(name);
-                seenPlaces.add(placeId);
+                if (placeId) seenPlaces.add(placeId);
                 merged.push(restaurant);
             }
         });
         
+        console.log('合併完成，總共:', merged.length, '間餐廳');
+        console.log('推薦餐廳數量:', merged.filter(r => r.is_recommended).length);
+        
         return merged;
+    }
+
+    // 為需要地理編碼的推薦餐廳進行地理編碼
+    async geocodeRecommendedRestaurants(restaurants) {
+        if (!this.geocoder) {
+            this.geocoder = new google.maps.Geocoder();
+        }
+        
+        const geocodePromises = restaurants.map((restaurant, index) => {
+            return new Promise((resolve) => {
+                // 如果是推薦餐廳且需要地理編碼
+                if (restaurant.is_recommended && restaurant.needs_geocoding && restaurant.formatted_address) {
+                    console.log('為推薦餐廳進行地理編碼:', restaurant.name, restaurant.formatted_address);
+                    this.geocoder.geocode({ address: restaurant.formatted_address }, (results, status) => {
+                        if (status === 'OK' && results[0]) {
+                            const location = results[0].geometry.location;
+                            // 正確更新座標（確保是數字格式，不是 LatLng 對象）
+                            restaurant.geometry.location = {
+                                lat: location.lat(),
+                                lng: location.lng()
+                            };
+                            restaurant.needs_geocoding = false;
+                            console.log('✓ 地理編碼成功:', restaurant.name, location.lat(), location.lng());
+                        } else {
+                            console.warn('✗ 地理編碼失敗:', restaurant.name, status);
+                            // 地理編碼失敗時，標記為無效座標，稍後不會在地圖上顯示標記
+                            restaurant.geometry.location = { lat: 0, lng: 0 };
+                        }
+                        resolve();
+                    });
+                } else {
+                    // 如果不需要地理編碼，確保座標格式正確
+                    if (restaurant.geometry && restaurant.geometry.location) {
+                        const loc = restaurant.geometry.location;
+                        // 如果是 Google Maps LatLng 對象，轉換為普通對象
+                        if (typeof loc.lat === 'function') {
+                            restaurant.geometry.location = {
+                                lat: loc.lat(),
+                                lng: loc.lng()
+                            };
+                        }
+                    }
+                    resolve();
+                }
+            });
+        });
+        
+        await Promise.all(geocodePromises);
     }
 
     async fetchRestaurantDetails(restaurants) {
         // 為每個餐廳獲取詳細信息
         const detailPromises = restaurants.map((restaurant, index) => {
             return new Promise((resolve) => {
-                if (!restaurant.place_id) {
-                    resolve();
-                    return;
+                const currentRestaurant = restaurants[index];
+                let placeId = restaurant.place_id;
+                
+                // 如果是推薦餐廳且 place_id 是假 ID，嘗試通過名稱和地址搜尋
+                if (restaurant.is_recommended && placeId && placeId.startsWith('recommended_')) {
+                    // 嘗試通過名稱和地址搜尋 Google Places
+                    const searchQuery = restaurant.name + ' ' + (restaurant.formatted_address || restaurant.vicinity || '');
+                    console.log('🔍 嘗試搜尋推薦餐廳的 place_id:', restaurant.name, searchQuery);
+                    
+                    // 使用 TextSearch 方法搜尋餐廳
+                    const textSearchRequest = {
+                        query: searchQuery,
+                        type: 'restaurant',
+                        location: restaurant.geometry?.location ? 
+                            new google.maps.LatLng(
+                                typeof restaurant.geometry.location.lat === 'function' ? 
+                                    restaurant.geometry.location.lat() : 
+                                    restaurant.geometry.location.lat,
+                                typeof restaurant.geometry.location.lng === 'function' ? 
+                                    restaurant.geometry.location.lng() : 
+                                    restaurant.geometry.location.lng
+                            ) : 
+                            new google.maps.LatLng(this.campusLocation.lat, this.campusLocation.lng),
+                        radius: 5000 // 5公里範圍
+                    };
+                    
+                    if (this.placesService && this.placesService.textSearch) {
+                        this.placesService.textSearch(textSearchRequest, (results, status) => {
+                            if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                                // 找到匹配的餐廳，使用第一個結果的 place_id
+                                placeId = results[0].place_id;
+                                console.log('✓ 找到推薦餐廳的 place_id:', placeId, results[0].name);
+                                // 繼續獲取詳細資訊
+                                this.fetchPlaceDetails(placeId, currentRestaurant, restaurants, index, resolve);
+                            } else {
+                                console.warn('✗ 無法找到推薦餐廳的 place_id:', restaurant.name, status);
+                                resolve();
+                            }
+                        });
+                    } else {
+                        console.warn('PlacesService.textSearch 方法不可用');
+                        resolve();
+                    }
+                    return; // 已經處理，不需要繼續
                 }
                 
-                const detailRequest = {
-                    placeId: restaurant.place_id,
-                    fields: ['name', 'rating', 'user_ratings_total', 'price_level', 'types', 'opening_hours', 'formatted_address', 'vicinity', 'reviews']
-                };
-                
-                this.placesService.getDetails(detailRequest, (place, status) => {
-                    if (status === google.maps.places.PlacesServiceStatus.OK && place) {
-                        // 合併詳細信息到餐廳對象
-                        this.restaurants[index] = {
-                            ...this.restaurants[index],
-                            ...place,
-                            // 檢查是否有外送服務
-                            hasDelivery: place.types && place.types.includes('meal_delivery'),
-                            // 獲取外送相關評價
-                            deliveryRating: this.getDeliveryRating(place)
-                        };
-                    }
+                // 如果有有效的 place_id，直接獲取詳細資訊
+                if (placeId && !placeId.startsWith('recommended_')) {
+                    this.fetchPlaceDetails(placeId, currentRestaurant, restaurants, index, resolve);
+                } else {
                     resolve();
-                });
+                }
             });
         });
         
         await Promise.all(detailPromises);
+    }
+    
+    // 獲取 Google Place 的詳細資訊
+    fetchPlaceDetails(placeId, currentRestaurant, restaurants, index, resolve) {
+        const detailRequest = {
+            placeId: placeId,
+            fields: ['name', 'rating', 'user_ratings_total', 'price_level', 'types', 'opening_hours', 'formatted_address', 'vicinity', 'reviews']
+        };
+        
+        this.placesService.getDetails(detailRequest, (place, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                // 合併詳細信息到餐廳對象（保留原有的推薦餐廳資訊）
+                restaurants[index] = {
+                    ...currentRestaurant,
+                    ...place,
+                    // 更新 place_id（如果通過搜尋找到新的）
+                    place_id: placeId,
+                    // 保留推薦餐廳的特殊標記
+                    is_recommended: currentRestaurant.is_recommended || false,
+                    recommendation_id: currentRestaurant.recommendation_id,
+                    recommendation_title: currentRestaurant.recommendation_title,
+                    recommendation_content: currentRestaurant.recommendation_content,
+                    recommendation_author: currentRestaurant.recommendation_author,
+                    recommendation_created_at: currentRestaurant.recommendation_created_at,
+                    recommendation_view_count: currentRestaurant.recommendation_view_count,
+                    recommendation_like_count: currentRestaurant.recommendation_like_count,
+                    // 檢查是否有外送服務
+                    hasDelivery: place.types && place.types.includes('meal_delivery'),
+                    // 獲取外送相關評價
+                    deliveryRating: this.getDeliveryRating(place)
+                };
+                console.log('✓ 成功獲取推薦餐廳營業時間:', currentRestaurant.name, place.opening_hours?.open_now);
+            } else {
+                console.warn('獲取餐廳詳細資訊失敗:', currentRestaurant.name, status);
+            }
+            resolve();
+        });
     }
     
     getDeliveryRating(place) {
@@ -694,31 +916,55 @@ class CampusMap {
 
     displayRestaurants(restaurants) {
         // 保存餐廳列表到實例變數，以便點擊時使用
-        this.restaurants = restaurants;
+        // 對餐廳列表進行排序，推薦餐廳優先顯示
+        const sortedRestaurants = [...restaurants].sort((a, b) => {
+            // 推薦餐廳排在前面
+            if (a.is_recommended && !b.is_recommended) return -1;
+            if (!a.is_recommended && b.is_recommended) return 1;
+            // 如果都是推薦餐廳或都不是，按評分排序（評分高的在前）
+            const ratingA = a.rating || 0;
+            const ratingB = b.rating || 0;
+            return ratingB - ratingA;
+        });
+        
+        this.restaurants = sortedRestaurants;
         
         const restaurantsContent = document.getElementById('restaurants-content');
         const restaurantsCount = document.getElementById('restaurants-count');
         
         if (restaurantsCount) {
-            restaurantsCount.textContent = `(${restaurants.length} 間)`;
+            restaurantsCount.textContent = `(${sortedRestaurants.length} 間)`;
         }
 
-        if (restaurants.length === 0) {
+        if (sortedRestaurants.length === 0) {
             restaurantsContent.innerHTML = '<p class="error-text">附近沒有找到餐廳。</p>';
             return;
         }
 
         let html = '<div class="restaurants-items">';
         
-        restaurants.forEach((restaurant, index) => {
+        sortedRestaurants.forEach((restaurant, index) => {
             const rating = restaurant.rating || 0;
             const priceLevel = restaurant.price_level || 0;
             const priceSymbols = '$'.repeat(priceLevel);
-            const isOpen = restaurant.opening_hours && restaurant.opening_hours.open_now;
+            
+            // 判斷營業狀態：只有當有 opening_hours 資訊時才顯示
+            const hasOpeningHours = restaurant.opening_hours && restaurant.opening_hours.open_now !== undefined;
+            const isOpen = hasOpeningHours ? restaurant.opening_hours.open_now : null; // null 表示未知
+            
             const hasDelivery = restaurant.hasDelivery || (restaurant.types && restaurant.types.includes('meal_delivery'));
             const deliveryRating = restaurant.deliveryRating;
             
             const isRecommended = restaurant.is_recommended || false;
+            
+            // 構建營業狀態標籤
+            let openingStatusBadge = '';
+            if (isOpen === true) {
+                openingStatusBadge = '<span class="open-badge">營業中</span>';
+            } else if (isOpen === false) {
+                openingStatusBadge = '<span class="closed-badge">已打烊</span>';
+            }
+            // 如果 isOpen === null，不顯示營業狀態標籤（因為未知）
             
             html += `
                 <div class="restaurant-item" data-restaurant-index="${index}" ${isRecommended ? 'data-recommended="true"' : ''}>
@@ -726,7 +972,7 @@ class CampusMap {
                         <h5>${restaurant.name || '未命名餐廳'}</h5>
                         <div class="restaurant-badges">
                             ${isRecommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
-                            ${isOpen ? '<span class="open-badge">營業中</span>' : '<span class="closed-badge">已打烊</span>'}
+                            ${openingStatusBadge}
                             ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                         </div>
                     </div>
@@ -754,6 +1000,29 @@ class CampusMap {
                             ${restaurant.types.slice(0, 3).map(type => 
                                 `<span class="type-tag">${this.translateType(type)}</span>`
                             ).join('')}
+                        </div>
+                    ` : ''}
+                    <div class="restaurant-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${restaurant.place_id ? `
+                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/place/?q=place_id:${restaurant.place_id}', '_blank');" style="flex: 1; padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                                <i class="fab fa-google"></i> 在 Google Maps 查看
+                            </button>
+                        ` : restaurant.geometry && restaurant.geometry.location ? `
+                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name)}+${encodeURIComponent(restaurant.vicinity || restaurant.formatted_address || '')}', '_blank');" style="flex: 1; padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                                <i class="fab fa-google"></i> 在 Google Maps 查看
+                            </button>
+                        ` : ''}
+                        ${restaurant.place_id ? `
+                            <button class="view-reviews-btn" onclick="event.stopPropagation(); if(window.campusMap) window.campusMap.loadGoogleReviews('${restaurant.place_id}', ${index});" style="flex: 1; padding: 8px 12px; background: var(--hover-bg, #f7f9fa); border: 1px solid var(--border-color, #e1e8ed); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; color: var(--text-color, #000);">
+                                <i class="fas fa-comments"></i> 查看評論
+                            </button>
+                        ` : ''}
+                    </div>
+                    ${restaurant.place_id ? `
+                        <div id="reviews-${index}" class="google-reviews-container" style="display: none; margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e8ed; max-height: 700px; overflow-y: auto;">
+                            <div class="reviews-loading" style="text-align: center; padding: 20px; color: #666;">
+                                <i class="fas fa-spinner fa-spin"></i> 載入評論中...
+                            </div>
                         </div>
                     ` : ''}
                 </div>
@@ -800,9 +1069,54 @@ class CampusMap {
 
     addRestaurantMarkers(restaurants) {
         restaurants.forEach((restaurant, index) => {
+            // 檢查餐廳是否有有效的座標
+            const location = restaurant.geometry?.location;
+            if (!location) {
+                // 如果是推薦餐廳，仍然顯示在列表中，只是不顯示地圖標記
+                if (restaurant.is_recommended) {
+                    console.log('推薦餐廳無座標，將顯示在列表中但不顯示地圖標記:', restaurant.name);
+                } else {
+                    console.warn('餐廳沒有座標，跳過標記:', restaurant.name);
+                }
+                return;
+            }
+            
+            // 檢查座標是否有效（不是 0,0）
+            const lat = typeof location.lat === 'function' ? location.lat() : location.lat;
+            const lng = typeof location.lng === 'function' ? location.lng() : location.lng;
+            
+            // 檢查座標是否為 null（表示沒有座標）
+            if (lat === null || lng === null) {
+                if (restaurant.is_recommended) {
+                    console.log('推薦餐廳座標為 null，將顯示在列表中但不顯示地圖標記:', restaurant.name);
+                } else {
+                    console.warn('餐廳座標為 null，跳過標記:', restaurant.name);
+                }
+                return;
+            }
+            
+            // 檢查座標是否有效（不是 0,0 且不是 NaN）
+            if ((lat === 0 && lng === 0) || !lat || !lng || isNaN(lat) || isNaN(lng)) {
+                console.warn('餐廳座標無效，跳過標記:', restaurant.name, '座標:', lat, lng);
+                return;
+            }
+            
+            // 檢查座標是否在校園位置（可能是預設值，應該跳過）
+            const campusLat = 25.076132980674792;
+            const campusLng = 121.61012050007541;
+            const distance = Math.sqrt(Math.pow(lat - campusLat, 2) + Math.pow(lng - campusLng, 2));
+            // 如果座標非常接近校園位置（距離小於 0.0001 度，約 11 米），且是推薦餐廳但沒有地址，可能是預設值
+            if (restaurant.is_recommended && distance < 0.0001 && !restaurant.formatted_address) {
+                console.warn('推薦餐廳座標可能是預設值（校園位置），跳過標記:', restaurant.name);
+                return;
+            }
+            
             const isRecommended = restaurant.is_recommended || false;
+            // 確保 position 是正確的格式（Google Maps 可以接受 {lat, lng} 對象）
+            const markerPosition = { lat: lat, lng: lng };
+            
             const marker = new google.maps.Marker({
-                position: restaurant.geometry.location,
+                position: markerPosition,
                 map: this.map,
                 title: restaurant.name,
                 icon: {
@@ -843,7 +1157,13 @@ class CampusMap {
             });
 
             marker.addListener('click', () => {
+                // 關閉之前打開的 InfoWindow
+                if (this.currentInfoWindow) {
+                    this.currentInfoWindow.close();
+                }
+                // 打開新的 InfoWindow 並保存引用
                 infoWindow.open(this.map, marker);
+                this.currentInfoWindow = infoWindow;
                 // 如果是推薦餐廳，直接顯示詳情；否則選擇餐廳
                 if (restaurant.is_recommended && restaurant.recommendation_id) {
                     this.showRestaurantDetails(restaurant, index);
@@ -869,14 +1189,26 @@ class CampusMap {
         // 移動地圖到餐廳位置（使用平滑動畫）
         if (restaurant.geometry && restaurant.geometry.location) {
             const location = restaurant.geometry.location;
-            // 處理 LatLng 對象或包含 lat/lng 的對象
-            if (location.lat && location.lng) {
-                this.map.panTo(location);
-            } else if (typeof location.lat === 'function') {
+            let lat, lng;
+            
+            // 處理不同的座標格式
+            if (typeof location.lat === 'function') {
                 // Google Maps LatLng 對象
-                this.map.panTo(location);
+                lat = location.lat();
+                lng = location.lng();
+            } else {
+                // 普通對象 {lat, lng}
+                lat = location.lat;
+                lng = location.lng;
             }
-            this.map.setZoom(17);
+            
+            // 確保座標有效
+            if (lat && lng && !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+                this.map.panTo({ lat: lat, lng: lng });
+                this.map.setZoom(17);
+            } else {
+                console.warn('餐廳座標無效，無法移動地圖:', restaurant.name, lat, lng);
+            }
         }
         
         // 在側邊面板顯示餐廳詳情和評論
@@ -905,7 +1237,13 @@ class CampusMap {
                     </div>
                 `
             });
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, this.restaurantMarkers[index]);
+            this.currentInfoWindow = infoWindow;
         }
     }
     
@@ -927,9 +1265,22 @@ class CampusMap {
         const rating = restaurant.rating || 0;
         const priceLevel = restaurant.price_level || 0;
         const priceSymbols = '$'.repeat(priceLevel);
-        const isOpen = restaurant.opening_hours && restaurant.opening_hours.open_now;
+        
+        // 判斷營業狀態：只有當有 opening_hours 資訊時才顯示
+        const hasOpeningHours = restaurant.opening_hours && restaurant.opening_hours.open_now !== undefined;
+        const isOpen = hasOpeningHours ? restaurant.opening_hours.open_now : null; // null 表示未知
+        
         const hasDelivery = restaurant.hasDelivery || (restaurant.types && restaurant.types.includes('meal_delivery'));
         const deliveryRating = restaurant.deliveryRating;
+        
+        // 構建營業狀態標籤
+        let openingStatusBadge = '';
+        if (isOpen === true) {
+            openingStatusBadge = '<span class="open-badge">營業中</span>';
+        } else if (isOpen === false) {
+            openingStatusBadge = '<span class="closed-badge">已打烊</span>';
+        }
+        // 如果 isOpen === null，不顯示營業狀態標籤（因為未知）
         
         let html = `
             <div class="restaurant-detail">
@@ -941,7 +1292,7 @@ class CampusMap {
                     <h3>${restaurant.name || '未命名餐廳'}</h3>
                     <div class="restaurant-badges">
                         ${restaurant.is_recommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
-                        ${isOpen ? '<span class="open-badge">營業中</span>' : '<span class="closed-badge">已打烊</span>'}
+                        ${openingStatusBadge}
                         ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                     </div>
                 </div>
@@ -2038,7 +2389,13 @@ class CampusMap {
                             });
                             
                             turnMarker.addListener('click', () => {
+                                // 關閉之前打開的 InfoWindow
+                                if (this.currentInfoWindow) {
+                                    this.currentInfoWindow.close();
+                                }
+                                // 打開新的 InfoWindow 並保存引用
                                 infoWindow.open(this.map, turnMarker);
+                                this.currentInfoWindow = infoWindow;
                             });
                             
                             this.routeMarkers.push(turnMarker);
@@ -2234,10 +2591,72 @@ class CampusMap {
      * 從 URL 參數顯示餐廳位置
      */
     showRestaurantFromURL(restaurantName, lat, lng, address) {
+        console.log('showRestaurantFromURL 被調用:', { restaurantName, lat, lng, address, hasMap: !!this.map });
+        
         if (!this.map) {
             console.error('地圖未初始化');
             return;
         }
+        
+        // 如果有座標，直接使用；如果沒有，使用地址或餐廳名稱進行地理編碼
+        if (lat && lng && lat !== 'null' && lng !== 'null') {
+            console.log('使用座標顯示餐廳:', { lat, lng });
+            this._showRestaurantMarker(restaurantName, parseFloat(lat), parseFloat(lng), address);
+        } else if (address && address.trim() !== '') {
+            console.log('使用地址進行地理編碼:', address);
+            // 使用地址進行地理編碼
+            if (!this.geocoder) {
+                this.geocoder = new google.maps.Geocoder();
+            }
+            
+            this.geocoder.geocode({ address: address }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                    const location = results[0].geometry.location;
+                    this._showRestaurantMarker(restaurantName, location.lat(), location.lng(), address);
+                } else {
+                    console.error('地理編碼失敗:', status);
+                    // 如果地址編碼失敗，嘗試使用餐廳名稱
+                    this._geocodeByRestaurantName(restaurantName, address);
+                }
+            });
+        } else if (restaurantName && restaurantName.trim() !== '') {
+            // 如果沒有地址但有餐廳名稱，使用餐廳名稱進行地理編碼
+            console.log('使用餐廳名稱進行地理編碼:', restaurantName);
+            this._geocodeByRestaurantName(restaurantName, '');
+        } else {
+            console.error('缺少餐廳位置信息（座標、地址或餐廳名稱）');
+            alert('缺少餐廳位置信息，無法在地圖上顯示');
+        }
+    }
+    
+    /**
+     * 使用餐廳名稱進行地理編碼（內部方法）
+     */
+    _geocodeByRestaurantName(restaurantName, fallbackAddress) {
+        if (!this.geocoder) {
+            this.geocoder = new google.maps.Geocoder();
+        }
+        
+        // 嘗試使用餐廳名稱加上「台北市」來搜尋
+        const searchQuery = restaurantName + ' 台北市';
+        
+        this.geocoder.geocode({ address: searchQuery }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const location = results[0].geometry.location;
+                const foundAddress = results[0].formatted_address || fallbackAddress;
+                this._showRestaurantMarker(restaurantName, location.lat(), location.lng(), foundAddress);
+            } else {
+                console.error('使用餐廳名稱地理編碼失敗:', status);
+                alert('無法找到餐廳位置，請確認餐廳名稱是否正確');
+            }
+        });
+    }
+    
+    /**
+     * 顯示餐廳標記（內部方法）
+     */
+    _showRestaurantMarker(restaurantName, lat, lng, address) {
+        console.log('=== _showRestaurantMarker 被調用 ===', { restaurantName, lat, lng, address });
         
         // 創建餐廳標記
         const restaurantMarker = new google.maps.Marker({
@@ -2257,13 +2676,16 @@ class CampusMap {
             zIndex: 1000
         });
         
+        // 確定目的地（優先使用座標，其次地址，最後使用名稱）
+        const destination = `${lat},${lng}`; // 使用座標格式，更精確
+        
         // 創建信息窗口
         const infoWindow = new google.maps.InfoWindow({
             content: `
                 <div style="padding: 10px; min-width: 200px;">
                     <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">${restaurantName}</h3>
                     ${address ? `<p style="margin: 0; font-size: 13px; color: #666;"><i class="fas fa-map-marker-alt"></i> ${address}</p>` : ''}
-                    <button onclick="campusMap.startDirectionsToDestination('${address || restaurantName}')" 
+                    <button onclick="campusMap.startDirectionsToDestination('${destination}')" 
                             style="margin-top: 10px; padding: 8px 16px; background: #ff6b35; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                         <i class="fas fa-route"></i> 規劃路線
                     </button>
@@ -2273,7 +2695,13 @@ class CampusMap {
         
         // 點擊標記顯示信息窗口
         restaurantMarker.addListener('click', () => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, restaurantMarker);
+            this.currentInfoWindow = infoWindow;
         });
         
         // 移動地圖到餐廳位置
@@ -2282,10 +2710,171 @@ class CampusMap {
         
         // 自動打開信息窗口
         setTimeout(() => {
+            // 關閉之前打開的 InfoWindow
+            if (this.currentInfoWindow) {
+                this.currentInfoWindow.close();
+            }
+            // 打開新的 InfoWindow 並保存引用
             infoWindow.open(this.map, restaurantMarker);
+            this.currentInfoWindow = infoWindow;
         }, 500);
         
+        // 自動規劃路線（延遲一下確保地圖和界面已完全載入）
+        console.log('設置自動規劃路線定時器，2秒後執行，目的地:', destination);
+        setTimeout(() => {
+            console.log('=== 開始自動規劃路線 ===');
+            console.log('目的地:', destination);
+            console.log('當前 this:', this);
+            
+            // 先顯示路線規劃界面
+            console.log('調用 promptForDirections...');
+            this.promptForDirections();
+            
+            // 等待界面元素準備好
+            const waitForElements = () => {
+                const destinationInput = document.getElementById('directions-destination');
+                const originInput = document.getElementById('directions-origin');
+                
+                if (!destinationInput || !originInput) {
+                    console.log('等待界面元素準備好...');
+                    setTimeout(waitForElements, 100);
+                    return;
+                }
+                
+                console.log('界面元素已準備好，開始設置路線');
+                
+                // 設置終點
+                destinationInput.value = destination;
+                console.log('已設置終點:', destination);
+                
+                // 直接調用 getDirections，它會自動獲取當前位置作為起點
+                // 不需要等待設置起點輸入框，因為 getDirections 會自動處理
+                setTimeout(() => {
+                    console.log('直接調用 getDirections 規劃路線...');
+                    this.getDirections(destination).then(() => {
+                        console.log('✓ 路線規劃完成');
+                    }).catch((error) => {
+                        console.error('✗ 路線規劃失敗:', error);
+                    });
+                }, 800);
+            };
+            
+            waitForElements();
+        }, 2000);
+        
         console.log('餐廳位置已標示:', restaurantName);
+    }
+
+    // 載入 Google Maps 評論
+    loadGoogleReviews(placeId, restaurantIndex) {
+        if (!this.placesService || !placeId) {
+            console.error('無法載入評論：PlacesService 未初始化或缺少 place_id');
+            return;
+        }
+
+        const reviewsContainer = document.getElementById(`reviews-${restaurantIndex}`);
+        if (!reviewsContainer) {
+            console.error('找不到評論容器');
+            return;
+        }
+
+        // 顯示容器和載入狀態
+        reviewsContainer.style.display = 'block';
+        reviewsContainer.innerHTML = '<div class="reviews-loading" style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-spinner fa-spin"></i> 載入評論中...</div>';
+
+        // 使用 getDetails 獲取評論
+        const request = {
+            placeId: placeId,
+            fields: ['reviews', 'rating', 'user_ratings_total', 'name']
+        };
+
+        this.placesService.getDetails(request, (place, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && place && place.reviews) {
+                const reviews = place.reviews.slice(0, 5); // 只顯示前5則評論
+                
+                if (reviews.length === 0) {
+                    reviewsContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暫無評論</p>';
+                    return;
+                }
+
+                let reviewsHtml = `
+                    <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e1e8ed;">
+                        <h6 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333;">
+                            <i class="fas fa-star" style="color: #f39c12;"></i> Google Maps 評論
+                        </h6>
+                        <p style="margin: 0; font-size: 12px; color: #666;">
+                            總評分：${place.rating ? place.rating.toFixed(1) : 'N/A'} / 5.0 
+                            ${place.user_ratings_total ? `(${place.user_ratings_total} 則評論)` : ''}
+                        </p>
+                    </div>
+                    <div style="max-height: 600px; overflow-y: auto; padding-right: 8px;">
+                `;
+
+                reviews.forEach((review) => {
+                    const rating = review.rating || 0;
+                    const stars = '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+                    const timeAgo = review.time ? this.formatTimeAgo(review.time) : '';
+                    
+                    reviewsHtml += `
+                        <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0;">
+                            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; margin-right: 10px; flex-shrink: 0;">
+                                    ${review.author_name ? review.author_name.charAt(0) : '?'}
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 4px;">
+                                        ${review.author_name || '匿名用戶'}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666;">
+                                        <span style="color: #f39c12;">${stars}</span>
+                                        <span>${rating.toFixed(1)}</span>
+                                        ${timeAgo ? `<span>• ${timeAgo}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            ${review.text ? `
+                                <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #555; word-wrap: break-word;">
+                                    ${review.text.length > 200 ? review.text.substring(0, 200) + '...' : review.text}
+                                </p>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+
+                reviewsHtml += `
+                    </div>
+                    <div style="margin-top: 12px; text-align: center;">
+                        <a href="https://www.google.com/maps/place/?q=place_id:${placeId}" target="_blank" style="display: inline-block; padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                            <i class="fab fa-google"></i> 在 Google Maps 查看所有評論
+                        </a>
+                    </div>
+                `;
+
+                reviewsContainer.innerHTML = reviewsHtml;
+            } else {
+                reviewsContainer.innerHTML = `
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        ${status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS ? '找不到評論' : '載入評論失敗，請稍後再試'}
+                    </p>
+                `;
+            }
+        });
+    }
+
+    // 格式化時間（將時間戳轉換為相對時間）
+    formatTimeAgo(time) {
+        if (!time) return '';
+        
+        const now = new Date();
+        const reviewTime = new Date(time * 1000); // Google Places API 返回的是秒級時間戳
+        const diffInSeconds = Math.floor((now - reviewTime) / 1000);
+        
+        if (diffInSeconds < 60) return '剛剛';
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} 分鐘前`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} 小時前`;
+        if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} 天前`;
+        if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} 個月前`;
+        return `${Math.floor(diffInSeconds / 31536000)} 年前`;
     }
 }
 
@@ -2315,16 +2904,40 @@ function initMap() {
             
             // 檢查 URL 參數，如果有餐廳信息，則在地圖上標示
             const urlParams = new URLSearchParams(window.location.search);
-            const restaurantName = urlParams.get('restaurant');
+            let restaurantName = urlParams.get('restaurant');
             const restaurantLat = urlParams.get('lat');
             const restaurantLng = urlParams.get('lng');
-            const restaurantAddress = urlParams.get('address');
+            let restaurantAddress = urlParams.get('address');
             
-            if (restaurantName && restaurantLat && restaurantLng) {
+            // 如果餐廳名稱看起來像數字（可能是標題），嘗試從地址或其他地方獲取
+            // 但通常推薦餐廳時，標題就是餐廳名稱，所以直接使用
+            if (restaurantName && /^\d+$/.test(restaurantName.trim())) {
+                console.warn('餐廳名稱看起來像數字，可能是標題:', restaurantName);
+                // 如果地址不為空，可以嘗試使用地址
+                if (restaurantAddress && restaurantAddress.trim() !== '') {
+                    console.log('使用地址作為餐廳名稱:', restaurantAddress);
+                    restaurantName = restaurantAddress;
+                }
+            }
+            
+            console.log('URL 參數檢查:', { 
+                restaurantName, 
+                restaurantLat, 
+                restaurantLng, 
+                restaurantAddress,
+                hasRestaurant: !!(restaurantName && restaurantName.trim() !== '')
+            });
+            
+            // 只要有餐廳名稱就可以顯示（可以通過名稱、地址或座標來定位）
+            if (restaurantName && restaurantName.trim() !== '') {
+                console.log('發現餐廳參數，將在 1 秒後顯示餐廳位置');
                 // 延遲一下確保地圖已完全初始化
                 setTimeout(() => {
-                    campusMap.showRestaurantFromURL(restaurantName, parseFloat(restaurantLat), parseFloat(restaurantLng), restaurantAddress);
+                    console.log('調用 showRestaurantFromURL:', { restaurantName, restaurantLat, restaurantLng, restaurantAddress });
+                    campusMap.showRestaurantFromURL(restaurantName, restaurantLat, restaurantLng, restaurantAddress);
                 }, 1000);
+            } else {
+                console.log('未發現餐廳參數，跳過餐廳顯示');
             }
         } catch (error) {
             console.error('創建 CampusMap 實例時發生錯誤:', error);
