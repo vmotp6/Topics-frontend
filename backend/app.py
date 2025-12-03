@@ -503,6 +503,17 @@ def login():
             if user[2] == 0:  # status = 0 表示停用
                 return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
             
+            # 檢查 role，只允許 STU 和 TEA 登入
+            user_role = user[1]  # role 欄位
+            allowed_roles = ['STU', 'TEA', 'STUDENT', 'TEACHER']  # 支援多種格式
+            
+            # 檢查 role 是否在允許列表中
+            if user_role not in allowed_roles:
+                return jsonify({
+                    "message": "您的帳號角色不允許登入此系統，僅限學生和老師使用。",
+                    "error": "role_not_allowed"
+                }), 403
+            
             return jsonify({
                 "message": "登入成功",
                 "username": user[0],
