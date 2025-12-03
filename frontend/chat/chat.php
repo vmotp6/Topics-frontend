@@ -855,7 +855,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -935,7 +935,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -1032,7 +1032,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -1349,13 +1349,16 @@ try {
                 <div class="user-name" id="group-name-${group.id}">${group.group_name}</div>
                 <div class="user-role">${group.member_count} 位成員</div>
                 <div class="contact-type">群組</div>
-                <button class="edit-group-btn" onclick="editGroupName('${group.id}', '${group.group_name}')">編輯</button>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                  <button class="edit-group-btn" onclick="event.stopPropagation(); editGroupName('${group.id}', '${group.group_name}')" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">編輯</button>
+                  <button class="delete-group-btn" onclick="event.stopPropagation(); deleteGroup('${group.id}', '${group.group_name}')" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">刪除</button>
+                </div>
               </div>
             `;
             
             groupItem.addEventListener('click', function(e) {
-              // 如果點擊的是編輯按鈕，不觸發群組選擇
-              if (e.target && e.target.classList && e.target.classList.contains('edit-group-btn')) {
+              // 如果點擊的是編輯或刪除按鈕，不觸發群組選擇
+              if (e.target && e.target.classList && (e.target.classList.contains('edit-group-btn') || e.target.classList.contains('delete-group-btn'))) {
                 return;
               }
               selectGroup(group.id, group.group_name);
@@ -1556,6 +1559,63 @@ try {
           console.error('更新群組名稱失敗:', error);
           alert('更新群組名稱失敗');
         }
+      }
+    }
+    
+    // 刪除群組
+    async function deleteGroup(groupId, groupName) {
+      if (!confirm(`確定要刪除群組「${groupName}」嗎？此操作無法復原。`)) {
+        return;
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'delete_group');
+        formData.append('group_id', groupId);
+        formData.append('username', username);
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // 如果當前選中的是這個群組，清除聊天區域
+          if (currentGroupId === groupId) {
+            currentGroupId = null;
+            currentChatType = 'private';
+            currentUserName = null;
+            
+            // 清除聊天區域
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+              chatMessages.innerHTML = '<div class="no-chat-selected">請選擇一個聯絡人或群組開始聊天</div>';
+            }
+            
+            // 清除聊天標題
+            const chatNameElement = document.querySelector('.current-chat-name');
+            if (chatNameElement) {
+              chatNameElement.textContent = '';
+            }
+            
+            const chatRoleElement = document.querySelector('.current-chat-role');
+            if (chatRoleElement) {
+              chatRoleElement.textContent = '';
+            }
+          }
+          
+          alert('群組已成功刪除！');
+          
+          // 重新載入群組列表
+          loadGroups();
+        } else {
+          alert('刪除失敗: ' + result.error);
+        }
+      } catch (error) {
+        console.error('刪除群組失敗:', error);
+        alert('刪除群組失敗');
       }
     }
     
