@@ -855,7 +855,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -902,6 +902,14 @@ try {
             <div class="current-chat-name">選擇老師開始聊天</div>
             <div class="current-chat-role"></div>
           </div>
+          <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
+            <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+              ➕ 新增成員
+            </button>
+            <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+              👥 管理成員
+            </button>
+          </div>
         </div>
         
         <div class="chat-messages" id="chatMessages">
@@ -935,7 +943,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -981,6 +989,14 @@ try {
           <div class="current-chat-info">
             <div class="current-chat-name">選擇聯絡人開始聊天</div>
             <div class="current-chat-role"></div>
+          </div>
+          <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
+            <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+              ➕ 新增成員
+            </button>
+            <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+              👥 管理成員
+            </button>
           </div>
         </div>
         
@@ -1032,7 +1048,7 @@ try {
           <!-- 搜尋現有聯絡人 -->
           <div style="margin-bottom: 10px;">
             <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
           <!-- 新增聯絡人區域 -->
@@ -1078,6 +1094,14 @@ try {
           <div class="current-chat-info">
             <div class="current-chat-name">選擇聯絡人開始聊天</div>
             <div class="current-chat-role"></div>
+          </div>
+          <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
+            <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+              ➕ 新增成員
+            </button>
+            <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+              👥 管理成員
+            </button>
           </div>
         </div>
         
@@ -1333,12 +1357,21 @@ try {
             groupItem.dataset.groupId = group.id;
             groupItem.dataset.groupName = group.group_name;
             groupItem.dataset.chatType = 'group';
+            groupItem.dataset.createdBy = group.created_by || '';
             
-            // 獲取未讀數量（如果有的話）
+            // 判斷當前用戶是否為群組創建者
+            const isCreator = group.created_by === username;
+            
+            // 獲取未讀數量（從後端直接返回，立即顯示）
             const unreadCount = parseInt(group.unread_count || 0);
             const badgeHtml = unreadCount > 0 
-              ? `<span class="unread-badge" data-group-id="${group.id}" data-count="${unreadCount}" style="display: flex;">${unreadCount > 99 ? '99+' : unreadCount}</span>`
-              : `<span class="unread-badge" data-group-id="${group.id}" style="display: none;"></span>`;
+              ? `<span class="unread-badge" data-group-id="${group.id}" data-count="${unreadCount}" style="display: flex; visibility: visible;">${unreadCount > 99 ? '99+' : unreadCount}</span>`
+              : `<span class="unread-badge" data-group-id="${group.id}" style="display: none; visibility: hidden;"></span>`;
+            
+            // 根據是否為創建者顯示不同的按鈕
+            const actionButtonHtml = isCreator 
+              ? `<button class="delete-group-btn" onclick="event.stopPropagation(); deleteGroup('${group.id}', '${group.group_name}')" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">刪除</button>`
+              : `<button class="leave-group-btn" onclick="event.stopPropagation(); leaveGroup('${group.id}', '${group.group_name}')" style="padding: 5px 10px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">離開</button>`;
             
             groupItem.innerHTML = `
               <div class="user-avatar" style="background: #4CAF50;">
@@ -1349,13 +1382,16 @@ try {
                 <div class="user-name" id="group-name-${group.id}">${group.group_name}</div>
                 <div class="user-role">${group.member_count} 位成員</div>
                 <div class="contact-type">群組</div>
-                <button class="edit-group-btn" onclick="editGroupName('${group.id}', '${group.group_name}')">編輯</button>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                  <button class="edit-group-btn" onclick="event.stopPropagation(); editGroupName('${group.id}', '${group.group_name}')" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">編輯</button>
+                  ${actionButtonHtml}
+                </div>
               </div>
             `;
             
             groupItem.addEventListener('click', function(e) {
-              // 如果點擊的是編輯按鈕，不觸發群組選擇
-              if (e.target && e.target.classList && e.target.classList.contains('edit-group-btn')) {
+              // 如果點擊的是編輯、刪除或離開按鈕，不觸發群組選擇
+              if (e.target && e.target.classList && (e.target.classList.contains('edit-group-btn') || e.target.classList.contains('delete-group-btn') || e.target.classList.contains('leave-group-btn'))) {
                 return;
               }
               selectGroup(group.id, group.group_name);
@@ -1364,8 +1400,11 @@ try {
             groupsContainer.appendChild(groupItem);
           });
           
-          // 載入群組未讀數量
-          await updateGroupUnreadCounts();
+          // 未讀數量已經從後端返回並顯示，這裡只做後續更新（可選）
+          // 使用 setTimeout 讓初始渲染完成後再更新，避免阻塞
+          setTimeout(() => {
+            updateGroupUnreadCounts();
+          }, 100);
         } else if (result.error) {
           console.error('載入群組失敗:', result.error);
           alert('載入群組失敗: ' + result.error);
@@ -1384,23 +1423,56 @@ try {
         
         console.log('群組未讀數量 API 響應:', result);
         
-        if (result.success && result.unread_counts) {
-          // 更新每個群組的未讀徽章
-          Object.keys(result.unread_counts).forEach(groupId => {
-            const unreadCount = parseInt(result.unread_counts[groupId] || 0);
-            const badge = document.querySelector(`.unread-badge[data-group-id="${groupId}"]`);
+        if (result.success) {
+          const unreadCounts = result.unread_counts || {};
+          
+          // 獲取所有群組項目的徽章
+          const allGroupBadges = document.querySelectorAll('.unread-badge[data-group-id]');
+          
+          // 更新所有群組的未讀徽章（包括沒有未讀訊息的群組）
+          allGroupBadges.forEach(badge => {
+            const groupId = badge.getAttribute('data-group-id');
+            const unreadCount = parseInt(unreadCounts[groupId] || 0);
             
-            if (badge) {
-              if (unreadCount > 0) {
+            if (unreadCount > 0) {
+              badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+              badge.setAttribute('data-count', unreadCount);
+              badge.style.display = 'flex';
+              badge.style.visibility = 'visible';
+              badge.classList.add('show', 'pulse');
+            } else {
+              badge.style.display = 'none';
+              badge.style.visibility = 'hidden';
+              badge.classList.remove('show', 'pulse');
+            }
+          });
+          
+          // 處理 API 返回的未讀群組（確保所有有未讀的群組都顯示徽章）
+          Object.keys(unreadCounts).forEach(groupId => {
+            const unreadCount = parseInt(unreadCounts[groupId] || 0);
+            if (unreadCount > 0) {
+              let badge = document.querySelector(`.unread-badge[data-group-id="${groupId}"]`);
+              
+              // 如果徽章不存在，嘗試創建它（這通常不應該發生，但為了安全起見）
+              if (!badge) {
+                const groupItem = document.querySelector(`.user-item[data-group-id="${groupId}"]`);
+                if (groupItem) {
+                  const avatarContainer = groupItem.querySelector('.user-avatar');
+                  if (avatarContainer) {
+                    badge = document.createElement('span');
+                    badge.className = 'unread-badge';
+                    badge.setAttribute('data-group-id', groupId);
+                    avatarContainer.appendChild(badge);
+                  }
+                }
+              }
+              
+              if (badge) {
                 badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
                 badge.setAttribute('data-count', unreadCount);
                 badge.style.display = 'flex';
                 badge.style.visibility = 'visible';
                 badge.classList.add('show', 'pulse');
-              } else {
-                badge.style.display = 'none';
-                badge.style.visibility = 'hidden';
-                badge.classList.remove('show', 'pulse');
               }
             }
           });
@@ -1478,11 +1550,16 @@ try {
       // 更新聊天標題
       const chatNameElement = document.querySelector('.current-chat-name');
       const chatRoleElement = document.querySelector('.current-chat-role');
+      const chatHeaderActions = document.getElementById('chatHeaderActions');
       if (chatNameElement) {
         chatNameElement.textContent = groupName;
       }
       if (chatRoleElement) {
         chatRoleElement.textContent = '群組聊天';
+      }
+      // 顯示群組管理按鈕
+      if (chatHeaderActions) {
+        chatHeaderActions.style.display = 'flex';
       }
       
       // 啟用輸入框
@@ -1506,6 +1583,430 @@ try {
       
       // 載入群組聊天記錄
       loadGroupChatHistory();
+    }
+    
+    // 顯示新增成員模態框
+    async function showAddMemberModal() {
+      if (!currentGroupId) {
+        alert('請先選擇一個群組');
+        return;
+      }
+      
+      // 獲取群組成員列表（排除已在群組中的成員）
+      try {
+        const response = await fetch(`group_management.php?action=get_group_members&group_id=${currentGroupId}`);
+        const result = await response.json();
+        
+        if (!result.success) {
+          alert('獲取群組成員失敗: ' + (result.error || '未知錯誤'));
+          return;
+        }
+        
+        const groupMembers = result.members || [];
+        const memberUsernames = groupMembers.map(m => m.username);
+        
+        // 過濾出不在群組中的聯絡人
+        const availableContacts = allContacts.filter(c => 
+          c.username !== username && !memberUsernames.includes(c.username)
+        );
+        
+        if (availableContacts.length === 0) {
+          alert('沒有可新增的成員');
+          return;
+        }
+        
+        // 創建模態框
+        const modal = document.createElement('div');
+        modal.id = 'addMemberModal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          animation: fadeIn 0.2s ease-out;
+        `;
+        
+        modal.innerHTML = `
+          <div style="background: white; padding: 0; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out;">
+            <!-- 標題區域 -->
+            <div style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); padding: 24px 28px; color: white;">
+              <h3 style="margin: 0; font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">➕</span>
+                <span>新增成員</span>
+              </h3>
+            </div>
+            
+            <!-- 內容區域 -->
+            <div style="padding: 28px;">
+              <!-- 搜尋成員 -->
+              <div style="margin-bottom: 24px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">搜尋成員</label>
+                <div style="position: relative;">
+                  <input type="text" id="addMemberSearch" placeholder="搜尋姓名、科系或班級..." 
+                         style="width: 100%; padding: 12px 16px 12px 44px; border: 2px solid #e0e0e0; border-radius: 8px; box-sizing: border-box; font-size: 14px; transition: all 0.3s ease; outline: none;"
+                         onfocus="this.style.borderColor='#4CAF50'; this.style.boxShadow='0 0 0 3px rgba(76, 175, 80, 0.1)'"
+                         onblur="this.style.borderColor='#e0e0e0'; this.style.boxShadow='none'">
+                  <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #999; font-size: 16px;">🔍</span>
+                </div>
+              </div>
+              
+              <!-- 選擇成員 -->
+              <div style="margin-bottom: 24px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">選擇成員</label>
+                <div id="addMemberSelection" style="max-height: 350px; overflow-y: auto; border: 2px solid #e0e0e0; padding: 12px; margin-top: 8px; border-radius: 8px; background: #fafafa;">
+                  ${generateAddMemberCheckboxes(availableContacts)}
+                </div>
+                <div style="margin-top: 12px; font-size: 13px; color: #666; display: flex; align-items: center; gap: 6px;">
+                  <span style="color: #4CAF50; font-weight: 600;">已選擇 <span id="selectedAddMemberCount" style="color: #4CAF50;">0</span> 位成員</span>
+                </div>
+              </div>
+              
+              <!-- 按鈕區域 -->
+              <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+                <button onclick="closeAddMemberModal()" 
+                        style="padding: 12px 24px; background: #f5f5f5; color: #666; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease;"
+                        onmouseover="this.style.background='#e0e0e0'"
+                        onmouseout="this.style.background='#f5f5f5'">取消</button>
+                <button onclick="addMembersToGroup()" 
+                        style="padding: 12px 32px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);"
+                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(76, 175, 80, 0.4)'"
+                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(76, 175, 80, 0.3)'">新增</button>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // 設置成員搜尋功能
+        const memberSearchInput = document.getElementById('addMemberSearch');
+        if (memberSearchInput) {
+          memberSearchInput.addEventListener('input', function() {
+            filterAddMemberCheckboxes(this.value.toLowerCase().trim());
+          });
+        }
+        
+        // 設置成員選擇計數更新
+        updateSelectedAddMemberCount();
+        
+        // 點擊背景關閉
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            closeAddMemberModal();
+          }
+        });
+      } catch (error) {
+        console.error('顯示新增成員模態框失敗:', error);
+        alert('顯示新增成員模態框失敗: ' + error.message);
+      }
+    }
+    
+    // 生成新增成員選擇框
+    function generateAddMemberCheckboxes(contacts) {
+      if (contacts.length === 0) {
+        return '<div style="color: #999; text-align: center; padding: 40px 20px;"><div style="font-size: 48px; margin-bottom: 12px;">👤</div><div style="font-size: 14px;">暫無可新增的成員</div></div>';
+      }
+      
+      let html = '';
+      contacts.forEach(contact => {
+        const displayName = contact.name || contact.username;
+        const role = contact.contact_type || '';
+        const department = contact.department || '';
+        const grade = contact.grade || '';
+        const className = contact.class_name || '';
+        const additionalInfo = grade ? ` - ${grade}${className ? ' ' + className : ''}` : '';
+        const searchableText = `${displayName} ${role} ${department} ${grade} ${className}`.toLowerCase();
+        
+        html += `
+          <div class="add-member-item" data-search-text="${searchableText}" 
+               style="margin: 6px 0; padding: 12px; border: 2px solid #e8e8e8; border-radius: 8px; display: flex; align-items: center; background: white; transition: all 0.2s ease; cursor: pointer;"
+               onmouseover="this.style.borderColor='#4CAF50'; this.style.backgroundColor='#f1f8f4'; this.style.transform='translateX(4px)'"
+               onmouseout="this.style.borderColor='#e8e8e8'; this.style.backgroundColor='white'; this.style.transform='translateX(0)'"
+               onclick="document.getElementById('add_member_${contact.username}').click()">
+            <input type="checkbox" id="add_member_${contact.username}" value="${contact.username}" data-role="${role}" 
+                   style="margin-right: 12px; cursor: pointer; width: 18px; height: 18px; accent-color: #4CAF50;" 
+                   onchange="updateSelectedAddMemberCount(); this.closest('.add-member-item').style.borderColor = this.checked ? '#4CAF50' : '#e8e8e8'; this.closest('.add-member-item').style.backgroundColor = this.checked ? '#f1f8f4' : 'white';">
+            <label for="add_member_${contact.username}" style="flex: 1; cursor: pointer; margin: 0;">
+              <div style="font-weight: 600; color: #333; margin-bottom: 4px; font-size: 14px;">${escapeHtml(displayName)}</div>
+              <div style="font-size: 12px; color: #888;">${escapeHtml(role)}${department ? ' - ' + escapeHtml(department) : ''}${additionalInfo}</div>
+            </label>
+          </div>
+        `;
+      });
+      
+      return html;
+    }
+    
+    // 過濾新增成員選擇框
+    function filterAddMemberCheckboxes(searchTerm) {
+      const memberItems = document.querySelectorAll('#addMemberSelection .add-member-item');
+      let visibleCount = 0;
+      
+      memberItems.forEach(item => {
+        const searchText = item.dataset.searchText || '';
+        if (searchTerm === '' || searchText.includes(searchTerm)) {
+          item.style.display = 'flex';
+          visibleCount++;
+        } else {
+          item.style.display = 'none';
+        }
+      });
+      
+      // 如果沒有可見項目，顯示提示
+      if (visibleCount === 0 && searchTerm !== '') {
+        const memberSelection = document.getElementById('addMemberSelection');
+        if (memberSelection && !memberSelection.querySelector('.no-results')) {
+          const noResults = document.createElement('div');
+          noResults.className = 'no-results';
+          noResults.style.cssText = 'text-align: center; padding: 40px 20px; color: #999; font-size: 14px;';
+          noResults.innerHTML = '<div style="font-size: 48px; margin-bottom: 12px;">🔍</div><div>找不到符合條件的成員</div>';
+          memberSelection.appendChild(noResults);
+        }
+      } else {
+        const noResults = document.querySelector('#addMemberSelection .no-results');
+        if (noResults) {
+          noResults.remove();
+        }
+      }
+    }
+    
+    // 更新已選擇新增成員計數
+    function updateSelectedAddMemberCount() {
+      const selectedCount = document.querySelectorAll('#addMemberSelection input[type="checkbox"]:checked').length;
+      const countElement = document.getElementById('selectedAddMemberCount');
+      if (countElement) {
+        countElement.textContent = selectedCount;
+      }
+    }
+    
+    // 關閉新增成員模態框
+    function closeAddMemberModal() {
+      const modal = document.getElementById('addMemberModal');
+      if (modal) {
+        modal.remove();
+      }
+    }
+    
+    // 新增成員到群組
+    async function addMembersToGroup() {
+      if (!currentGroupId) {
+        alert('請先選擇一個群組');
+        return;
+      }
+      
+      const selectedMembers = [];
+      document.querySelectorAll('#addMemberSelection input[type="checkbox"]:checked').forEach(checkbox => {
+        selectedMembers.push({
+          username: checkbox.value,
+          role: checkbox.dataset.role
+        });
+      });
+      
+      if (selectedMembers.length === 0) {
+        alert('請至少選擇一位成員');
+        return;
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'add_group_members');
+        formData.append('group_id', currentGroupId);
+        formData.append('members', JSON.stringify(selectedMembers));
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert(`已成功新增 ${selectedMembers.length} 位成員到群組！`);
+          closeAddMemberModal();
+          // 重新載入群組列表以更新成員數量
+          loadGroups();
+        } else {
+          alert('新增成員失敗: ' + (result.error || '未知錯誤'));
+        }
+      } catch (error) {
+        console.error('新增成員失敗:', error);
+        alert('新增成員失敗: ' + error.message);
+      }
+    }
+    
+    // 顯示管理成員模態框（包含踢出成員功能）
+    async function showManageMembersModal() {
+      if (!currentGroupId) {
+        alert('請先選擇一個群組');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`group_management.php?action=get_group_members&group_id=${currentGroupId}`);
+        const result = await response.json();
+        
+        if (!result.success) {
+          alert('獲取群組成員失敗: ' + (result.error || '未知錯誤'));
+          return;
+        }
+        
+        const groupMembers = result.members || [];
+        
+        // 創建模態框
+        const modal = document.createElement('div');
+        modal.id = 'manageMembersModal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          animation: fadeIn 0.2s ease-out;
+        `;
+        
+        let membersHtml = '';
+        if (groupMembers.length === 0) {
+          membersHtml = '<div style="color: #999; text-align: center; padding: 40px 20px;"><div style="font-size: 48px; margin-bottom: 12px;">👤</div><div style="font-size: 14px;">群組中暫無成員</div></div>';
+        } else {
+          groupMembers.forEach(member => {
+            const isCurrentUser = member.username === username;
+            const isCreator = Boolean(member.is_creator);
+            // 不能踢出自己
+            const canKick = !isCurrentUser;
+            
+            // 確保名稱是字符串
+            const memberName = (member.name && String(member.name).trim()) || (member.username && String(member.username).trim()) || '未知用戶';
+            const memberRole = (member.role && String(member.role).trim()) || '';
+            const memberDepartment = (member.department && String(member.department).trim()) || '';
+            
+            membersHtml += `
+              <div class="manage-member-item" 
+                   style="margin: 8px 0; padding: 16px; border: 2px solid #e8e8e8; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; background: white; transition: all 0.2s ease;"
+                   onmouseover="this.style.borderColor='#ff9800'; this.style.backgroundColor='#fff8f0'"
+                   onmouseout="this.style.borderColor='#e8e8e8'; this.style.backgroundColor='white'">
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; color: #333; margin-bottom: 4px; font-size: 14px;">
+                    ${escapeHtml(memberName)} 
+                    ${isCreator ? '<span style="color: #ff9800; font-size: 12px; margin-left: 8px;">(創建者)</span>' : ''}
+                    ${isCurrentUser ? '<span style="color: #4CAF50; font-size: 12px; margin-left: 8px;">(我)</span>' : ''}
+                  </div>
+                  <div style="font-size: 12px; color: #888;">${memberRole ? escapeHtml(memberRole) : ''}${memberDepartment ? (memberRole ? ' - ' : '') + escapeHtml(memberDepartment) : ''}</div>
+                </div>
+                ${canKick ? `
+                  <button onclick="removeMemberFromGroup('${escapeHtml(member.username || '')}', '${escapeHtml(memberName)}')" 
+                          style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s ease; width:50%;"
+                          onmouseover="this.style.background='#d32f2f'; this.style.transform='scale(1.05)'"
+                          onmouseout="this.style.background='#f44336'; this.style.transform='scale(1)'">
+                    ❌ 踢出
+                  </button>
+                ` : '<span style="color: #999; font-size: 12px;">無法移除</span>'}
+              </div>
+            `;
+          });
+        }
+        
+        modal.innerHTML = `
+          <div style="background: white; padding: 0; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.3s ease-out;">
+            <!-- 標題區域 -->
+            <div style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); padding: 24px 28px; color: white;">
+              <h3 style="margin: 0; font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">👥</span>
+                <span>管理成員 (${groupMembers.length} 位)</span>
+              </h3>
+            </div>
+            
+            <!-- 內容區域 -->
+            <div style="padding: 28px;">
+              <div id="manageMemberList" style="max-height: 400px; overflow-y: auto;">
+                ${membersHtml}
+              </div>
+              
+              <!-- 按鈕區域 -->
+              <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e0e0e0;">
+                <button onclick="closeManageMembersModal()" 
+                        style="padding: 12px 24px; background: #f5f5f5; color: #666; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease;"
+                        onmouseover="this.style.background='#e0e0e0'"
+                        onmouseout="this.style.background='#f5f5f5'">關閉</button>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // 點擊背景關閉
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            closeManageMembersModal();
+          }
+        });
+      } catch (error) {
+        console.error('顯示管理成員模態框失敗:', error);
+        alert('顯示管理成員模態框失敗: ' + error.message);
+      }
+    }
+    
+    // 關閉管理成員模態框
+    function closeManageMembersModal() {
+      const modal = document.getElementById('manageMembersModal');
+      if (modal) {
+        modal.remove();
+      }
+    }
+    
+    // 從群組中移除成員（踢出）
+    async function removeMemberFromGroup(memberUsername, memberName) {
+      if (!currentGroupId) {
+        alert('請先選擇一個群組');
+        return;
+      }
+      
+      if (!confirm(`確定要將「${memberName}」從群組中移除嗎？`)) {
+        return;
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'remove_group_member');
+        formData.append('group_id', currentGroupId);
+        formData.append('member_username', memberUsername);
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          alert(`已成功將「${memberName}」從群組中移除！`);
+          // 重新載入管理成員模態框
+          closeManageMembersModal();
+          setTimeout(() => {
+            showManageMembersModal();
+          }, 300);
+          // 重新載入群組列表以更新成員數量
+          loadGroups();
+        } else {
+          alert('移除成員失敗: ' + (result.error || '未知錯誤'));
+        }
+      } catch (error) {
+        console.error('移除成員失敗:', error);
+        alert('移除成員失敗: ' + error.message);
+      }
     }
     
     // 編輯群組名稱
@@ -1556,6 +2057,120 @@ try {
           console.error('更新群組名稱失敗:', error);
           alert('更新群組名稱失敗');
         }
+      }
+    }
+    
+    // 刪除群組（僅創建者可用）
+    async function deleteGroup(groupId, groupName) {
+      if (!confirm(`確定要刪除群組「${groupName}」嗎？此操作無法復原。`)) {
+        return;
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'delete_group');
+        formData.append('group_id', groupId);
+        formData.append('username', username);
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // 如果當前選中的是這個群組，清除聊天區域
+          if (currentGroupId === groupId) {
+            currentGroupId = null;
+            currentChatType = 'private';
+            currentUserName = null;
+            
+            // 清除聊天區域
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+              chatMessages.innerHTML = '<div class="no-chat-selected">請選擇一個聯絡人或群組開始聊天</div>';
+            }
+            
+            // 清除聊天標題
+            const chatNameElement = document.querySelector('.current-chat-name');
+            if (chatNameElement) {
+              chatNameElement.textContent = '';
+            }
+            
+            const chatRoleElement = document.querySelector('.current-chat-role');
+            if (chatRoleElement) {
+              chatRoleElement.textContent = '';
+            }
+          }
+          
+          alert('群組已成功刪除！');
+          
+          // 重新載入群組列表
+          loadGroups();
+        } else {
+          alert('刪除失敗: ' + result.error);
+        }
+      } catch (error) {
+        console.error('刪除群組失敗:', error);
+        alert('刪除群組失敗');
+      }
+    }
+    
+    // 離開群組（非創建者可用）
+    async function leaveGroup(groupId, groupName) {
+      if (!confirm(`確定要離開群組「${groupName}」嗎？`)) {
+        return;
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('action', 'leave_group');
+        formData.append('group_id', groupId);
+        formData.append('username', username);
+        
+        const response = await fetch('group_management.php', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // 如果當前選中的是這個群組，清除聊天區域
+          if (currentGroupId === groupId) {
+            currentGroupId = null;
+            currentChatType = 'private';
+            currentUserName = null;
+            
+            // 清除聊天區域
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+              chatMessages.innerHTML = '<div class="no-chat-selected">請選擇一個聯絡人或群組開始聊天</div>';
+            }
+            
+            // 清除聊天標題
+            const chatNameElement = document.querySelector('.current-chat-name');
+            if (chatNameElement) {
+              chatNameElement.textContent = '';
+            }
+            
+            const chatRoleElement = document.querySelector('.current-chat-role');
+            if (chatRoleElement) {
+              chatRoleElement.textContent = '';
+            }
+          }
+          
+          alert('已成功離開群組！');
+          
+          // 重新載入群組列表
+          loadGroups();
+        } else {
+          alert('離開失敗: ' + result.error);
+        }
+      } catch (error) {
+        console.error('離開群組失敗:', error);
+        alert('離開群組失敗');
       }
     }
     
@@ -1689,14 +2304,16 @@ try {
         contentDiv.className = 'message-content';
         
         // 已讀狀態顯示（類似 LINE）
+        // 排除發送者自己，所以顯示的已讀人數 = read_count - 1
         const readCount = parseInt(message.read_count || 0);
+        const displayReadCount = message.from_user === username ? Math.max(0, readCount - 1) : readCount;
         let readStatusHtml = '';
         
-        // 只有自己發送的訊息才顯示已讀狀態，且已讀人數大於0
-        if (message.from_user === username && readCount > 0) {
+        // 只有自己發送的訊息才顯示已讀狀態，且已讀人數大於0（排除自己）
+        if (message.from_user === username && displayReadCount > 0) {
           readStatusHtml = `
             <div class="read-status-group" style="font-size: 11px; color: #999; margin-top: 4px; text-align: right;">
-              <span class="read-count-text">${readCount} 已讀</span>
+              <span class="read-count-text">${displayReadCount} 已讀</span>
             </div>
           `;
         }
@@ -1779,12 +2396,22 @@ try {
       const contentDiv = messageDiv.querySelector('.message-content');
       if (!contentDiv) return;
       
-      // 如果已讀人數為0，隱藏已讀狀態
-      if (readCount <= 0) {
+      // 獲取訊息發送者
+      const messageFromUser = messageDiv.querySelector('.message-content > div:first-child')?.textContent?.split('(')[0]?.trim();
+      // 排除發送者自己，所以顯示的已讀人數 = readCount - 1
+      const displayReadCount = messageFromUser === username ? Math.max(0, readCount - 1) : readCount;
+      
+      // 如果已讀人數為0（排除發送者後），隱藏已讀狀態
+      if (displayReadCount <= 0) {
         const readStatusDiv = contentDiv.querySelector('.read-status-group');
         if (readStatusDiv) {
           readStatusDiv.remove();
         }
+        return;
+      }
+      
+      // 只有自己發送的訊息才顯示已讀狀態
+      if (messageFromUser !== username) {
         return;
       }
       
@@ -1803,7 +2430,7 @@ try {
       }
       
       readStatusDiv.innerHTML = `
-        <span class="read-count-text">${readCount} 已讀</span>
+        <span class="read-count-text">${displayReadCount} 已讀</span>
       `;
     }
     
@@ -2711,6 +3338,8 @@ try {
             // 延遲一點時間確保資料庫已更新
             setTimeout(() => {
               loadGroupChatHistory(true);
+              // 發送訊息後更新未讀徽章（因為其他成員會有未讀）
+              updateGroupUnreadCounts();
             }, 200);
           } else {
             console.error('群組訊息發送失敗:', result.error);
@@ -3117,9 +3746,23 @@ try {
       filteredContacts = [...allContacts];
       currentPage = 1;
       
+      // 保存當前選中的聯絡人ID（在重新渲染前）
+      const previousSelectedUserId = currentUserId && currentChatType === 'private' ? currentUserId : null;
+      
       // 重新渲染聯絡人列表
       renderContacts();
       updatePagination();
+      
+      // 渲染完成後，恢復選中狀態
+      if (previousSelectedUserId) {
+        setTimeout(() => {
+          const selectedItem = document.querySelector(`[data-user-id="${previousSelectedUserId}"]`);
+          if (selectedItem && selectedItem.classList) {
+            selectedItem.classList.add('active');
+            console.log('排序後恢復選中狀態:', previousSelectedUserId);
+          }
+        }, 50);
+      }
       
       // 渲染完成後，更新徽章顯示（不重新排序，只更新顯示）
       setTimeout(() => {
@@ -3449,10 +4092,24 @@ try {
           </div>
         `;
         
-        // 添加點擊事件
-        li.addEventListener('click', function() {
+        // 添加點擊事件（支援點擊整個項目或頭像）
+        // 點擊項目的任何部分（包括頭像）都會觸發選擇
+        li.addEventListener('click', function(e) {
+          // 無論點擊項目中的哪個部分（包括頭像），都觸發選擇
           selectContact(contact.username, contact.name);
         });
+        
+        // 特別為頭像設置可點擊樣式，讓用戶知道頭像可以點擊
+        const avatarElement = li.querySelector('.user-avatar');
+        if (avatarElement) {
+          avatarElement.style.cursor = 'pointer';
+          // 為頭像添加點擊事件，確保點擊頭像時也能觸發選擇
+          // 阻止事件冒泡，避免重複調用 selectContact
+          avatarElement.addEventListener('click', function(e) {
+            e.stopPropagation(); // 阻止冒泡到 li，避免重複調用
+            selectContact(contact.username, contact.name);
+          });
+        }
         
         contactListItems.appendChild(li);
       });
@@ -3462,6 +4119,15 @@ try {
       // sortAndRenderContacts 會調用 renderContacts
       // 如果這裡再調用 updateContactUnreadCounts，會造成循環
       // 徽章更新應該在 sortAndRenderContacts 完成後通過 updateBadgeDisplay 處理
+      
+      // 渲染完成後，恢復選中狀態（如果有當前選中的聯絡人）
+      if (currentUserId && currentChatType === 'private') {
+        const selectedItem = document.querySelector(`[data-user-id="${currentUserId}"]`);
+        if (selectedItem && selectedItem.classList) {
+          selectedItem.classList.add('active');
+          console.log('渲染後恢復選中狀態:', currentUserId);
+        }
+      }
     }
     
     // HTML 轉義函數
@@ -3738,8 +4404,11 @@ try {
     
     // 選擇聯絡人
     function selectContact(userId, userName) {
+      console.log('選擇聯絡人:', userId, userName);
       // 隱藏新增聯絡人搜尋結果
       hideAddContactResults();
+      
+      // 移除所有項目的active狀態（包括群組和聯絡人）
       const userItems = document.querySelectorAll('.user-item');
       userItems.forEach(item => {
         if (item && item.classList) {
@@ -3747,9 +4416,37 @@ try {
         }
       });
       
+      // 添加當前項目的active狀態
       const selectedItem = document.querySelector(`[data-user-id="${userId}"]`);
-      if (selectedItem && selectedItem.classList) {
-        selectedItem.classList.add('active');
+      console.log('查找選中項目:', `[data-user-id="${userId}"]`, '找到:', selectedItem);
+      if (selectedItem) {
+        // 確保移除可能存在的內聯樣式
+        selectedItem.style.background = '';
+        selectedItem.style.borderLeft = '';
+        selectedItem.style.transform = '';
+        selectedItem.style.boxShadow = '';
+        selectedItem.style.borderColor = '';
+        
+        // 添加 active 類
+        if (selectedItem.classList) {
+          selectedItem.classList.add('active');
+          console.log('已添加 active 類到選中項目');
+          
+          // 強制觸發重繪，確保樣式生效
+          selectedItem.offsetHeight;
+        }
+      } else {
+        console.warn('未找到選中的聯絡人項目:', userId);
+        // 嘗試查找所有可能的選擇器
+        const allItems = document.querySelectorAll('.user-item');
+        console.log('所有 user-item 數量:', allItems.length);
+        allItems.forEach((item, index) => {
+          console.log(`項目 ${index}:`, {
+            'data-user-id': item.getAttribute('data-user-id'),
+            'data-group-id': item.getAttribute('data-group-id'),
+            'classList': Array.from(item.classList || [])
+          });
+        });
       }
       
       if (currentUserId !== userId || currentChatType !== 'private') {
@@ -3769,6 +4466,7 @@ try {
       
       const chatNameElement = document.querySelector('.current-chat-name');
       const chatRoleElement = document.querySelector('.current-chat-role');
+      const chatHeaderActions = document.getElementById('chatHeaderActions');
       if (chatNameElement) {
         chatNameElement.textContent = currentUserName;
       }
@@ -3776,6 +4474,10 @@ try {
       const selectedContact = allContacts.find(c => c.username === userId);
       if (chatRoleElement && selectedContact) {
         chatRoleElement.textContent = selectedContact.department || '';
+      }
+      // 隱藏群組管理按鈕（私聊時不顯示）
+      if (chatHeaderActions) {
+        chatHeaderActions.style.display = 'none';
       }
       
       const messageInput = document.getElementById('messageInput');
@@ -4224,12 +4926,12 @@ try {
       console.log('快取清理完成');
     }, 5 * 60 * 1000);
     
-    // 定期更新群組未讀數量（每10秒更新一次）
+    // 定期更新群組未讀數量（每3秒更新一次，提高實時性）
     setInterval(async () => {
       if (document.getElementById('groupsContainer')) {
         await updateGroupUnreadCounts();
       }
-    }, 10000);
+    }, 3000);
     
     // 輪詢新訊息
     setInterval(async () => {
@@ -4265,6 +4967,9 @@ try {
               if (lastMsg.timestamp) {
                 lastMessageId = new Date(lastMsg.timestamp).getTime();
               }
+              
+              // 有新訊息時立即更新未讀徽章
+              updateGroupUnreadCounts();
             }
             
             // 更新已存在訊息的已讀狀態
@@ -4323,5 +5028,3 @@ try {
 <?php include("../share/footer.php"); ?>
 </body>
 </html>
-
-聯絡人列表

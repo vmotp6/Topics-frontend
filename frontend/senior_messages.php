@@ -148,14 +148,22 @@ try {
         $has_is_published = false;
     }
     
-    // 檢查餐廳相關欄位是否存在
+    // 檢查餐廳相關欄位是否存在（檢查多個欄位以確保準確性）
     $has_restaurant_fields = false;
     try {
-        $check_sql = "SHOW COLUMNS FROM senior_messages LIKE 'restaurant_name'";
+        // 檢查關鍵欄位是否存在
+        $check_sql = "SHOW COLUMNS FROM senior_messages WHERE Field IN ('restaurant_name', 'restaurant_rating', 'delivery_rating')";
         $check_stmt = $pdo->query($check_sql);
-        $has_restaurant_fields = $check_stmt->rowCount() > 0;
+        $has_restaurant_fields = $check_stmt->rowCount() >= 2; // 至少要有2個欄位存在
     } catch(PDOException $e) {
-        $has_restaurant_fields = false;
+        // 如果查詢失敗，嘗試直接查詢（更寬鬆的方式）
+        try {
+            $test_sql = "SELECT restaurant_name, restaurant_rating, delivery_rating FROM senior_messages LIMIT 1";
+            $test_stmt = $pdo->query($test_sql);
+            $has_restaurant_fields = true; // 如果能查詢，說明欄位存在
+        } catch(PDOException $e2) {
+            $has_restaurant_fields = false;
+        }
     }
     
     // 先計算總留言數（根據篩選條件）
@@ -196,7 +204,7 @@ try {
                 sm.content,
                 sm.author_contact,
                 sm.message_type,
-                COALESCE(pc.name, '其他') as message_type_name,
+                COALESCE(pc.name, sm.message_type, '其他') as message_type_name,
                 sm.is_published,
                 sm.created_at,
                 sm.updated_at,
@@ -269,7 +277,9 @@ try {
     ];
     
     foreach ($messages as &$message) {
-        $message['message_type'] = $message['message_type_name'] ?? '其他';
+        // 保留原始的 message_type（可能是代碼），同時保留 message_type_name（中文名稱）
+        $message['message_type_original'] = $message['message_type'] ?? '';
+        $message['message_type'] = $message['message_type_name'] ?? $message['message_type'] ?? '其他';
         
         // 如果年級還是代碼格式，轉換為中文
         if (!empty($message['author_grade'])) {
@@ -570,7 +580,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .header {
             margin-bottom: 30px; /* 減少底部間距 */
             padding: 20px 20px; /* 減少內部 padding */
-            background: linear-gradient(90deg, rgba(122, 201, 199, 0.1) 0%, rgba(149, 109, 189, 0.05) 100%);
+            background: rgba(102, 126, 234, 0.1);
             border-radius: 20px;
             border: 1px solid var(--border-color);
             position: relative;
@@ -603,18 +613,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(90deg, #000000 0%, #0074a9 50%, #000000 100%);
+            background: #667eea;
         }
         
         .header h1 {
-            color: var(--text-color);
+            color: #667eea;
             font-size: 2rem;
             margin-bottom: 10px;
             font-weight: 800;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
         
         .header p {
@@ -625,14 +631,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .permission-notice {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
             padding: 15px 20px;
             border-radius: 12px;
             margin-bottom: 20px;
             font-size: 0.95rem;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
             border: none;
         }
         
@@ -646,7 +652,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
             text-decoration: none;
             padding: 10px 20px;
@@ -654,7 +660,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-weight: 700;
             font-size: 0.9rem;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
             border: none;
             position: relative;
             overflow: hidden;
@@ -667,13 +673,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(149,109,189,0.2), transparent);
+            background: rgba(102, 126, 234, 0.2);
             transition: left 0.5s;
         }
         
         .post-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
             color: white;
         }
         
@@ -721,16 +727,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .filter-tab:hover {
-            background: rgba(29, 155, 240, 0.1);
+            background: rgba(102, 126, 234, 0.1);
             color: var(--accent-color);
             transform: translateY(-1px);
             text-decoration: none;
         }
         
         .filter-tab.active {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
-            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
             text-decoration: none;
         }
         
@@ -775,7 +781,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             left: 0;
             width: 4px;
             height: 100%;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             opacity: 0;
             transition: opacity 0.3s ease;
         }
@@ -801,7 +807,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             width: 45px;
             height: 45px;
             border-radius: 50%;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -810,7 +816,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-size: 1rem;
             margin-right: 15px;
             flex-shrink: 0;
-            box-shadow: 0 3px 10px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
             overflow: hidden;
             position: relative;
         }
@@ -848,7 +854,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .message-type {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
             padding: 4px 12px;
             border-radius: 15px;
@@ -969,7 +975,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         .back-btn {
             display: inline-block;
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
             padding: 15px 30px;
             border-radius: 25px;
@@ -977,16 +983,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-weight: 700;
             transition: all 0.3s ease;
             margin-top: 25px;
-            box-shadow: 0 4px 15px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
             text-align: center;
             width: auto;
             max-width: 200px;
         }
         
         .back-btn:hover {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(29, 155, 240, 0.4);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
         
         .back-btn-container {
@@ -1029,12 +1035,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         ::-webkit-scrollbar-thumb {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             border-radius: 10px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
         }
         
         /* 響應式設計 */
@@ -1204,11 +1210,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .pagination-btn:hover:not(.disabled) {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             color: white;
             border-color: transparent;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
         .pagination-btn.disabled {
@@ -1230,17 +1236,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         .pagination-number:hover {
-            background: rgba(29, 155, 240, 0.1);
+            background: rgba(102, 126, 234, 0.1);
             border-color: var(--accent-color);
             color: var(--accent-color);
         }
         
         .pagination-number.active {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background: #667eea;
             border-color: transparent;
             color: white;
             font-weight: 700;
-            box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         }
         
         .pagination-info {
@@ -1311,10 +1317,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             
             <div class="sort-controls" style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
                 <span style="color: var(--secondary-text); font-size: 0.9rem; font-weight: 500;">排序：</span>
-                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=newest" class="sort-btn <?php echo $sort_order === 'newest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'newest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'newest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=newest" class="sort-btn <?php echo $sort_order === 'newest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'newest' ? '#667eea' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'newest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     由新到舊
                 </a>
-                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=oldest" class="sort-btn <?php echo $sort_order === 'oldest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'oldest' ? 'linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%)' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'oldest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                <a href="?filter=<?php echo urlencode($filter_type); ?>&sort=oldest" class="sort-btn <?php echo $sort_order === 'oldest' ? 'active' : ''; ?>" style="padding: 8px 16px; background: <?php echo $sort_order === 'oldest' ? '#667eea' : 'var(--hover-bg)'; ?>; color: <?php echo $sort_order === 'oldest' ? 'white' : 'var(--secondary-text)'; ?>; border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     由舊到新
                 </a>
             </div>
@@ -1355,7 +1361,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <div class="message-title"><?php echo htmlspecialchars($message['title']); ?></div>
                         
                         <?php if (($message['message_type'] ?? '') === '推薦餐廳' && !empty($message['restaurant_name'])): ?>
-                            <div class="restaurant-info-card" style="background: linear-gradient(90deg, rgba(122, 201, 199, 0.1), rgba(149, 109, 189, 0.05)); border: 1px solid rgba(149, 109, 189, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
+                            <div class="restaurant-info-card" style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
                                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                                     <div style="font-size: 24px;">🍽️</div>
                                     <div style="flex: 1;">
@@ -1369,23 +1375,152 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 </div>
                                 
                                 <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-                                    <?php if (!empty($message['restaurant_rating'])): ?>
-                                        <div style="display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(243, 156, 18, 0.2); border-radius: 8px;">
-                                            <span style="color: #f39c12;">★</span>
-                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;"><?php echo htmlspecialchars($message['restaurant_rating']); ?>/5</span>
+                                    <?php 
+                                    // 嘗試從多個來源獲取餐廳評分
+                                    $restaurant_rating = null;
+                                    
+                                    // 方法1: 從 senior_messages 表的 restaurant_rating 欄位獲取
+                                    if (isset($message['restaurant_rating'])) {
+                                        $raw = $message['restaurant_rating'];
+                                        if ($raw !== null && $raw !== '' && $raw !== '0') {
+                                            $val = intval($raw);
+                                            if ($val >= 1 && $val <= 5) {
+                                                $restaurant_rating = $val;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 方法2: 如果欄位沒有數據，嘗試從 restaurant_reviews 表獲取該留言的平均評分
+                                    if ($restaurant_rating === null && !empty($message['id'])) {
+                                        try {
+                                            $review_stmt = $pdo->prepare("
+                                                SELECT AVG(rating) as avg_rating 
+                                                FROM restaurant_reviews 
+                                                WHERE message_id = ? AND is_published = 1
+                                            ");
+                                            $review_stmt->execute([$message['id']]);
+                                            $review_result = $review_stmt->fetch(PDO::FETCH_ASSOC);
+                                            if ($review_result && !empty($review_result['avg_rating'])) {
+                                                $avg = round($review_result['avg_rating'], 1);
+                                                if ($avg >= 1 && $avg <= 5) {
+                                                    $restaurant_rating = $avg;
+                                                }
+                                            }
+                                        } catch(PDOException $e) {
+                                            // 如果表不存在，忽略錯誤
+                                        }
+                                    }
+                                    
+                                    // 方法3: 如果還是沒有，嘗試從留言內容中解析（例如：評分5、5星等）
+                                    if ($restaurant_rating === null && !empty($message['content'])) {
+                                        $content = $message['content'];
+                                        // 嘗試匹配各種評分格式
+                                        if (preg_match('/餐廳評分[：:]\s*(\d+)/u', $content, $matches) || 
+                                            preg_match('/評分[：:]\s*(\d+)/u', $content, $matches) ||
+                                            preg_match('/(\d+)\s*星/u', $content, $matches) ||
+                                            preg_match('/(\d+)\s*\/\s*5/u', $content, $matches)) {
+                                            $val = intval($matches[1]);
+                                            if ($val >= 1 && $val <= 5) {
+                                                $restaurant_rating = $val;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if ($restaurant_rating !== null): 
+                                    ?>
+                                        <div style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 10px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);">
+                                            <span style="color: #f39c12; font-size: 18px; font-weight: bold;">★</span>
+                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">餐廳評分：<?php echo is_float($restaurant_rating) ? number_format($restaurant_rating, 1) : $restaurant_rating; ?>/5</span>
                                         </div>
                                     <?php endif; ?>
                                     
-                                    <?php if (!empty($message['delivery_rating'])): ?>
-                                        <div style="display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(255, 107, 53, 0.2); border-radius: 8px;">
-                                            <span style="color: #ff6b35;">🏍️</span>
-                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;">外送 <?php echo htmlspecialchars($message['delivery_rating']); ?>/5</span>
+                                    <?php 
+                                    // 嘗試從多個來源獲取外送評分
+                                    $delivery_rating = null;
+                                    
+                                    // 方法1: 從 senior_messages 表的 delivery_rating 欄位獲取
+                                    if (isset($message['delivery_rating'])) {
+                                        $raw = $message['delivery_rating'];
+                                        if ($raw !== null && $raw !== '' && $raw !== '0') {
+                                            $val = intval($raw);
+                                            if ($val >= 1 && $val <= 5) {
+                                                $delivery_rating = $val;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 方法2: 從 restaurant_reviews 表獲取該留言的平均外送評分
+                                    if ($delivery_rating === null && !empty($message['id'])) {
+                                        try {
+                                            $review_stmt = $pdo->prepare("
+                                                SELECT AVG(delivery_rating) as avg_delivery_rating 
+                                                FROM restaurant_reviews 
+                                                WHERE message_id = ? AND delivery_rating IS NOT NULL AND is_published = 1
+                                            ");
+                                            $review_stmt->execute([$message['id']]);
+                                            $review_result = $review_stmt->fetch(PDO::FETCH_ASSOC);
+                                            if ($review_result && !empty($review_result['avg_delivery_rating'])) {
+                                                $avg = round($review_result['avg_delivery_rating'], 1);
+                                                if ($avg >= 1 && $avg <= 5) {
+                                                    $delivery_rating = $avg;
+                                                }
+                                            }
+                                        } catch(PDOException $e) {
+                                            // 如果表不存在，忽略錯誤
+                                        }
+                                    }
+                                    
+                                    // 方法3: 從留言內容中解析外送評分
+                                    if ($delivery_rating === null && !empty($message['content'])) {
+                                        $content = $message['content'];
+                                        if (preg_match('/外送評分[：:]\s*(\d+)/u', $content, $matches) || 
+                                            preg_match('/外送[：:]\s*(\d+)/u', $content, $matches)) {
+                                            $val = intval($matches[1]);
+                                            if ($val >= 1 && $val <= 5) {
+                                                $delivery_rating = $val;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if ($delivery_rating !== null): 
+                                    ?>
+                                        <div style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 10px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);">
+                                            <span style="color: #ff6b35; font-size: 18px;">🏍️</span>
+                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">外送評分：<?php echo is_float($delivery_rating) ? number_format($delivery_rating, 1) : $delivery_rating; ?>/5</span>
                                         </div>
                                     <?php endif; ?>
                                     
-                                    <?php if (!empty($message['price_level'])): ?>
-                                        <div style="padding: 6px 12px; background: rgba(39, 174, 96, 0.2); border-radius: 8px;">
-                                            <span style="color: var(--text-color); font-weight: 600; font-size: 14px;"><?php echo str_repeat('$', $message['price_level']); ?></span>
+                                    <?php 
+                                    // 處理價格等級
+                                    $price_level = null;
+                                    if (isset($message['price_level'])) {
+                                        $raw = $message['price_level'];
+                                        if ($raw !== null && $raw !== '' && $raw !== '0') {
+                                            $val = intval($raw);
+                                            if ($val >= 1 && $val <= 4) {
+                                                $price_level = $val;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 如果還是沒有，嘗試從留言內容中解析價格等級
+                                    if ($price_level === null && !empty($message['content'])) {
+                                        $content = $message['content'];
+                                        // 匹配 $、$$、$$$、$$$$ 等格式
+                                        if (preg_match('/價格[：:]\s*(\$+)/u', $content, $matches) || 
+                                            preg_match('/(\${1,4})/u', $content, $matches)) {
+                                            $dollar_count = strlen($matches[1]);
+                                            if ($dollar_count >= 1 && $dollar_count <= 4) {
+                                                $price_level = $dollar_count;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if ($price_level !== null): 
+                                    ?>
+                                        <div style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 10px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);">
+                                            <span style="color: #27ae60; font-size: 18px;">💰</span>
+                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">價格：<?php echo str_repeat('$', $price_level); ?></span>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -1400,17 +1535,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <span class="read-more" onclick="toggleContent(<?php echo $message['id']; ?>)">展開更多</span>
                         <?php endif; ?>
                         
-                        <?php if (($message['message_type'] ?? '') === '推薦餐廳'): ?>
+                        <?php 
+                        // 檢查是否為推薦餐廳類型（同時檢查名稱和代碼）
+                        $is_restaurant_type = false;
+                        $original_message_type = $message['message_type_original'] ?? $message['message_type'] ?? '';
+                        $message_type_name = $message['message_type_name'] ?? $message['message_type'] ?? '';
+                        $current_message_type = $message['message_type'] ?? '';
+                        
+                        // 檢查是否為推薦餐廳（可能是名稱「推薦餐廳」或代碼「REST」）
+                        if ($original_message_type === '推薦餐廳' || $original_message_type === 'REST' || 
+                            $message_type_name === '推薦餐廳' || $message_type_name === 'REST' ||
+                            $current_message_type === '推薦餐廳' || $current_message_type === 'REST' ||
+                            stripos($original_message_type, '餐廳') !== false || 
+                            stripos($message_type_name, '餐廳') !== false ||
+                            stripos($current_message_type, '餐廳') !== false) {
+                            $is_restaurant_type = true;
+                        }
+                        
+                        // 獲取餐廳名稱（如果沒有，使用標題作為備用）
+                        $restaurant_name = trim($message['restaurant_name'] ?? '');
+                        $restaurant_address = trim($message['restaurant_address'] ?? '');
+                        
+                        // 如果沒有餐廳名稱，優先使用標題（推薦餐廳時標題就是餐廳名稱）
+                        if (empty($restaurant_name)) {
+                            $restaurant_name = trim($message['title'] ?? '推薦餐廳');
+                        }
+                        
+                        // 如果沒有餐廳名稱但有地址，使用地址作為搜尋關鍵字（備用方案）
+                        if (empty($restaurant_name) && !empty($restaurant_address)) {
+                            $restaurant_name = $restaurant_address;
+                        }
+                        ?>
+                        <?php if ($is_restaurant_type): ?>
                             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); display: flex; gap: 10px; flex-wrap: wrap;">
-                                <?php if (!empty($message['restaurant_lat']) && !empty($message['restaurant_lng'])): ?>
-                                    <button type="button" 
-                                            onclick="showRestaurantOnMap('<?php echo htmlspecialchars($message['restaurant_name'] ?? ''); ?>', <?php echo htmlspecialchars($message['restaurant_lat']); ?>, <?php echo htmlspecialchars($message['restaurant_lng']); ?>, '<?php echo htmlspecialchars($message['restaurant_address'] ?? ''); ?>')"
-                                            style="padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; font-weight: 600;">
-                                        <i class="fas fa-map-marker-alt"></i> 在地圖上查看
-                                    </button>
-                                <?php endif; ?>
                                 <button type="button" 
-                                        onclick="showRestaurantReviews(<?php echo $message['id']; ?>, '<?php echo htmlspecialchars($message['restaurant_name'] ?? ''); ?>')"
+                                        onclick="showRestaurantOnMap('<?php echo htmlspecialchars($restaurant_name); ?>', <?php echo !empty($message['restaurant_lat']) ? htmlspecialchars($message['restaurant_lat']) : 'null'; ?>, <?php echo !empty($message['restaurant_lng']) ? htmlspecialchars($message['restaurant_lng']) : 'null'; ?>, '<?php echo htmlspecialchars($restaurant_address); ?>')"
+                                        style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; font-weight: 600;">
+                                    <i class="fas fa-map-marker-alt"></i> 在地圖上查看
+                                </button>
+                                <button type="button" 
+                                        onclick="showRestaurantReviews(<?php echo $message['id']; ?>, '<?php echo htmlspecialchars($restaurant_name); ?>', <?php echo !empty($message['restaurant_lat']) ? htmlspecialchars($message['restaurant_lat']) : 'null'; ?>, <?php echo !empty($message['restaurant_lng']) ? htmlspecialchars($message['restaurant_lng']) : 'null'; ?>, '<?php echo htmlspecialchars($restaurant_address); ?>')"
                                         style="padding: 8px 16px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); cursor: pointer; font-size: 13px; transition: all 0.3s ease;">
                                     <i class="fas fa-comments"></i> 查看評價與留言
                                 </button>
@@ -1489,7 +1653,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <!-- 顯示頁碼範圍 -->
                         <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
                             <?php if ($i == $current_page): ?>
-                                <span class="pagination-number active" style="padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); border: 1px solid transparent; border-radius: 6px; color: white; font-weight: 700; min-width: 40px; text-align: center; box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);">
+                                <span class="pagination-number active" style="padding: 8px 12px; background: #667eea; border: 1px solid transparent; border-radius: 6px; color: white; font-weight: 700; min-width: 40px; text-align: center; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
                                     <?php echo $i; ?>
                                 </span>
                             <?php else: ?>
@@ -1709,15 +1873,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // 在地圖上顯示餐廳位置
         function showRestaurantOnMap(restaurantName, lat, lng, address) {
             // 構建地圖頁面 URL，帶上餐廳參數
-            const mapUrl = `campus_map.php?restaurant=${encodeURIComponent(restaurantName)}&lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}`;
+            let mapUrl = `campus_map.php?restaurant=${encodeURIComponent(restaurantName)}&address=${encodeURIComponent(address)}`;
+            // 如果有座標，加上座標參數；如果沒有，地圖頁面會使用地址進行地理編碼
+            if (lat !== null && lng !== null && lat !== 'null' && lng !== 'null') {
+                mapUrl += `&lat=${lat}&lng=${lng}`;
+            }
             // 在同一視窗打開，讓用戶可以直接使用地圖功能
             window.location.href = mapUrl;
         }
         
-        // 顯示餐廳評價和留言
-        function showRestaurantReviews(messageId, restaurantName) {
-            // 打開評價和留言的模態框或新頁面
-            window.location.href = `restaurant_reviews.php?message_id=${messageId}&restaurant=${encodeURIComponent(restaurantName)}`;
+        // 顯示餐廳評價和留言 - 跳轉到地圖頁面顯示附近餐廳
+        function showRestaurantReviews(messageId, restaurantName, lat, lng, address) {
+            // 構建地圖頁面 URL，帶上餐廳參數和座標，並自動顯示附近餐廳
+            let mapUrl = `campus_map.php?restaurant=${encodeURIComponent(restaurantName)}&address=${encodeURIComponent(address)}&show_nearby=true`;
+            // 如果有座標，加上座標參數
+            if (lat !== null && lng !== null && lat !== 'null' && lng !== 'null') {
+                mapUrl += `&lat=${lat}&lng=${lng}`;
+            }
+            // 跳轉到地圖頁面
+            window.location.href = mapUrl;
         }
     </script>
     

@@ -63,7 +63,12 @@ try {
             $current_email = $result['email'];
         }
         // 獲取 username_changed 欄位（如果存在）
-        $username_changed = isset($result['username_changed']) ? (int)$result['username_changed'] : 0;
+        // NULL = 手動創建的帳號（不適用此功能）
+        // 0 = 系統生成的帳號，未修改過
+        // 1 = 系統生成的帳號，已修改過
+        $username_changed = isset($result['username_changed']) && $result['username_changed'] !== null 
+            ? (int)$result['username_changed'] 
+            : null;
         // 獲取當前頭像
         if (!empty($result['profile_picture'])) {
             $current_profile_picture = $result['profile_picture'];
@@ -373,7 +378,7 @@ try {
         <?php if ($is_teacher && $is_auto_generated): ?>
         <div class="credentials-section">
             <h2>帳號密碼設定</h2>
-            <?php if ($username_changed == 0): ?>
+            <?php if ($username_changed === 0): ?>
                 <div class="info-text">
                     <strong>提示：</strong>這是系統為您自動生成的帳號，建議您首次登入後立即修改為個人專屬帳號和密碼。
                 </div>
@@ -384,7 +389,7 @@ try {
             <?php endif; ?>
             
             <form id="credentialsForm">
-                <?php if ($username_changed == 0): ?>
+                <?php if ($username_changed === 0): ?>
                 <div class="form-group">
                     <label for="new_username">新帳號 <span style="color: #f5222d;">*</span></label>
                     <input type="text" id="new_username" name="new_username" placeholder="請輸入新帳號" value="" required>
@@ -678,7 +683,7 @@ try {
                 const currentPassword = document.getElementById('current_password').value;
                 const newPassword = document.getElementById('new_password').value;
                 const confirmPassword = document.getElementById('confirm_password').value;
-                const usernameChanged = <?php echo $username_changed; ?>;
+                const usernameChanged = <?php echo $username_changed !== null ? (int)$username_changed : 'null'; ?>;
                 
                 // 驗證密碼確認
                 if (newPassword !== confirmPassword) {
@@ -702,7 +707,7 @@ try {
                 formData.append('new_password', newPassword);
                 
                 // 只有在尚未修改過帳號時才允許修改帳號
-                if (usernameChanged == 0 && newUsername && newUsername.trim() !== '') {
+                if (usernameChanged === 0 && newUsername && newUsername.trim() !== '') {
                     // 驗證新帳號長度
                     if (newUsername.length < 3) {
                         const messageDiv = document.getElementById('credentialsMessage');
@@ -716,7 +721,7 @@ try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
-                fetch('http://localhost:5000/teacher/update-credentials', {
+                fetch('update_teacher_credentials.php', {
                     method: 'POST',
                     body: formData,
                     signal: controller.signal

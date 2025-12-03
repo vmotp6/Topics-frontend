@@ -1118,14 +1118,14 @@ $conn->close();
                 <div class="captcha-section">
                     <h3> <span class="required">*</span> <i class="fas fa-shield-alt"></i> 安全驗證 </h3>
                     <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
-                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" required maxlength="6" autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" required maxlength="6" autocomplete="off" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
                         <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #ddd; border-radius: 5px; cursor: pointer;" title="點擊刷新驗證碼">
                         <button type="button" onclick="refreshCaptcha()" style="padding: 10px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
                             <i class="fas fa-sync-alt"></i> 刷新
                         </button>
                     </div>
                     <small style="color: #666; display: block; margin-top: 5px;">
-                        <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（不區分大小寫）
+                        <i class="fas fa-info-circle"></i> 請輸入圖片中顯示的字母和數字（英文會自動轉換為大寫）
                     </small>
                 </div>
 

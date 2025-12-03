@@ -35,45 +35,33 @@ try {
 }
 
 // --------------------------------------------------
-// 建立資料表（若不存在）
+// 資料表結構說明（表已存在於 topics_good.sql 中）
 // --------------------------------------------------
+// 注意：資料表結構已在 topics_good.sql 中定義
+// 如果表不存在，請執行 topics_good.sql 來建立資料表
+// 學校欄位使用 school_code（學校代號），不是 school_name
+
+// --------------------------------------------------
+// 讀取資料庫選項資料
+// --------------------------------------------------
+// 讀取目標年級選項（國一、國二、國三）
+$target_grades_options = [];
 try {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS junior_school_recruitment_applications (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            school_name VARCHAR(100) NOT NULL COMMENT '學校名稱',
-            city VARCHAR(20) NOT NULL COMMENT '縣市',
-            district VARCHAR(20) NOT NULL COMMENT '區/鄉鎮市',
-            school_address VARCHAR(255) DEFAULT NULL COMMENT '學校地址',
-            contact_name VARCHAR(50) NOT NULL COMMENT '聯絡人姓名',
-            contact_title VARCHAR(50) DEFAULT NULL COMMENT '聯絡人職稱',
-            contact_phone VARCHAR(20) NOT NULL COMMENT '聯絡電話',
-            contact_email VARCHAR(120) NOT NULL COMMENT '聯絡Email',
-            preferred_date DATE NOT NULL COMMENT '期望招生日期',
-            preferred_time VARCHAR(50) NOT NULL COMMENT '期望時間',
-            target_grades VARCHAR(50) NOT NULL COMMENT '目標年級',
-            expected_students INT NOT NULL COMMENT '預期學生數',
-            venue_type VARCHAR(50) DEFAULT NULL COMMENT '場地類型',
-            special_requirements TEXT DEFAULT NULL COMMENT '特殊需求',
-            remarks TEXT DEFAULT NULL COMMENT '備註',
-            `status` ENUM('pending','approved','rejected','completed','cancelled') DEFAULT 'pending' COMMENT '申請狀態',
-            admin_comment TEXT DEFAULT NULL COMMENT '管理員備註',
-            admin_id INT DEFAULT NULL COMMENT '處理的管理員ID',
-            processed_at TIMESTAMP NULL DEFAULT NULL COMMENT '處理時間',
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '建立時間',
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新時間',
-            INDEX idx_school_name (school_name),
-            INDEX idx_city (city),
-            INDEX idx_district (district),
-            INDEX idx_status (`status`),
-            INDEX idx_created_at (created_at),
-            INDEX idx_contact_email (contact_email),
-            INDEX idx_preferred_date (preferred_date),
-            INDEX idx_admin_id (admin_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='國中學校招生申請表單';
-    ");
+    $stmt = $pdo->prepare("SELECT code, name FROM identity_options WHERE code IN ('J1', 'J2', 'J3') ORDER BY code");
+    $stmt->execute();
+    $target_grades_options = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    die('建立資料表失敗: ' . htmlspecialchars($e->getMessage()));
+    error_log("讀取目標年級選項失敗: " . $e->getMessage());
+}
+
+// 讀取場地類型選項
+$venue_options = [];
+try {
+    $stmt = $pdo->prepare("SELECT code, name FROM venue ORDER BY code");
+    $stmt->execute();
+    $venue_options = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("讀取場地類型選項失敗: " . $e->getMessage());
 }
 
 // --------------------------------------------------
@@ -86,6 +74,7 @@ $selected_application_id = 0;
 $action = '';
 $result_message = '';
 $result_type = '';
+$selected_target_grades = []; // 已選的目標年級（用於更新時）
 
 // --------------------------------------------------
 // 處理 GET 搜尋邏輯
@@ -101,7 +90,14 @@ if ($action === 'search' && isset($_GET['email'])) {
     $search_email = trim($_GET['email']);
     if ($search_email !== '') {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM junior_school_recruitment_applications WHERE contact_email = ? ORDER BY created_at DESC");
+            // 先從 schools_contacts 找到聯絡人，再找對應的申請
+            $stmt = $pdo->prepare("
+                SELECT a.* 
+                FROM junior_school_recruitment_applications a
+                INNER JOIN schools_contacts c ON a.contacts_id = c.id
+                WHERE c.email = ? 
+                ORDER BY a.created_at DESC
+            ");
             $stmt->execute([$search_email]);
             $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -114,6 +110,52 @@ if ($action === 'search' && isset($_GET['email'])) {
                 }
             } elseif (count($application_list) > 0) {
                 $application_data = $application_list[0];
+            }
+            
+            // 讀取已選的目標年級和聯絡人資訊
+            if ($application_data) {
+                try {
+                    $stmt = $pdo->prepare("SELECT target_grades FROM recruitment_target WHERE application_id = ?");
+                    $stmt->execute([$application_data['id']]);
+                    $selected_target_grades = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                } catch (PDOException $e) {
+                    error_log("讀取目標年級失敗: " . $e->getMessage());
+                    $selected_target_grades = [];
+                }
+                
+                // 查詢學校名稱用於顯示（資料表只存 school_code）
+                if (!empty($application_data['school_code'])) {
+                    try {
+                        $stmt = $pdo->prepare("SELECT name FROM school_data WHERE school_code = ? LIMIT 1");
+                        $stmt->execute([$application_data['school_code']]);
+                        $school_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($school_data && !empty($school_data['name'])) {
+                            $application_data['school_name_display'] = $school_data['name'];
+                        } else {
+                            $application_data['school_name_display'] = $application_data['school_code'];
+                        }
+                    } catch (PDOException $e) {
+                        error_log("查詢學校名稱失敗: " . $e->getMessage());
+                        $application_data['school_name_display'] = $application_data['school_code'];
+                    }
+                }
+                
+                // 查詢聯絡人資訊
+                if (!empty($application_data['contacts_id'])) {
+                    try {
+                        $stmt = $pdo->prepare("SELECT contact_name, email, phone, title FROM schools_contacts WHERE id = ? LIMIT 1");
+                        $stmt->execute([$application_data['contacts_id']]);
+                        $contact_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($contact_data) {
+                            $application_data['contact_name'] = $contact_data['contact_name'];
+                            $application_data['contact_email'] = $contact_data['email'];
+                            $application_data['contact_phone'] = $contact_data['phone'];
+                            $application_data['contact_title'] = $contact_data['title'];
+                        }
+                    } catch (PDOException $e) {
+                        error_log("查詢聯絡人資訊失敗: " . $e->getMessage());
+                    }
+                }
             }
         } catch (PDOException $e) {
             error_log("搜尋申請資料失敗: " . $e->getMessage());
@@ -128,9 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action_post = $_POST['action'] ?? 'submit';
     $application_id = isset($_POST['application_id']) ? (int)$_POST['application_id'] : 0;
 
-    $school_name = trim($_POST['school_name'] ?? '');
-    $city = trim($_POST['city'] ?? '');
-    $district = trim($_POST['district'] ?? '');
+    $school_code = trim($_POST['school_code'] ?? '');
     $school_address = trim($_POST['school_address'] ?? '');
     $contact_name = trim($_POST['contact_name'] ?? '');
     $contact_title = trim($_POST['contact_title'] ?? '');
@@ -138,23 +178,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contact_email = trim($_POST['contact_email'] ?? '');
     $preferred_date = trim($_POST['preferred_date'] ?? '');
     $preferred_time = trim($_POST['preferred_time'] ?? '');
-    $target_grades = trim($_POST['target_grades'] ?? '');
+    // 目標年級改為複選陣列
+    $target_grades = isset($_POST['target_grades']) && is_array($_POST['target_grades']) ? $_POST['target_grades'] : [];
     $expected_students = trim($_POST['expected_students'] ?? '');
-    $venue_type = trim($_POST['venue_type'] ?? '');
+    $venue_type = trim($_POST['venue_type'] ?? ''); // 存 code
     $special_requirements = trim($_POST['special_requirements'] ?? '');
     $remarks = trim($_POST['remarks'] ?? '');
     $captcha = trim($_POST['captcha'] ?? '');
 
     // 表單驗證
-    if ($school_name === '' || $city === '' || $district === '' || $contact_name === '' ||
+    if ($school_code === '' || $contact_name === '' ||
         $contact_phone === '' || $contact_email === '' || $preferred_date === '' ||
-        $preferred_time === '' || $target_grades === '' || $expected_students === '') {
+        $preferred_time === '' || empty($target_grades) || $expected_students === '') {
         $result_message = '請填寫所有必填欄位。';
         $result_type = 'error';
-    } elseif (!empty($school_name) && !preg_match('/^.+ \(.+\)$/', $school_name)) {
-        // 驗證就讀國中格式（必須從系統選項中選擇）
+    } elseif (empty($school_code)) {
+        // 驗證學校代號必須存在
         $result_message = '請從系統提供的選項中選擇學校，不能自行輸入';
         $result_type = 'error';
+    } elseif (!empty($school_name) && !empty($city)) {
+        // 驗證縣市與學校是否一致
+        // 從學校名稱中提取學校名稱（去除括號部分）
+        $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
+        
+        // 查詢學校實際所在的縣市和區/鄉鎮市
+        try {
+            $school_check_stmt = $pdo->prepare("SELECT city, district FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1");
+            $school_check_stmt->execute([$school_name_only]);
+            $school_result = $school_check_stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($school_result) {
+                $school_city_actual = $school_result['city'] ?? '';
+                $school_district_actual = $school_result['district'] ?? '';
+                    
+                    // 標準化縣市名稱（處理「臺」vs「台」等變體）
+                    $normalizeCity = function($city) {
+                        if (empty($city)) return '';
+                        $city = str_replace('臺', '台', $city);
+                        return trim($city);
+                    };
+                    
+                    // 驗證並修正縣市
+                    if (!empty($school_city_actual)) {
+                        $normalized_selected = $normalizeCity($city);
+                        $normalized_actual = $normalizeCity($school_city_actual);
+                        
+                        if ($normalized_selected !== $normalized_actual) {
+                            // 縣市不一致，自動修正為學校實際所在的縣市
+                            $city = $school_city_actual;
+                            error_log("警告：用戶選擇的縣市 ({$normalized_selected}) 與學校實際所在縣市 ({$normalized_actual}) 不一致，已自動修正為 {$school_city_actual}");
+                        }
+                    }
+                    
+                    // 驗證並修正區/鄉鎮市
+                    if (!empty($school_district_actual) && !empty($district) && $district !== $school_district_actual) {
+                        // 區/鄉鎮市不一致，自動修正為學校實際所在的區/鄉鎮市
+                        $district = $school_district_actual;
+                        error_log("警告：用戶選擇的區/鄉鎮市 ({$district}) 與學校實際所在區/鄉鎮市 ({$school_district_actual}) 不一致，已自動修正為 {$school_district_actual}");
+                    }
+                }
+        } catch (PDOException $e) {
+            error_log("查詢學校縣市失敗: " . $e->getMessage());
+            // 查詢失敗時不阻擋提交，但記錄錯誤
+        }
     } elseif ($captcha === '') {
         $result_message = '請輸入驗證碼。';
         $result_type = 'error';
@@ -181,22 +267,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $expected_students_int = (int)$expected_students;
 
                 if ($action_post === 'update' && $application_id > 0) {
+                    // 先處理聯絡人：檢查或新增到 schools_contacts
+                    $contacts_id = null;
+                    try {
+                        // 檢查是否已存在相同的聯絡人（根據 school_code 和 email）
+                        $check_contact = $pdo->prepare("SELECT id FROM schools_contacts WHERE school_code = ? AND email = ? LIMIT 1");
+                        $check_contact->execute([$school_code, $contact_email]);
+                        $existing_contact = $check_contact->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($existing_contact) {
+                            // 更新現有聯絡人（包含 phone 欄位）
+                            $contacts_id = (int)$existing_contact['id'];
+                            $upd_contact = $pdo->prepare("UPDATE schools_contacts SET contact_name=?, phone=?, title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?");
+                            $upd_contact->execute([$contact_name ?: null, $contact_phone ?: null, $contact_title ?: null, $contacts_id]);
+                        } else {
+                            // 新增聯絡人（包含 phone 欄位）
+                            $ins_contact = $pdo->prepare("INSERT INTO schools_contacts (school_code, contact_name, email, phone, title) VALUES (?, ?, ?, ?, ?)");
+                            $ins_contact->execute([$school_code, $contact_name ?: null, $contact_email, $contact_phone ?: null, $contact_title ?: null]);
+                            $contacts_id = (int)$pdo->lastInsertId();
+                        }
+                    } catch (PDOException $e) {
+                        error_log("處理聯絡人資料失敗: " . $e->getMessage());
+                        throw $e;
+                    }
+                    
+                    if (!$contacts_id) {
+                        throw new PDOException("無法取得聯絡人ID");
+                    }
+                    
                     // 更新申請資料
                     $upd = $pdo->prepare("UPDATE junior_school_recruitment_applications SET
-                        school_name=?, city=?, district=?, school_address=?, contact_name=?, contact_title=?,
-                        contact_phone=?, contact_email=?, preferred_date=?, preferred_time=?, target_grades=?,
+                        school_code=?, school_address=?, contacts_id=?, preferred_date=?, preferred_time=?,
                         expected_students=?, venue_type=?, special_requirements=?, remarks=?, updated_at=CURRENT_TIMESTAMP
-                        WHERE id=? AND contact_email=?");
+                        WHERE id=?");
 
                     $upd->execute([
-                        $school_name, $city, $district, $school_address ?: null,
-                        $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
-                        $preferred_date, $preferred_time, $target_grades,
+                        $school_code, $school_address ?: null, $contacts_id,
+                        $preferred_date, $preferred_time,
                         $expected_students_int, $venue_type ?: null, $special_requirements ?: null, $remarks ?: null,
-                        $application_id, $contact_email
+                        $application_id
                     ]);
 
                     if ($upd->rowCount() > 0) {
+                        // 更新目標年級：先刪除舊的，再插入新的
+                        try {
+                            $del_target = $pdo->prepare("DELETE FROM recruitment_target WHERE application_id = ?");
+                            $del_target->execute([$application_id]);
+                            
+                            if (!empty($target_grades) && is_array($target_grades)) {
+                                $ins_target = $pdo->prepare("INSERT INTO recruitment_target (application_id, target_grades) VALUES (?, ?)");
+                                foreach ($target_grades as $grade_code) {
+                                    // 驗證 grade_code 是否為有效的 J1, J2, J3
+                                    $grade_code = trim($grade_code);
+                                    if (in_array($grade_code, ['J1', 'J2', 'J3'])) {
+                                        try {
+                                            $ins_target->execute([$application_id, $grade_code]);
+                                            error_log("成功插入目標年級: application_id={$application_id}, target_grades={$grade_code}");
+                                        } catch (PDOException $e) {
+                                            // 記錄錯誤但不中斷流程（可能是重複鍵）
+                                            error_log("插入目標年級失敗: " . $e->getMessage() . " (application_id={$application_id}, target_grades={$grade_code})");
+                                            if (strpos($e->getMessage(), 'Duplicate entry') === false && 
+                                                strpos($e->getMessage(), 'foreign key constraint') === false) {
+                                                throw $e; // 重新拋出非重複鍵和非外鍵的錯誤
+                                            }
+                                        }
+                                    } else {
+                                        error_log("警告：無效的年級代碼: {$grade_code}");
+                                    }
+                                }
+                            } else {
+                                error_log("警告：目標年級為空或不是陣列: " . print_r($target_grades, true));
+                            }
+                        } catch (PDOException $e) {
+                            error_log("更新目標年級時發生錯誤: " . $e->getMessage());
+                            throw $e; // 重新拋出錯誤，觸發 rollback
+                        }
+                        
                         $pdo->commit();
                         header('Location: ' . $_SERVER['PHP_SELF'] . '?updated=1&id=' . $application_id);
                         exit;
@@ -206,21 +352,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pdo->rollBack();
                     }
                 } else {
-                    // 新增申請資料
+                    // 新增申請資料（注意：status 欄位有外鍵約束，需要設定有效的狀態代碼）
+                    // 根據 topics_good.sql，application_statuses 表中的狀態代碼為：'PE'（待審核）、'AP'（通過）、'RE'（不通過）、'AD'（備取）
+                    // status 欄位有外鍵約束到 application_statuses.code，所以必須使用有效的代碼或 NULL
+                    $default_status = 'PE'; // 使用 'PE'（待審核）作為預設狀態
+                    // 驗證狀態代碼是否存在
+                    try {
+                        $stmt = $pdo->prepare("SELECT code FROM application_statuses WHERE code = ? LIMIT 1");
+                        $stmt->execute([$default_status]);
+                        $status_row = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if (!$status_row) {
+                            // 如果 'PE' 不存在，使用 NULL（但這可能會違反外鍵約束）
+                            $default_status = null;
+                            error_log("警告：application_statuses 表中沒有 'PE' 狀態，使用 NULL");
+                        }
+                    } catch (PDOException $e) {
+                        // 如果查詢失敗，使用 NULL（但這可能會違反外鍵約束）
+                        error_log("無法查詢狀態代碼: " . $e->getMessage());
+                        $default_status = null;
+                    }
+                    
+                    // 先處理聯絡人：檢查或新增到 schools_contacts
+                    $contacts_id = null;
+                    try {
+                        // 檢查是否已存在相同的聯絡人（根據 school_code 和 email）
+                        $check_contact = $pdo->prepare("SELECT id FROM schools_contacts WHERE school_code = ? AND email = ? LIMIT 1");
+                        $check_contact->execute([$school_code, $contact_email]);
+                        $existing_contact = $check_contact->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($existing_contact) {
+                            // 更新現有聯絡人（包含 phone 欄位）
+                            $contacts_id = (int)$existing_contact['id'];
+                            $upd_contact = $pdo->prepare("UPDATE schools_contacts SET contact_name=?, phone=?, title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?");
+                            $upd_contact->execute([$contact_name ?: null, $contact_phone ?: null, $contact_title ?: null, $contacts_id]);
+                        } else {
+                            // 新增聯絡人（包含 phone 欄位）
+                            $ins_contact = $pdo->prepare("INSERT INTO schools_contacts (school_code, contact_name, email, phone, title) VALUES (?, ?, ?, ?, ?)");
+                            $ins_contact->execute([$school_code, $contact_name ?: null, $contact_email, $contact_phone ?: null, $contact_title ?: null]);
+                            $contacts_id = (int)$pdo->lastInsertId();
+                        }
+                    } catch (PDOException $e) {
+                        error_log("處理聯絡人資料失敗: " . $e->getMessage());
+                        throw $e;
+                    }
+                    
+                    if (!$contacts_id) {
+                        throw new PDOException("無法取得聯絡人ID");
+                    }
+                    
                     $ins = $pdo->prepare("INSERT INTO junior_school_recruitment_applications
-                        (school_name, city, district, school_address, contact_name, contact_title,
-                         contact_phone, contact_email, preferred_date, preferred_time, target_grades,
-                         expected_students, venue_type, special_requirements, remarks)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        (school_code, school_address, contacts_id, preferred_date, preferred_time,
+                         expected_students, venue_type, special_requirements, remarks, status)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-                    $ins->execute([
-                        $school_name, $city, $district, $school_address ?: null,
-                        $contact_name, $contact_title ?: null, $contact_phone, $contact_email,
-                        $preferred_date, $preferred_time, $target_grades,
-                        $expected_students_int, $venue_type ?: null, $special_requirements ?: null, $remarks ?: null
-                    ]);
+                    // 確保所有必填欄位不為空字串
+                    // 注意：preferred_date 和 expected_students 在資料表中是 DEFAULT NULL，但我們驗證為必填
+                    $ins_params = [
+                        $school_code ?: null, 
+                        $school_address ?: null,
+                        $contacts_id,
+                        $preferred_date ?: null, 
+                        $preferred_time ?: null,
+                        $expected_students_int > 0 ? $expected_students_int : null, 
+                        $venue_type ?: null, 
+                        $special_requirements ?: null, 
+                        $remarks ?: null,
+                        $default_status // status 欄位
+                    ];
+                    
+                    // 記錄插入參數以便除錯
+                    error_log("插入參數數量: " . count($ins_params));
+                    error_log("插入參數: " . print_r($ins_params, true));
+                    
+                    $ins->execute($ins_params);
 
                     $application_id = (int)$pdo->lastInsertId();
+                    
+                    if ($application_id <= 0) {
+                        throw new PDOException("無法取得新插入的申請編號");
+                    }
+                    
+                    // 插入目標年級到 recruitment_target 表
+                    if (!empty($target_grades) && is_array($target_grades)) {
+                        $ins_target = $pdo->prepare("INSERT INTO recruitment_target (application_id, target_grades) VALUES (?, ?)");
+                        foreach ($target_grades as $grade_code) {
+                            // 驗證 grade_code 是否為有效的 J1, J2, J3
+                            $grade_code = trim($grade_code);
+                            if (in_array($grade_code, ['J1', 'J2', 'J3'])) {
+                                try {
+                                    $ins_target->execute([$application_id, $grade_code]);
+                                    error_log("成功插入目標年級: application_id={$application_id}, target_grades={$grade_code}");
+                                } catch (PDOException $e) {
+                                    // 記錄詳細錯誤
+                                    error_log("插入目標年級失敗: " . $e->getMessage() . " (application_id={$application_id}, target_grades={$grade_code})");
+                                    error_log("錯誤詳情: " . print_r($e->errorInfo, true));
+                                    
+                                    // 如果是重複鍵錯誤，忽略（可能已經存在）
+                                    if (strpos($e->getMessage(), 'Duplicate entry') === false) {
+                                        // 外鍵約束錯誤或其他錯誤，重新拋出
+                                        throw $e;
+                                    }
+                                }
+                            } else {
+                                error_log("警告：無效的年級代碼: {$grade_code} (application_id={$application_id})");
+                            }
+                        }
+                    } else {
+                        error_log("警告：目標年級為空或不是陣列: " . print_r($target_grades, true) . " (application_id={$application_id})");
+                        // 如果目標年級為空，這是一個錯誤，應該回滾
+                        throw new PDOException("目標年級為必填欄位，請至少選擇一個年級");
+                    }
+                    
                     $pdo->commit();
 
                     // 發送確認信
@@ -237,20 +479,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $mail->setFrom(SMTP_FROM_EMAIL, '康寧大學招生系統');
                         $mail->addAddress($contact_email, $contact_name);
                         $mail->isHTML(true);
-                        $mail->Subject = '國中學校招生申請已收到 - ' . htmlspecialchars($school_name, ENT_QUOTES, 'UTF-8');
+                        // 查詢學校名稱用於郵件
+                        $school_name_for_email = $school_code;
+                        try {
+                            $stmt = $pdo->prepare("SELECT name FROM school_data WHERE school_code = ? LIMIT 1");
+                            $stmt->execute([$school_code]);
+                            $school_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                            if ($school_data && !empty($school_data['name'])) {
+                                $school_name_for_email = $school_data['name'];
+                            }
+                        } catch (PDOException $e) {
+                            error_log("查詢學校名稱失敗: " . $e->getMessage());
+                        }
+                        
+                        $mail->Subject = '國中學校招生申請已收到 - ' . htmlspecialchars($school_name_for_email, ENT_QUOTES, 'UTF-8');
 
                         $mailBody = "
                             <html><body style='font-family:Arial,sans-serif'>
                             <h2>感謝您的申請</h2>
                             <p>親愛的 {$contact_name} 您好，</p>
-                            <p>貴校 <strong>{$school_name}</strong> 的招生申請已收到，申請編號為：<strong>#{$application_id}</strong>。</p>
+                            <p>貴校 <strong>{$school_name_for_email}</strong> 的招生申請已收到，申請編號為：<strong>#{$application_id}</strong>。</p>
                             <p>我們將於 3-5 個工作天內與您聯繫。</p>
                             <hr>
                             <p style='font-size:12px;color:#777;'>此為系統自動發送郵件，請勿直接回覆。</p>
                             </body></html>";
 
                         $mail->Body = $mailBody;
-                        $mail->AltBody = "感謝您的申請。貴校 {$school_name} 的招生申請已收到，申請編號 #{$application_id}。";
+                        $mail->AltBody = "感謝您的申請。貴校 {$school_name_for_email} 的招生申請已收到，申請編號 #{$application_id}。";
                         $mail->send();
                     } catch (Exception $e) {
                         error_log("郵件發送失敗: " . $e->getMessage());
@@ -268,9 +523,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 優化錯誤提示
                 $error_message = $ex->getMessage();
                 $error_code = $ex->getCode();
+                $error_info = $ex->errorInfo ?? [];
                 
-                // 記錄詳細錯誤到日誌
-                error_log("資料庫錯誤 [Code: $error_code]: " . $error_message);
+                // 記錄詳細錯誤到日誌（包含更多資訊）
+                error_log("資料庫錯誤 [Code: $error_code] [SQLState: " . ($error_info[0] ?? 'N/A') . "]: " . $error_message);
+                error_log("錯誤詳情: " . print_r($error_info, true));
+                error_log("POST 資料: " . print_r($_POST, true));
                 
                 // 根據錯誤類型提供友好的中文提示
                 if ($error_code == 1644) {
@@ -284,12 +542,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif (strpos($error_message, 'Duplicate entry') !== false) {
                     $result_message = '此申請資料已存在，請勿重複提交。';
                 } elseif (strpos($error_message, 'foreign key constraint') !== false) {
-                    $result_message = '資料關聯錯誤，請檢查輸入的資料是否正確。';
-                } elseif (strpos($error_message, 'cannot be null') !== false) {
+                    // 詳細記錄外鍵約束錯誤
+                    if (strpos($error_message, 'recruitment_target') !== false) {
+                        if (strpos($error_message, 'application_id') !== false) {
+                            $result_message = '資料關聯錯誤：申請編號不存在，請重新提交申請。';
+                        } elseif (strpos($error_message, 'target_grades') !== false) {
+                            $result_message = '資料關聯錯誤：目標年級代碼無效，請選擇有效的年級（國一、國二、國三）。';
+                        } else {
+                            $result_message = '資料關聯錯誤：目標年級資料驗證失敗，請檢查選擇的年級是否正確。';
+                        }
+                    } elseif (strpos($error_message, 'school_code') !== false) {
+                        $result_message = '資料關聯錯誤：學校代號不存在，請從系統選項中選擇學校。';
+                    } else {
+                        $result_message = '資料關聯錯誤，請檢查輸入的資料是否正確。';
+                    }
+                } elseif (strpos($error_message, 'cannot be null') !== false || strpos($error_message, 'Column') !== false && strpos($error_message, 'cannot be null') !== false) {
                     $result_message = '必填欄位未填寫完整，請檢查所有標示 * 的欄位。';
+                } elseif (strpos($error_message, 'Unknown column') !== false) {
+                    $result_message = '資料表結構錯誤，請聯繫系統管理員檢查資料庫設定。';
+                } elseif (strpos($error_message, 'Table') !== false && strpos($error_message, "doesn't exist") !== false) {
+                    $result_message = '資料表不存在，請聯繫系統管理員檢查資料庫設定。';
                 } else {
                     // 其他資料庫錯誤，提供通用提示
-                    $result_message = '申請提交失敗，請檢查輸入的資料是否正確。如問題持續，請聯繫系統管理員。';
+                    // 在開發環境可以通過 URL 參數 ?debug=1 顯示詳細錯誤
+                    $show_debug = isset($_GET['debug']) && $_GET['debug'] == '1';
+                    if ($show_debug) {
+                        $result_message = '申請提交失敗：' . htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8') . ' (錯誤代碼: ' . $error_code . ')';
+                    } else {
+                        $result_message = '申請提交失敗，請檢查輸入的資料是否正確。如問題持續，請聯繫系統管理員。';
+                    }
                 }
                 
                 $result_type = 'error';
@@ -356,8 +637,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             color: #2c3e50;
         }
         
-        .field-group input[name="city"],
-        .field-group input[name="district"],
+        .field-group select[name="city"],
+        .field-group select[name="district"],
         .field-group input[name="school_address"] {
             width: 100%;
             padding: 12px 15px;
@@ -370,8 +651,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
             font-family: 'Microsoft JhengHei', sans-serif;
         }
         
-        .field-group input[name="city"]:focus,
-        .field-group input[name="district"]:focus,
+        .field-group select[name="city"]:focus,
+        .field-group select[name="district"]:focus,
         .field-group input[name="school_address"]:focus {
             outline: none;
             border-color: #667eea;
@@ -606,7 +887,25 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         
                         <!-- 申請資料列表 -->
                         <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
-                            <?php foreach ($application_list as $app): 
+                            <?php foreach ($application_list as $app):
+                                // 為每個申請讀取聯絡人資訊
+                                $app_contact_name = '';
+                                $app_contact_email = '';
+                                $app_contact_phone = '';
+                                if (!empty($app['contacts_id'])) {
+                                    try {
+                                        $stmt = $pdo->prepare("SELECT contact_name, email, phone, title FROM schools_contacts WHERE id = ? LIMIT 1");
+                                        $stmt->execute([$app['contacts_id']]);
+                                        $app_contact = $stmt->fetch(PDO::FETCH_ASSOC);
+                                        if ($app_contact) {
+                                            $app_contact_name = $app_contact['contact_name'] ?? '';
+                                            $app_contact_email = $app_contact['email'] ?? '';
+                                            $app_contact_phone = $app_contact['phone'] ?? '';
+                                        }
+                                    } catch (PDOException $e) {
+                                        // 忽略錯誤
+                                    }
+                                } 
                                 $is_selected = ($application_data && $application_data['id'] == $app['id']);
                                 $status_text = [
                                     'pending' => ['text' => '審核中', 'color' => '#ff9800'],
@@ -626,7 +925,24 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                                 <?php endif; ?>
                                             </div>
                                             <div style="font-size: 14px; color: #666; margin-bottom: 5px;">
-                                                <i class="fas fa-building"></i> <?php echo htmlspecialchars($app['school_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                                <i class="fas fa-building"></i> 
+                                                <?php 
+                                                // 查詢學校名稱用於顯示
+                                                $display_name = $app['school_code'] ?? '';
+                                                if (!empty($app['school_code'])) {
+                                                    try {
+                                                        $stmt = $pdo->prepare("SELECT name FROM school_data WHERE school_code = ? LIMIT 1");
+                                                        $stmt->execute([$app['school_code']]);
+                                                        $school_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                                                        if ($school_data && !empty($school_data['name'])) {
+                                                            $display_name = $school_data['name'];
+                                                        }
+                                                    } catch (PDOException $e) {
+                                                        // 忽略錯誤，使用代號
+                                                    }
+                                                }
+                                                echo htmlspecialchars($display_name, ENT_QUOTES, 'UTF-8'); 
+                                                ?>
                                             </div>
                                             <div style="font-size: 13px; color: #888;">
                                                 <i class="fas fa-calendar"></i> <?php echo date('Y-m-d H:i', strtotime($app['created_at'])); ?>
@@ -687,15 +1003,24 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                             <label><span class="required">*</span> 學校名稱：</label>
                             <div class="modern-search-container">
                                 <div class="search-input-wrapper">
-                                    <input type="text" id="school_name" name="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required 
-                                           value="<?php 
-                                           $school_name_value = '';
-                                           if ($application_data) {
-                                               $school_name_value = htmlspecialchars($application_data['school_name'], ENT_QUOTES, 'UTF-8');
-                                           } elseif (isset($_POST['school_name'])) {
-                                               $school_name_value = htmlspecialchars($_POST['school_name'], ENT_QUOTES, 'UTF-8');
+                                    <input type="hidden" id="school_code" name="school_code" value="<?php 
+                                           $school_code_value = '';
+                                           if ($application_data && isset($application_data['school_code'])) {
+                                               $school_code_value = htmlspecialchars($application_data['school_code'], ENT_QUOTES, 'UTF-8');
+                                           } elseif (isset($_POST['school_code'])) {
+                                               $school_code_value = htmlspecialchars($_POST['school_code'], ENT_QUOTES, 'UTF-8');
                                            }
-                                           echo $school_name_value;
+                                           echo $school_code_value;
+                                           ?>" />
+                                    <input type="text" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required 
+                                           value="<?php 
+                                           $school_name_display = '';
+                                           if ($application_data && isset($application_data['school_name_display'])) {
+                                               $school_name_display = htmlspecialchars($application_data['school_name_display'], ENT_QUOTES, 'UTF-8');
+                                           } elseif (isset($_POST['school_name_display'])) {
+                                               $school_name_display = htmlspecialchars($_POST['school_name_display'], ENT_QUOTES, 'UTF-8');
+                                           }
+                                           echo $school_name_display;
                                            ?>" />
                                     <div class="search-icon">
                                         <i class="fas fa-search"></i>
@@ -716,36 +1041,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     </div>
                     <div class="form-row">
                         <div class="field-group">
-                            <label><span class="required">*</span> 縣市</label>
-                            <input type="text" name="city" placeholder="例如：台北市、新北市" required 
-                                   value="<?php 
-                                   $city_value = '';
-                                   if ($application_data) {
-                                       $city_value = htmlspecialchars($application_data['city'], ENT_QUOTES, 'UTF-8');
-                                   } elseif (isset($_POST['city'])) {
-                                       $city_value = htmlspecialchars($_POST['city'], ENT_QUOTES, 'UTF-8');
-                                   }
-                                   echo $city_value;
-                                   ?>" />
-                        </div>
-                        <div class="field-group">
-                            <label><span class="required">*</span> 區/鄉鎮市</label>
-                            <input type="text" name="district" placeholder="例如：中正區、板橋區" required 
-                                   value="<?php 
-                                   $district_value = '';
-                                   if ($application_data) {
-                                       $district_value = htmlspecialchars($application_data['district'], ENT_QUOTES, 'UTF-8');
-                                   } elseif (isset($_POST['district'])) {
-                                       $district_value = htmlspecialchars($_POST['district'], ENT_QUOTES, 'UTF-8');
-                                   }
-                                   echo $district_value;
-                                   ?>" />
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="field-group">
                             <label>學校地址</label>
-                            <input type="text" name="school_address" placeholder="請輸入完整地址（選填）" 
+                            <input type="text" name="school_address" id="school_address" placeholder="將根據縣市和區/鄉鎮市自動產生" readonly
                                    value="<?php 
                                    $school_address_value = '';
                                    if ($application_data) {
@@ -756,6 +1053,12 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    echo $school_address_value;
                                    ?>" />
                         </div>
+                    </div>
+                    <div id="city_school_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                        <i class="fas fa-exclamation-circle"></i> <span id="city_school_mismatch_error_text">就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市</span>
+                    </div>
+                    <div id="district_school_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
+                        <i class="fas fa-exclamation-circle"></i> <span id="district_school_mismatch_error_text">區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，系統已自動更新為正確的區/鄉鎮市</span>
                     </div>
                 </div>
 
@@ -797,7 +1100,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    value="<?php 
                                    $contact_phone_value = '';
                                    if ($application_data) {
-                                       $contact_phone_value = htmlspecialchars($application_data['contact_phone'], ENT_QUOTES, 'UTF-8');
+                                       $contact_phone_value = htmlspecialchars($application_data['contact_phone'] ?? '', ENT_QUOTES, 'UTF-8');
                                    } elseif (isset($_POST['contact_phone'])) {
                                        $contact_phone_value = htmlspecialchars($_POST['contact_phone'], ENT_QUOTES, 'UTF-8');
                                    }
@@ -861,16 +1164,31 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 目標年級</label>
-                            <input type="text" name="target_grades" placeholder="例如：七年級、八年級、九年級" required
-                                   value="<?php 
-                                   $target_grades_value = '';
-                                   if ($application_data) {
-                                       $target_grades_value = htmlspecialchars($application_data['target_grades'], ENT_QUOTES, 'UTF-8');
-                                   } elseif (isset($_POST['target_grades'])) {
-                                       $target_grades_value = htmlspecialchars($_POST['target_grades'], ENT_QUOTES, 'UTF-8');
-                                   }
-                                   echo $target_grades_value;
-                                   ?>" />
+                            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 8px;">
+                                <?php
+                                // 確定已選的年級
+                                $checked_grades = [];
+                                if (!empty($selected_target_grades)) {
+                                    $checked_grades = $selected_target_grades;
+                                } elseif (isset($_POST['target_grades']) && is_array($_POST['target_grades'])) {
+                                    $checked_grades = $_POST['target_grades'];
+                                }
+                                
+                                foreach ($target_grades_options as $option):
+                                    $is_checked = in_array($option['code'], $checked_grades);
+                                ?>
+                                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 15px; border: 2px solid #e0e0e0; border-radius: 8px; transition: all 0.3s; background: <?php echo $is_checked ? '#e3f2fd' : '#fff'; ?>; border-color: <?php echo $is_checked ? '#667eea' : '#e0e0e0'; ?>;">
+                                        <input type="checkbox" name="target_grades[]" value="<?php echo htmlspecialchars($option['code'], ENT_QUOTES, 'UTF-8'); ?>" 
+                                               <?php echo $is_checked ? 'checked' : ''; ?> 
+                                               style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;"
+                                               onchange="this.parentElement.style.background = this.checked ? '#e3f2fd' : '#fff'; this.parentElement.style.borderColor = this.checked ? '#667eea' : '#e0e0e0';">
+                                        <span style="font-size: 15px; color: #333;"><?php echo htmlspecialchars($option['name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <small style="color: #666; margin-top: 8px; display: block;">
+                                <i class="fas fa-info-circle"></i> 可複選多個年級
+                            </small>
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 預期參與學生數</label>
@@ -898,11 +1216,14 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                 } elseif (isset($_POST['venue_type'])) {
                                     $venue_type_value = $_POST['venue_type'];
                                 }
+                                
+                                foreach ($venue_options as $venue):
                                 ?>
-                                <option value="校內" <?php echo ($venue_type_value === '校內') ? 'selected' : ''; ?>>校內</option>
-                                <option value="校外" <?php echo ($venue_type_value === '校外') ? 'selected' : ''; ?>>校外</option>
-                                <option value="線上" <?php echo ($venue_type_value === '線上') ? 'selected' : ''; ?>>線上</option>
-                                <option value="其他" <?php echo ($venue_type_value === '其他') ? 'selected' : ''; ?>>其他</option>
+                                    <option value="<?php echo htmlspecialchars($venue['code'], ENT_QUOTES, 'UTF-8'); ?>" 
+                                            <?php echo ($venue_type_value === $venue['code']) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($venue['name'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
@@ -973,6 +1294,31 @@ function checkRequiredFields() {
 
 // 頁面載入時初始化輸入框視覺效果和學校搜尋
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化縣市和區/鄉鎮市下拉選單
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    
+    if (citySelect) {
+        // 縣市改變時更新區/鄉鎮市選項
+        citySelect.addEventListener('change', function() {
+            updateDistricts();
+            validateCitySchoolMatch();
+        });
+        
+        // 如果有預設值，初始化區/鄉鎮市選項
+        if (citySelect.value) {
+            updateDistricts();
+        }
+    }
+    
+    if (districtSelect) {
+        // 區/鄉鎮市改變時更新學校地址並驗證
+        districtSelect.addEventListener('change', function() {
+            updateSchoolAddress();
+            validateCitySchoolMatch();
+        });
+    }
+    
     // 綁定學校搜尋事件
     const schoolSearchInput = document.getElementById('school_name');
     const clearSchoolBtn = document.getElementById('clearSchoolSearch');
@@ -1039,21 +1385,36 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 表單提交前驗證
     function validateFormBeforeSubmit(e) {
+        const schoolCodeInput = document.getElementById('school_code');
         const schoolNameInput = document.getElementById('school_name');
-        if (schoolNameInput) {
-            const schoolName = schoolNameInput.value.trim();
-            if (schoolName) {
-                // 檢查格式是否為：學校名稱 (縣市區)
-                const schoolFormatPattern = /^.+ \(.+\)$/;
-                if (!schoolFormatPattern.test(schoolName)) {
-                    e.preventDefault();
-                    showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+        
+        // 驗證學校代號是否存在
+        if (schoolCodeInput) {
+            const schoolCode = schoolCodeInput.value.trim();
+            if (!schoolCode) {
+                e.preventDefault();
+                showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
+                if (schoolNameInput) {
                     schoolNameInput.focus();
                     schoolNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return false;
                 }
+                return false;
             }
         }
+        
+        // 驗證目標年級至少選擇一個
+        const targetGradesCheckboxes = document.querySelectorAll('input[name="target_grades[]"]:checked');
+        if (targetGradesCheckboxes.length === 0) {
+            e.preventDefault();
+            alert('請至少選擇一個目標年級');
+            const firstCheckbox = document.querySelector('input[name="target_grades[]"]');
+            if (firstCheckbox) {
+                firstCheckbox.focus();
+                firstCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return false;
+        }
+        
         return true;
     }
     
@@ -1121,6 +1482,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (form) {
         form.addEventListener('submit', function(e) {
+            // 驗證縣市與學校是否一致
+            if (!validateCitySchoolMatch()) {
+                e.preventDefault();
+                const citySelect = document.getElementById('citySelect');
+                if (citySelect) {
+                    citySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    citySelect.focus();
+                }
+                return false;
+            }
+            
             // 防止重複提交
             if (isSubmitting) {
                 e.preventDefault();
@@ -1261,11 +1633,13 @@ function performSchoolSearch() {
                         additionalInfo = `<div class="school-alternative-names">其他名稱: ${school.all_names.join(', ')}</div>`;
                     }
                     
-                    return `<div class="search-result-item" onclick="selectSchool('${school.name}', '${school.city}', '${school.district}')">
+                    // 確保 school_code 存在，如果沒有則使用空字串
+                    const schoolCode = school.school_code || '';
+                    return `<div class="search-result-item" onclick="selectSchool('${schoolCode}', '${school.name}', '${school.city}', '${school.district}')">
                         <i class="fas fa-school"></i>
                         <div class="school-info">
                             <span class="school-name">${displayName}</span>
-                            <span class="school-location">${school.city} ${school.district}</span>
+                            <span class="school-location">${school.city || ''} ${school.district || ''}</span>
                             ${additionalInfo}
                         </div>
                     </div>`;
@@ -1364,31 +1738,326 @@ function validateSchoolInputImmediate() {
 
 // 清除搜尋
 function clearSchoolSearch() {
-    document.getElementById('school_name').value = '';
+    const schoolCodeInput = document.getElementById('school_code');
+    const schoolNameInput = document.getElementById('school_name');
+    if (schoolCodeInput) schoolCodeInput.value = '';
+    if (schoolNameInput) schoolNameInput.value = '';
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'none';
     clearSchoolError();
+    clearCityMismatchError();
+    clearDistrictMismatchError();
+}
+
+// 台灣縣市和區/鄉鎮市對應資料
+const cityDistrictsMap = {
+    '台北市': ['中正區', '大同區', '中山區', '松山區', '大安區', '萬華區', '信義區', '士林區', '北投區', '內湖區', '南港區', '文山區'],
+    '新北市': ['板橋區', '三重區', '中和區', '永和區', '新莊區', '新店區', '樹林區', '鶯歌區', '三峽區', '淡水區', '汐止區', '瑞芳區', '土城區', '蘆洲區', '五股區', '泰山區', '林口區', '深坑區', '石碇區', '坪林區', '三芝區', '石門區', '八里區', '平溪區', '雙溪區', '貢寮區', '金山區', '萬里區', '烏來區'],
+    '桃園市': ['桃園區', '中壢區', '大溪區', '楊梅區', '蘆竹區', '大園區', '龜山區', '八德區', '龍潭區', '平鎮區', '新屋區', '觀音區', '復興區'],
+    '台中市': ['中區', '東區', '南區', '西區', '北區', '西屯區', '南屯區', '北屯區', '豐原區', '東勢區', '大甲區', '清水區', '沙鹿區', '梧棲區', '后里區', '神岡區', '潭子區', '大雅區', '新社區', '石岡區', '外埔區', '大安區', '烏日區', '大肚區', '龍井區', '霧峰區', '太平區', '大里區', '和平區'],
+    '台南市': ['中西區', '東區', '南區', '北區', '安平區', '安南區', '永康區', '歸仁區', '新化區', '左鎮區', '玉井區', '楠西區', '南化區', '仁德區', '關廟區', '龍崎區', '官田區', '麻豆區', '佳里區', '西港區', '七股區', '將軍區', '學甲區', '北門區', '新營區', '後壁區', '白河區', '東山區', '六甲區', '下營區', '柳營區', '鹽水區', '善化區', '大內區', '山上區', '新市區', '安定區'],
+    '高雄市': ['新興區', '前金區', '苓雅區', '鹽埕區', '鼓山區', '旗津區', '前鎮區', '三民區', '左營區', '楠梓區', '小港區', '仁武區', '大社區', '岡山區', '路竹區', '阿蓮區', '田寮區', '燕巢區', '橋頭區', '梓官區', '彌陀區', '永安區', '湖內區', '鳳山區', '大寮區', '林園區', '鳥松區', '大樹區', '旗山區', '美濃區', '六龜區', '內門區', '杉林區', '甲仙區', '桃源區', '那瑪夏區', '茂林區', '茄萣區'],
+    '基隆市': ['仁愛區', '信義區', '中正區', '中山區', '安樂區', '暖暖區', '七堵區'],
+    '新竹市': ['東區', '北區', '香山區'],
+    '嘉義市': ['東區', '西區'],
+    '新竹縣': ['竹北市', '湖口鄉', '新豐鄉', '新埔鎮', '關西鎮', '芎林鄉', '寶山鄉', '竹東鎮', '五峰鄉', '橫山鄉', '尖石鄉', '北埔鄉', '峨眉鄉'],
+    '苗栗縣': ['苗栗市', '苑裡鎮', '通霄鎮', '竹南鎮', '頭份市', '後龍鎮', '卓蘭鎮', '大湖鄉', '公館鄉', '銅鑼鄉', '南庄鄉', '頭屋鄉', '三義鄉', '西湖鄉', '造橋鄉', '三灣鄉', '獅潭鄉', '泰安鄉'],
+    '彰化縣': ['彰化市', '鹿港鎮', '和美鎮', '線西鄉', '伸港鄉', '福興鄉', '秀水鄉', '花壇鄉', '芬園鄉', '員林市', '溪湖鎮', '田中鎮', '大村鄉', '埔鹽鄉', '埔心鄉', '永靖鄉', '社頭鄉', '二水鄉', '北斗鎮', '二林鎮', '田尾鄉', '埤頭鄉', '芳苑鄉', '大城鄉', '竹塘鄉', '溪州鄉'],
+    '南投縣': ['南投市', '埔里鎮', '草屯鎮', '竹山鎮', '集集鎮', '名間鄉', '鹿谷鄉', '中寮鄉', '魚池鄉', '國姓鄉', '水里鄉', '信義鄉', '仁愛鄉'],
+    '雲林縣': ['斗六市', '斗南鎮', '虎尾鎮', '西螺鎮', '土庫鎮', '北港鎮', '古坑鄉', '大埤鄉', '莿桐鄉', '林內鄉', '二崙鄉', '崙背鄉', '麥寮鄉', '東勢鄉', '褒忠鄉', '台西鄉', '元長鄉', '四湖鄉', '口湖鄉', '水林鄉'],
+    '嘉義縣': ['太保市', '朴子市', '布袋鎮', '大林鎮', '民雄鄉', '溪口鄉', '新港鄉', '六腳鄉', '東石鄉', '義竹鄉', '鹿草鄉', '水上鄉', '中埔鄉', '竹崎鄉', '梅山鄉', '番路鄉', '大埔鄉', '阿里山鄉'],
+    '屏東縣': ['屏東市', '潮州鎮', '東港鎮', '恆春鎮', '萬丹鄉', '長治鄉', '麟洛鄉', '九如鄉', '里港鄉', '鹽埔鄉', '高樹鄉', '萬巒鄉', '內埔鄉', '竹田鄉', '新埤鄉', '枋寮鄉', '新園鄉', '崁頂鄉', '林邊鄉', '南州鄉', '佳冬鄉', '琉球鄉', '車城鄉', '滿州鄉', '枋山鄉', '三地門鄉', '霧台鄉', '瑪家鄉', '泰武鄉', '來義鄉', '春日鄉', '獅子鄉', '牡丹鄉'],
+    '宜蘭縣': ['宜蘭市', '頭城鎮', '礁溪鄉', '壯圍鄉', '員山鄉', '羅東鎮', '三星鄉', '大同鄉', '五結鄉', '冬山鄉', '蘇澳鎮', '南澳鄉'],
+    '花蓮縣': ['花蓮市', '鳳林鎮', '玉里鎮', '新城鄉', '吉安鄉', '壽豐鄉', '光復鄉', '豐濱鄉', '瑞穗鄉', '富里鄉', '秀林鄉', '萬榮鄉', '卓溪鄉'],
+    '台東縣': ['台東市', '成功鎮', '關山鎮', '卑南鄉', '鹿野鄉', '池上鄉', '東河鄉', '長濱鄉', '太麻里鄉', '大武鄉', '綠島鄉', '海端鄉', '延平鄉', '金峰鄉', '達仁鄉', '蘭嶼鄉'],
+    '澎湖縣': ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'],
+    '金門縣': ['金城鎮', '金湖鎮', '金沙鎮', '金寧鄉', '烈嶼鄉', '烏坵鄉'],
+    '連江縣': ['南竿鄉', '北竿鄉', '莒光鄉', '東引鄉']
+};
+
+// 縣市名稱對應表（處理「臺」vs「台」等變體）
+const cityNameMap = {
+    '臺北市': '台北市',
+    '台北市': '台北市',
+    '臺中市': '台中市',
+    '台中市': '台中市',
+    '臺南市': '台南市',
+    '台南市': '台南市',
+    '臺東縣': '台東縣',
+    '台東縣': '台東縣'
+};
+
+// 標準化縣市名稱
+function normalizeCityName(city) {
+    if (!city) return '';
+    if (cityNameMap[city]) {
+        return cityNameMap[city];
+    }
+    return city.replace(/臺/g, '台');
+}
+
+// 更新區/鄉鎮市選項
+function updateDistricts(preserveValue = false) {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolAddressInput = document.getElementById('school_address');
+    
+    if (!citySelect || !districtSelect) return;
+    
+    const selectedCity = citySelect.value;
+    const currentDistrict = preserveValue ? districtSelect.value : '';
+    districtSelect.innerHTML = '<option value="">請選擇區/鄉鎮市</option>';
+    
+    if (selectedCity && cityDistrictsMap[selectedCity]) {
+        const districts = cityDistrictsMap[selectedCity];
+        districts.forEach(district => {
+            const option = document.createElement('option');
+            option.value = district;
+            option.textContent = district;
+            if (preserveValue && district === currentDistrict) {
+                option.selected = true;
+            }
+            districtSelect.appendChild(option);
+        });
+    }
+    
+    // 如果沒有保留值，清空學校地址
+    if (!preserveValue) {
+        schoolAddressInput.value = '';
+    } else if (currentDistrict && selectedCity) {
+        // 如果保留了值，更新學校地址
+        updateSchoolAddress();
+    }
+}
+
+// 更新學校地址
+function updateSchoolAddress() {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolAddressInput = document.getElementById('school_address');
+    
+    if (!citySelect || !districtSelect || !schoolAddressInput) return;
+    
+    const city = citySelect.value;
+    const district = districtSelect.value;
+    
+    if (city && district) {
+        schoolAddressInput.value = city + district;
+    } else {
+        schoolAddressInput.value = '';
+    }
+}
+
+// 清除縣市不一致錯誤
+function clearCityMismatchError() {
+    const errorDiv = document.getElementById('city_school_mismatch_error');
+    const citySelect = document.getElementById('citySelect');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    if (citySelect) {
+        citySelect.style.borderColor = '';
+        citySelect.style.borderWidth = '';
+        citySelect.style.boxShadow = '';
+    }
+}
+
+// 清除區/鄉鎮市不一致錯誤
+function clearDistrictMismatchError() {
+    const errorDiv = document.getElementById('district_school_mismatch_error');
+    const districtSelect = document.getElementById('districtSelect');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    if (districtSelect) {
+        districtSelect.style.borderColor = '';
+        districtSelect.style.borderWidth = '';
+        districtSelect.style.boxShadow = '';
+    }
+}
+
+// 顯示縣市不一致錯誤
+function showCityMismatchError(message) {
+    const errorDiv = document.getElementById('city_school_mismatch_error');
+    const errorText = document.getElementById('city_school_mismatch_error_text');
+    const citySelect = document.getElementById('citySelect');
+    
+    if (errorDiv && errorText) {
+        errorText.textContent = message || '就讀縣市與選擇的學校所在縣市不一致，系統已自動更新為正確的縣市';
+        errorDiv.style.display = 'block';
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+            errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+    }
+    
+    if (citySelect) {
+        citySelect.style.borderColor = '#d32f2f';
+        citySelect.style.borderWidth = '2px';
+        citySelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+    }
+    
+    // 3秒後自動清除錯誤提示和紅色框框
+    setTimeout(() => {
+        clearCityMismatchError();
+    }, 3000);
+}
+
+// 顯示區/鄉鎮市不一致錯誤
+function showDistrictMismatchError(message) {
+    const errorDiv = document.getElementById('district_school_mismatch_error');
+    const errorText = document.getElementById('district_school_mismatch_error_text');
+    const districtSelect = document.getElementById('districtSelect');
+    
+    if (errorDiv && errorText) {
+        errorText.textContent = message || '區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，系統已自動更新為正確的區/鄉鎮市';
+        errorDiv.style.display = 'block';
+        errorDiv.style.animation = 'none';
+        setTimeout(() => {
+            errorDiv.style.animation = 'slideDown 0.3s ease';
+        }, 10);
+    }
+    
+    if (districtSelect) {
+        districtSelect.style.borderColor = '#d32f2f';
+        districtSelect.style.borderWidth = '2px';
+        districtSelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
+    }
+    
+    // 3秒後自動清除錯誤提示和紅色框框
+    setTimeout(() => {
+        clearDistrictMismatchError();
+    }, 3000);
+}
+
+// 驗證縣市與學校是否一致
+function validateCitySchoolMatch() {
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolCityActualInput = document.getElementById('school_city_actual');
+    const schoolDistrictActualInput = document.getElementById('school_district_actual');
+    const schoolInput = document.getElementById('school_name');
+    
+    if (!citySelect || !schoolCityActualInput || !schoolInput) {
+        return true;
+    }
+    
+    const selectedCity = citySelect.value;
+    const selectedDistrict = districtSelect ? districtSelect.value : '';
+    const actualCity = schoolCityActualInput.value;
+    const actualDistrict = schoolDistrictActualInput ? schoolDistrictActualInput.value : '';
+    const schoolName = schoolInput.value.trim();
+    
+    if (!schoolName || !actualCity) {
+        clearCityMismatchError();
+        clearDistrictMismatchError();
+        return true;
+    }
+    
+    let hasError = false;
+    
+    // 驗證縣市
+    const normalizedSelected = normalizeCityName(selectedCity);
+    const normalizedActual = normalizeCityName(actualCity);
+    
+    if (normalizedSelected && normalizedActual && normalizedSelected !== normalizedActual) {
+        const options = citySelect.options;
+        for (let i = 0; i < options.length; i++) {
+            const optionValue = normalizeCityName(options[i].value);
+            if (optionValue === normalizedActual) {
+                citySelect.value = options[i].value;
+                updateDistricts();
+                showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，已自動更新為正確的縣市');
+                hasError = true;
+                break;
+            }
+        }
+        if (!hasError) {
+            showCityMismatchError('就讀縣市與選擇的學校所在縣市不一致，請選擇正確的縣市');
+            hasError = true;
+        }
+    } else {
+        clearCityMismatchError();
+    }
+    
+    // 驗證區/鄉鎮市
+    if (districtSelect && actualDistrict && selectedDistrict && selectedDistrict !== actualDistrict) {
+        // 檢查區/鄉鎮市是否在當前縣市的選項中
+        const districtOptions = districtSelect.options;
+        let districtFound = false;
+        for (let i = 0; i < districtOptions.length; i++) {
+            if (districtOptions[i].value === actualDistrict) {
+                districtFound = true;
+                break;
+            }
+        }
+        
+        if (districtFound) {
+            // 如果區/鄉鎮市在選項中，自動更新
+            districtSelect.value = actualDistrict;
+            updateSchoolAddress();
+            showDistrictMismatchError('區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，已自動更新為正確的區/鄉鎮市');
+            hasError = true;
+        } else {
+            // 如果區/鄉鎮市不在選項中，手動添加
+            const option = document.createElement('option');
+            option.value = actualDistrict;
+            option.textContent = actualDistrict;
+            option.selected = true;
+            districtSelect.appendChild(option);
+            updateSchoolAddress();
+            showDistrictMismatchError('區/鄉鎮市與選擇的學校所在區/鄉鎮市不一致，已自動更新為正確的區/鄉鎮市');
+            hasError = true;
+        }
+    } else {
+        clearDistrictMismatchError();
+    }
+    
+    return !hasError;
 }
 
 // 選擇學校
-function selectSchool(schoolName, city, district) {
-    const fullSchoolName = `${schoolName} (${city}${district})`;
-    const schoolInput = document.getElementById('school_name');
-    schoolInput.value = fullSchoolName;
+function selectSchool(schoolCode, schoolName, city, district) {
+    // 驗證 schoolCode 是否存在
+    if (!schoolCode || schoolCode.trim() === '') {
+        console.error('錯誤：學校代號為空', {schoolCode, schoolName, city, district});
+        alert('錯誤：無法取得學校代號，請重新選擇學校');
+        return;
+    }
     
-    // 自動填入縣市和區/鄉鎮市
+    const fullSchoolName = `${schoolName} (${city}${district})`;
+    const schoolCodeInput = document.getElementById('school_code');
+    const schoolNameInput = document.getElementById('school_name');
+    
+    // 儲存學校代號（隱藏欄位）
+    if (schoolCodeInput) {
+        schoolCodeInput.value = schoolCode.trim();
+        console.log('已設置學校代號:', schoolCode.trim());
+    } else {
+        console.error('錯誤：找不到 school_code 輸入框');
+    }
+    
+    // 顯示學校名稱（顯示欄位）
+    if (schoolNameInput) {
+        schoolNameInput.value = fullSchoolName;
+    }
+    
+    // 注意：縣市和區/鄉鎮市不再存到資料庫，僅用於顯示（如果有顯示欄位的話）
     const cityInput = document.querySelector('input[name="city"]');
     const districtInput = document.querySelector('input[name="district"]');
-    if (cityInput) cityInput.value = city;
-    if (districtInput) districtInput.value = district;
+    if (cityInput) cityInput.value = city || '';
+    if (districtInput) districtInput.value = district || '';
     
     document.getElementById('schoolResults').classList.remove('show');
     document.getElementById('clearSchoolSearch').style.display = 'block';
     
-    // 清除錯誤提示（因為用戶已從系統選項中選擇）
     clearSchoolError();
+    clearCityMismatchError();
+    clearDistrictMismatchError();
     
-    // 觸發必填欄位檢查
+    // 驗證縣市和區/鄉鎮市是否一致
+    validateCitySchoolMatch();
+    
     if (typeof checkRequiredFields === 'function') {
         checkRequiredFields();
     }
@@ -1400,12 +2069,35 @@ function loadApplicationData() {
     const data = <?php echo json_encode($application_data); ?>;
     
     // 填入表單資料
+    const schoolCodeInput = document.getElementById('school_code');
     const schoolNameInput = document.getElementById('school_name');
-    if (schoolNameInput) {
-        schoolNameInput.value = data.school_name || '';
+    if (schoolCodeInput) {
+        schoolCodeInput.value = data.school_code || '';
     }
-    document.querySelector('input[name="city"]').value = data.city || '';
-    document.querySelector('input[name="district"]').value = data.district || '';
+    if (schoolNameInput) {
+        schoolNameInput.value = data.school_name_display || data.school_code || '';
+    }
+    // 注意：city 和 district 不再存到資料庫，從 school_data 查詢顯示
+    // 查詢學校的縣市和區/鄉鎮市用於顯示（但不存到資料庫）
+    <?php if ($application_data && !empty($application_data['school_code'])): ?>
+    try {
+        const schoolCode = '<?php echo htmlspecialchars($application_data['school_code'], ENT_QUOTES, 'UTF-8'); ?>';
+        fetch(`api/school_data_api.php?action=get&code=${encodeURIComponent(schoolCode)}`)
+            .then(response => response.json())
+            .then(schoolData => {
+                if (schoolData && schoolData.school) {
+                    const cityInput = document.querySelector('input[name="city"]');
+                    const districtInput = document.querySelector('input[name="district"]');
+                    if (cityInput && schoolData.school.city) cityInput.value = schoolData.school.city;
+                    if (districtInput && schoolData.school.district) districtInput.value = schoolData.school.district;
+                }
+            })
+            .catch(err => console.log('查詢學校資訊失敗:', err));
+    } catch (e) {
+        console.log('無法查詢學校資訊:', e);
+    }
+    <?php endif; ?>
+    
     document.querySelector('input[name="school_address"]').value = data.school_address || '';
     document.querySelector('input[name="contact_name"]').value = data.contact_name || '';
     document.querySelector('input[name="contact_title"]').value = data.contact_title || '';
@@ -1413,7 +2105,23 @@ function loadApplicationData() {
     document.querySelector('input[name="contact_email"]').value = data.contact_email || '';
     document.querySelector('input[name="preferred_date"]').value = data.preferred_date || '';
     document.querySelector('select[name="preferred_time"]').value = data.preferred_time || '';
-    document.querySelector('input[name="target_grades"]').value = data.target_grades || '';
+    
+    // 載入目標年級（複選）
+    const targetGradesCheckboxes = document.querySelectorAll('input[name="target_grades[]"]');
+    targetGradesCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    <?php if (!empty($selected_target_grades)): ?>
+    const selectedGrades = <?php echo json_encode($selected_target_grades); ?>;
+    targetGradesCheckboxes.forEach(checkbox => {
+        if (selectedGrades.includes(checkbox.value)) {
+            checkbox.checked = true;
+            checkbox.parentElement.style.background = '#e3f2fd';
+            checkbox.parentElement.style.borderColor = '#667eea';
+        }
+    });
+    <?php endif; ?>
+    
     document.querySelector('input[name="expected_students"]').value = data.expected_students || '';
     document.querySelector('select[name="venue_type"]').value = data.venue_type || '';
     document.querySelector('textarea[name="special_requirements"]').value = data.special_requirements || '';
