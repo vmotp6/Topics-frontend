@@ -268,7 +268,7 @@ function getActiveClass($targetFile) {
   .logo-icon {
     width: 50px;
     height: 50px;
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:  #a964a0 0% ;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -597,7 +597,7 @@ function getActiveClass($targetFile) {
   }
 
   .dropdown-menu a.btn-logout:hover {
-    background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+    background:   #a964a0 0% ;
     color: white;
     transform: translateY(-1px);
   }

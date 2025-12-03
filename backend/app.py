@@ -551,10 +551,10 @@ def register():
                 conn.rollback()
                 return jsonify({"message": "電子郵件已被使用過"}), 400
 
-            # 插入新用戶（角色預設為學生）
+            # 插入新用戶（角色預設為學生，使用角色代碼 'STU'）
             print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
-                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, '學生')",
+                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STU')",
                 (username, password, email, name)
             )
             user_id = cursor.lastrowid
