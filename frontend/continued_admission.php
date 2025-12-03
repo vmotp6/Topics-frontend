@@ -406,13 +406,28 @@ foreach ($courses as $course) {
     const choiceMap = <?php echo json_encode($courseNameToFieldMap, JSON_UNESCAPED_UNICODE); ?>;
     function toggleContactAddress(checkbox) {
       const contactAddress = document.getElementById('contact_address');
+      const contactAddressRequired = document.getElementById('contact_address_required');
+      const isForeign = document.querySelector('input[name="is_foreign_student"]:checked')?.value === 'yes';
+      
       if (checkbox.checked) {
         contactAddress.disabled = true;
         contactAddress.value = '';
         contactAddress.placeholder = '已選擇同戶籍地址';
+        // 如果勾選「同戶籍地址」，則通訊地址不是必填
+        contactAddress.removeAttribute('required');
+        if (contactAddressRequired) {
+          contactAddressRequired.style.display = 'none';
+        }
       } else {
         contactAddress.disabled = false;
         contactAddress.placeholder = '若與戶籍地址不同，請填寫完整通訊地址';
+        // 如果未勾選「同戶籍地址」，且是本國籍，則通訊地址必填
+        if (!isForeign) {
+          contactAddress.setAttribute('required', 'required');
+          if (contactAddressRequired) {
+            contactAddressRequired.style.display = 'inline';
+          }
+        }
       }
     }
     
@@ -431,6 +446,17 @@ foreach ($courses as $course) {
       // 監聽郵遞區號輸入 → 查詢縣市和鄉鎮
       zipInput.addEventListener('input', function() {
         const zip = this.value.trim();
+        
+        // 如果郵遞區號被清除或修改，解除縣市和地區的只讀狀態
+        if (zip.length === 0 || zip.length < 3) {
+          // 清除只讀狀態，讓使用者可以手動輸入
+          cityInput.removeAttribute('readonly');
+          districtInput.removeAttribute('readonly');
+          cityInput.style.backgroundColor = '';
+          districtInput.style.backgroundColor = '';
+          cityInput.style.cursor = '';
+          districtInput.style.cursor = '';
+        }
         
         // 清除之前的計時器
         if (zipDebounceTimer) {
@@ -454,9 +480,6 @@ foreach ($courses as $course) {
     
     // 從API獲取郵遞區號資料（根據郵遞區號查詢縣市鄉鎮）
     function fetchZipCodeByCode(zipcode, cityInput, districtInput) {
-      const originalCityValue = cityInput.value;
-      const originalDistrictValue = districtInput.value;
-      
       // 發送API請求
       fetch(`api/zipcode_api.php?zipcode=${encodeURIComponent(zipcode)}`)
         .then(response => response.json())
@@ -467,12 +490,32 @@ foreach ($courses as $course) {
             const addressInfo = data.data;
             console.log('地址資訊:', addressInfo);
             
-            // 只自動填充縣市和鄉鎮，不填充路名和路段
-            if (!originalCityValue || originalCityValue === '') {
-              cityInput.value = addressInfo.city || '';
+            // 先清空縣市和地區輸入框，確保資料一致性
+            cityInput.value = '';
+            districtInput.value = '';
+            
+            // 解除只讀狀態（如果之前有設定的話）
+            cityInput.removeAttribute('readonly');
+            districtInput.removeAttribute('readonly');
+            cityInput.style.backgroundColor = '';
+            districtInput.style.backgroundColor = '';
+            cityInput.style.cursor = '';
+            districtInput.style.cursor = '';
+            
+            // 自動填充縣市和鄉鎮
+            if (addressInfo.city) {
+              cityInput.value = addressInfo.city;
+              // 設為只讀，避免使用者修改
+              cityInput.setAttribute('readonly', 'readonly');
+              cityInput.style.backgroundColor = '#f5f5f5';
+              cityInput.style.cursor = 'not-allowed';
             }
-            if (!originalDistrictValue || originalDistrictValue === '') {
-              districtInput.value = addressInfo.district || '';
+            if (addressInfo.district) {
+              districtInput.value = addressInfo.district;
+              // 設為只讀，避免使用者修改
+              districtInput.setAttribute('readonly', 'readonly');
+              districtInput.style.backgroundColor = '#f5f5f5';
+              districtInput.style.cursor = 'not-allowed';
             }
             
             // 添加視覺提示
@@ -486,10 +529,24 @@ foreach ($courses as $course) {
             }, 1000);
           } else {
             console.log('❌ 找不到郵遞區號資料:', data.message || '');
+            // 如果查詢失敗，確保欄位不是只讀狀態
+            cityInput.removeAttribute('readonly');
+            districtInput.removeAttribute('readonly');
+            cityInput.style.backgroundColor = '';
+            districtInput.style.backgroundColor = '';
+            cityInput.style.cursor = '';
+            districtInput.style.cursor = '';
           }
         })
         .catch(error => {
           console.error('❌ 查詢郵遞區號失敗:', error);
+          // 如果查詢失敗，確保欄位不是只讀狀態
+          cityInput.removeAttribute('readonly');
+          districtInput.removeAttribute('readonly');
+          cityInput.style.backgroundColor = '';
+          districtInput.style.backgroundColor = '';
+          cityInput.style.cursor = '';
+          districtInput.style.cursor = '';
         });
     }
     
@@ -1355,6 +1412,9 @@ foreach ($courses as $course) {
               updateSelectedChoicesDisplay();
               updateHiddenFields();
               setIdNumberReadOnly(false); // 清空表單後設置身分證字號為可編輯
+              
+              // 清空表單後自動重整頁面
+              window.location.reload();
             }, 2000);
           } else {
             showMessage(data.message, 'error');
@@ -1712,8 +1772,20 @@ foreach ($courses as $course) {
           addressRequiredNote.style.display = 'inline';
         }
         
-        // 本國籍：通訊地址根據「同戶籍地址」選項決定是否必填（保持原有邏輯）
-        // 這裡不需要特別處理，因為原有的驗證邏輯會處理
+        // 本國籍：通訊地址根據「同戶籍地址」選項決定是否必填
+        // 如果未勾選「同戶籍地址」，則通訊地址必填
+        const sameAddressCheckbox = document.querySelector('input[name="same_address"]');
+        if (sameAddressCheckbox && !sameAddressCheckbox.checked && contactAddressInput) {
+          contactAddressInput.setAttribute('required', 'required');
+          if (contactAddressRequired) {
+            contactAddressRequired.style.display = 'inline';
+          }
+        } else if (contactAddressInput) {
+          contactAddressInput.removeAttribute('required');
+          if (contactAddressRequired) {
+            contactAddressRequired.style.display = 'none';
+          }
+        }
       }
     }
     
@@ -2217,6 +2289,11 @@ foreach ($courses as $course) {
         citySelect.style.borderWidth = '2px';
         citySelect.style.boxShadow = '0 0 0 3px rgba(211, 47, 47, 0.1)';
       }
+      
+      // 3秒後自動清除錯誤提示和紅色框框
+      setTimeout(() => {
+        clearCityMismatchError();
+      }, 3000);
     }
     
     // 驗證縣市與學校是否一致
