@@ -285,7 +285,29 @@ foreach ($courses as $course) {
             </div>
           </div>
     </fieldset>
+    <fieldset>
+      <legend>自傳 / 自我介紹</legend>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label><span class="required">*</span>自傳 / 自我介紹</label>
+              <textarea name="self_intro" id="self_intro" rows="8" placeholder="請簡述個人學習經歷、興趣愛好、未來規劃等。表格若不敷使用，請自行以 A4 紙書寫。" maxlength="1000" required></textarea>
+              <div class="char-count">字數：<span id="self_intro_count">0</span>/1000</div>
+            </div>
+          </div>
+    </fieldset>
 
+    <fieldset>
+      <legend>興趣 / 專長</legend>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label><span class="required">*</span>興趣 / 專長</label>
+              <textarea name="skills" id="skills" rows="6" placeholder="請詳述個人興趣、專長、特殊才能、社團經驗、競賽成果等。" maxlength="500" required></textarea>
+              <div class="char-count">字數：<span id="skills_count">0</span>/500</div>
+            </div>
+          </div>
+    </fieldset>
     <fieldset>
       <legend>繳驗資料</legend>
           
@@ -325,29 +347,7 @@ foreach ($courses as $course) {
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>自傳 / 自我介紹</legend>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label><span class="required">*</span>自傳 / 自我介紹</label>
-              <textarea name="self_intro" id="self_intro" rows="8" placeholder="請簡述個人學習經歷、興趣愛好、未來規劃等。表格若不敷使用，請自行以 A4 紙書寫。" maxlength="1000" required></textarea>
-              <div class="char-count">字數：<span id="self_intro_count">0</span>/1000</div>
-            </div>
-          </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>興趣 / 專長</legend>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label><span class="required">*</span>興趣 / 專長</label>
-              <textarea name="skills" id="skills" rows="6" placeholder="請詳述個人興趣、專長、特殊才能、社團經驗、競賽成果等。" maxlength="500" required></textarea>
-              <div class="char-count">字數：<span id="skills_count">0</span>/500</div>
-            </div>
-          </div>
-    </fieldset>
+    
 
     <fieldset>
       <legend>志願序 <span class="required">*</span></legend>

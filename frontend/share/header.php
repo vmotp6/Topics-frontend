@@ -994,21 +994,29 @@ function getActiveClass($targetFile) {
                                  $user_display_name = $row['name'];
                              }
                              
-                             if (!empty($row['profile_picture'])) {
-                                 $profile_picture = $row['profile_picture'];
-                                 
-                                 // 優先檢查是否為上傳的頭像（uploads/ 開頭）
-                                 if (strpos($profile_picture, 'uploads/') === 0) {
-                                     // 上傳的頭像，優先使用
-                                     $avatar_src = getCorrectPath($profile_picture);
-                                 } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
-                                     // 完整 URL（如 Google 頭像），如果沒有上傳的頭像才使用
-                                     $avatar_src = $profile_picture;
-                                 } else {
-                                     // share 目錄的檔案，使用 getResourcePath
-                                     $avatar_src = getResourcePath($profile_picture);
-                                 }
-                             }
+                            if (!empty($row['profile_picture'])) {
+                                $profile_picture = $row['profile_picture'];
+                                
+                                // 優先檢查是否為上傳的頭像（uploads/ 開頭）
+                                if (strpos($profile_picture, 'uploads/') === 0) {
+                                    // 上傳的頭像，檢查檔案是否存在
+                                    $file_path = dirname(__DIR__) . '/' . $profile_picture;
+                                    if (file_exists($file_path)) {
+                                        // 檔案存在，使用 getCorrectPath 獲取正確路徑並添加時間戳避免快取
+                                        $avatar_src = getCorrectPath($profile_picture) . '?v=' . filemtime($file_path);
+                                    } else {
+                                        // 檔案不存在，記錄錯誤並使用預設頭像
+                                        error_log("頭像檔案不存在: {$file_path}, 資料庫路徑: {$profile_picture}");
+                                        $avatar_src = getResourcePath('EIdROxGXsAE_LSs.jpg');
+                                    }
+                                } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                                    // 完整 URL（如 Google 頭像），直接使用
+                                    $avatar_src = $profile_picture;
+                                } else {
+                                    // share 目錄的檔案，使用 getResourcePath
+                                    $avatar_src = getResourcePath($profile_picture);
+                                }
+                            }
                          }
                          $conn->close();
                      }
