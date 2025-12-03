@@ -94,9 +94,9 @@ function getOverviewStats($pdo, $department_filter = '') {
         $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
                     COUNT(*) as total_applications,
-                    COUNT(DISTINCT school_name) as total_schools,
-                    COUNT(DISTINCT session_id) as total_sessions
-                FROM admission_applications WHERE $filter";
+                    COUNT(DISTINCT a.school) as total_schools,
+                    COUNT(DISTINCT a.session_id) as total_sessions
+                FROM admission_applications a WHERE $filter";
         $stmt = $pdo->query($sql);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -139,21 +139,30 @@ function getGradeStats($pdo) {
 function getSchoolStats($pdo) {
     try {
         $sql = "SELECT 
-                    COALESCE(school_name, '未填寫') as school_name,
+                    sd.name as school_name,
+                    a.school as school_code,
                     COUNT(*) as count
-                FROM admission_applications 
-                GROUP BY school_name
+                FROM admission_applications a
+                LEFT JOIN school_data sd ON a.school = sd.school_code
+                GROUP BY a.school, sd.name
                 ORDER BY count DESC
                 LIMIT 10";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        return array_map(function($row) {
+        // 處理結果，將 NULL 轉換為適當的顯示名稱
+        $formattedResults = array_map(function($row) {
+            $schoolName = $row['school_name'];
+            if ($schoolName === null || $schoolName === '') {
+                $schoolName = $row['school_code'] ?: '未填寫';
+            }
             return [
-                'name' => $row['school_name'],
+                'name' => $schoolName,
                 'value' => (int)$row['count']
             ];
         }, $results);
+        
+        return $formattedResults;
     } catch (PDOException $e) {
         error_log("學校統計錯誤: " . $e->getMessage());
         return ['error' => '無法獲取學校統計'];
@@ -164,21 +173,30 @@ function getSchoolStats($pdo) {
 function getSessionStats($pdo) {
     try {
         $sql = "SELECT 
-                    a.session_choice as session_name,
+                    s.session_name,
+                    a.session_id,
                     COUNT(*) as count
                 FROM admission_applications a
-                WHERE a.session_choice IS NOT NULL AND a.session_choice != ''
-                GROUP BY a.session_choice
+                LEFT JOIN admission_sessions s ON a.session_id = s.id
+                WHERE a.session_id IS NOT NULL
+                GROUP BY a.session_id, s.session_name
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        return array_map(function($row) {
+        // 處理結果，將 NULL 轉換為適當的顯示名稱
+        $formattedResults = array_map(function($row) {
+            $sessionName = $row['session_name'];
+            if ($sessionName === null || $sessionName === '') {
+                $sessionName = '場次ID: ' . $row['session_id'];
+            }
             return [
-                'name' => $row['session_name'],
+                'name' => $sessionName,
                 'value' => (int)$row['count']
             ];
         }, $results);
+        
+        return $formattedResults;
     } catch (PDOException $e) {
         error_log("場次統計錯誤: " . $e->getMessage());
         return ['error' => '無法獲取場次統計'];
