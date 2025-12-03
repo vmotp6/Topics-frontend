@@ -169,7 +169,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group medium">
-              <label><span class="required">*</span>就讀縣市</label>
+              <label><span class="required" id="school_city_required">*</span>就讀縣市</label>
               <select name="school_city" id="school_city" required>
                 <option value="">請選擇縣市</option>
                 <option value="台北市">台北市</option>
@@ -197,7 +197,7 @@ foreach ($courses as $course) {
               </select>
             </div>
             <div class="form-group">
-              <label><span class="required">*</span>就讀國中</label>
+              <label><span class="required" id="school_name_required">*</span>就讀國中</label>
               <div class="modern-search-container">
                 <div class="search-input-wrapper">
                   <input type="text" name="school_name" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required>
@@ -230,7 +230,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label> <small style="color: #d32f2f;">(<span class="required">*</span>為必填)</small> 戶籍地址 </label>
+              <label> <small style="color: #d32f2f;" id="address_required_note">(<span class="required" id="address_required">*</span>為必填)</small> 戶籍地址 </label>
               <div class="address-group">
                 <div class="zip-input-wrapper">
                   <input type="text" name="zip" placeholder="郵遞區號" maxlength="6">
@@ -238,15 +238,15 @@ foreach ($courses as $course) {
                       <i class="fas fa-info-circle"></i>
                     </span>
                 </div>
-                <input type="text" name="city" placeholder="*縣/市" required>
-                <input type="text" name="district" placeholder="*市/區/鄉/鎮" required>
+                <input type="text" name="city" id="address_city" placeholder="*縣/市" required>
+                <input type="text" name="district" id="address_district" placeholder="*市/區/鄉/鎮" required>
                 <input type="text" name="village" placeholder="村/里">
                 <input type="text" name="neighbor" placeholder="鄰">
-                <input type="text" name="road" placeholder="*路(街)" required>
+                <input type="text" name="road" id="address_road" placeholder="*路(街)" required>
                 <input type="text" name="section" placeholder="段">
                 <input type="text" name="lane" placeholder="巷">
                 <input type="text" name="alley" placeholder="弄">
-                <input type="text" name="no" placeholder="*號" required>
+                <input type="text" name="no" id="address_no" placeholder="*號" required>
                 <input type="text" name="floor" placeholder="樓之">
               </div>
             </div>
@@ -254,7 +254,7 @@ foreach ($courses as $course) {
           
           <div class="form-row">
             <div class="form-group">
-              <label>通訊地址</label>
+              <label>通訊地址 <span class="required" id="contact_address_required" style="display: none;">*</span></label>
               <div class="checkbox-group">
                 <label><input type="checkbox" name="same_address" value="yes" onchange="toggleContactAddress(this)"> 同戶籍地址</label>
               </div>
@@ -823,12 +823,6 @@ foreach ($courses as $course) {
               { name: 'birth_month', label: '出生月' },
               { name: 'birth_day', label: '出生日' },
               { name: 'mobile', label: '行動電話' },
-              { name: 'school_city', label: '就讀縣市' },
-              { name: 'school_name', label: '就讀國中' },
-              { name: 'city', label: '戶籍地址縣/市' },
-              { name: 'district', label: '戶籍地址市/區/鄉/鎮' },
-              { name: 'road', label: '戶籍地址路(街)' },
-              { name: 'no', label: '戶籍地址號' },
               { name: 'guardian', label: '監護人姓名' },
               { name: 'guardian_mobile', label: '監護人行動電話' },
               { name: 'self_intro', label: '自傳/自我介紹', type: 'textarea' },
@@ -841,8 +835,18 @@ foreach ($courses as $course) {
                 { name: 'nationality', label: '國籍' },
                 { name: 'passport_number', label: '護照號碼' }
               );
+              // 外籍生：就讀縣市、就讀國中、戶籍地址、通訊地址不是必填
             } else {
               requiredFields.push({ name: 'id', label: '身分證字號' });
+              // 本國籍：就讀縣市、就讀國中、戶籍地址為必填
+              requiredFields.push(
+                { name: 'school_city', label: '就讀縣市' },
+                { name: 'school_name', label: '就讀國中' },
+                { name: 'city', label: '戶籍地址縣/市' },
+                { name: 'district', label: '戶籍地址市/區/鄉/鎮' },
+                { name: 'road', label: '戶籍地址路(街)' },
+                { name: 'no', label: '戶籍地址號' }
+              );
             }
             
             // 檢查必填欄位
@@ -1117,19 +1121,21 @@ foreach ($courses as $course) {
               return false;
             }
             
-            // 驗證通訊地址（如果未勾選「同戶籍地址」，則通訊地址必填）
-            const sameAddressCheckbox = document.querySelector('input[name="same_address"]');
-            const contactAddressInput = document.querySelector('input[name="contact_address"]');
-            if (sameAddressCheckbox && !sameAddressCheckbox.checked && contactAddressInput) {
-              const contactAddress = contactAddressInput.value.trim();
-              if (!contactAddress) {
-                showMessage('通訊地址為必填欄位，請填寫完整通訊地址或勾選「同戶籍地址」', 'error');
-                contactAddressInput.focus();
-                contactAddressInput.style.borderColor = '#d32f2f';
-                setTimeout(() => {
-                  contactAddressInput.style.borderColor = '';
-                }, 3000);
-                return false;
+            // 驗證通訊地址（如果未勾選「同戶籍地址」，則通訊地址必填，但外籍生除外）
+            if (!isForeign) {
+              const sameAddressCheckbox = document.querySelector('input[name="same_address"]');
+              const contactAddressInput = document.querySelector('input[name="contact_address"]');
+              if (sameAddressCheckbox && !sameAddressCheckbox.checked && contactAddressInput) {
+                const contactAddress = contactAddressInput.value.trim();
+                if (!contactAddress) {
+                  showMessage('通訊地址為必填欄位，請填寫完整通訊地址或勾選「同戶籍地址」', 'error');
+                  contactAddressInput.focus();
+                  contactAddressInput.style.borderColor = '#d32f2f';
+                  setTimeout(() => {
+                    contactAddressInput.style.borderColor = '';
+                  }, 3000);
+                  return false;
+                }
               }
             }
             
@@ -1600,6 +1606,24 @@ foreach ($courses as $course) {
       const nationalityInput = document.getElementById('nationality_input');
       const passportInput = document.getElementById('passport_number_input');
       
+      // 就讀縣市和就讀國中欄位
+      const schoolCitySelect = document.getElementById('school_city');
+      const schoolNameInput = document.getElementById('school_name');
+      const schoolCityRequired = document.getElementById('school_city_required');
+      const schoolNameRequired = document.getElementById('school_name_required');
+      
+      // 戶籍地址欄位
+      const addressCity = document.getElementById('address_city');
+      const addressDistrict = document.getElementById('address_district');
+      const addressRoad = document.getElementById('address_road');
+      const addressNo = document.getElementById('address_no');
+      const addressRequired = document.getElementById('address_required');
+      const addressRequiredNote = document.getElementById('address_required_note');
+      
+      // 通訊地址欄位
+      const contactAddressInput = document.getElementById('contact_address');
+      const contactAddressRequired = document.getElementById('contact_address_required');
+      
       if (isForeign) {
         // 顯示外籍生欄位，隱藏本國籍欄位
         if (localFields) localFields.style.display = 'none';
@@ -1612,6 +1636,40 @@ foreach ($courses as $course) {
         }
         if (nationalityInput) nationalityInput.setAttribute('required', 'required');
         if (passportInput) passportInput.setAttribute('required', 'required');
+        
+        // 外籍生：就讀縣市和就讀國中改為非必填
+        if (schoolCitySelect) {
+          schoolCitySelect.removeAttribute('required');
+        }
+        if (schoolNameInput) {
+          schoolNameInput.removeAttribute('required');
+        }
+        if (schoolCityRequired) {
+          schoolCityRequired.style.display = 'none';
+        }
+        if (schoolNameRequired) {
+          schoolNameRequired.style.display = 'none';
+        }
+        
+        // 外籍生：戶籍地址改為非必填
+        if (addressCity) addressCity.removeAttribute('required');
+        if (addressDistrict) addressDistrict.removeAttribute('required');
+        if (addressRoad) addressRoad.removeAttribute('required');
+        if (addressNo) addressNo.removeAttribute('required');
+        if (addressRequired) {
+          addressRequired.style.display = 'none';
+        }
+        if (addressRequiredNote) {
+          addressRequiredNote.style.display = 'none';
+        }
+        
+        // 外籍生：通訊地址改為非必填（如果未勾選「同戶籍地址」）
+        if (contactAddressInput) {
+          contactAddressInput.removeAttribute('required');
+        }
+        if (contactAddressRequired) {
+          contactAddressRequired.style.display = 'none';
+        }
       } else {
         // 顯示本國籍欄位，隱藏外籍生欄位
         if (localFields) localFields.style.display = 'flex';
@@ -1627,6 +1685,35 @@ foreach ($courses as $course) {
           passportInput.removeAttribute('required');
           passportInput.value = ''; // 清空護照號碼
         }
+        
+        // 本國籍：就讀縣市和就讀國中為必填
+        if (schoolCitySelect) {
+          schoolCitySelect.setAttribute('required', 'required');
+        }
+        if (schoolNameInput) {
+          schoolNameInput.setAttribute('required', 'required');
+        }
+        if (schoolCityRequired) {
+          schoolCityRequired.style.display = 'inline';
+        }
+        if (schoolNameRequired) {
+          schoolNameRequired.style.display = 'inline';
+        }
+        
+        // 本國籍：戶籍地址為必填
+        if (addressCity) addressCity.setAttribute('required', 'required');
+        if (addressDistrict) addressDistrict.setAttribute('required', 'required');
+        if (addressRoad) addressRoad.setAttribute('required', 'required');
+        if (addressNo) addressNo.setAttribute('required', 'required');
+        if (addressRequired) {
+          addressRequired.style.display = 'inline';
+        }
+        if (addressRequiredNote) {
+          addressRequiredNote.style.display = 'inline';
+        }
+        
+        // 本國籍：通訊地址根據「同戶籍地址」選項決定是否必填（保持原有邏輯）
+        // 這裡不需要特別處理，因為原有的驗證邏輯會處理
       }
     }
     

@@ -326,8 +326,12 @@ try {
             throw new Exception("找不到學校 '{$school_name_only}' 的有效代碼，請從系統提供的選項中選擇學校");
         }
     } else {
-        // 如果學校名稱為空，也拋出錯誤
-        throw new Exception('就讀國中為必填欄位，請填寫');
+        // 如果學校名稱為空，檢查是否為外籍生
+        if ($is_foreign_student !== 'yes') {
+            // 本國籍：就讀國中為必填
+            throw new Exception('就讀國中為必填欄位，請填寫');
+        }
+        // 外籍生：就讀國中不是必填，允許為空
     }
     
     // 組合完整地址字符串
