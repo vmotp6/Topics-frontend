@@ -5028,5 +5028,3 @@ try {
 <?php include("../share/footer.php"); ?>
 </body>
 </html>
-
-聯絡人列表
