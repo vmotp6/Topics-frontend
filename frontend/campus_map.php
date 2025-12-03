@@ -76,9 +76,6 @@ require_once 'config.php';
             <div id="side-panel" class="side-panel">
                 <div class="panel-header">
                     <h3 id="panel-title"><i class="fas fa-info-circle"></i> 校園資訊</h3>
-                    <button id="close-panel-btn" class="close-panel-btn">
-                        <i class="fas fa-times"></i>
-                    </button>
                 </div>
                 <div class="panel-content">
                     <!-- 校園資訊 -->
