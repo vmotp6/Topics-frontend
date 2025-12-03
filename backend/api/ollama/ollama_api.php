@@ -139,9 +139,32 @@ function handleAskQuestion($ollama) {
             }
         }
         
-        // 檢查是否為科系或學費問題，如果是則直接從資料庫回答（優化：添加超時機制，減少到1秒）
+        // 首先檢查是否有完全匹配的 Q&A 資料，如果有則直接返回答案
         $question_lower = mb_strtolower($question, 'UTF-8');
         $db_query_timeout = 1.0; // 優化：資料庫查詢超時時間減少到1秒，提高速度
+        $db_query_start = microtime(true);
+        
+        $exact_answer = getExactQAAnswer($question);
+        $db_query_elapsed = microtime(true) - $db_query_start;
+        
+        // 如果找到完全匹配的答案，直接返回
+        if (!empty($exact_answer) && $db_query_elapsed < $db_query_timeout) {
+            $response_time = round((microtime(true) - $start_time) * 1000);
+            
+            // 保存問答歷史
+            saveQAHistory($question, $exact_answer, 'database', $response_time);
+            
+            echo json_encode([
+                'success' => true,
+                'answer' => $exact_answer,
+                'model' => 'database',
+                'context_used' => true,
+                'response_time_ms' => $response_time
+            ]);
+            return;
+        }
+        
+        // 檢查是否為科系或學費問題，如果是則直接從資料庫回答（優化：添加超時機制，減少到1秒）
         $db_query_start = microtime(true);
         
         if (mb_strpos($question_lower, '科系', 0, 'UTF-8') !== false || mb_strpos($question_lower, '科', 0, 'UTF-8') !== false) {
@@ -607,6 +630,83 @@ function buildRelevanceOrder($keywords) {
     return "CASE " . implode(' ', $order_parts) . " ELSE 999 END";
 }
 
+// 獲取完全匹配的 Q&A 答案（直接用於回答，不作為上下文）
+function getExactQAAnswer($question) {
+    try {
+        $conn = getOllamaDatabaseConnection();
+        $question = mb_convert_encoding($question, 'UTF-8', 'auto');
+        $question_lower = mb_strtolower($question, 'UTF-8');
+        
+        // 查詢所有 Q&A 資料
+        $sql = "SELECT content_data, created_at FROM ollama_training_data WHERE content_type = 'qa' ORDER BY created_at DESC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $best_match = null;
+        $best_similarity = 0;
+        
+        while ($row = $result->fetch_assoc()) {
+            $content_data = json_decode($row['content_data'], true);
+            if ($content_data && isset($content_data['question']) && isset($content_data['answer'])) {
+                $db_question = mb_strtolower($content_data['question'], 'UTF-8');
+                
+                // 計算相似度
+                $similarity = 0;
+                if (mb_strpos($question_lower, $db_question) !== false || mb_strpos($db_question, $question_lower) !== false) {
+                    $similarity = 100; // 完全匹配
+                } else {
+                    // 計算共同字符比例
+                    $common_chars = 0;
+                    $question_len = mb_strlen($question_lower, 'UTF-8');
+                    $db_question_len = mb_strlen($db_question, 'UTF-8');
+                    
+                    for ($i = 0; $i < $question_len; $i++) {
+                        $char = mb_substr($question_lower, $i, 1, 'UTF-8');
+                        if (mb_strpos($db_question, $char, 0, 'UTF-8') !== false) {
+                            $common_chars++;
+                        }
+                    }
+                    
+                    $max_len = max($question_len, $db_question_len);
+                    if ($max_len > 0) {
+                        $similarity = ($common_chars / $max_len) * 100;
+                    }
+                }
+                
+                // 如果相似度超過 80%，認為是高度匹配，直接返回答案
+                if ($similarity > 80 && $similarity > $best_similarity) {
+                    $best_match = $content_data['answer'];
+                    $best_similarity = $similarity;
+                    
+                    // 如果完全匹配（100%），立即返回
+                    if ($similarity == 100) {
+                        $stmt->close();
+                        $conn->close();
+                        error_log("找到完全匹配的 Q&A，問題: " . $question . ", 相似度: " . $similarity . "%");
+                        return $best_match;
+                    }
+                }
+            }
+        }
+        
+        $stmt->close();
+        $conn->close();
+        
+        // 如果有高度匹配的答案，返回它
+        if ($best_match !== null) {
+            error_log("找到高度匹配的 Q&A，問題: " . $question . ", 相似度: " . $best_similarity . "%");
+            return $best_match;
+        }
+        
+        return '';
+        
+    } catch (Exception $e) {
+        error_log("獲取完全匹配 Q&A 答案錯誤: " . $e->getMessage());
+        return '';
+    }
+}
+
 // 從訓練資料庫獲取相關資料
 function getRelevantTrainingData($question) {
     try {
@@ -615,6 +715,92 @@ function getRelevantTrainingData($question) {
         $question = mb_convert_encoding($question, 'UTF-8', 'auto');
         $question_lower = mb_strtolower($question, 'UTF-8');
         
+        // 首先嘗試精確匹配：查找問題內容相似的 Q&A 資料
+        // 這對於 JSON 格式的資料特別有效，因為可以直接匹配 question 欄位
+        $exact_match_sql = "SELECT content_data, created_at FROM ollama_training_data WHERE content_type = 'qa' ORDER BY created_at DESC";
+        $exact_match_stmt = $conn->prepare($exact_match_sql);
+        $exact_match_stmt->execute();
+        $exact_match_result = $exact_match_stmt->get_result();
+        
+        $exact_matches = [];
+        while ($row = $exact_match_result->fetch_assoc()) {
+            $content_data = json_decode($row['content_data'], true);
+            if ($content_data) {
+                // 檢查是否有 question 欄位
+                $db_question = '';
+                if (isset($content_data['question'])) {
+                    $db_question = mb_strtolower($content_data['question'], 'UTF-8');
+                } elseif (isset($content_data['type']) && $content_data['type'] === 'qa' && isset($content_data['question'])) {
+                    $db_question = mb_strtolower($content_data['question'], 'UTF-8');
+                }
+                
+                    // 計算相似度（簡單的字符串包含檢查）
+                    if (!empty($db_question)) {
+                        // 如果用戶問題包含資料庫問題的關鍵部分，或資料庫問題包含用戶問題的關鍵部分
+                        $similarity = 0;
+                        if (mb_strpos($question_lower, $db_question) !== false || mb_strpos($db_question, $question_lower) !== false) {
+                            $similarity = 100; // 完全匹配
+                        } else {
+                            // 計算共同關鍵詞數量（使用簡單的字符匹配）
+                            $common_chars = 0;
+                            $question_len = mb_strlen($question_lower, 'UTF-8');
+                            $db_question_len = mb_strlen($db_question, 'UTF-8');
+                            
+                            // 檢查每個字符是否在另一個字符串中
+                            for ($i = 0; $i < $question_len; $i++) {
+                                $char = mb_substr($question_lower, $i, 1, 'UTF-8');
+                                if (mb_strpos($db_question, $char, 0, 'UTF-8') !== false) {
+                                    $common_chars++;
+                                }
+                            }
+                            
+                            $max_len = max($question_len, $db_question_len);
+                            if ($max_len > 0) {
+                                $similarity = ($common_chars / $max_len) * 100;
+                            }
+                        }
+                        
+                        if ($similarity > 30) { // 相似度超過30%就認為相關
+                            $exact_matches[] = [
+                                'content_data' => $content_data,
+                                'similarity' => $similarity,
+                                'created_at' => $row['created_at']
+                            ];
+                        }
+                    }
+            }
+        }
+        $exact_match_stmt->close();
+        
+        // 如果有精確匹配，按相似度排序並返回
+        if (!empty($exact_matches)) {
+            usort($exact_matches, function($a, $b) {
+                if ($a['similarity'] == $b['similarity']) {
+                    return strtotime($b['created_at']) - strtotime($a['created_at']); // 較新的優先
+                }
+                return $b['similarity'] - $a['similarity']; // 相似度高的優先
+            });
+            
+            // 返回前5個最相似的匹配
+            $training_data = [];
+            foreach (array_slice($exact_matches, 0, 5) as $match) {
+                $content_data = $match['content_data'];
+                if (isset($content_data['question']) && isset($content_data['answer'])) {
+                    $training_data[] = [
+                        'content' => "Q: " . $content_data['question'] . "\nA: " . $content_data['answer'],
+                        'title' => $content_data['title'] ?? ''
+                    ];
+                }
+            }
+            
+            if (!empty($training_data)) {
+                $conn->close();
+                error_log("找到精確匹配的 Q&A 資料，數量: " . count($training_data));
+                return $training_data;
+            }
+        }
+        
+        // 如果沒有精確匹配，使用關鍵詞匹配（原有邏輯）
         // 通用關鍵詞提取 - 自動從問題中提取有意義的關鍵詞
         $keywords = extractKeywords($question_lower);
         

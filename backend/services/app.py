@@ -606,6 +606,19 @@ def login():
                         "error": "account_disabled"
                     }), 403
                 
+                # 檢查 role，只允許 STU 和 TEA 登入
+                user_role = user[1]  # role 欄位
+                allowed_roles = ['STU', 'TEA', 'STUDENT', 'TEACHER']  # 支援多種格式
+                
+                # 檢查 role 是否在允許列表中
+                if user_role not in allowed_roles:
+                    print(f"❌ 角色不允許登入: {username}, 角色: {user_role}")
+                    return jsonify({
+                        "message": "您的帳號角色不允許登入此系統，僅限學生和老師使用。",
+                        "error": "role_not_allowed",
+                        "role": user_role
+                    }), 403
+                
                 print(f"✅ 登入成功: {username}, 角色: {user[1]}")
                 return jsonify({
                     "message": "登入成功",

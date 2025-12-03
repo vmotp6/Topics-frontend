@@ -1360,30 +1360,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         
                         <div class="message-title"><?php echo htmlspecialchars($message['title']); ?></div>
                         
-                        <?php if (($message['message_type'] ?? '') === '推薦餐廳' && !empty($message['restaurant_name'])): ?>
+                        <?php 
+                        // 獲取餐廳名稱（優先從資料庫欄位，如果沒有則使用標題作為備用）
+                        $restaurant_name_display = $message['restaurant_name'] ?? '';
+                        
+                        // 如果資料庫沒有餐廳名稱，且是推薦餐廳類型，嘗試使用標題作為餐廳名稱
+                        if (empty($restaurant_name_display)) {
+                            $original_message_type = $message['message_type_original'] ?? '';
+                            $message_type_name = $message['message_type'] ?? '';
+                            if ($original_message_type === '推薦餐廳' || $original_message_type === 'REST' || 
+                                $message_type_name === '推薦餐廳' || $message_type_name === 'REST') {
+                                // 如果是推薦餐廳類型，標題可能就是餐廳名稱
+                                $restaurant_name_display = $message['title'] ?? '';
+                            }
+                        }
+                        
+                        // 如果有餐廳名稱，顯示在標題下方
+                        if (!empty($restaurant_name_display)): ?>
+                            <div style="margin: 8px 0 15px 0; color: var(--text-color); font-size: 18px; font-weight: 600;">
+                                <?php echo htmlspecialchars($restaurant_name_display); ?>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <?php 
+                        // 檢查是否為推薦餐廳類型（同時檢查名稱和代碼）
+                        $is_restaurant = false;
+                        $original_message_type = $message['message_type_original'] ?? '';
+                        $message_type_name = $message['message_type'] ?? '';
+                        if ($original_message_type === '推薦餐廳' || $original_message_type === 'REST' || 
+                            $message_type_name === '推薦餐廳' || $message_type_name === 'REST') {
+                            $is_restaurant = true;
+                        }
+                        
+                        if ($is_restaurant): ?>
                             <div class="restaurant-info-card" style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 15px;">
-                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                                    <div style="font-size: 24px;">🍽️</div>
-                                    <div style="flex: 1;">
-                                        <h4 style="margin: 0 0 4px 0; color: var(--text-color); font-size: 16px; font-weight: 600;">
-                                            <?php echo htmlspecialchars($message['restaurant_name']); ?>
-                                        </h4>
-                                        <p style="margin: 0; color: var(--secondary-text); font-size: 13px;">
-                                            <i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($message['restaurant_address'] ?? '地址未知'); ?>
-                                        </p>
-                                    </div>
-                                </div>
                                 
                                 <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
                                     <?php 
                                     // 嘗試從多個來源獲取餐廳評分
                                     $restaurant_rating = null;
                                     
-                                    // 方法1: 從 senior_messages 表的 restaurant_rating 欄位獲取
+                                    // 方法1: 從 senior_messages 表的 restaurant_rating 欄位獲取（優先使用）
                                     if (isset($message['restaurant_rating'])) {
                                         $raw = $message['restaurant_rating'];
+                                        // 檢查是否為有效評分（1-5，可以是整數或小數）
+                                        // 允許 null、空字串、0 以外的所有有效評分
                                         if ($raw !== null && $raw !== '' && $raw !== '0') {
-                                            $val = intval($raw);
+                                            $val = is_numeric($raw) ? floatval($raw) : intval($raw);
+                                            // 評分範圍是 1-5，允許小數（如 4.5）
                                             if ($val >= 1 && $val <= 5) {
                                                 $restaurant_rating = $val;
                                             }
@@ -1414,14 +1438,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     // 方法3: 如果還是沒有，嘗試從留言內容中解析（例如：評分5、5星等）
                                     if ($restaurant_rating === null && !empty($message['content'])) {
                                         $content = $message['content'];
-                                        // 嘗試匹配各種評分格式
-                                        if (preg_match('/餐廳評分[：:]\s*(\d+)/u', $content, $matches) || 
-                                            preg_match('/評分[：:]\s*(\d+)/u', $content, $matches) ||
-                                            preg_match('/(\d+)\s*星/u', $content, $matches) ||
-                                            preg_match('/(\d+)\s*\/\s*5/u', $content, $matches)) {
-                                            $val = intval($matches[1]);
-                                            if ($val >= 1 && $val <= 5) {
-                                                $restaurant_rating = $val;
+                                        
+                                        // 嘗試匹配各種評分格式（按優先順序）
+                                        $patterns = [
+                                            '/餐廳評分[：:]\s*(\d+(?:\.\d+)?)/u',           // 餐廳評分：5 或 餐廳評分：4.5
+                                            '/餐廳[：:]\s*(\d+(?:\.\d+)?)\s*星/u',          // 餐廳：5星 或 餐廳：4.5星
+                                            '/評分[：:]\s*(\d+(?:\.\d+)?)/u',               // 評分：5 或 評分：4.5
+                                            '/(\d+(?:\.\d+)?)\s*星/u',                      // 5星 或 4.5星
+                                            '/(\d+(?:\.\d+)?)\s*\/\s*5/u',                  // 5/5 或 4.5/5
+                                            '/★\s*(\d+(?:\.\d+)?)/u',                       // ★5 或 ★4.5
+                                            '/⭐\s*(\d+(?:\.\d+)?)/u',                      // ⭐5 或 ⭐4.5
+                                            '/rating[：:]\s*(\d+(?:\.\d+)?)/iu',            // rating: 5 或 rating: 4.5
+                                        ];
+                                        
+                                        foreach ($patterns as $pattern) {
+                                            if (preg_match($pattern, $content, $matches)) {
+                                                $val = floatval($matches[1]);
+                                                // 評分範圍是 1-5，允許小數
+                                                if ($val >= 1 && $val <= 5) {
+                                                    $restaurant_rating = $val;
+                                                    break; // 找到第一個匹配就停止
+                                                }
+                                            }
+                                        }
+                                        
+                                        // 如果還是沒有找到，嘗試查找留言開頭或結尾的評分模式
+                                        if ($restaurant_rating === null) {
+                                            // 檢查留言開頭（前100個字元）
+                                            $content_start = mb_substr($content, 0, 100);
+                                            if (preg_match('/(\d+(?:\.\d+)?)\s*[星⭐★]/u', $content_start, $matches)) {
+                                                $val = floatval($matches[1]);
+                                                if ($val >= 1 && $val <= 5) {
+                                                    $restaurant_rating = $val;
+                                                }
+                                            }
+                                            
+                                            // 檢查留言結尾（後100個字元）
+                                            if ($restaurant_rating === null && mb_strlen($content) > 100) {
+                                                $content_end = mb_substr($content, -100);
+                                                if (preg_match('/(\d+(?:\.\d+)?)\s*[星⭐★]/u', $content_end, $matches)) {
+                                                    $val = floatval($matches[1]);
+                                                    if ($val >= 1 && $val <= 5) {
+                                                        $restaurant_rating = $val;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1430,7 +1490,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     ?>
                                         <div style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 10px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);">
                                             <span style="color: #f39c12; font-size: 18px; font-weight: bold;">★</span>
-                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">餐廳評分：<?php echo is_float($restaurant_rating) ? number_format($restaurant_rating, 1) : $restaurant_rating; ?>/5</span>
+                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">餐廳評分：<?php echo is_float($restaurant_rating) ? number_format($restaurant_rating, 1) : $restaurant_rating; ?>/5.0</span>
                                         </div>
                                     <?php endif; ?>
                                     
@@ -1486,7 +1546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     ?>
                                         <div style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 10px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);">
                                             <span style="color: #ff6b35; font-size: 18px;">🏍️</span>
-                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">外送評分：<?php echo is_float($delivery_rating) ? number_format($delivery_rating, 1) : $delivery_rating; ?>/5</span>
+                                            <span style="color: var(--text-color); font-weight: 700; font-size: 15px;">外送評分：<?php echo is_float($delivery_rating) ? number_format($delivery_rating, 1) : $delivery_rating; ?>/5.0</span>
                                         </div>
                                     <?php endif; ?>
                                     
@@ -1598,6 +1658,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <div class="view-count">
                                 👁️ <?php echo $message['view_count'] ?? 0; ?>
                             </div>
+                        </div>
+                        
+                        <!-- 留言區 -->
+                        <div class="comments-section" id="comments-section-<?php echo $message['id']; ?>" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                            <div class="comments-header" style="margin-bottom: 15px;">
+                                <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-color);">
+                                    <i class="fas fa-comments"></i> 留言區
+                                    <span id="comment-count-<?php echo $message['id']; ?>" style="font-size: 14px; font-weight: 400; color: var(--secondary-text); margin-left: 8px;">(0)</span>
+                                </h4>
+                            </div>
+                            
+                            <!-- 留言列表 -->
+                            <div class="comments-list" id="comments-list-<?php echo $message['id']; ?>" style="margin-bottom: 15px;">
+                                <!-- 留言將通過 AJAX 載入 -->
+                            </div>
+                            
+                            <!-- 留言輸入表單 -->
+                            <?php if ($isLoggedIn): ?>
+                                <div class="comment-form" style="display: flex; gap: 10px; align-items: flex-start;">
+                                    <?php 
+                                    // 獲取當前用戶頭像
+                                    $comment_user_avatar = getResourcePath('EIdROxGXsAE_LSs.jpg');
+                                    if ($isLoggedIn && isset($_SESSION['username'])) {
+                                        try {
+                                            $avatar_stmt = $pdo->prepare("SELECT profile_picture FROM user WHERE username = ?");
+                                            $avatar_stmt->execute([$_SESSION['username']]);
+                                            $avatar_result = $avatar_stmt->fetch(PDO::FETCH_ASSOC);
+                                            if ($avatar_result && !empty($avatar_result['profile_picture'])) {
+                                                $profile_picture = $avatar_result['profile_picture'];
+                                                if (strpos($profile_picture, 'uploads/') === 0) {
+                                                    $comment_user_avatar = getCorrectPath($profile_picture);
+                                                } elseif (filter_var($profile_picture, FILTER_VALIDATE_URL)) {
+                                                    $comment_user_avatar = $profile_picture;
+                                                } else {
+                                                    $comment_user_avatar = getResourcePath($profile_picture);
+                                                }
+                                            }
+                                        } catch(PDOException $e) {
+                                            // 使用預設頭像
+                                        }
+                                    }
+                                    ?>
+                                    <div class="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
+                                        <img src="<?php echo htmlspecialchars($comment_user_avatar); ?>" 
+                                             alt="您的頭像" 
+                                             style="width: 100%; height: 100%; object-fit: cover;"
+                                             onerror="this.src='<?php echo htmlspecialchars(getResourcePath('EIdROxGXsAE_LSs.jpg')); ?>'">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <textarea id="comment-input-<?php echo $message['id']; ?>" 
+                                                  placeholder="寫下您的留言..." 
+                                                  style="width: 100%; min-height: 60px; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; background: var(--bg-color); color: var(--text-color);"></textarea>
+                                        <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                                            <button type="button" 
+                                                    onclick="submitComment(<?php echo $message['id']; ?>)"
+                                                    style="padding: 8px 20px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease;">
+                                                發布留言
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div style="padding: 15px; text-align: center; background: var(--hover-bg); border-radius: 8px; color: var(--secondary-text); font-size: 14px;">
+                                    請先登入才能留言
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -1868,6 +1994,103 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     }
                 }
             }).catch(error => console.log('瀏覽次數更新失敗:', error));
+        });
+        
+        // 載入留言
+        function loadComments(messageId) {
+            const commentsList = document.getElementById('comments-list-' + messageId);
+            const commentCount = document.getElementById('comment-count-' + messageId);
+            
+            if (!commentsList) return;
+            
+            fetch('api/get_message_comments.php?message_id=' + messageId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.comments) {
+                        commentsList.innerHTML = '';
+                        if (data.comments.length === 0) {
+                            commentsList.innerHTML = '<div style="padding: 15px; text-align: center; color: var(--secondary-text); font-size: 14px;">尚無留言</div>';
+                        } else {
+                            data.comments.forEach(comment => {
+                                const commentDiv = document.createElement('div');
+                                commentDiv.className = 'comment-item';
+                                commentDiv.style.cssText = 'padding: 12px; margin-bottom: 10px; background: var(--hover-bg); border-radius: 8px; border-left: 3px solid var(--accent-color);';
+                                commentDiv.innerHTML = `
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                        <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
+                                            <img src="${comment.author_avatar || '<?php echo getResourcePath("EIdROxGXsAE_LSs.jpg"); ?>'}" 
+                                                 alt="${comment.author_name}" 
+                                                 style="width: 100%; height: 100%; object-fit: cover;"
+                                                 onerror="this.src='<?php echo getResourcePath("EIdROxGXsAE_LSs.jpg"); ?>'">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 600; font-size: 14px; color: var(--text-color);">${comment.author_name}</div>
+                                            <div style="font-size: 12px; color: var(--secondary-text);">${comment.created_at}</div>
+                                        </div>
+                                    </div>
+                                    <div style="color: var(--text-color); font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${comment.content}</div>
+                                `;
+                                commentsList.appendChild(commentDiv);
+                            });
+                        }
+                        if (commentCount) {
+                            commentCount.textContent = '(' + data.comments.length + ')';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('載入留言失敗:', error);
+                    commentsList.innerHTML = '<div style="padding: 15px; text-align: center; color: var(--secondary-text); font-size: 14px;">載入留言失敗</div>';
+                });
+        }
+        
+        // 提交留言
+        function submitComment(messageId) {
+            const commentInput = document.getElementById('comment-input-' + messageId);
+            if (!commentInput || !commentInput.value.trim()) {
+                alert('請輸入留言內容');
+                return;
+            }
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '發布中...';
+            
+            fetch('api/submit_message_comment.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'message_id=' + messageId + '&content=' + encodeURIComponent(commentInput.value.trim())
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        commentInput.value = '';
+                        loadComments(messageId);
+                    } else {
+                        alert('發布失敗: ' + (data.error || '未知錯誤'));
+                    }
+                })
+                .catch(error => {
+                    console.error('發布留言失敗:', error);
+                    alert('發布失敗，請檢查網路連線或稍後再試');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                });
+        }
+        
+        // 頁面載入時載入所有留言
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.message-card').forEach(card => {
+                const messageId = card.getAttribute('data-message-id');
+                if (messageId) {
+                    loadComments(messageId);
+                }
+            });
         });
         
         // 在地圖上顯示餐廳位置

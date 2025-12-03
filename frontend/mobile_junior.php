@@ -772,7 +772,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
         
         /* 啟用狀態 - 藍色 */
         .submit-btn:not(:disabled) {
-            background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+            background:  #956dbd 100%;
             color: white;
             cursor: pointer;
             opacity: 1;

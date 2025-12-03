@@ -612,6 +612,26 @@ li.user-item.active .user-name,
   align-items: flex-start;
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  gap: 10px;
+}
+
+.message-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin-top: 4px;
+}
+
+.message-avatar .avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e1e8ed;
+}
+
+.message.sent .message-avatar {
+  display: none;
 }
 
 @keyframes fadeIn {
@@ -634,12 +654,9 @@ li.user-item.active .user-name,
   padding: 18px 25px;
   border-radius: 25px;
   word-wrap: break-word;
-  box-shadow: 
-    0 8px 25px rgba(0,0,0,0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.2);
   position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
 }
 
 .message-content::before {
@@ -656,16 +673,16 @@ li.user-item.active .user-name,
 
 .message.received .message-content {
   background: #ffffff;
-  color: #2c3e50;
+  color: #000000;
   border: 1px solid #e1e8ed;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .message.sent .message-content {
-  background: #007bff;
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
-  border: 1px solid #0056b3;
+  background: #cdcdcd70;
+  color: #000000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #b8b8b8;
 }
 
 .message:hover .message-content {
@@ -678,7 +695,7 @@ li.user-item.active .user-name,
 }
 
 .message.sent:hover .message-content {
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(205, 205, 205, 0.3);
 }
 
 .message-time {
