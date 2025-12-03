@@ -8,6 +8,7 @@ class CampusMap {
         this.map = null;
         this.markers = [];
         this.restaurantMarkers = [];
+        this.restaurantMarkerMap = new Map(); // 使用 Map 來存儲餐廳到標記的映射
         this.directionsService = null;
         this.directionsRenderer = null;
         this.placesService = null;
@@ -513,13 +514,6 @@ class CampusMap {
 
 
         // 關閉側邊面板按鈕
-        const closePanelBtn = document.getElementById('close-panel-btn');
-        if (closePanelBtn) {
-            closePanelBtn.addEventListener('click', () => {
-                this.toggleSidePanel();
-            });
-        }
-
         // 校園平面圖按鈕
         const showCampusMapBtn = document.getElementById('show-campus-map-btn');
         if (showCampusMapBtn) {
@@ -1165,20 +1159,36 @@ class CampusMap {
                 infoWindow.open(this.map, marker);
                 this.currentInfoWindow = infoWindow;
                 // 如果是推薦餐廳，直接顯示詳情；否則選擇餐廳
-                if (restaurant.is_recommended && restaurant.recommendation_id) {
-                    this.showRestaurantDetails(restaurant, index);
-                } else {
-                    this.selectRestaurant(index);
+                // 使用餐廳在列表中的實際索引
+                const actualIndex = this.restaurants.findIndex(r => {
+                    if (restaurant.is_recommended && restaurant.recommendation_id) {
+                        return r.is_recommended && r.recommendation_id === restaurant.recommendation_id;
+                    } else {
+                        return r.place_id === restaurant.place_id;
+                    }
+                });
+                if (actualIndex >= 0) {
+                    if (restaurant.is_recommended && restaurant.recommendation_id) {
+                        this.showRestaurantDetails(restaurant, actualIndex);
+                    } else {
+                        this.selectRestaurant(actualIndex);
+                    }
                 }
             });
 
             this.restaurantMarkers.push(marker);
+            // 使用餐廳的唯一標識符作為 key 存儲標記映射
+            const markerKey = restaurant.is_recommended && restaurant.recommendation_id 
+                ? `recommended_${restaurant.recommendation_id}` 
+                : restaurant.place_id || `restaurant_${index}`;
+            this.restaurantMarkerMap.set(markerKey, marker);
         });
     }
 
     clearRestaurantMarkers() {
         this.restaurantMarkers.forEach(marker => marker.setMap(null));
         this.restaurantMarkers = [];
+        this.restaurantMarkerMap.clear();
     }
 
     selectRestaurant(index) {
@@ -1202,20 +1212,64 @@ class CampusMap {
                 lng = location.lng;
             }
             
-            // 確保座標有效
+            // 檢查座標是否為 null（表示沒有座標）
+            if (lat === null || lng === null) {
+                console.warn('餐廳座標為 null，無法移動地圖:', restaurant.name);
+                // 如果有地址，嘗試進行地理編碼
+                if (restaurant.formatted_address || restaurant.vicinity) {
+                    const address = restaurant.formatted_address || restaurant.vicinity;
+                    console.log('嘗試使用地址進行地理編碼:', address);
+                    this.geocodeAndMoveToRestaurant(restaurant, address);
+                }
+                return;
+            }
+            
+            // 確保座標有效（不是 0,0 且不是 NaN）
             if (lat && lng && !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+                // 檢查座標是否在校園位置（可能是預設值）
+                const campusLat = 25.076132980674792;
+                const campusLng = 121.61012050007541;
+                const distance = Math.sqrt(Math.pow(lat - campusLat, 2) + Math.pow(lng - campusLng, 2));
+                
+                // 如果座標非常接近校園位置（距離小於 0.0001 度，約 11 米），且是推薦餐廳，可能是預設值
+                if (restaurant.is_recommended && distance < 0.0001 && (restaurant.formatted_address || restaurant.vicinity)) {
+                    console.warn('推薦餐廳座標可能是預設值（校園位置），嘗試使用地址進行地理編碼:', restaurant.name);
+                    const address = restaurant.formatted_address || restaurant.vicinity;
+                    this.geocodeAndMoveToRestaurant(restaurant, address);
+                    return;
+                }
+                
+                console.log('移動地圖到餐廳位置:', restaurant.name, lat, lng);
                 this.map.panTo({ lat: lat, lng: lng });
                 this.map.setZoom(17);
             } else {
                 console.warn('餐廳座標無效，無法移動地圖:', restaurant.name, lat, lng);
+                // 如果有地址，嘗試進行地理編碼
+                if (restaurant.formatted_address || restaurant.vicinity) {
+                    const address = restaurant.formatted_address || restaurant.vicinity;
+                    console.log('嘗試使用地址進行地理編碼:', address);
+                    this.geocodeAndMoveToRestaurant(restaurant, address);
+                }
+            }
+        } else {
+            // 如果沒有座標但有地址，嘗試進行地理編碼
+            if (restaurant.formatted_address || restaurant.vicinity) {
+                const address = restaurant.formatted_address || restaurant.vicinity;
+                console.log('餐廳沒有座標，嘗試使用地址進行地理編碼:', address);
+                this.geocodeAndMoveToRestaurant(restaurant, address);
             }
         }
         
         // 在側邊面板顯示餐廳詳情和評論
         this.showRestaurantDetails(restaurant, index);
         
-        // 打開該餐廳的資訊視窗
-        if (this.restaurantMarkers && this.restaurantMarkers[index]) {
+        // 打開該餐廳的資訊視窗（使用 Map 查找標記，而不是索引）
+        const markerKey = restaurant.is_recommended && restaurant.recommendation_id 
+            ? `recommended_${restaurant.recommendation_id}` 
+            : restaurant.place_id || `restaurant_${index}`;
+        const marker = this.restaurantMarkerMap.get(markerKey);
+        
+        if (marker) {
             const infoWindow = new google.maps.InfoWindow({
                 content: `
                     <div style="padding: 15px; max-width: 280px;">
@@ -1242,9 +1296,58 @@ class CampusMap {
                 this.currentInfoWindow.close();
             }
             // 打開新的 InfoWindow 並保存引用
-            infoWindow.open(this.map, this.restaurantMarkers[index]);
+            infoWindow.open(this.map, marker);
             this.currentInfoWindow = infoWindow;
+        } else {
+            console.warn('未找到對應的標記，餐廳:', restaurant.name, 'key:', markerKey);
         }
+    }
+    
+    // 地理編碼並移動到餐廳位置，同時更新標記位置
+    geocodeAndMoveToRestaurant(restaurant, address) {
+        if (!this.geocoder) {
+            this.geocoder = new google.maps.Geocoder();
+        }
+        
+        console.log('開始地理編碼餐廳:', restaurant.name, '地址:', address);
+        
+        this.geocoder.geocode({ address: address }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const location = results[0].geometry.location;
+                const lat = location.lat();
+                const lng = location.lng();
+                
+                console.log('地理編碼成功:', restaurant.name, '座標:', lat, lng);
+                
+                // 更新餐廳座標
+                if (restaurant.geometry) {
+                    restaurant.geometry.location = { lat: lat, lng: lng };
+                } else {
+                    restaurant.geometry = { location: { lat: lat, lng: lng } };
+                }
+                
+                // 移動地圖到正確位置
+                this.map.panTo({ lat: lat, lng: lng });
+                this.map.setZoom(17);
+                
+                // 找到對應的標記並更新位置（使用 Map 查找）
+                const markerKey = restaurant.is_recommended && restaurant.recommendation_id 
+                    ? `recommended_${restaurant.recommendation_id}` 
+                    : restaurant.place_id || `restaurant_${restaurant.name}`;
+                const marker = this.restaurantMarkerMap.get(markerKey);
+                
+                if (marker) {
+                    marker.setPosition({ lat: lat, lng: lng });
+                    console.log('✓ 已更新標記位置:', restaurant.name, 'key:', markerKey);
+                } else {
+                    console.warn('未找到對應的標記，餐廳:', restaurant.name, 'key:', markerKey);
+                    // 如果找不到標記，可能需要重新創建標記
+                    // 但這通常不應該發生，因為標記應該已經存在
+                }
+            } else {
+                console.error('✗ 地理編碼失敗:', restaurant.name, '狀態:', status);
+            }
+        });
     }
     
     async showRestaurantDetails(restaurant, index) {
@@ -1614,6 +1717,14 @@ class CampusMap {
         // 更新面板標題
         document.getElementById('panel-title').innerHTML = '<i class="fas fa-route"></i> 路線規劃';
         
+        // 預設起點為指定地址
+        const defaultOrigin = '114臺北市內湖區康寧路三段75巷137號';
+        const originInput = document.getElementById('directions-origin');
+        if (originInput && !originInput.value.trim()) {
+            originInput.value = defaultOrigin;
+            console.log('設置起點預設值:', defaultOrigin);
+        }
+        
         // 預設終點為校園地址（先設置，再初始化自動完成）
         const destinationInput = document.getElementById('directions-destination');
         if (destinationInput && !destinationInput.value) {
@@ -1624,15 +1735,14 @@ class CampusMap {
         // 初始化自動完成
         this.initDirectionsAutocomplete();
         
-        // 如果起點已經有值，立即觸發路線規劃
-        const originInput = document.getElementById('directions-origin');
-        if (originInput && originInput.value.trim()) {
-            console.log('起點已有值，立即觸發路線規劃');
+        // 如果起點和終點都有值，立即觸發路線規劃
+        if (originInput && originInput.value.trim() && destinationInput && destinationInput.value.trim()) {
+            console.log('起點和終點都有值，立即觸發路線規劃');
             setTimeout(() => {
                 this.updateDirectionsIfReady();
             }, 200);
         } else {
-            console.log('等待用戶選擇起點');
+            console.log('等待用戶選擇起點或終點');
         }
     }
     
@@ -1770,7 +1880,8 @@ class CampusMap {
             });
         });
         
-        // 輸入框變化時更新路線（使用 blur 事件，當用戶完成輸入後觸發）
+        // 輸入框變化時更新路線（只使用 blur 事件，當用戶完成輸入後觸發）
+        // 移除 input 事件監聽器，避免在用戶輸入過程中自動規劃路線失敗
         const originInput = document.getElementById('directions-origin');
         const destinationInput = document.getElementById('directions-destination');
         if (originInput) {
@@ -1782,13 +1893,7 @@ class CampusMap {
                     }, 300);
                 }
             });
-            // 也監聽輸入變化（延遲觸發，避免頻繁請求）
-            originInput.addEventListener('input', () => {
-                clearTimeout(this.directionsUpdateTimeout);
-                this.directionsUpdateTimeout = setTimeout(() => {
-                    this.updateDirectionsIfReady();
-                }, 800);
-            });
+            // 移除 input 事件監聽器，避免在輸入過程中自動規劃路線
         }
         if (destinationInput) {
             // 當輸入框失去焦點時觸發（用戶完成輸入）
@@ -1799,13 +1904,7 @@ class CampusMap {
                     }, 300);
                 }
             });
-            // 也監聽輸入變化（延遲觸發，避免頻繁請求）
-            destinationInput.addEventListener('input', () => {
-                clearTimeout(this.directionsUpdateTimeout);
-                this.directionsUpdateTimeout = setTimeout(() => {
-                    this.updateDirectionsIfReady();
-                }, 800);
-            });
+            // 移除 input 事件監聽器，避免在輸入過程中自動規劃路線
         }
     }
     
@@ -1820,6 +1919,14 @@ class CampusMap {
         
         let origin = originInput.value.trim();
         let destination = destinationInput.value.trim();
+        
+        // 如果起點為空，設置為預設地址
+        const defaultOrigin = '114臺北市內湖區康寧路三段75巷137號';
+        if (!origin) {
+            origin = defaultOrigin;
+            originInput.value = origin;
+            console.log('起點為空，已設置為預設地址:', origin);
+        }
         
         // 如果終點為空，設置為校園地址
         if (!destination) {
@@ -1852,10 +1959,11 @@ class CampusMap {
         // 清除自定義標記
         this.clearRouteMarkers();
         
-        // 清除輸入框
+        // 清除輸入框（但保留預設起點）
         const originInput = document.getElementById('directions-origin');
         const destinationInput = document.getElementById('directions-destination');
-        if (originInput) originInput.value = '';
+        const defaultOrigin = '114臺北市內湖區康寧路三段75巷137號';
+        if (originInput) originInput.value = defaultOrigin; // 保留預設起點
         if (destinationInput) destinationInput.value = '';
         
         // 清除顯示內容
