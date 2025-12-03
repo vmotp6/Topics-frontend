@@ -1,5 +1,7 @@
 <?php
 require_once '../session_config.php';
+// 載入資料庫配置
+require_once '../config.php';
 
 // 移除權限檢查，允許直接查看統計分析
 // 檢查權限 - 支援多種登入方式
@@ -26,16 +28,11 @@ require_once '../session_config.php';
 //     exit;
 // }
 
-// 資料庫連接
-$host = 'localhost';
-$dbname = 'topics_good';
-$db_username = 'root';
-$db_password = '';
-
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
+    // 使用統一的資料庫配置
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $action = $_GET['action'] ?? 'overview';
@@ -143,70 +140,147 @@ function getGenderStats($pdo, $department_filter = '') {
 function getSchoolCityStats($pdo, $department_filter = '') {
     try {
         $filter = buildDepartmentFilter($department_filter);
-        $sql = "SELECT 
-                    COALESCE(school_city, '未填寫') as city_name,
-                    COUNT(*) as count
-                FROM continued_admission 
-                WHERE $filter
-                GROUP BY school_city
-                ORDER BY count DESC
-                LIMIT 10";
+        
+        // 檢查 school_data 表是否存在
+        $check_school_table = $pdo->query("SHOW TABLES LIKE 'school_data'");
+        $has_school_table = $check_school_table->rowCount() > 0;
+        
+        // 檢查 continued_admission 表是否有 school_city 欄位
+        $columns_check = $pdo->query("SHOW COLUMNS FROM continued_admission LIKE 'school_city'");
+        $has_school_city_column = $columns_check->rowCount() > 0;
+        
+        if ($has_school_city_column) {
+            // 如果表中有 school_city 欄位，直接使用
+            $sql = "SELECT 
+                        COALESCE(school_city, '未填寫') as city_name,
+                        COUNT(*) as count
+                    FROM continued_admission 
+                    WHERE $filter
+                    GROUP BY school_city
+                    ORDER BY count DESC
+                    LIMIT 10";
+        } elseif ($has_school_table) {
+            // 如果沒有 school_city 欄位，從 school_data 表 JOIN 獲取縣市
+            $sql = "SELECT 
+                        COALESCE(sd.city, '未填寫') as city_name,
+                        COUNT(*) as count
+                    FROM continued_admission ca
+                    LEFT JOIN school_data sd ON ca.school = sd.school_code
+                    WHERE $filter
+                    GROUP BY sd.city
+                    ORDER BY count DESC
+                    LIMIT 10";
+        } else {
+            // 如果都沒有，返回空結果
+            $sql = "SELECT '未填寫' as city_name, 0 as count WHERE 1=0";
+        }
+        
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         return array_map(function($row) {
             return [
-                'name' => $row['city_name'],
+                'name' => $row['city_name'] ?: '未填寫',
                 'value' => (int)$row['count']
             ];
         }, $results);
     } catch (PDOException $e) {
         error_log("縣市統計錯誤: " . $e->getMessage());
-        return ['error' => '無法獲取縣市統計'];
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取縣市統計: ' . $e->getMessage()];
     }
 }
 
 // 志願選擇統計
 function getChoicesStats($pdo, $department_filter = '') {
     try {
-        $filter = buildDepartmentFilter($department_filter);
-        $sql = "SELECT choices FROM continued_admission WHERE $filter AND choices IS NOT NULL AND choices != ''";
-        $stmt = $pdo->query($sql);
-        $results = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        // 檢查 continued_admission_choices 表是否存在
+        $check_table = $pdo->query("SHOW TABLES LIKE 'continued_admission_choices'");
+        $has_choices_table = $check_table->rowCount() > 0;
         
-        $choiceStats = [];
-        $totalChoices = 0;
+        // 檢查 continued_admission 表是否有 choices 欄位
+        $check_column = $pdo->query("SHOW COLUMNS FROM continued_admission LIKE 'choices'");
+        $has_choices_column = $check_column->rowCount() > 0;
         
-        foreach ($results as $choicesJson) {
-            $choices = json_decode($choicesJson, true);
-            if (is_array($choices)) {
-                foreach ($choices as $choice) {
-                    if (!empty($choice)) {
-                        $choiceStats[$choice] = ($choiceStats[$choice] ?? 0) + 1;
-                        $totalChoices++;
+        if ($has_choices_table) {
+            // 使用 continued_admission_choices 表（新結構）
+            $where_clause = '';
+            if (!empty($department_filter)) {
+                // 如果指定了科系篩選，只統計該科系的志願
+                $where_clause = "WHERE d.name = " . $pdo->quote($department_filter);
+            }
+            
+            $sql = "SELECT 
+                        COALESCE(d.name, cac.department_code, '未知科系') as department_name,
+                        COUNT(*) as count
+                    FROM continued_admission_choices cac
+                    INNER JOIN continued_admission ca ON cac.application_id = ca.id
+                    LEFT JOIN departments d ON cac.department_code = d.code
+                    $where_clause
+                    GROUP BY d.name, cac.department_code
+                    ORDER BY count DESC
+                    LIMIT 20";
+        } elseif ($has_choices_column) {
+            // 使用 continued_admission 表的 choices JSON 欄位（舊結構）
+            $filter = buildDepartmentFilter($department_filter);
+            $sql = "SELECT choices FROM continued_admission WHERE $filter AND choices IS NOT NULL AND choices != ''";
+            $stmt = $pdo->query($sql);
+            $results = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            $choiceStats = [];
+            foreach ($results as $choicesJson) {
+                $choices = json_decode($choicesJson, true);
+                if (is_array($choices)) {
+                    foreach ($choices as $choice) {
+                        if (!empty($choice)) {
+                            $choiceStats[$choice] = ($choiceStats[$choice] ?? 0) + 1;
+                        }
                     }
                 }
             }
+            
+            // 轉換為API格式
+            $formattedStats = [];
+            foreach ($choiceStats as $choice => $count) {
+                $formattedStats[] = [
+                    'name' => $choice,
+                    'value' => $count
+                ];
+            }
+            
+            // 按數量排序
+            usort($formattedStats, function($a, $b) {
+                return $b['value'] - $a['value'];
+            });
+            
+            return $formattedStats;
+        } else {
+            // 如果都沒有，返回空結果
+            return [];
         }
         
-        // 轉換為API格式
-        $formattedStats = [];
-        foreach ($choiceStats as $choice => $count) {
-            $formattedStats[] = [
-                'name' => $choice,
-                'value' => $count
-            ];
+        // 執行查詢（僅當使用 continued_admission_choices 表時）
+        if ($has_choices_table) {
+            $stmt = $pdo->query($sql);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // 轉換為API格式
+            $formattedStats = [];
+            foreach ($results as $row) {
+                $formattedStats[] = [
+                    'name' => $row['department_name'] ?: '未知科系',
+                    'value' => (int)$row['count']
+                ];
+            }
+            
+            return $formattedStats;
         }
         
-        // 按數量排序
-        usort($formattedStats, function($a, $b) {
-            return $b['value'] - $a['value'];
-        });
-        
-        return $formattedStats;
+        return [];
     } catch (PDOException $e) {
         error_log("志願統計錯誤: " . $e->getMessage());
-        return ['error' => '無法獲取志願統計'];
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取志願統計: ' . $e->getMessage()];
     }
 }
 
