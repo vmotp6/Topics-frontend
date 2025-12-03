@@ -201,10 +201,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
                 $title = $restaurant_name;
             }
             
+            // 將評分資訊追加到留言內容後面
+            $rating_text = "\n\n";
+            
+            // 餐廳評分
+            if (!empty($restaurant_rating)) {
+                $rating_text .= "餐廳評分：" . intval($restaurant_rating) . "星\n";
+            }
+            
+            // 外送評分
+            if (!empty($delivery_rating)) {
+                $rating_text .= "外送評分：" . intval($delivery_rating) . "星\n";
+            } else {
+                // 如果外送評分為空，表示無外送
+                $rating_text .= "外送評分：無外送\n";
+            }
+            
+            // 價格等級
+            if (!empty($price_level)) {
+                $price_level_text = '';
+                switch (intval($price_level)) {
+                    case 1:
+                        $price_level_text = '$ - 平價';
+                        break;
+                    case 2:
+                        $price_level_text = '$$ - 中等';
+                        break;
+                    case 3:
+                        $price_level_text = '$$$ - 較貴';
+                        break;
+                    case 4:
+                        $price_level_text = '$$$$ - 高檔';
+                        break;
+                    default:
+                        $price_level_text = '未知';
+                }
+                $rating_text .= "價格等級：" . $price_level_text . "\n";
+            }
+            
+            // 將評分資訊追加到內容後面
+            $content_with_rating = $content . $rating_text;
+            
             // 準備留言資料（包含餐廳信息）
             $messageData = [
                 'title' => $title,
-                'content' => $content,
+                'content' => $content_with_rating,
                 'author_name' => $author_name,
                 'author_email' => $user_email,
                 'author_department' => $author_department,

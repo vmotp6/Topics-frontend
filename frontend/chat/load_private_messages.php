@@ -66,7 +66,8 @@ try {
         // 使用 user_id 查詢
         if ($lastMessageId > 0) {
             // 只獲取比 lastMessageId 更新的消息
-            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username, 
+                           u1.profile_picture as from_user_profile_picture, u1.role as from_user_role
                     FROM private_chat_history pch
                     LEFT JOIN user u1 ON pch.from_user_id = u1.id
                     LEFT JOIN user u2 ON pch.to_user_id = u2.id
@@ -78,7 +79,8 @@ try {
             $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId, $lastMessageId]);
         } else {
             // 獲取所有消息
-            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+            $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username,
+                           u1.profile_picture as from_user_profile_picture, u1.role as from_user_role
                     FROM private_chat_history pch
                     LEFT JOIN user u1 ON pch.from_user_id = u1.id
                     LEFT JOIN user u2 ON pch.to_user_id = u2.id
@@ -95,7 +97,9 @@ try {
         foreach ($messages as &$msg) {
             $msg['from_user'] = $msg['from_username'];
             $msg['to_user'] = $msg['to_username'];
-            unset($msg['from_username'], $msg['to_username']);
+            $msg['profile_picture'] = $msg['from_user_profile_picture'] ?? null;
+            $msg['role'] = $msg['from_user_role'] ?? null;
+            unset($msg['from_username'], $msg['to_username'], $msg['from_user_profile_picture'], $msg['from_user_role']);
         }
         
     } elseif ($useUsername) {
@@ -129,7 +133,8 @@ try {
             
             if ($lastMessageId > 0) {
                 // 只獲取比 lastMessageId 更新的消息
-                $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username,
+                               u1.profile_picture as from_user_profile_picture, u1.role as from_user_role
                         FROM private_chat_history pch
                         LEFT JOIN user u1 ON pch.from_user = u1.id
                         LEFT JOIN user u2 ON pch.to_user = u2.id
@@ -141,7 +146,8 @@ try {
                 $stmt->execute([$fromUserId, $toUserId, $toUserId, $fromUserId, $lastMessageId]);
             } else {
                 // 獲取所有消息
-                $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username 
+                $sql = "SELECT pch.*, u1.username as from_username, u2.username as to_username,
+                               u1.profile_picture as from_user_profile_picture, u1.role as from_user_role
                         FROM private_chat_history pch
                         LEFT JOIN user u1 ON pch.from_user = u1.id
                         LEFT JOIN user u2 ON pch.to_user = u2.id
@@ -158,30 +164,43 @@ try {
             foreach ($messages as &$msg) {
                 $msg['from_user'] = $msg['from_username'];
                 $msg['to_user'] = $msg['to_username'];
-                unset($msg['from_username'], $msg['to_username']);
+                $msg['profile_picture'] = $msg['from_user_profile_picture'] ?? null;
+                $msg['role'] = $msg['from_user_role'] ?? null;
+                unset($msg['from_username'], $msg['to_username'], $msg['from_user_profile_picture'], $msg['from_user_role']);
             }
         } else {
             // 如果是 VARCHAR 類型，直接使用 username
             if ($lastMessageId > 0) {
                 // 只獲取比 lastMessageId 更新的消息
-                $sql = "SELECT * FROM private_chat_history 
-                        WHERE ((from_user = ? AND to_user = ?) 
-                        OR (from_user = ? AND to_user = ?))
-                        AND id > ?
-                        ORDER BY timestamp ASC";
+                $sql = "SELECT pch.*, u.profile_picture as from_user_profile_picture, u.role as from_user_role
+                        FROM private_chat_history pch
+                        LEFT JOIN user u ON pch.from_user = u.username
+                        WHERE ((pch.from_user = ? AND pch.to_user = ?) 
+                        OR (pch.from_user = ? AND pch.to_user = ?))
+                        AND pch.id > ?
+                        ORDER BY pch.timestamp ASC";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$from, $to, $to, $from, $lastMessageId]);
             } else {
                 // 獲取所有消息
-                $sql = "SELECT * FROM private_chat_history 
-                        WHERE (from_user = ? AND to_user = ?) 
-                        OR (from_user = ? AND to_user = ?) 
-                        ORDER BY timestamp ASC";
+                $sql = "SELECT pch.*, u.profile_picture as from_user_profile_picture, u.role as from_user_role
+                        FROM private_chat_history pch
+                        LEFT JOIN user u ON pch.from_user = u.username
+                        WHERE (pch.from_user = ? AND pch.to_user = ?) 
+                        OR (pch.from_user = ? AND pch.to_user = ?) 
+                        ORDER BY pch.timestamp ASC";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$from, $to, $to, $from]);
             }
             $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
             error_log("使用 from_user/to_user (VARCHAR) 查詢，找到 " . count($messages) . " 條消息");
+            
+            // 添加 profile_picture 和 role 到訊息中
+            foreach ($messages as &$msg) {
+                $msg['profile_picture'] = $msg['from_user_profile_picture'] ?? null;
+                $msg['role'] = $msg['from_user_role'] ?? null;
+                unset($msg['from_user_profile_picture'], $msg['from_user_role']);
+            }
         }
     } else {
         error_log("表結構異常: 找不到用戶欄位");

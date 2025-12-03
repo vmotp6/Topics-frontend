@@ -2300,6 +2300,45 @@ try {
         messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
         messageDiv.dataset.messageId = messageId;
         
+        const isReceived = message.from_user !== username;
+        
+        // 如果是對方發送的訊息，添加頭像
+        if (isReceived) {
+          // 處理頭像路徑
+          let avatarSrc = '';
+          if (message.profile_picture) {
+            if (message.profile_picture.startsWith('http://') || message.profile_picture.startsWith('https://')) {
+              // 完整 URL（如 Google 頭像）
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('/')) {
+              // 絕對路徑
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('uploads/')) {
+              // 上傳的頭像，使用 ../uploads/（包括 uploads/avatars/）
+              avatarSrc = '../' + message.profile_picture;
+            } else if (message.profile_picture.includes('avatars/')) {
+              // 如果包含 avatars/，確保路徑正確
+              if (message.profile_picture.startsWith('avatars/')) {
+                avatarSrc = '../uploads/' + message.profile_picture;
+              } else {
+                avatarSrc = '../' + message.profile_picture;
+              }
+            } else {
+              // share 目錄的檔案，使用 ../share/
+              avatarSrc = '../share/' + message.profile_picture;
+            }
+          } else {
+            // 預設頭像
+            avatarSrc = '../share/EIdROxGXsAE_LSs.jpg';
+          }
+          
+          // 創建頭像元素
+          const avatarDiv = document.createElement('div');
+          avatarDiv.className = 'message-avatar';
+          avatarDiv.innerHTML = `<img src="${avatarSrc}" alt="${escapeHtml(message.from_user || '未知用戶')}" class="avatar-img">`;
+          messageDiv.appendChild(avatarDiv);
+        }
+        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         
@@ -2319,10 +2358,10 @@ try {
         }
         
         contentDiv.innerHTML = `
-          <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+          <div style="font-size: 12px; color: #000000; margin-bottom: 4px;">
             ${escapeHtml(message.from_user || '未知用戶')} (${escapeHtml(message.role || '用戶')})
           </div>
-          <div>${escapeHtml(message.message || '')}</div>
+          <div style="color: #000000;">${escapeHtml(message.message || '')}</div>
           ${readStatusHtml}
         `;
         
@@ -2963,6 +3002,45 @@ try {
         messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
         messageDiv.dataset.messageId = message.id;
         
+        const isReceived = message.from_user !== username;
+        
+        // 如果是對方發送的訊息，添加頭像
+        if (isReceived) {
+          // 處理頭像路徑
+          let avatarSrc = '';
+          if (message.profile_picture) {
+            if (message.profile_picture.startsWith('http://') || message.profile_picture.startsWith('https://')) {
+              // 完整 URL（如 Google 頭像）
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('/')) {
+              // 絕對路徑
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('uploads/')) {
+              // 上傳的頭像，使用 ../uploads/（包括 uploads/avatars/）
+              avatarSrc = '../' + message.profile_picture;
+            } else if (message.profile_picture.includes('avatars/')) {
+              // 如果包含 avatars/，確保路徑正確
+              if (message.profile_picture.startsWith('avatars/')) {
+                avatarSrc = '../uploads/' + message.profile_picture;
+              } else {
+                avatarSrc = '../' + message.profile_picture;
+              }
+            } else {
+              // share 目錄的檔案，使用 ../share/
+              avatarSrc = '../share/' + message.profile_picture;
+            }
+          } else {
+            // 預設頭像
+            avatarSrc = '../share/EIdROxGXsAE_LSs.jpg';
+          }
+          
+          // 創建頭像元素
+          const avatarDiv = document.createElement('div');
+          avatarDiv.className = 'message-avatar';
+          avatarDiv.innerHTML = `<img src="${avatarSrc}" alt="${escapeHtml(message.from_user || '未知用戶')}" class="avatar-img">`;
+          messageDiv.appendChild(avatarDiv);
+        }
+        
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         
@@ -3112,6 +3190,45 @@ try {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.from_user === username ? 'sent' : 'received'}`;
         messageDiv.dataset.messageId = messageId;
+        
+        const isReceived = message.from_user !== username;
+        
+        // 如果是對方發送的訊息，添加頭像
+        if (isReceived) {
+          // 處理頭像路徑
+          let avatarSrc = '';
+          if (message.profile_picture) {
+            if (message.profile_picture.startsWith('http://') || message.profile_picture.startsWith('https://')) {
+              // 完整 URL（如 Google 頭像）
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('/')) {
+              // 絕對路徑
+              avatarSrc = message.profile_picture;
+            } else if (message.profile_picture.startsWith('uploads/')) {
+              // 上傳的頭像，使用 ../uploads/（包括 uploads/avatars/）
+              avatarSrc = '../' + message.profile_picture;
+            } else if (message.profile_picture.includes('avatars/')) {
+              // 如果包含 avatars/，確保路徑正確
+              if (message.profile_picture.startsWith('avatars/')) {
+                avatarSrc = '../uploads/' + message.profile_picture;
+              } else {
+                avatarSrc = '../' + message.profile_picture;
+              }
+            } else {
+              // share 目錄的檔案，使用 ../share/
+              avatarSrc = '../share/' + message.profile_picture;
+            }
+          } else {
+            // 預設頭像
+            avatarSrc = '../share/EIdROxGXsAE_LSs.jpg';
+          }
+          
+          // 創建頭像元素
+          const avatarDiv = document.createElement('div');
+          avatarDiv.className = 'message-avatar';
+          avatarDiv.innerHTML = `<img src="${avatarSrc}" alt="${escapeHtml(message.from_user || '未知用戶')}" class="avatar-img">`;
+          messageDiv.appendChild(avatarDiv);
+        }
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
