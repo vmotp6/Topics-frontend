@@ -1,5 +1,7 @@
 <?php
 require_once '../session_config.php';
+// 載入資料庫配置
+require_once '../config.php';
 
 // 移除權限檢查，允許直接查看統計分析
 // 檢查權限 - 支援多種登入方式
@@ -26,16 +28,11 @@ require_once '../session_config.php';
 //     exit;
 // }
 
-// 資料庫連接
-$host = 'localhost';
-$dbname = 'topics_good';
-$db_username = 'root';
-$db_password = '';
-
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $db_username, $db_password);
+    // 使用統一的資料庫配置
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET, DB_USERNAME, DB_PASSWORD);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $action = $_GET['action'] ?? 'overview';
