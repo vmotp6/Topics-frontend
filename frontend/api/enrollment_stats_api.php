@@ -1,10 +1,16 @@
 <?php
+// 關閉錯誤顯示，確保只輸出 JSON
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
 // 載入 session 配置
 require_once '../session_config.php';
 // 載入資料庫配置
 $config_path = __DIR__ . '/../config.php';
 if (!file_exists($config_path)) {
     http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => '找不到 config.php 檔案: ' . $config_path]);
     exit;
 }
@@ -13,6 +19,7 @@ require_once $config_path;
 // 檢查必要的常數是否已定義
 if (!defined('DB_HOST') || !defined('DB_NAME') || !defined('DB_USERNAME') || !defined('DB_PASSWORD') || !defined('DB_CHARSET')) {
     http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => '資料庫配置常數未定義']);
     exit;
 }
@@ -60,68 +67,126 @@ try {
         case 'overview':
             // 總體統計
             $stats = getOverviewStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'department':
             // 科系統計
             $stats = getDepartmentStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'system':
             // 學制統計
             $stats = getSystemStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'grade':
             // 年級統計
             $stats = getGradeStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'gender':
             // 性別統計
             $stats = getGenderStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'identity':
             // 身分別統計
             $stats = getIdentityStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'monthly':
             // 月度統計
             $stats = getMonthlyStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'school_department':
             // 國中選擇科系統計（限管理員和學校行政人員）
             $stats = getSchoolDepartmentStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         default:
             http_response_code(400);
-            echo json_encode(['error' => '無效的操作']);
+            echo json_encode(['error' => '無效的操作'], JSON_UNESCAPED_UNICODE);
     }
 
 } catch (PDOException $e) {
     error_log("資料庫錯誤: " . $e->getMessage());
     error_log("資料庫配置: DB_HOST=" . (defined('DB_HOST') ? DB_HOST : '未定義') . ", DB_NAME=" . (defined('DB_NAME') ? DB_NAME : '未定義'));
+    error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
     http_response_code(500);
-    echo json_encode(['error' => '資料庫連接失敗: ' . $e->getMessage()]);
+    echo json_encode(['error' => '資料庫連接失敗: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
 } catch (Exception $e) {
     error_log("一般錯誤: " . $e->getMessage());
+    error_log("錯誤堆疊: " . $e->getTraceAsString());
     http_response_code(500);
-    echo json_encode(['error' => '系統錯誤: ' . $e->getMessage()]);
+    echo json_encode(['error' => '系統錯誤: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+} catch (Error $e) {
+    // 捕獲 PHP 7+ 的 Error 類別（包括致命錯誤）
+    error_log("致命錯誤: " . $e->getMessage());
+    error_log("錯誤堆疊: " . $e->getTraceAsString());
+    http_response_code(500);
+    echo json_encode(['error' => '系統錯誤: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
 
-// 輔助函數：建立科系篩選的 WHERE 條件
+// 輔助函數：建立科系篩選的 WHERE 條件（針對 enrollment_intention 表）
+function buildDepartmentFilterForEnrollmentIntention($pdo, $department) {
+    if (empty($department)) {
+        return '1=1'; // 不篩選
+    }
+    
+    // 使用 DESCRIBE 來檢查 enrollment_intention 表的欄位（最可靠的方法）
+    try {
+        // 首先檢查表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在");
+            return '1=1';
+        }
+        
+        $describe_result = $pdo->query("DESCRIBE enrollment_intention");
+        if ($describe_result === false) {
+            error_log("無法描述 enrollment_intention 表結構");
+            return '1=1';
+        }
+        
+        $columns = $describe_result->fetchAll(PDO::FETCH_COLUMN);
+        if (empty($columns)) {
+            error_log("enrollment_intention 表沒有欄位");
+            return '1=1';
+        }
+        
+        $has_intention1 = in_array('intention1', $columns);
+        $has_intention2 = in_array('intention2', $columns);
+        $has_intention3 = in_array('intention3', $columns);
+        
+        if ($has_intention1 && $has_intention2 && $has_intention3) {
+            // 所有 intention 欄位都存在，可以構建篩選條件
+            $escaped_dept = $pdo->quote('%' . $department . '%');
+            return "(intention1 LIKE $escaped_dept OR intention2 LIKE $escaped_dept OR intention3 LIKE $escaped_dept)";
+        } else {
+            // 欄位不存在，返回不篩選
+            error_log("enrollment_intention 表缺少 intention 欄位，無法進行科系篩選");
+            return '1=1';
+        }
+    } catch (PDOException $e) {
+        error_log("檢查 enrollment_intention 表結構失敗: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return '1=1';
+    } catch (Exception $e) {
+        error_log("檢查 enrollment_intention 表結構時發生一般錯誤: " . $e->getMessage());
+        return '1=1';
+    }
+}
+
+// 輔助函數：建立科系篩選的 WHERE 條件（通用版本，可能返回針對不同表的條件）
 function buildDepartmentFilter($pdo, $department) {
     if (empty($department)) {
         return '1=1'; // 不篩選
@@ -175,110 +240,197 @@ function buildDepartmentFilter($pdo, $department) {
 }
 
 function getOverviewStats($pdo, $department_filter = '') {
-    $stats = [];
-    $filter = buildDepartmentFilter($pdo, $department_filter);
-    
-    // 總報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention WHERE $filter");
-    $stats['total'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-    
-    // 本月報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE $filter AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
-    $stats['monthly'] = $stmt->fetch(PDO::FETCH_ASSOC)['monthly'];
-    
-    // 本週報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE $filter AND YEARWEEK(created_at) = YEARWEEK(NOW())");
-    $stats['weekly'] = $stmt->fetch(PDO::FETCH_ASSOC)['weekly'];
-    
-    // 今日報名人數
-    $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE $filter AND DATE(created_at) = CURDATE()");
-    $stats['daily'] = $stmt->fetch(PDO::FETCH_ASSOC)['daily'];
-    
-    return $stats;
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取總覽統計");
+            return ['total' => 0, 'monthly' => 0, 'weekly' => 0, 'daily' => 0];
+        }
+        
+        $stats = [];
+        // 使用專門針對 enrollment_intention 表的篩選函數
+        $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        
+        // 總報名人數
+        $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention WHERE $filter");
+        $stats['total'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        
+        // 本月報名人數
+        $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE $filter AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
+        $stats['monthly'] = $stmt->fetch(PDO::FETCH_ASSOC)['monthly'];
+        
+        // 本週報名人數
+        $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE $filter AND YEARWEEK(created_at) = YEARWEEK(NOW())");
+        $stats['weekly'] = $stmt->fetch(PDO::FETCH_ASSOC)['weekly'];
+        
+        // 今日報名人數
+        $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE $filter AND DATE(created_at) = CURDATE()");
+        $stats['daily'] = $stmt->fetch(PDO::FETCH_ASSOC)['daily'];
+        
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("總覽統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取總覽統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("總覽統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取總覽統計: ' . $e->getMessage()];
+    }
 }
 
 function getDepartmentStats($pdo, $department_filter = '') {
-    $stats = [];
-    $filter = buildDepartmentFilter($pdo, $department_filter);
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取科系統計");
+            return [];
+        }
+        
+        $stats = [];
+        
+        // 檢查 enrollment_choices 表是否存在（正規化結構）
+        $check_choices_table = $pdo->query("SHOW TABLES LIKE 'enrollment_choices'");
+        $has_choices_table = $check_choices_table->rowCount() > 0;
+        
+        // 檢查 enrollment_intention 表是否有 intention1, intention2, intention3 欄位（舊結構）
+        $describe_result = $pdo->query("DESCRIBE enrollment_intention");
+        $columns = $describe_result ? $describe_result->fetchAll(PDO::FETCH_COLUMN) : [];
+        $has_intention1 = in_array('intention1', $columns);
+        $has_intention2 = in_array('intention2', $columns);
+        $has_intention3 = in_array('intention3', $columns);
+        
+        if ($has_choices_table) {
+            // 使用正規化的 enrollment_choices 表結構
+            try {
+                $stmt = $pdo->query("
+                    SELECT 
+                        CASE ec.choice_order
+                            WHEN 1 THEN '第一志願'
+                            WHEN 2 THEN '第二志願'
+                            WHEN 3 THEN '第三志願'
+                            ELSE '未知'
+                        END as priority,
+                        COALESCE(d.name, ec.department_code, '無特定') as department,
+                        COUNT(*) as count
+                    FROM enrollment_intention ei
+                    INNER JOIN enrollment_choices ec ON ei.id = ec.enrollment_id
+                    LEFT JOIN departments d ON ec.department_code = d.code
+                    WHERE ec.department_code IS NOT NULL AND ec.department_code != ''
+                    GROUP BY ec.choice_order, COALESCE(d.name, ec.department_code, '無特定')
+                ");
+                
+                $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                error_log("查詢科系統計（enrollment_choices）失敗: " . $e->getMessage());
+                error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+                $raw_data = [];
+            }
+        } elseif ($has_intention1 && $has_intention2 && $has_intention3) {
+            // 使用舊的 intention1, intention2, intention3 欄位結構
+            $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+            
+            try {
+                $stmt = $pdo->query("
+                    SELECT 
+                        '第一志願' as priority,
+                        COALESCE(intention1, '無特定') as department,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE intention1 IS NOT NULL AND intention1 != '' AND $filter
+                    GROUP BY intention1
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        '第二志願' as priority,
+                        COALESCE(intention2, '無特定') as department,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定' AND $filter
+                    GROUP BY intention2
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        '第三志願' as priority,
+                        COALESCE(intention3, '無特定') as department,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定' AND $filter
+                    GROUP BY intention3
+                ");
+                
+                $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                error_log("查詢科系統計（intention欄位）失敗: " . $e->getMessage());
+                error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+                $raw_data = [];
+            }
+        } else {
+            // 兩種結構都不存在
+            error_log("科系統計：找不到可用的資料表或欄位（enrollment_choices: " . ($has_choices_table ? '存在' : '不存在') . ", intention欄位: " . ($has_intention1 && $has_intention2 && $has_intention3 ? '存在' : '不存在') . "）");
+            return [];
+        }
+        
+        if (empty($raw_data)) {
+            error_log("科系統計：查詢結果為空");
+            return [];
+        }
     
-    // 科系統計（三個意願合併，但保留志願順序資訊）
-    // 如果有科系篩選，只統計包含該科系的學生的所有選擇
-    $stmt = $pdo->query("
-        SELECT 
-            '第一志願' as priority,
-            COALESCE(intention1, '無特定') as department,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE intention1 IS NOT NULL AND intention1 != '' AND $filter
-        GROUP BY intention1
+        // 合併相同科系的數據，但保留志願分布資訊
+        $merged = [];
+        foreach ($raw_data as $row) {
+            $dept = $row['department'];
+            $priority = $row['priority'];
+            $count = (int)$row['count'];
+            
+            if (!isset($merged[$dept])) {
+                $merged[$dept] = [
+                    'total' => 0,
+                    'priorities' => []
+                ];
+            }
+            
+            $merged[$dept]['total'] += $count;
+            $merged[$dept]['priorities'][$priority] = ($merged[$dept]['priorities'][$priority] ?? 0) + $count;
+        }
         
-        UNION ALL
-        
-        SELECT 
-            '第二志願' as priority,
-            COALESCE(intention2, '無特定') as department,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定' AND $filter
-        GROUP BY intention2
-        
-        UNION ALL
-        
-        SELECT 
-            '第三志願' as priority,
-            COALESCE(intention3, '無特定') as department,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定' AND $filter
-        GROUP BY intention3
-    ");
-    
-    $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // 合併相同科系的數據，但保留志願分布資訊
-    $merged = [];
-    foreach ($raw_data as $row) {
-        $dept = $row['department'];
-        $priority = $row['priority'];
-        $count = $row['count'];
-        
-        if (!isset($merged[$dept])) {
-            $merged[$dept] = [
-                'total' => 0,
-                'priorities' => []
+        // 轉換為前端需要的格式
+        foreach ($merged as $department => $data) {
+            // 創建詳細的志願分布描述
+            $priority_details = [];
+            foreach (['第一志願', '第二志願', '第三志願'] as $priority) {
+                if (isset($data['priorities'][$priority]) && $data['priorities'][$priority] > 0) {
+                    $priority_details[] = $priority . ': ' . $data['priorities'][$priority] . '人';
+                }
+            }
+            
+            $stats[] = [
+                'name' => $department,
+                'value' => $data['total'],
+                'priority_details' => implode(', ', $priority_details),
+                'first_choice' => $data['priorities']['第一志願'] ?? 0,
+                'second_choice' => $data['priorities']['第二志願'] ?? 0,
+                'third_choice' => $data['priorities']['第三志願'] ?? 0
             ];
         }
         
-        $merged[$dept]['total'] += $count;
-        $merged[$dept]['priorities'][$priority] = $count;
-    }
-    
-    // 轉換為前端需要的格式
-    foreach ($merged as $department => $data) {
-        // 創建詳細的志願分布描述
-        $priority_details = [];
-        foreach (['第一志願', '第二志願', '第三志願'] as $priority) {
-            if (isset($data['priorities'][$priority])) {
-                $priority_details[] = $priority . ': ' . $data['priorities'][$priority] . '人';
-            }
-        }
+        // 按總數量排序
+        usort($stats, function($a, $b) {
+            return $b['value'] - $a['value'];
+        });
         
-        $stats[] = [
-            'name' => $department,
-            'value' => $data['total'],
-            'priority_details' => implode(', ', $priority_details),
-            'first_choice' => $data['priorities']['第一志願'] ?? 0,
-            'second_choice' => $data['priorities']['第二志願'] ?? 0,
-            'third_choice' => $data['priorities']['第三志願'] ?? 0
-        ];
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("科系統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取科系統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("科系統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取科系統計: ' . $e->getMessage()];
     }
-    
-    // 按總數量排序
-    usort($stats, function($a, $b) {
-        return $b['value'] - $a['value'];
-    });
-    
-    return $stats;
 }
 
 function getSystemStats($pdo, $department_filter = '') {
@@ -299,46 +451,139 @@ function getSystemStats($pdo, $department_filter = '') {
         
         if ($has_system_columns) {
             // 使用 enrollment_intention 表的 system1, system2, system3 欄位（舊結構）
-            // 檢查是否有 intention1 欄位，如果有才能進行科系篩選
-            $check_intention1 = $pdo->query("SHOW COLUMNS FROM enrollment_intention LIKE 'intention1'");
-            $has_intention_columns = $check_intention1->rowCount() > 0;
+            // 使用 DESCRIBE 來檢查欄位是否存在（最可靠的方法）
+            $describe_result = $pdo->query("DESCRIBE enrollment_intention");
+            $columns = $describe_result->fetchAll(PDO::FETCH_COLUMN);
+            $has_intention1 = in_array('intention1', $columns);
+            $has_intention2 = in_array('intention2', $columns);
+            $has_intention3 = in_array('intention3', $columns);
             
-            if ($has_intention_columns && !empty($department_filter)) {
-                // 有 intention1 欄位且指定了科系篩選
-                $filter = buildDepartmentFilter($pdo, $department_filter);
-            } else {
-                // 沒有 intention1 欄位或沒有指定科系篩選，不進行篩選
+            // 確保 filter 變數已初始化為不篩選
+            $filter = '1=1';
+            
+            // 只有在 enrollment_intention 表有所有 intention 欄位時才能進行科系篩選
+            if ($has_intention1 && $has_intention2 && $has_intention3 && !empty($department_filter)) {
+                // 所有 intention 欄位都存在，可以構建篩選條件
+                $escaped_dept = $pdo->quote('%' . $department_filter . '%');
+                $filter = "(intention1 LIKE $escaped_dept OR intention2 LIKE $escaped_dept OR intention3 LIKE $escaped_dept)";
+            } else if (!empty($department_filter)) {
+                // 欄位不存在但指定了科系篩選，使用不篩選並記錄警告
                 $filter = '1=1';
+                error_log("學制統計：enrollment_intention 表缺少 intention 欄位（intention1: " . ($has_intention1 ? '存在' : '不存在') . ", intention2: " . ($has_intention2 ? '存在' : '不存在') . ", intention3: " . ($has_intention3 ? '存在' : '不存在') . "），無法進行科系篩選");
             }
             
-            $stmt = $pdo->query("
-                SELECT 
-                    COALESCE(system1, '未選擇') as system_type,
-                    COUNT(*) as count
-                FROM enrollment_intention 
-                WHERE system1 IS NOT NULL AND system1 != '' AND $filter
-                GROUP BY system1
+            // 使用 try-catch 來捕獲 SQL 錯誤
+            try {
+                // 構建 SQL 查詢
+                $sql = "
+                    SELECT 
+                        COALESCE(system1, '未選擇') as system_type,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE system1 IS NOT NULL AND system1 != '' AND $filter
+                    GROUP BY system1
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        COALESCE(system2, '未選擇') as system_type,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' AND $filter
+                    GROUP BY system2
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        COALESCE(system3, '未選擇') as system_type,
+                        COUNT(*) as count
+                    FROM enrollment_intention 
+                    WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' AND $filter
+                    GROUP BY system3
+                ";
                 
-                UNION ALL
+                // 在執行前最後一次檢查：確保 filter 不包含不存在的欄位
+                if (strpos($filter, 'intention1') !== false || strpos($filter, 'intention2') !== false || strpos($filter, 'intention3') !== false) {
+                    // 如果 filter 包含 intention 欄位，再次確認這些欄位存在
+                    $describe_result = $pdo->query("DESCRIBE enrollment_intention");
+                    $columns = $describe_result->fetchAll(PDO::FETCH_COLUMN);
+                    if (!in_array('intention1', $columns) || !in_array('intention2', $columns) || !in_array('intention3', $columns)) {
+                        // 欄位不存在，強制使用不篩選
+                        $filter = '1=1';
+                        $sql = "
+                            SELECT 
+                                COALESCE(system1, '未選擇') as system_type,
+                                COUNT(*) as count
+                            FROM enrollment_intention 
+                            WHERE system1 IS NOT NULL AND system1 != ''
+                            GROUP BY system1
+                            
+                            UNION ALL
+                            
+                            SELECT 
+                                COALESCE(system2, '未選擇') as system_type,
+                                COUNT(*) as count
+                            FROM enrollment_intention 
+                            WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇'
+                            GROUP BY system2
+                            
+                            UNION ALL
+                            
+                            SELECT 
+                                COALESCE(system3, '未選擇') as system_type,
+                                COUNT(*) as count
+                            FROM enrollment_intention 
+                            WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇'
+                            GROUP BY system3
+                        ";
+                    }
+                }
                 
-                SELECT 
-                    COALESCE(system2, '未選擇') as system_type,
-                    COUNT(*) as count
-                FROM enrollment_intention 
-                WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' AND $filter
-                GROUP BY system2
+                $stmt = $pdo->query($sql);
+                $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e) {
+                // 如果查詢失敗，可能是因為 filter 中包含了不存在的欄位
+                // 重新嘗試不使用 filter
+                error_log("學制統計查詢失敗，嘗試不使用篩選: " . $e->getMessage());
+                error_log("失敗的 SQL: " . $sql);
+                error_log("使用的 filter: " . $filter);
+                error_log("has_intention_columns: " . ($has_intention_columns ? 'true' : 'false'));
                 
-                UNION ALL
-                
-                SELECT 
-                    COALESCE(system3, '未選擇') as system_type,
-                    COUNT(*) as count
-                FROM enrollment_intention 
-                WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' AND $filter
-                GROUP BY system3
-            ");
-            
-            $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                try {
+                    $stmt = $pdo->query("
+                        SELECT 
+                            COALESCE(system1, '未選擇') as system_type,
+                            COUNT(*) as count
+                        FROM enrollment_intention 
+                        WHERE system1 IS NOT NULL AND system1 != ''
+                        GROUP BY system1
+                        
+                        UNION ALL
+                        
+                        SELECT 
+                            COALESCE(system2, '未選擇') as system_type,
+                            COUNT(*) as count
+                        FROM enrollment_intention 
+                        WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇'
+                        GROUP BY system2
+                        
+                        UNION ALL
+                        
+                        SELECT 
+                            COALESCE(system3, '未選擇') as system_type,
+                            COUNT(*) as count
+                        FROM enrollment_intention 
+                        WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇'
+                        GROUP BY system3
+                    ");
+                    
+                    $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (PDOException $e2) {
+                    // 如果仍然失敗，返回空結果
+                    error_log("學制統計查詢完全失敗: " . $e2->getMessage());
+                    return [];
+                }
+            }
         } elseif ($has_preferences_table) {
             // 使用 enrollment_preferences 表（正規化結構）
             if (!empty($department_filter)) {
@@ -432,242 +677,317 @@ function getSystemStats($pdo, $department_filter = '') {
 }
 
 function getGradeStats($pdo, $department_filter = '') {
-    $filter = buildDepartmentFilter($pdo, $department_filter);
-    
-    $stmt = $pdo->query("
-        SELECT 
-            COALESCE(current_grade, '未填寫') as grade,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE $filter
-        GROUP BY current_grade
-        ORDER BY 
-            CASE current_grade
-                WHEN '國一' THEN 1
-                WHEN '國二' THEN 2
-                WHEN '國三' THEN 3
-                WHEN '已畢業' THEN 4
-                ELSE 5
-            END
-    ");
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[] = [
-            'name' => $row['grade'],
-            'value' => (int)$row['count']
-        ];
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取年級統計");
+            return [];
+        }
+        
+        // 使用專門針對 enrollment_intention 表的篩選函數
+        $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        
+        $stmt = $pdo->query("
+            SELECT 
+                COALESCE(current_grade, '未填寫') as grade,
+                COUNT(*) as count
+            FROM enrollment_intention 
+            WHERE $filter
+            GROUP BY current_grade
+            ORDER BY 
+                CASE current_grade
+                    WHEN '國一' THEN 1
+                    WHEN '國二' THEN 2
+                    WHEN '國三' THEN 3
+                    WHEN '已畢業' THEN 4
+                    ELSE 5
+                END
+        ");
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[] = [
+                'name' => $row['grade'],
+                'value' => (int)$row['count']
+            ];
+        }
+        
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("年級統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取年級統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("年級統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取年級統計: ' . $e->getMessage()];
     }
-    
-    return $stats;
 }
 
 function getGenderStats($pdo, $department_filter = '') {
-    $filter = buildDepartmentFilter($pdo, $department_filter);
-    
-    $stmt = $pdo->query("
-        SELECT 
-            COALESCE(gender, '未填寫') as gender,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE $filter
-        GROUP BY gender
-        ORDER BY 
-            CASE gender
-                WHEN '男' THEN 1
-                WHEN '女' THEN 2
-                ELSE 3
-            END
-    ");
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[] = [
-            'name' => $row['gender'],
-            'value' => (int)$row['count']
-        ];
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取性別統計");
+            return [];
+        }
+        
+        // 使用專門針對 enrollment_intention 表的篩選函數
+        $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        
+        $stmt = $pdo->query("
+            SELECT 
+                COALESCE(gender, '未填寫') as gender,
+                COUNT(*) as count
+            FROM enrollment_intention 
+            WHERE $filter
+            GROUP BY gender
+            ORDER BY 
+                CASE gender
+                    WHEN '男' THEN 1
+                    WHEN '女' THEN 2
+                    ELSE 3
+                END
+        ");
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[] = [
+                'name' => $row['gender'],
+                'value' => (int)$row['count']
+            ];
+        }
+        
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("性別統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取性別統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("性別統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取性別統計: ' . $e->getMessage()];
     }
-    
-    return $stats;
 }
 
 function getIdentityStats($pdo, $department_filter = '') {
-    $filter = buildDepartmentFilter($pdo, $department_filter);
-    
-    $stmt = $pdo->query("
-        SELECT 
-            COALESCE(identity, '未填寫') as identity,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE $filter
-        GROUP BY identity
-        ORDER BY 
-            CASE identity
-                WHEN '學生' THEN 1
-                WHEN '家長' THEN 2
-                ELSE 3
-            END
-    ");
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[] = [
-            'name' => $row['identity'],
-            'value' => (int)$row['count']
-        ];
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取身分別統計");
+            return [];
+        }
+        
+        // 使用專門針對 enrollment_intention 表的篩選函數
+        $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        
+        $stmt = $pdo->query("
+            SELECT 
+                COALESCE(identity, '未填寫') as identity,
+                COUNT(*) as count
+            FROM enrollment_intention 
+            WHERE $filter
+            GROUP BY identity
+            ORDER BY 
+                CASE identity
+                    WHEN '學生' THEN 1
+                    WHEN '家長' THEN 2
+                    ELSE 3
+                END
+        ");
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[] = [
+                'name' => $row['identity'],
+                'value' => (int)$row['count']
+            ];
+        }
+        
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("身分別統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取身分別統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("身分別統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取身分別統計: ' . $e->getMessage()];
     }
-    
-    return $stats;
 }
 
 function getMonthlyStats($pdo, $department_filter = '') {
-    $filter = buildDepartmentFilter($pdo, $department_filter);
-    
-    $stmt = $pdo->query("
-        SELECT 
-            DATE_FORMAT(created_at, '%Y-%m') as month,
-            COUNT(*) as count
-        FROM enrollment_intention 
-        WHERE $filter AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-        ORDER BY month
-    ");
-    
-    $stats = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $stats[] = [
-            'name' => $row['month'],
-            'value' => (int)$row['count']
-        ];
+    try {
+        // 檢查 enrollment_intention 表是否存在
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            error_log("enrollment_intention 表不存在，無法獲取月度統計");
+            return [];
+        }
+        
+        // 使用專門針對 enrollment_intention 表的篩選函數
+        $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        
+        $stmt = $pdo->query("
+            SELECT 
+                DATE_FORMAT(created_at, '%Y-%m') as month,
+                COUNT(*) as count
+            FROM enrollment_intention 
+            WHERE $filter AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+            GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+            ORDER BY month
+        ");
+        
+        $stats = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $stats[] = [
+                'name' => $row['month'],
+                'value' => (int)$row['count']
+            ];
+        }
+        
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("月度統計錯誤: " . $e->getMessage());
+        error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+        return ['error' => '無法獲取月度統計: ' . $e->getMessage()];
+    } catch (Exception $e) {
+        error_log("月度統計一般錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取月度統計: ' . $e->getMessage()];
     }
-    
-    return $stats;
 }
 
 function getSchoolDepartmentStats($pdo, $department_filter = '') {
-    // 國中選擇科系分佈應該顯示所有數據，不受部門限制
-    $filter = '1=1'; // 不應用部門篩選
-    
-    // 檢查 enrollment_choices 表是否存在
-    $check_table = $pdo->query("SHOW TABLES LIKE 'enrollment_choices'");
-    $has_choices_table = $check_table->rowCount() > 0;
-    
-    // 檢查 school_data 表是否存在（用於獲取學校名稱）
-    $check_school_table = $pdo->query("SHOW TABLES LIKE 'school_data'");
-    $has_school_table = $check_school_table->rowCount() > 0;
-    
-    if ($has_choices_table) {
-        // 使用正規化的 enrollment_choices 表結構
-        // 統計每個國中選擇的科系（三個志願都計算）
-        $school_join = $has_school_table 
-            ? "LEFT JOIN school_data sd ON ei.junior_high = sd.school_code"
-            : "";
-        $school_select = $has_school_table 
-            ? "COALESCE(sd.name, ei.junior_high, '未填寫')"
-            : "COALESCE(ei.junior_high, '未填寫')";
+    try {
+        // 國中選擇科系分佈應該顯示所有數據，不受部門限制
+        $filter = '1=1'; // 不應用部門篩選
         
-        try {
-            // 構建 GROUP BY 子句，使用與 SELECT 相同的表達式
-            $group_by_school = $has_school_table 
+        // 檢查 enrollment_choices 表是否存在
+        $check_table = $pdo->query("SHOW TABLES LIKE 'enrollment_choices'");
+        $has_choices_table = $check_table->rowCount() > 0;
+        
+        // 檢查 school_data 表是否存在（用於獲取學校名稱）
+        $check_school_table = $pdo->query("SHOW TABLES LIKE 'school_data'");
+        $has_school_table = $check_school_table->rowCount() > 0;
+        
+        if ($has_choices_table) {
+            // 使用正規化的 enrollment_choices 表結構
+            // 統計每個國中選擇的科系（三個志願都計算）
+            $school_join = $has_school_table 
+                ? "LEFT JOIN school_data sd ON ei.junior_high = sd.school_code"
+                : "";
+            $school_select = $has_school_table 
                 ? "COALESCE(sd.name, ei.junior_high, '未填寫')"
                 : "COALESCE(ei.junior_high, '未填寫')";
-            $group_by_dept = "COALESCE(d.name, ec.department_code, '無特定')";
             
-            $stmt = $pdo->query("
-                SELECT 
-                    $school_select as school_name,
-                    $group_by_dept as department,
-                    COUNT(*) as count,
-                    CASE ec.choice_order
-                        WHEN 1 THEN '第一志願'
-                        WHEN 2 THEN '第二志願'
-                        WHEN 3 THEN '第三志願'
-                        ELSE '未知'
-                    END as priority
-                FROM enrollment_intention ei
-                INNER JOIN enrollment_choices ec ON ei.id = ec.enrollment_id
-                LEFT JOIN departments d ON ec.department_code = d.code
-                $school_join
-                WHERE ei.junior_high IS NOT NULL AND ei.junior_high != ''
-                    AND ec.department_code IS NOT NULL AND ec.department_code != ''
-                    AND $filter
-                GROUP BY $group_by_school, $group_by_dept, ec.choice_order
-                ORDER BY school_name, department, ec.choice_order
-            ");
-        } catch (PDOException $e) {
-            error_log("查詢國中選擇科系統計失敗: " . $e->getMessage());
-            // 返回空結果
-            $stmt = $pdo->query("SELECT 1 WHERE 1=0");
-        }
-    } else {
-        // 如果沒有 enrollment_choices 表，返回空數據
-        $stmt = $pdo->query("SELECT 1 WHERE 1=0"); // 返回空結果集
-    }
-    
-    $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // 按國中分組，統計每個國中選擇的科系
-    $school_stats = [];
-    foreach ($raw_data as $row) {
-        $school = $row['school_name'];
-        $department = $row['department'];
-        $count = (int)$row['count'];
-        $priority = $row['priority'];
-        
-        if (!isset($school_stats[$school])) {
-            $school_stats[$school] = [];
-        }
-        
-        if (!isset($school_stats[$school][$department])) {
-            $school_stats[$school][$department] = [
-                'total' => 0,
-                'priorities' => [
-                    '第一志願' => 0,
-                    '第二志願' => 0,
-                    '第三志願' => 0
-                ]
-            ];
-        }
-        
-        $school_stats[$school][$department]['total'] += $count;
-        if (isset($school_stats[$school][$department]['priorities'][$priority])) {
-            $school_stats[$school][$department]['priorities'][$priority] += $count;
+            try {
+                // 構建 GROUP BY 子句，使用與 SELECT 相同的表達式
+                $group_by_school = $has_school_table 
+                    ? "COALESCE(sd.name, ei.junior_high, '未填寫')"
+                    : "COALESCE(ei.junior_high, '未填寫')";
+                $group_by_dept = "COALESCE(d.name, ec.department_code, '無特定')";
+                
+                $stmt = $pdo->query("
+                    SELECT 
+                        $school_select as school_name,
+                        $group_by_dept as department,
+                        COUNT(*) as count,
+                        CASE ec.choice_order
+                            WHEN 1 THEN '第一志願'
+                            WHEN 2 THEN '第二志願'
+                            WHEN 3 THEN '第三志願'
+                            ELSE '未知'
+                        END as priority
+                    FROM enrollment_intention ei
+                    INNER JOIN enrollment_choices ec ON ei.id = ec.enrollment_id
+                    LEFT JOIN departments d ON ec.department_code = d.code
+                    $school_join
+                    WHERE ei.junior_high IS NOT NULL AND ei.junior_high != ''
+                        AND ec.department_code IS NOT NULL AND ec.department_code != ''
+                        AND $filter
+                    GROUP BY $group_by_school, $group_by_dept, ec.choice_order
+                    ORDER BY school_name, department, ec.choice_order
+                ");
+            } catch (PDOException $e) {
+                error_log("查詢國中選擇科系統計失敗: " . $e->getMessage());
+                error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+                // 返回空結果
+                $stmt = $pdo->query("SELECT 1 WHERE 1=0");
+            }
         } else {
-            $school_stats[$school][$department]['priorities'][$priority] = $count;
+            // 如果沒有 enrollment_choices 表，返回空數據
+            $stmt = $pdo->query("SELECT 1 WHERE 1=0"); // 返回空結果集
         }
-    }
-    
-    // 轉換為前端需要的格式
-    $stats = [];
-    foreach ($school_stats as $school => $departments) {
-        $department_list = [];
-        foreach ($departments as $dept => $data) {
-            $department_list[] = [
-                'name' => $dept,
-                'total' => $data['total'],
-                'first_choice' => $data['priorities']['第一志願'],
-                'second_choice' => $data['priorities']['第二志願'],
-                'third_choice' => $data['priorities']['第三志願']
+        
+        $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // 按國中分組，統計每個國中選擇的科系
+        $school_stats = [];
+        foreach ($raw_data as $row) {
+            $school = $row['school_name'];
+            $department = $row['department'];
+            $count = (int)$row['count'];
+            $priority = $row['priority'];
+            
+            if (!isset($school_stats[$school])) {
+                $school_stats[$school] = [];
+            }
+            
+            if (!isset($school_stats[$school][$department])) {
+                $school_stats[$school][$department] = [
+                    'total' => 0,
+                    'priorities' => [
+                        '第一志願' => 0,
+                        '第二志願' => 0,
+                        '第三志願' => 0
+                    ]
+                ];
+            }
+            
+            $school_stats[$school][$department]['total'] += $count;
+            if (isset($school_stats[$school][$department]['priorities'][$priority])) {
+                $school_stats[$school][$department]['priorities'][$priority] += $count;
+            } else {
+                $school_stats[$school][$department]['priorities'][$priority] = $count;
+            }
+        }
+        
+        // 轉換為前端需要的格式
+        $stats = [];
+        foreach ($school_stats as $school => $departments) {
+            $department_list = [];
+            foreach ($departments as $dept => $data) {
+                $department_list[] = [
+                    'name' => $dept,
+                    'total' => $data['total'],
+                    'first_choice' => $data['priorities']['第一志願'],
+                    'second_choice' => $data['priorities']['第二志願'],
+                    'third_choice' => $data['priorities']['第三志願']
+                ];
+            }
+            
+            // 按總數排序
+            usort($department_list, function($a, $b) {
+                return $b['total'] - $a['total'];
+            });
+            
+            $stats[] = [
+                'school' => $school,
+                'departments' => $department_list,
+                'total_students' => array_sum(array_column($department_list, 'total'))
             ];
         }
         
-        // 按總數排序
-        usort($department_list, function($a, $b) {
-            return $b['total'] - $a['total'];
+        // 按總學生數排序
+        usort($stats, function($a, $b) {
+            return $b['total_students'] - $a['total_students'];
         });
         
-        $stats[] = [
-            'school' => $school,
-            'departments' => $department_list,
-            'total_students' => array_sum(array_column($department_list, 'total'))
-        ];
+        return $stats;
+    } catch (Exception $e) {
+        error_log("國中選擇科系統計錯誤: " . $e->getMessage());
+        error_log("錯誤堆疊: " . $e->getTraceAsString());
+        return ['error' => '無法獲取國中選擇科系統計: ' . $e->getMessage()];
     }
-    
-    // 按總學生數排序
-    usort($stats, function($a, $b) {
-        return $b['total_students'] - $a['total_students'];
-    });
-    
-    return $stats;
 }
 ?>
