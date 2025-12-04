@@ -78,7 +78,7 @@ $admission_teacher = [];
 $teacher_query = "SELECT u.name, t.department, t.phone 
                   FROM teacher t 
                   LEFT JOIN user u ON t.user_id = u.id 
-                  WHERE t.user_id = 12";
+                  WHERE t.user_id = 90";
 $teacher_result = $conn->query($teacher_query);
 if ($teacher_result && $teacher_result->num_rows > 0) {
     $admission_teacher = $teacher_result->fetch_assoc();
@@ -99,6 +99,14 @@ if (isset($_SESSION['success_message'])) {
         // 設定全域變數供 JavaScript 使用
         echo "<script>
             window.successMessage = '" . addslashes($success_message) . "';
+        </script>";
+    }
+    
+    // 檢查是否需要自動刷新（報名成功後3秒刷新）
+    if (isset($_SESSION['auto_refresh'])) {
+        unset($_SESSION['auto_refresh']);
+        echo "<script>
+            window.autoRefresh = true;
         </script>";
     }
 }
@@ -665,13 +673,35 @@ if ($_POST && !isset($_POST['action'])) {
             try {
                 require_once 'includes/email_functions.php';
                 
-                // 組合課程資訊用於郵件
+                // 從departments表查詢科系名稱（將代碼轉換為名稱）
                 $course_info = [];
                 if (!empty($course_priority_1)) {
-                    $course_info[] = "第一選擇：" . $course_priority_1;
+                    // 查詢科系名稱
+                    $dept_query_1 = "SELECT name FROM departments WHERE code = ? LIMIT 1";
+                    $dept_stmt_1 = $conn->prepare($dept_query_1);
+                    $dept_stmt_1->bind_param("s", $course_priority_1);
+                    $dept_stmt_1->execute();
+                    $dept_result_1 = $dept_stmt_1->get_result();
+                    $dept_name_1 = $course_priority_1; // 預設使用代碼
+                    if ($dept_row_1 = $dept_result_1->fetch_assoc()) {
+                        $dept_name_1 = $dept_row_1['name'];
+                    }
+                    $dept_stmt_1->close();
+                    $course_info[] = "第一選擇：" . $dept_name_1;
                 }
                 if (!empty($course_priority_2)) {
-                    $course_info[] = "第二選擇：" . $course_priority_2;
+                    // 查詢科系名稱
+                    $dept_query_2 = "SELECT name FROM departments WHERE code = ? LIMIT 1";
+                    $dept_stmt_2 = $conn->prepare($dept_query_2);
+                    $dept_stmt_2->bind_param("s", $course_priority_2);
+                    $dept_stmt_2->execute();
+                    $dept_result_2 = $dept_stmt_2->get_result();
+                    $dept_name_2 = $course_priority_2; // 預設使用代碼
+                    if ($dept_row_2 = $dept_result_2->fetch_assoc()) {
+                        $dept_name_2 = $dept_row_2['name'];
+                    }
+                    $dept_stmt_2->close();
+                    $course_info[] = "第二選擇：" . $dept_name_2;
                 }
                 $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
                 
@@ -750,8 +780,16 @@ if ($_POST && !isset($_POST['action'])) {
             $messageType = "success";
             // 提交成功後清除驗證碼（將由 captcha_image.php 重新生成）
             unset($_SESSION['captcha_code']);
+            // 設定成功訊息和自動刷新標記
+            $_SESSION['success_message'] = $message;
+            $_SESSION['should_refresh'] = true;
+            $_SESSION['auto_refresh'] = true; // 標記需要自動刷新
             // 清空 POST 資料，避免表單資料被保留
             $_POST = array();
+            
+            // 重新導向到同一頁面以觸發成功訊息和自動刷新
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
         } else {
             $message = "報名失敗：" . $stmt->error;
             $messageType = "error";
@@ -1696,6 +1734,15 @@ $conn->close();
                 showSuccessModal(window.successMessage);
                 // 清除全域變數
                 window.successMessage = null;
+                
+                // 如果需要自動刷新（報名成功後3秒刷新）
+                if (window.autoRefresh) {
+                    console.log('Auto refresh enabled, will refresh in 3 seconds');
+                    setTimeout(function() {
+                        console.log('Auto refreshing page...');
+                        window.location.href = window.location.pathname;
+                    }, 3000); // 3秒後刷新
+                }
             } else {
                 console.log('No success message found');
             }

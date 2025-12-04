@@ -160,15 +160,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_GET['add_contact'])) {
 			$pdo->commit();
 
 			// 寄送郵件
-			$mail = new PHPMailer(true);
-			$mail->isSMTP();
-			$mail->Host = SMTP_HOST;
-			$mail->SMTPAuth = true;
-			$mail->Username = SMTP_USERNAME;
-			$mail->Password = SMTP_PASSWORD;
-			$mail->SMTPSecure = SMTP_SECURE;
-			$mail->Port = SMTP_PORT;
-			$mail->CharSet = 'UTF-8';
+			$mail_errors = [];
+			try {
+				$mail = new PHPMailer(true);
+				$mail->isSMTP();
+				$mail->Host = SMTP_HOST;
+				$mail->SMTPAuth = true;
+				$mail->Username = SMTP_USERNAME;
+				$mail->Password = SMTP_PASSWORD;
+				$mail->SMTPSecure = SMTP_SECURE;
+				$mail->Port = SMTP_PORT;
+				$mail->CharSet = 'UTF-8';
+				$mail->SMTPDebug = 0; // 關閉調試模式（生產環境）
+				$mail->Debugoutput = function($str, $level) use (&$mail_errors) {
+					$mail_errors[] = $str;
+				};
 			// 動態寄件者名稱：優先使用老師姓名，其次使用通用名稱
 			$fromName = $teacher_name ? $teacher_name : '康寧大學活動通知';
 			$mail->setFrom(SMTP_FROM_EMAIL, $fromName);
@@ -233,13 +239,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_GET['add_contact'])) {
 					$mail->send();
 					$sent++;
 				} catch (Exception $ex) {
-					error_log("郵件發送失敗 (收件人: {$row['email']}): " . $ex->getMessage());
+					$error_msg = $ex->getMessage();
+					error_log("郵件發送失敗 (收件人: {$row['email']}): " . $error_msg);
+					$mail_errors[] = "收件人 {$row['email']}: " . $error_msg;
 					$failed++;
 				}
 			}
+			} catch (Exception $mail_init_error) {
+				// 郵件初始化失敗
+				error_log("郵件系統初始化失敗: " . $mail_init_error->getMessage());
+				$result_message = '郵件系統初始化失敗：' . $mail_init_error->getMessage() . '。請檢查SMTP設定。';
+				if ($pdo->inTransaction()) {
+					$pdo->rollBack();
+				}
+				throw new Exception($result_message);
+			}
 
 			// 顯示結果：若無失敗，只顯示成功數量並使用綠色樣式
-			if ($failed === 0) {
+			if ($failed === 0 && $sent > 0) {
 				$result_message = '寄送完成：成功 ' . $sent . ' 封';
 				// 成功後清空頁面表單與暫存內容
 				echo '<script>
@@ -261,13 +278,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_GET['add_contact'])) {
 				// 清空伺服端端的 POST 值，避免重新渲染時 value 屬性帶回舊資料
 				$__clear_fields = ['teacher_name','teacher_email','subject','content','event_date','link','extra_emails','contacts'];
 				foreach ($__clear_fields as $__k) { if (isset($_POST[$__k])) { unset($_POST[$__k]); } }
-			} else {
+			} elseif ($sent > 0) {
 				$result_message = '寄送完成：成功 ' . $sent . ' 封，失敗 ' . $failed . ' 封';
+				if (!empty($mail_errors) && count($mail_errors) <= 5) {
+					$result_message .= '。錯誤詳情：' . implode('; ', array_slice($mail_errors, 0, 5));
+				}
+			} else {
+				$result_message = '寄送失敗：沒有成功發送任何郵件。';
+				if (!empty($mail_errors)) {
+					$result_message .= ' 錯誤：' . implode('; ', array_slice($mail_errors, 0, 3));
+				} else {
+					$result_message .= ' 請檢查SMTP設定或聯絡系統管理員。';
+				}
+				error_log("郵件發送完全失敗 - 成功: $sent, 失敗: $failed, 錯誤: " . implode(' | ', $mail_errors));
 			}
 		} catch (Exception $ex) {
 			if ($pdo->inTransaction()) $pdo->rollBack();
 			$result_message = '發送失敗：' . $ex->getMessage();
 		}
+	}
+}
+
+// 處理AJAX請求：獲取聯絡人列表
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_contacts') {
+	header('Content-Type: application/json; charset=utf-8');
+	try {
+		$stmt = $pdo->query("
+			SELECT 
+				sc.id, 
+				sc.school_code,
+				sd.name as school_name, 
+				sc.contact_name, 
+				sc.email, 
+				sc.phone,
+				sc.title,
+				sd.city, 
+				sd.district
+			FROM schools_contacts sc
+			LEFT JOIN school_data sd ON sc.school_code = sd.school_code
+			WHERE sc.is_active = 1 
+			ORDER BY sd.city, sd.district, sd.name, sc.contact_name
+		");
+		$contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+		echo json_encode(['success' => true, 'contacts' => $contacts], JSON_UNESCAPED_UNICODE);
+		exit;
+	} catch (PDOException $e) {
+		error_log("取得聯絡人清單失敗: " . $e->getMessage());
+		echo json_encode(['success' => false, 'message' => '取得聯絡人清單失敗'], JSON_UNESCAPED_UNICODE);
+		exit;
 	}
 }
 
@@ -468,10 +526,23 @@ try {
 		</div>
 
 		<?php if ($result_message !== ''): ?>
-			<div class="message <?php echo (strpos($result_message, '失敗') === false ? 'success' : 'error'); ?>">
+			<div class="message <?php echo (strpos($result_message, '失敗') === false ? 'success' : 'error'); ?>" id="resultMessage">
 				<i class="fas fa-<?php echo (strpos($result_message, '失敗') === false ? 'check-circle' : 'exclamation-triangle'); ?>"></i>
 				<?php echo htmlspecialchars($result_message, ENT_QUOTES, 'UTF-8'); ?>
 			</div>
+			<script>
+				// 3秒後自動隱藏訊息
+				setTimeout(function() {
+					var msg = document.getElementById('resultMessage');
+					if (msg) {
+						msg.style.transition = 'opacity 0.5s ease';
+						msg.style.opacity = '0';
+						setTimeout(function() {
+							msg.style.display = 'none';
+						}, 500);
+					}
+				}, 3000);
+			</script>
 		<?php endif; ?>
 
 		<div class="form-container">
@@ -514,7 +585,7 @@ try {
 						<div class="field-group">
 							<label><i class="fas fa-calendar-alt" style="color:#667eea;"></i> 活動日期（可選）</label>
 							<div class="event-date-wrapper">
-								<input type="date" name="event_date" id="event_date" style="padding-right:40px; cursor:pointer;" value="<?php echo isset($_POST['event_date']) ? htmlspecialchars($_POST['event_date'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
+								<input type="date" name="event_date" id="event_date" style="padding-right:40px; cursor:pointer;" min="<?php echo date('Y-m-d'); ?>" value="<?php echo isset($_POST['event_date']) ? htmlspecialchars($_POST['event_date'], ENT_QUOTES, 'UTF-8') : ''; ?>" />
 								<i class="fas fa-calendar-check date-icon"></i>
 							</div>
 							<small style="color: #666; font-size: 0.85em; margin-top:6px; display:block;">
@@ -538,7 +609,7 @@ try {
 
 				<div class="form-section">
 					<h3><i class="fas fa-users"></i> 選擇收件人（國中負責人）</h3>
-					<div style="max-height: 300px; overflow-y: auto; border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
+					<div id="contactsContainer" style="max-height: 300px; overflow-y: auto; border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
 						<?php if (empty($contacts)): ?>
 							<p style="color:#999; text-align:center; padding:20px;">目前尚無聯絡人，請先建立聯絡人資料。</p>
 						<?php else: ?>
@@ -549,8 +620,11 @@ try {
 								<button type="button" onclick="document.querySelectorAll('.recipients-list input[type=checkbox]').forEach(c => c.checked = false)" style="background:#6c757d; padding:8px 16px; border:0; border-radius:6px; color:#fff; font-size:14px; cursor:pointer; font-weight:600;">
 									<i class="fas fa-square"></i> 全不選
 								</button>
+								<button type="button" onclick="loadContactsList()" style="background:#667eea; padding:8px 16px; border:0; border-radius:6px; color:#fff; font-size:14px; cursor:pointer; font-weight:600;">
+									<i class="fas fa-sync-alt"></i> 重新整理
+								</button>
 							</div>
-							<div class="recipients-list" style="display:grid; gap:8px;">
+							<div class="recipients-list" id="recipientsList" style="display:grid; gap:8px;">
 							<?php foreach ($contacts as $c): ?>
 								<div class="checkbox-item">
 									<input type="checkbox" name="contacts[]" value="<?php echo (int)$c['id']; ?>" id="contact_<?php echo (int)$c['id']; ?>" />
@@ -598,7 +672,7 @@ try {
 		<div class="form-container" style="margin-top:20px;">
 			<div class="form-section">
 				<h3><i class="fas fa-address-book"></i> 聯絡人維護（快速新增）</h3>
-				<form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?add_contact=1" id="addContactForm">
+				<form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>?add_contact=1" id="addContactForm" onsubmit="return submitAddContactForm(event);">
 					<div class="form-row">
 						<div class="field-group">
 							<label><span class="required">*</span> 學校</label>
@@ -717,10 +791,50 @@ try {
 								$schoolNameRow = $schoolNameStmt->fetch(PDO::FETCH_ASSOC);
 								$school_name_display = $schoolNameRow['name'] ?? $school_code;
 								
+								// 獲取新增的聯絡人ID（如果是新增）
+								$new_contact_id = null;
+								if ($action === '新增') {
+									$new_contact_id = (int)$pdo->lastInsertId();
+								} else {
+									$new_contact_id = (int)$existing['id'];
+								}
+								
+								// 獲取完整的聯絡人資訊用於顯示
+								$contactInfoStmt = $pdo->prepare("
+									SELECT 
+										sc.id, 
+										sc.school_code,
+										sd.name as school_name, 
+										sc.contact_name, 
+										sc.email, 
+										sc.phone,
+										sc.title,
+										sd.city, 
+										sd.district
+									FROM schools_contacts sc
+									LEFT JOIN school_data sd ON sc.school_code = sd.school_code
+									WHERE sc.id = ? AND sc.is_active = 1
+								");
+								$contactInfoStmt->execute([$new_contact_id]);
+								$new_contact_info = $contactInfoStmt->fetch(PDO::FETCH_ASSOC);
+								
 								$msg = '已' . $action . '聯絡人（學校：' . htmlspecialchars($school_name_display, ENT_QUOTES, 'UTF-8') . '，Email：' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '）';
 								echo '<div id="contactAddSuccessMsg" class="message success"><i class="fas fa-check-circle"></i> ' . $msg . '</div>';
+								echo '<script>
+									// 3秒後自動隱藏新增聯絡人成功訊息
+									setTimeout(function() {
+										var msg = document.getElementById("contactAddSuccessMsg");
+										if (msg) {
+											msg.style.transition = "opacity 0.5s ease";
+											msg.style.opacity = "0";
+											setTimeout(function() {
+												msg.style.display = "none";
+											}, 500);
+										}
+									}, 3000);
+								</script>';
 								
-								// 清空表單並滾動到成功訊息位置
+								// 清空表單並動態更新聯絡人列表
 								echo '<script>
 									(function() {
 										// 清空表單
@@ -740,6 +854,16 @@ try {
 											if (resultsDiv) resultsDiv.classList.remove("show");
 										}
 										
+										// 動態更新聯絡人列表
+										if (typeof loadContactsList === "function") {
+											loadContactsList();
+										} else {
+											// 如果函數不存在，重新載入頁面
+											setTimeout(function() {
+												window.location.reload();
+											}, 1000);
+										}
+										
 										// 滾動到成功訊息位置
 										setTimeout(function() {
 											var successMsg = document.getElementById("contactAddSuccessMsg");
@@ -749,6 +873,13 @@ try {
 										}, 100);
 									})();
 								</script>';
+								
+								// 輸出新增的聯絡人資訊（用於動態更新）
+								if ($new_contact_info) {
+									echo '<script>
+										window.newContactInfo = ' . json_encode($new_contact_info, JSON_UNESCAPED_UNICODE) . ';
+									</script>';
+								}
 							} else {
 								echo '<div class="message warning"><i class="fas fa-info-circle"></i> 操作完成，但未影響任何記錄（可能資料已存在）</div>';
 							}
@@ -777,6 +908,33 @@ try {
 		<script>
 		// 保存表單內容到 localStorage（防止頁面刷新丟失）
 		document.addEventListener('DOMContentLoaded', function() {
+			// 設置活動日期的最小值為今天
+			var eventDateInput = document.getElementById('event_date');
+			if (eventDateInput) {
+				var today = new Date().toISOString().split('T')[0];
+				eventDateInput.setAttribute('min', today);
+				
+				// 如果當前值小於今天，清空它
+				if (eventDateInput.value && eventDateInput.value < today) {
+					eventDateInput.value = '';
+				}
+			}
+			
+			// 自動隱藏所有成功和錯誤訊息（3秒後）
+			var messages = document.querySelectorAll('.message.success, .message.error');
+			messages.forEach(function(msg) {
+				// 如果訊息還沒有設置自動隱藏
+				if (!msg.hasAttribute('data-auto-hide')) {
+					msg.setAttribute('data-auto-hide', 'true');
+					setTimeout(function() {
+						msg.style.transition = 'opacity 0.5s ease';
+						msg.style.opacity = '0';
+						setTimeout(function() {
+							msg.style.display = 'none';
+						}, 500);
+					}, 3000);
+				}
+			});
 			// 恢復保存的表單內容（但優先使用伺服器端自動填入的值）
 			var savedForm = localStorage.getItem('teacher_notification_form');
 			if (savedForm) {
@@ -1208,6 +1366,230 @@ try {
 		
 		// 將函數暴露到全局作用域
 		window.selectContactSchool = selectContactSchool;
+		
+		// AJAX提交新增聯絡人表單
+		window.submitAddContactForm = function(event) {
+			event.preventDefault();
+			
+			const form = document.getElementById('addContactForm');
+			if (!form) return false;
+			
+			const formData = new FormData(form);
+			const submitBtn = form.querySelector('button[type="submit"]');
+			const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
+			
+			// 顯示載入狀態
+			if (submitBtn) {
+				submitBtn.disabled = true;
+				submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 處理中...';
+			}
+			
+			// 發送AJAX請求
+			fetch(form.action, {
+				method: 'POST',
+				body: formData
+			})
+			.then(response => response.text())
+			.then(html => {
+				// 創建臨時div來解析響應
+				const tempDiv = document.createElement('div');
+				tempDiv.innerHTML = html;
+				
+				// 查找成功或錯誤訊息
+				const successMsg = tempDiv.querySelector('#contactAddSuccessMsg, .message.success');
+				const errorMsg = tempDiv.querySelector('.message.error, .message.warning');
+				
+				// 移除舊的訊息
+				const oldMsg = document.querySelector('#contactAddSuccessMsg, .message.success, .message.error');
+				if (oldMsg && oldMsg.closest('.form-container')) {
+					oldMsg.remove();
+				}
+				
+				// 顯示新訊息
+				if (successMsg) {
+					const formContainer = form.closest('.form-container');
+					if (formContainer) {
+						const clonedMsg = successMsg.cloneNode(true);
+						formContainer.insertBefore(clonedMsg, formContainer.firstChild);
+						
+						// 3秒後自動隱藏訊息
+						setTimeout(function() {
+							if (clonedMsg) {
+								clonedMsg.style.transition = 'opacity 0.5s ease';
+								clonedMsg.style.opacity = '0';
+								setTimeout(function() {
+									clonedMsg.style.display = 'none';
+								}, 500);
+							}
+						}, 3000);
+					}
+					
+					// 清空表單
+					form.reset();
+					const schoolCodeInput = document.getElementById('contact_school_code');
+					const schoolSearchInput = document.getElementById('contact_school_search');
+					if (schoolCodeInput) schoolCodeInput.value = '';
+					if (schoolSearchInput) schoolSearchInput.value = '';
+					const clearBtn = document.getElementById('clearContactSchoolSearch');
+					if (clearBtn) clearBtn.style.display = 'none';
+					const resultsDiv = document.getElementById('contactSchoolResults');
+					if (resultsDiv) resultsDiv.classList.remove('show');
+					
+					// 動態更新聯絡人列表
+					loadContactsList();
+					
+					// 滾動到成功訊息
+					setTimeout(() => {
+						const newSuccessMsg = document.querySelector('#contactAddSuccessMsg, .message.success');
+						if (newSuccessMsg) {
+							newSuccessMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+						}
+					}, 100);
+				} else if (errorMsg) {
+					const formContainer = form.closest('.form-container');
+					if (formContainer) {
+						formContainer.insertBefore(errorMsg.cloneNode(true), formContainer.firstChild);
+					}
+				}
+				
+				// 恢復按鈕狀態
+				if (submitBtn) {
+					submitBtn.disabled = false;
+					submitBtn.innerHTML = originalBtnText;
+				}
+			})
+			.catch(error => {
+				console.error('提交失敗:', error);
+				alert('提交失敗，請稍後再試。錯誤：' + error.message);
+				
+				// 恢復按鈕狀態
+				if (submitBtn) {
+					submitBtn.disabled = false;
+					submitBtn.innerHTML = originalBtnText;
+				}
+			});
+			
+			return false;
+		};
+		
+		// 動態載入聯絡人列表
+		window.loadContactsList = function() {
+			const recipientsList = document.getElementById('recipientsList');
+			const contactsContainer = document.getElementById('contactsContainer');
+			
+			if (!recipientsList && !contactsContainer) return;
+			
+			// 顯示載入中
+			if (recipientsList) {
+				recipientsList.innerHTML = '<div style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>';
+			}
+			
+			// 使用AJAX獲取最新的聯絡人列表
+			fetch('<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>?ajax=get_contacts')
+				.then(response => response.json())
+				.then(data => {
+					if (data.success && data.contacts) {
+						// 保存當前選中的聯絡人
+						const selectedContacts = [];
+						if (recipientsList) {
+							const checkboxes = recipientsList.querySelectorAll('input[type="checkbox"]:checked');
+							checkboxes.forEach(cb => selectedContacts.push(cb.value));
+						}
+						
+						// 更新聯絡人列表
+						if (recipientsList) {
+							if (data.contacts.length === 0) {
+								recipientsList.innerHTML = '<p style="color:#999; text-align:center; padding:20px;">目前尚無聯絡人，請先建立聯絡人資料。</p>';
+							} else {
+								let html = '';
+								data.contacts.forEach(function(c) {
+									const isChecked = selectedContacts.includes(String(c.id)) ? 'checked' : '';
+									html += `
+										<div class="checkbox-item">
+											<input type="checkbox" name="contacts[]" value="${c.id}" id="contact_${c.id}" ${isChecked} />
+											<label for="contact_${c.id}" style="cursor:pointer; flex:1;">
+												<div style="font-weight:600; color:#333;">
+													${escapeHtml(c.school_name || '未知學校')}
+												</div>
+												<div style="font-size:0.9em; color:#666; margin-top:4px;">
+													${c.contact_name ? `<i class="fas fa-user"></i> ${escapeHtml(c.contact_name)}${c.title ? ` <span style="color:#999;">（${escapeHtml(c.title)}）</span>` : ''} <span style="margin:0 8px;">·</span>` : ''}
+													${(c.city || c.district) ? `<i class="fas fa-map-marker-alt"></i> ${escapeHtml((c.city || '') + (c.district ? ' ' + c.district : ''))} <span style="margin:0 8px;">·</span>` : ''}
+													<i class="fas fa-envelope"></i> ${escapeHtml(c.email)}
+												</div>
+											</label>
+										</div>
+									`;
+								});
+								recipientsList.innerHTML = html;
+							}
+						}
+						
+						// 更新容器顯示狀態（如果recipientsList不存在）
+						if (contactsContainer && !recipientsList) {
+							if (data.contacts.length === 0) {
+								contactsContainer.innerHTML = '<p style="color:#999; text-align:center; padding:20px;">目前尚無聯絡人，請先建立聯絡人資料。</p>';
+							} else {
+								const buttonsHtml = `
+									<div style="margin-bottom:10px; display:flex; gap:10px;">
+										<button type="button" onclick="document.querySelectorAll('.recipients-list input[type=checkbox]').forEach(c => c.checked = true)" style="background:#28a745; padding:8px 16px; border:0; border-radius:6px; color:#fff; font-size:14px; cursor:pointer; font-weight:600;">
+											<i class="fas fa-check-square"></i> 全選
+										</button>
+										<button type="button" onclick="document.querySelectorAll('.recipients-list input[type=checkbox]').forEach(c => c.checked = false)" style="background:#6c757d; padding:8px 16px; border:0; border-radius:6px; color:#fff; font-size:14px; cursor:pointer; font-weight:600;">
+											<i class="fas fa-square"></i> 全不選
+										</button>
+										<button type="button" onclick="loadContactsList()" style="background:#667eea; padding:8px 16px; border:0; border-radius:6px; color:#fff; font-size:14px; cursor:pointer; font-weight:600;">
+											<i class="fas fa-sync-alt"></i> 重新整理
+										</button>
+									</div>
+									<div class="recipients-list" id="recipientsList" style="display:grid; gap:8px;">
+									</div>
+								`;
+								contactsContainer.innerHTML = buttonsHtml;
+								// 重新獲取recipientsList引用
+								const newRecipientsList = document.getElementById('recipientsList');
+								if (newRecipientsList && data.contacts.length > 0) {
+									let html = '';
+									data.contacts.forEach(function(c) {
+										const isChecked = selectedContacts.includes(String(c.id)) ? 'checked' : '';
+										html += `
+											<div class="checkbox-item">
+												<input type="checkbox" name="contacts[]" value="${c.id}" id="contact_${c.id}" ${isChecked} />
+												<label for="contact_${c.id}" style="cursor:pointer; flex:1;">
+													<div style="font-weight:600; color:#333;">
+														${escapeHtml(c.school_name || '未知學校')}
+													</div>
+													<div style="font-size:0.9em; color:#666; margin-top:4px;">
+														${c.contact_name ? `<i class="fas fa-user"></i> ${escapeHtml(c.contact_name)}${c.title ? ` <span style="color:#999;">（${escapeHtml(c.title)}）</span>` : ''} <span style="margin:0 8px;">·</span>` : ''}
+														${(c.city || c.district) ? `<i class="fas fa-map-marker-alt"></i> ${escapeHtml((c.city || '') + (c.district ? ' ' + c.district : ''))} <span style="margin:0 8px;">·</span>` : ''}
+														<i class="fas fa-envelope"></i> ${escapeHtml(c.email)}
+													</div>
+												</label>
+											</div>
+										`;
+									});
+									newRecipientsList.innerHTML = html;
+								}
+							}
+						}
+					} else {
+						console.error('載入聯絡人列表失敗:', data.message || '未知錯誤');
+					}
+				})
+				.catch(error => {
+					console.error('載入聯絡人列表錯誤:', error);
+					if (recipientsList) {
+						recipientsList.innerHTML = '<div style="text-align:center; padding:20px; color:#d32f2f;"><i class="fas fa-exclamation-triangle"></i> 載入失敗，請重新整理頁面</div>';
+					}
+				});
+		};
+		
+		// HTML轉義函數
+		function escapeHtml(text) {
+			if (!text) return '';
+			const div = document.createElement('div');
+			div.textContent = text;
+			return div.innerHTML;
+		}
 		
 		// 點擊其他地方隱藏搜尋結果
 		document.addEventListener('click', function(e) {
