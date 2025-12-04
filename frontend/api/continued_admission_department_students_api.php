@@ -38,59 +38,130 @@ try {
     // 查詢該科系的學生資料
     $students = [];
 
-    // 查詢 continued_admission 表
+    // 檢查 continued_admission 表是否存在
     $table_check = $conn->query("SHOW TABLES LIKE 'continued_admission'");
-    if ($table_check && $table_check->num_rows > 0) {
-        // 檢查 continued_admission 表的欄位結構
-        $columns_result = $conn->query("DESCRIBE continued_admission");
-        $available_columns = [];
-        while ($column = $columns_result->fetch_assoc()) {
-            $available_columns[] = $column['Field'];
-        }
-        
-        // 根據可用欄位動態構建SELECT語句
-        $select_fields = [];
-        $field_mapping = [
-            'name' => 'name',
-            'school_name' => 'school',
-            'phone' => 'phone1',
-            'mobile' => 'phone2',
-            'choices' => 'choices',
-            'created_at' => 'created_at'
-        ];
-        
-        foreach ($field_mapping as $field => $alias) {
-            if (in_array($field, $available_columns)) {
-                $select_fields[] = $field;
+    if (!$table_check || $table_check->num_rows == 0) {
+        echo json_encode(['error' => '找不到 continued_admission 表'], JSON_UNESCAPED_UNICODE);
+        $conn->close();
+        exit;
+    }
+
+    // 檢查 continued_admission_choices 表是否存在
+    $choices_table_check = $conn->query("SHOW TABLES LIKE 'continued_admission_choices'");
+    $has_choices_table = ($choices_table_check && $choices_table_check->num_rows > 0);
+
+    // 檢查 departments 表是否存在（用於科系名稱匹配）
+    $dept_table_check = $conn->query("SHOW TABLES LIKE 'departments'");
+    $has_departments_table = ($dept_table_check && $dept_table_check->num_rows > 0);
+
+    // 檢查 school_data 表是否存在（用於學校名稱）
+    $school_table_check = $conn->query("SHOW TABLES LIKE 'school_data'");
+    $has_school_table = ($school_table_check && $school_table_check->num_rows > 0);
+
+    if ($has_choices_table) {
+        // 使用 continued_admission_choices 表（新結構）
+        // 首先嘗試通過科系名稱或代碼匹配
+        $department_code = '';
+        if ($has_departments_table) {
+            // 查詢科系代碼（可能是名稱或代碼）
+            $dept_query = "SELECT code FROM departments WHERE name = ? OR code = ? LIMIT 1";
+            $dept_stmt = $conn->prepare($dept_query);
+            if ($dept_stmt) {
+                $dept_stmt->bind_param('ss', $department, $department);
+                $dept_stmt->execute();
+                $dept_result = $dept_stmt->get_result();
+                if ($dept_row = $dept_result->fetch_assoc()) {
+                    $department_code = $dept_row['code'];
+                }
+                $dept_stmt->close();
             }
         }
-        
-        if (empty($select_fields)) {
-            echo json_encode(['error' => 'continued_admission表中沒有可用的欄位'], JSON_UNESCAPED_UNICODE);
-            $conn->close();
-            exit;
+
+        // 構建 SQL 查詢
+        $school_join = $has_school_table 
+            ? "LEFT JOIN school_data sd ON ca.school = sd.school_code"
+            : "";
+        $school_select = $has_school_table 
+            ? "COALESCE(sd.name, ca.school, '未填寫') as school_name,"
+            : "COALESCE(ca.school, '未填寫') as school_name,";
+
+        if (!empty($department_code)) {
+            // 使用科系代碼查詢
+            $sql = "SELECT DISTINCT 
+                        ca.id,
+                        ca.name,
+                        ca.apply_no,
+                        $school_select
+                        ca.phone,
+                        ca.mobile,
+                        ca.created_at,
+                        cac.choice_order,
+                        cac.department_code,
+                        COALESCE(d.name, cac.department_code, '未知科系') as department_name
+                    FROM continued_admission ca
+                    INNER JOIN continued_admission_choices cac ON ca.id = cac.application_id
+                    LEFT JOIN departments d ON cac.department_code = d.code
+                    $school_join
+                    WHERE cac.department_code = ?
+                    ORDER BY ca.created_at DESC, cac.choice_order ASC";
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('s', $department_code);
+            }
+        } else {
+            // 使用科系名稱查詢（通過 departments 表）
+            if ($has_departments_table) {
+                $sql = "SELECT DISTINCT 
+                            ca.id,
+                            ca.name,
+                            ca.apply_no,
+                            $school_select
+                            ca.phone,
+                            ca.mobile,
+                            ca.created_at,
+                            cac.choice_order,
+                            cac.department_code,
+                            COALESCE(d.name, cac.department_code, '未知科系') as department_name
+                        FROM continued_admission ca
+                        INNER JOIN continued_admission_choices cac ON ca.id = cac.application_id
+                        LEFT JOIN departments d ON cac.department_code = d.code
+                        $school_join
+                        WHERE d.name = ? OR cac.department_code = ?
+                        ORDER BY ca.created_at DESC, cac.choice_order ASC";
+                $stmt = $conn->prepare($sql);
+                if ($stmt) {
+                    $stmt->bind_param('ss', $department, $department);
+                }
+            } else {
+                // 如果沒有 departments 表，直接使用科系名稱匹配
+                $sql = "SELECT DISTINCT 
+                            ca.id,
+                            ca.name,
+                            ca.apply_no,
+                            $school_select
+                            ca.phone,
+                            ca.mobile,
+                            ca.created_at,
+                            cac.choice_order,
+                            cac.department_code,
+                            cac.department_code as department_name
+                        FROM continued_admission ca
+                        INNER JOIN continued_admission_choices cac ON ca.id = cac.application_id
+                        $school_join
+                        WHERE cac.department_code = ?
+                        ORDER BY ca.created_at DESC, cac.choice_order ASC";
+                $stmt = $conn->prepare($sql);
+                if ($stmt) {
+                    $stmt->bind_param('s', $department);
+                }
+            }
         }
 
-        // 檢查是否有志願相關的欄位
-        if (!in_array('choices', $available_columns)) {
-            echo json_encode(['error' => '找不到choices欄位，可用欄位: ' . implode(', ', $available_columns)], JSON_UNESCAPED_UNICODE);
-            $conn->close();
-            exit;
-        }
-
-        // 構建WHERE子句 - 查詢choices欄位包含該科系
-        $sql = "SELECT " . implode(', ', $select_fields) . " FROM continued_admission WHERE choices LIKE ? ORDER BY created_at DESC";
-
-        $stmt = $conn->prepare($sql);
         if (!$stmt) {
             echo json_encode(['error' => 'SQL準備失敗: ' . $conn->error], JSON_UNESCAPED_UNICODE);
             $conn->close();
             exit;
         }
-
-        // 使用LIKE查詢，因為choices可能包含多個志願
-        $search_pattern = '%' . $department . '%';
-        $stmt->bind_param('s', $search_pattern);
 
         if (!$stmt->execute()) {
             echo json_encode(['error' => 'SQL執行失敗: ' . $stmt->error], JSON_UNESCAPED_UNICODE);
@@ -98,36 +169,58 @@ try {
             $conn->close();
             exit;
         }
-        
+
         $result = $stmt->get_result();
+        $student_map = []; // 用於去重，因為一個學生可能有多個志願
+
         while ($row = $result->fetch_assoc()) {
-            $student_data = [
-                'name' => $row['name'] ?? '未填寫',
-                'school' => $row['school_name'] ?? '未填寫',
-                'grade' => '未填寫', // continued_admission表中沒有年級欄位
-                'department' => $department, // 顯示查詢的科系
-                'created_at' => $row['created_at'] ?? '未填寫'
-            ];
+            $student_id = $row['id'];
             
-            // 添加聯絡電話
-            if (isset($row['phone'])) {
-                $student_data['phone1'] = $row['phone'] ?? '未填寫';
+            if (!isset($student_map[$student_id])) {
+                // 獲取該學生的所有志願
+                $choices_stmt = $conn->prepare("
+                    SELECT cac.choice_order, d.name as department_name, cac.department_code
+                    FROM continued_admission_choices cac
+                    LEFT JOIN departments d ON cac.department_code = d.code
+                    WHERE cac.application_id = ?
+                    ORDER BY cac.choice_order ASC
+                ");
+                $choices_stmt->bind_param('i', $student_id);
+                $choices_stmt->execute();
+                $choices_result = $choices_stmt->get_result();
+                $choices_list = [];
+                while ($choice_row = $choices_result->fetch_assoc()) {
+                    $choices_list[] = $choice_row['department_name'] ?? $choice_row['department_code'];
+                }
+                $choices_stmt->close();
+
+                $student_data = [
+                    'name' => $row['name'] ?? '未填寫',
+                    'school' => $row['school_name'] ?? '未填寫',
+                    'grade' => '未填寫', // continued_admission表中沒有年級欄位
+                    'department' => $department, // 顯示查詢的科系
+                    'created_at' => $row['created_at'] ?? '未填寫',
+                    'choices' => implode('、', $choices_list) // 所有志願
+                ];
+                
+                // 添加聯絡電話
+                if (isset($row['phone'])) {
+                    $student_data['phone1'] = $row['phone'] ?? '未填寫';
+                }
+                if (isset($row['mobile'])) {
+                    $student_data['phone2'] = $row['mobile'] ?? '未填寫';
+                }
+                
+                $student_map[$student_id] = $student_data;
             }
-            if (isset($row['mobile'])) {
-                $student_data['phone2'] = $row['mobile'] ?? '未填寫';
-            }
-            
-            // 添加志願資訊
-            if (isset($row['choices'])) {
-                $student_data['choices'] = $row['choices'] ?? '未填寫';
-            }
-            
-            $students[] = $student_data;
         }
         $stmt->close();
+        
+        // 轉換為陣列
+        $students = array_values($student_map);
     } else {
-        // 如果沒有 continued_admission 表，返回錯誤
-        echo json_encode(['error' => '找不到 continued_admission 表'], JSON_UNESCAPED_UNICODE);
+        // 如果沒有 continued_admission_choices 表，返回錯誤
+        echo json_encode(['error' => '找不到 continued_admission_choices 表，請確認資料庫結構'], JSON_UNESCAPED_UNICODE);
         $conn->close();
         exit;
     }
