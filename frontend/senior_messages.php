@@ -868,7 +868,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             font-size: 1.1rem;
             font-weight: 700;
             color: var(--text-color);
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             line-height: 1.4;
         }
         
@@ -1252,6 +1252,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         .pagination-info {
             color: var(--secondary-text);
             font-size: 0.9rem;
+        }
+        
+        /* 查看更多留言按鈕樣式 */
+        .show-more-comments-btn {
+            display: block;
+            width: 100%;
+            padding: 8px 16px;
+            margin: 10px 0;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--accent-color);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .show-more-comments-btn:hover {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: var(--accent-color);
+            transform: translateY(-1px);
+        }
+        
+        .show-more-comments-btn:active {
+            transform: translateY(0);
         }
         
         @media (max-width: 768px) {
@@ -2008,20 +2035,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 .then(data => {
                     if (data.success && data.comments) {
                         commentsList.innerHTML = '';
+                        
+                        // 移除可能存在的"查看更多"按鈕
+                        const existingButton = document.getElementById('show-more-comments-' + messageId);
+                        if (existingButton) {
+                            existingButton.remove();
+                        }
+                        
                         if (data.comments.length === 0) {
                             commentsList.innerHTML = '<div style="padding: 15px; text-align: center; color: var(--secondary-text); font-size: 14px;">尚無留言</div>';
                         } else {
-                            data.comments.forEach(comment => {
+                            const totalComments = data.comments.length;
+                            const showAll = commentsList.getAttribute('data-show-all') === 'true';
+                            const displayCount = showAll ? totalComments : Math.min(2, totalComments);
+                            
+                            // 儲存所有留言資料
+                            commentsList.setAttribute('data-all-comments', JSON.stringify(data.comments));
+                            
+                            // 只顯示前 displayCount 條留言
+                            for (let i = 0; i < displayCount; i++) {
+                                const comment = data.comments[i];
                                 const commentDiv = document.createElement('div');
                                 commentDiv.className = 'comment-item';
                                 commentDiv.style.cssText = 'padding: 12px; margin-bottom: 10px; background: var(--hover-bg); border-radius: 8px; border-left: 3px solid var(--accent-color);';
+                                const avatarUrl = comment.author_avatar || '/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';
                                 commentDiv.innerHTML = `
                                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                         <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
-                                            <img src="${comment.author_avatar || '<?php echo getResourcePath("EIdROxGXsAE_LSs.jpg"); ?>'}" 
+                                            <img src="${avatarUrl}" 
                                                  alt="${comment.author_name}" 
                                                  style="width: 100%; height: 100%; object-fit: cover;"
-                                                 onerror="this.src='<?php echo getResourcePath("EIdROxGXsAE_LSs.jpg"); ?>'">
+                                                 onerror="this.onerror=null; this.src='/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';">
                                         </div>
                                         <div style="flex: 1;">
                                             <div style="font-weight: 600; font-size: 14px; color: var(--text-color);">${comment.author_name}</div>
@@ -2031,7 +2075,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     <div style="color: var(--text-color); font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${comment.content}</div>
                                 `;
                                 commentsList.appendChild(commentDiv);
-                            });
+                            }
+                            
+                            // 如果留言超過2條，添加"查看更多"按鈕
+                            if (totalComments > 2) {
+                                const showMoreBtn = document.createElement('button');
+                                showMoreBtn.id = 'show-more-comments-' + messageId;
+                                showMoreBtn.className = 'show-more-comments-btn';
+                                showMoreBtn.textContent = showAll ? '收起' : '查看更多';
+                                showMoreBtn.onclick = function() {
+                                    toggleShowMoreComments(messageId);
+                                };
+                                
+                                // 將按鈕插入到留言列表後面
+                                const commentsSection = document.getElementById('comments-section-' + messageId);
+                                if (commentsSection) {
+                                    commentsSection.insertBefore(showMoreBtn, commentsSection.querySelector('.comment-form') || commentsSection.lastElementChild);
+                                }
+                            }
                         }
                         if (commentCount) {
                             commentCount.textContent = '(' + data.comments.length + ')';
@@ -2044,6 +2105,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 });
         }
         
+        // 切換顯示更多/收起留言
+        function toggleShowMoreComments(messageId) {
+            const commentsList = document.getElementById('comments-list-' + messageId);
+            const showMoreBtn = document.getElementById('show-more-comments-' + messageId);
+            
+            if (!commentsList || !showMoreBtn) return;
+            
+            const allCommentsJson = commentsList.getAttribute('data-all-comments');
+            if (!allCommentsJson) return;
+            
+            const allComments = JSON.parse(allCommentsJson);
+            const showAll = commentsList.getAttribute('data-show-all') === 'true';
+            
+            // 清空當前列表
+            commentsList.innerHTML = '';
+            
+            if (showAll) {
+                // 收起：只顯示前2條
+                commentsList.setAttribute('data-show-all', 'false');
+                for (let i = 0; i < Math.min(2, allComments.length); i++) {
+                    const comment = allComments[i];
+                    const commentDiv = document.createElement('div');
+                    commentDiv.className = 'comment-item';
+                    commentDiv.style.cssText = 'padding: 12px; margin-bottom: 10px; background: var(--hover-bg); border-radius: 8px; border-left: 3px solid var(--accent-color);';
+                    const avatarUrl = comment.author_avatar || '/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';
+                    commentDiv.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
+                                <img src="${avatarUrl}" 
+                                     alt="${comment.author_name}" 
+                                     style="width: 100%; height: 100%; object-fit: cover;"
+                                     onerror="this.onerror=null; this.src='/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';">
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 14px; color: var(--text-color);">${comment.author_name}</div>
+                                <div style="font-size: 12px; color: var(--secondary-text);">${comment.created_at}</div>
+                            </div>
+                        </div>
+                        <div style="color: var(--text-color); font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${comment.content}</div>
+                    `;
+                    commentsList.appendChild(commentDiv);
+                }
+                showMoreBtn.textContent = '查看更多';
+            } else {
+                // 展開：顯示所有留言
+                commentsList.setAttribute('data-show-all', 'true');
+                allComments.forEach(comment => {
+                    const commentDiv = document.createElement('div');
+                    commentDiv.className = 'comment-item';
+                    commentDiv.style.cssText = 'padding: 12px; margin-bottom: 10px; background: var(--hover-bg); border-radius: 8px; border-left: 3px solid var(--accent-color);';
+                    const avatarUrl = comment.author_avatar || '/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';
+                    commentDiv.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
+                                <img src="${avatarUrl}" 
+                                     alt="${comment.author_name}" 
+                                     style="width: 100%; height: 100%; object-fit: cover;"
+                                     onerror="this.onerror=null; this.src='/Topics-frontend/frontend/share/EIdROxGXsAE_LSs.jpg';">
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 14px; color: var(--text-color);">${comment.author_name}</div>
+                                <div style="font-size: 12px; color: var(--secondary-text);">${comment.created_at}</div>
+                            </div>
+                        </div>
+                        <div style="color: var(--text-color); font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${comment.content}</div>
+                    `;
+                    commentsList.appendChild(commentDiv);
+                });
+                showMoreBtn.textContent = '收起';
+            }
+        }
+        
         // 提交留言
         function submitComment(messageId) {
             const commentInput = document.getElementById('comment-input-' + messageId);
@@ -2051,6 +2184,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 alert('請輸入留言內容');
                 return;
             }
+            
+            // 儲存當前的展開/收起狀態
+            const commentsList = document.getElementById('comments-list-' + messageId);
+            const wasExpanded = commentsList && commentsList.getAttribute('data-show-all') === 'true';
             
             const button = event.target;
             const originalText = button.textContent;
@@ -2069,6 +2206,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     if (data.success) {
                         commentInput.value = '';
                         loadComments(messageId);
+                        // 如果之前是展開狀態，重新展開
+                        if (wasExpanded) {
+                            setTimeout(() => {
+                                const commentsListAfter = document.getElementById('comments-list-' + messageId);
+                                if (commentsListAfter) {
+                                    commentsListAfter.setAttribute('data-show-all', 'true');
+                                    toggleShowMoreComments(messageId);
+                                }
+                            }, 100);
+                        }
                     } else {
                         alert('發布失敗: ' + (data.error || '未知錯誤'));
                     }
