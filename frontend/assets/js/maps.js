@@ -965,7 +965,7 @@ class CampusMap {
                     <div class="restaurant-header">
                         <h5>${restaurant.name || '未命名餐廳'}</h5>
                         <div class="restaurant-badges">
-                            ${isRecommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                            ${isRecommended ? '<span class="recommended-badge" style="background: #667eea; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                             ${openingStatusBadge}
                             ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                         </div>
@@ -998,11 +998,11 @@ class CampusMap {
                     ` : ''}
                     <div class="restaurant-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
                         ${restaurant.place_id ? `
-                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/place/?q=place_id:${restaurant.place_id}', '_blank');" style="flex: 1; padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/place/?q=place_id:${restaurant.place_id}', '_blank');" style="flex: 1; padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
                                 <i class="fab fa-google"></i> 在 Google Maps 查看
                             </button>
                         ` : restaurant.geometry && restaurant.geometry.location ? `
-                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name)}+${encodeURIComponent(restaurant.vicinity || restaurant.formatted_address || '')}', '_blank');" style="flex: 1; padding: 8px 12px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                            <button class="view-on-google-btn" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name)}+${encodeURIComponent(restaurant.vicinity || restaurant.formatted_address || '')}', '_blank');" style="flex: 1; padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
                                 <i class="fab fa-google"></i> 在 Google Maps 查看
                             </button>
                         ` : ''}
@@ -1130,7 +1130,7 @@ class CampusMap {
                     <div style="padding: 12px; max-width: 250px;">
                         <h4 style="margin: 0 0 8px 0; color: #333; font-size: 16px;">
                             ${restaurant.name || '未命名餐廳'}
-                            ${isRecommended ? '<span style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                            ${isRecommended ? '<span style="background: #667eea; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-left: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                         </h4>
                         <p style="margin: 0 0 5px 0; color: #666; font-size: 13px;">
                             <i class="fas fa-map-marker-alt" style="color: #27ae60;"></i> ${restaurant.vicinity || restaurant.formatted_address || '地址未知'}
@@ -1394,7 +1394,7 @@ class CampusMap {
                 <div class="restaurant-detail-header">
                     <h3>${restaurant.name || '未命名餐廳'}</h3>
                     <div class="restaurant-badges">
-                        ${restaurant.is_recommended ? '<span class="recommended-badge" style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
+                        ${restaurant.is_recommended ? '<span class="recommended-badge" style="background: #667eea; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 6px;"><i class="fas fa-star"></i> 推薦</span>' : ''}
                         ${openingStatusBadge}
                         ${hasDelivery ? '<span class="delivery-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                     </div>
@@ -1413,7 +1413,7 @@ class CampusMap {
                         </p>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="window.location.href='restaurant_reviews.php?message_id=${restaurant.recommendation_id}&restaurant=${encodeURIComponent(restaurant.name)}'" 
-                                    style="padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                    style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
                                 <i class="fas fa-comments"></i> 查看完整推薦與評價
                             </button>
                             <button onclick="campusMap.startDirectionsToDestination('${restaurant.vicinity || restaurant.formatted_address || restaurant.name}')" 
@@ -1536,7 +1536,7 @@ class CampusMap {
                                         <div class="review-author">
                                             <div style="display: flex; align-items: center; gap: 6px;">
                                                 <strong>${review.author_name || '匿名用戶'}</strong>
-                                                ${review.source === 'senior' ? '<span style="background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;"><i class="fas fa-user-graduate"></i> 學長姐</span>' : ''}
+                                                ${review.source === 'senior' ? '<span style="background: #667eea; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;"><i class="fas fa-user-graduate"></i> 學長姐</span>' : ''}
                                                 ${review.isDelivery ? '<span class="delivery-review-badge"><i class="fas fa-motorcycle"></i> 外送</span>' : ''}
                                             </div>
                                             <span class="review-time">${this.formatReviewTime(review.time)}</span>
@@ -1976,6 +1976,12 @@ class CampusMap {
     startDirectionsToDestination(destination) {
         // 顯示路線規劃界面
         this.promptForDirections();
+        
+        // 更新「規劃路線」按鈕為 active 狀態
+        const getDirectionsBtn = document.getElementById('get-directions-btn');
+        if (getDirectionsBtn) {
+            this.updateActiveButton(getDirectionsBtn);
+        }
         
         // 設置終點地址
         const destinationInput = document.getElementById('directions-destination');
@@ -2631,7 +2637,14 @@ class CampusMap {
             this.sidePanelVisible = true;
             // 調整浮動按鈕位置，避免與側邊面板重疊
             if (floatingControls && window.innerWidth > 1024) {
-                floatingControls.style.right = '470px';
+                // 根據屏幕寬度設置不同的位置
+                if (window.innerWidth >= 1920) {
+                    // 大屏幕：側邊面板寬度 500px，加上間距
+                    floatingControls.style.right = '520px';
+                } else {
+                    // 桌面：側邊面板寬度 450px，加上間距
+                    floatingControls.style.right = '480px';
+                }
             }
         }
     }
@@ -2647,7 +2660,12 @@ class CampusMap {
                 this.sidePanelVisible = true;
                 // 調整浮動按鈕位置，避免與側邊面板重疊
                 if (floatingControls && window.innerWidth > 1024) {
-                    floatingControls.style.right = '470px';
+                    // 根據屏幕寬度設置不同的位置
+                    if (window.innerWidth >= 1920) {
+                        floatingControls.style.right = '520px';
+                    } else {
+                        floatingControls.style.right = '480px';
+                    }
                 }
             }, 300);
         }
@@ -2663,9 +2681,15 @@ class CampusMap {
             // 調整浮動按鈕位置
             if (floatingControls && window.innerWidth > 1024) {
                 if (!isVisible) {
-                    floatingControls.style.right = '470px';
+                    // 顯示面板時，根據屏幕寬度設置不同的位置
+                    if (window.innerWidth >= 1920) {
+                        floatingControls.style.right = '520px';
+                    } else {
+                        floatingControls.style.right = '480px';
+                    }
                 } else {
-                    floatingControls.style.right = '20px';
+                    // 隱藏面板時，恢復默認位置
+                    floatingControls.style.right = '60px';
                 }
             }
         }
@@ -2926,7 +2950,7 @@ class CampusMap {
                     reviewsHtml += `
                         <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0;">
                             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; margin-right: 10px; flex-shrink: 0;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: #667eea; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; margin-right: 10px; flex-shrink: 0;">
                                     ${review.author_name ? review.author_name.charAt(0) : '?'}
                                 </div>
                                 <div style="flex: 1; min-width: 0;">
@@ -2952,7 +2976,7 @@ class CampusMap {
                 reviewsHtml += `
                     </div>
                     <div style="margin-top: 12px; text-align: center;">
-                        <a href="https://www.google.com/maps/place/?q=place_id:${placeId}" target="_blank" style="display: inline-block; padding: 8px 16px; background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                        <a href="https://www.google.com/maps/place/?q=place_id:${placeId}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
                             <i class="fab fa-google"></i> 在 Google Maps 查看所有評論
                         </a>
                     </div>
@@ -2989,9 +3013,16 @@ class CampusMap {
 // 全域變數，供 HTML 中的 onclick 事件使用
 let campusMap;
 window.campusMap = null; // 確保可以在全域訪問
+let mapInitialized = false; // 標記地圖是否已初始化
 
 // 全域初始化函數，供 Google Maps API 回調使用
 function initMap() {
+    // 防止重複初始化
+    if (mapInitialized) {
+        console.log('地圖已經初始化，跳過重複初始化');
+        return;
+    }
+    
     console.log('initMap 被調用');
     console.log('google 物件:', typeof google !== 'undefined' ? '存在' : '不存在');
     console.log('google.maps:', typeof google !== 'undefined' && typeof google.maps !== 'undefined' ? '存在' : '不存在');
@@ -3008,6 +3039,7 @@ function initMap() {
         try {
             campusMap = new CampusMap();
             window.campusMap = campusMap; // 設置到 window 物件上
+            mapInitialized = true; // 標記地圖已初始化
             console.log('CampusMap 實例創建成功');
             
             // 檢查 URL 參數，如果有餐廳信息，則在地圖上標示
@@ -3059,12 +3091,23 @@ function initMap() {
 
 // 當頁面載入完成時檢查地圖狀態
 document.addEventListener('DOMContentLoaded', () => {
+    // 如果地圖已經初始化，不需要再次初始化
+    if (mapInitialized) {
+        console.log('地圖已經初始化，跳過 DOMContentLoaded 中的初始化');
+        return;
+    }
+    
     // 如果 Google Maps API 已經載入，直接初始化
     if (typeof google !== 'undefined' && google.maps) {
         initMap();
     } else {
         // 等待 Google Maps API 載入
         setTimeout(() => {
+            // 再次檢查是否已經初始化（可能在等待期間已經通過 callback 初始化了）
+            if (mapInitialized) {
+                console.log('地圖已在等待期間初始化，跳過');
+                return;
+            }
             if (typeof google !== 'undefined' && google.maps) {
                 initMap();
             } else {
