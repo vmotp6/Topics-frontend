@@ -55,7 +55,7 @@ try {
     // 連接資料庫
     $conn = getDatabaseConnection();
     
-    // 先獲取原始數據
+    // 先獲取原始數據（從 admission_recommendations 表）
     $sql = "SELECT * FROM admission_recommendations WHERE id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $recommendation_id);
@@ -68,6 +68,61 @@ try {
     
     $original_data = $result->fetch_assoc();
     $stmt->close();
+    
+    // 從關聯表獲取推薦人和學生信息（如果存在）
+    // 查詢推薦人信息
+    $recommender_data = [];
+    $recommender_sql = "SELECT * FROM recommender WHERE recommendations_id = ? LIMIT 1";
+    $recommender_stmt = $conn->prepare($recommender_sql);
+    if ($recommender_stmt) {
+        $recommender_stmt->bind_param("i", $recommendation_id);
+        $recommender_stmt->execute();
+        $recommender_result = $recommender_stmt->get_result();
+        if ($recommender_result->num_rows > 0) {
+            $recommender_data = $recommender_result->fetch_assoc();
+        }
+        $recommender_stmt->close();
+    }
+    
+    // 查詢被推薦學生信息
+    $recommended_data = [];
+    $recommended_sql = "SELECT * FROM recommended WHERE recommendations_id = ? LIMIT 1";
+    $recommended_stmt = $conn->prepare($recommended_sql);
+    if ($recommended_stmt) {
+        $recommended_stmt->bind_param("i", $recommendation_id);
+        $recommended_stmt->execute();
+        $recommended_result = $recommended_stmt->get_result();
+        if ($recommended_result->num_rows > 0) {
+            $recommended_data = $recommended_result->fetch_assoc();
+        }
+        $recommended_stmt->close();
+    }
+    
+    // 獲取科系和年級映射表（用於代碼轉換）
+    $departments = [];
+    $departments_sql = "SELECT code, name FROM departments";
+    $dept_result = $conn->query($departments_sql);
+    if ($dept_result) {
+        while ($row = $dept_result->fetch_assoc()) {
+            $departments[$row['code']] = $row['name'];
+        }
+    }
+    
+    $grades = [];
+    $grades_sql = "SELECT code, name FROM identity_options";
+    $grade_result = $conn->query($grades_sql);
+    if ($grade_result) {
+        while ($row = $grade_result->fetch_assoc()) {
+            $grades[$row['code']] = $row['name'];
+        }
+    }
+    
+    // 合併數據（優先使用關聯表的數據）
+    $email_data_source = array_merge(
+        $original_data,
+        $recommender_data,
+        $recommended_data
+    );
     
     // 更新狀態
     $update_sql = "UPDATE admission_recommendations SET status = ?";
@@ -99,19 +154,37 @@ try {
     
     // 審核通過通知
     if ($new_status === 'registered' && $original_data['status'] !== 'registered') {
+        // 轉換科系代碼為名稱
+        $recommender_department_name = $email_data_source['recommender_department'] ?? '';
+        if (!empty($email_data_source['department']) && isset($departments[$email_data_source['department']])) {
+            $recommender_department_name = $departments[$email_data_source['department']];
+        } elseif (!empty($email_data_source['recommender_department_code']) && isset($departments[$email_data_source['recommender_department_code']])) {
+            $recommender_department_name = $departments[$email_data_source['recommender_department_code']];
+        }
+        
+        // 轉換年級代碼為名稱
+        $student_grade_name = $email_data_source['student_grade'] ?? '';
+        if (!empty($email_data_source['grade']) && isset($grades[$email_data_source['grade']])) {
+            $student_grade_name = $grades[$email_data_source['grade']];
+        } elseif (!empty($email_data_source['student_grade_code']) && isset($grades[$email_data_source['student_grade_code']])) {
+            $student_grade_name = $grades[$email_data_source['student_grade_code']];
+        } elseif ($email_data_source['grade'] === 'GRADUATED' || $email_data_source['student_grade_code'] === 'GRADUATED') {
+            $student_grade_name = '已畢業';
+        }
+        
         $email_data = [
-            'student_name' => $original_data['student_name'],
-            'recommender_name' => $original_data['recommender_name'],
-            'recommender_student_id' => $original_data['recommender_student_id'],
-            'recommender_department' => $original_data['recommender_department'],
-            'student_school' => $original_data['student_school'],
-            'student_grade' => $original_data['student_grade'],
+            'student_name' => $email_data_source['student_name'] ?? $email_data_source['name'] ?? '',
+            'recommender_name' => $email_data_source['recommender_name'] ?? $email_data_source['name'] ?? '',
+            'recommender_student_id' => $email_data_source['recommender_student_id'] ?? $email_data_source['id'] ?? '',
+            'recommender_department' => $recommender_department_name, // 使用轉換後的名稱
+            'student_school' => $email_data_source['student_school'] ?? $email_data_source['school'] ?? '',
+            'student_grade' => $student_grade_name, // 使用轉換後的年級名稱
             'approval_time' => date('Y-m-d H:i:s')
         ];
         
         $email_sent = sendNotificationEmail(
-            $original_data['recommender_email'],
-            $original_data['recommender_name'],
+            $email_data_source['recommender_email'] ?? $email_data_source['email'] ?? '',
+            $email_data['recommender_name'],
             'approval_notification',
             $email_data
         );
@@ -121,17 +194,25 @@ try {
     
     // 入學確認通知
     if ($enrollment_status === '已入學' && $original_data['enrollment_status'] !== '已入學') {
+        // 轉換科系代碼為名稱
+        $recommender_department_name = $email_data_source['recommender_department'] ?? '';
+        if (!empty($email_data_source['department']) && isset($departments[$email_data_source['department']])) {
+            $recommender_department_name = $departments[$email_data_source['department']];
+        } elseif (!empty($email_data_source['recommender_department_code']) && isset($departments[$email_data_source['recommender_department_code']])) {
+            $recommender_department_name = $departments[$email_data_source['recommender_department_code']];
+        }
+        
         $email_data = [
-            'student_name' => $original_data['student_name'],
-            'recommender_name' => $original_data['recommender_name'],
-            'recommender_student_id' => $original_data['recommender_student_id'],
-            'recommender_department' => $original_data['recommender_department'],
+            'student_name' => $email_data_source['student_name'] ?? $email_data_source['name'] ?? '',
+            'recommender_name' => $email_data_source['recommender_name'] ?? $email_data_source['name'] ?? '',
+            'recommender_student_id' => $email_data_source['recommender_student_id'] ?? $email_data_source['id'] ?? '',
+            'recommender_department' => $recommender_department_name, // 使用轉換後的名稱
             'enrollment_time' => date('Y-m-d H:i:s')
         ];
         
         $email_sent = sendNotificationEmail(
-            $original_data['recommender_email'],
-            $original_data['recommender_name'],
+            $email_data_source['recommender_email'] ?? $email_data_source['email'] ?? '',
+            $email_data['recommender_name'],
             'enrollment_notification',
             $email_data
         );
@@ -140,18 +221,19 @@ try {
     }
     
     // 記錄通知日誌
+    $recommender_email = $email_data_source['recommender_email'] ?? $email_data_source['email'] ?? '';
     if ($email_sent && $notification_type) {
         logNotification(
             $recommendation_id,
             $notification_type,
-            $original_data['recommender_email'],
+            $recommender_email,
             'sent'
         );
     } elseif ($notification_type) {
         logNotification(
             $recommendation_id,
             $notification_type,
-            $original_data['recommender_email'],
+            $recommender_email,
             'failed'
         );
     }

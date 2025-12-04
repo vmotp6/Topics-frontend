@@ -91,9 +91,7 @@ function getFAQFromDatabase() {
                             <label class="form-check-label" for="use-ai">
                                 🤖 使用AI回答
                             </label>
-                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="testAIConnection()">
-                                🔧 測試AI連接
-                            </button>
+
                         </div>
                     </div>
                 </div>
@@ -104,6 +102,7 @@ function getFAQFromDatabase() {
 	<script>
 $(document).ready(function() {
     let qaKeywords = null; // 儲存關鍵詞資料
+    let faqData = []; // 儲存FAQ資料，用於相似度匹配
     
     // 1. 載入關鍵詞資料
     $.getJSON("assets/qa_keywords.json", function(data) {
@@ -146,6 +145,10 @@ $(document).ready(function() {
                     return;
                 }
 
+                // 保存FAQ資料到全局變量，用於相似度匹配
+                faqData = data;
+                console.log("FAQ資料已載入，共", faqData.length, "筆");
+                
                 let html = "";
                 data.forEach(function(item) {
                     html += `
@@ -228,11 +231,457 @@ $(document).ready(function() {
             });
     }
 
+    // 同義詞映射（將相似表達統一化）
+    function normalizeSynonyms(text) {
+        if (!text) return text;
+        
+        // 同義詞替換表
+        const synonymMap = {
+            '有那些': '有哪些',
+            '那些': '哪些',
+            '康寧': '康寧大學', // 將"康寧"統一為"康寧大學"
+            '附近': '', // 移除位置修飾詞，因為不影響核心問題
+            '周圍': '',
+            '周邊': '',
+            '旁邊': '',
+            '周圍的': '',
+            '可以': '',
+            '能夠': '',
+            '能': '',
+            '會': '',
+            '要': '',
+            '想': '',
+            '想要': '',
+            '請問': '',
+            '請': '',
+            '告訴': '',
+            '告訴我': ''
+        };
+        
+        let normalized = text;
+        for (const [synonym, replacement] of Object.entries(synonymMap)) {
+            // 使用不區分大小寫的替換
+            normalized = normalized.replace(new RegExp(synonym, 'gi'), replacement);
+        }
+        
+        return normalized.trim();
+    }
+    
+    // 提取關鍵詞（移除停用詞和標點）
+    function extractKeywords(text) {
+        if (!text) return [];
+        
+        // 先進行同義詞標準化
+        text = normalizeSynonyms(text);
+        
+        // 中文停用詞列表（常見的無意義詞）
+        const stopWords = [
+            '的', '了', '在', '是', '我', '有', '和', '就', '不', '人', '都', '一', '一個', 
+            '上', '也', '很', '到', '說', '要', '去', '你', '會', '著', '沒有', '看', '好', 
+            '自己', '這', '那', '個', '嗎', '呢', '啊', '吧', '麼', '什麼', '怎麼'
+        ];
+        
+        // 移除標點符號和空格，轉為小寫
+        let cleaned = text.toLowerCase().trim();
+        cleaned = cleaned.replace(/[，。！？、；：""''（）【】《》\s]/g, '');
+        
+        // 提取字符（對於中文，每個字符都是一個詞）
+        const chars = cleaned.split('');
+        
+        // 過濾停用詞
+        const keywords = chars.filter(char => {
+            return char.length > 0 && !stopWords.includes(char);
+        });
+        
+        return keywords;
+    }
+    
+    // 計算Jaccard相似度（基於關鍵詞集合）
+    function jaccardSimilarity(set1, set2) {
+        if (set1.length === 0 && set2.length === 0) return 1;
+        if (set1.length === 0 || set2.length === 0) return 0;
+        
+        const set1Set = new Set(set1);
+        const set2Set = new Set(set2);
+        
+        // 計算交集
+        let intersection = 0;
+        set1Set.forEach(item => {
+            if (set2Set.has(item)) {
+                intersection++;
+            }
+        });
+        
+        // 計算並集
+        const union = new Set([...set1, ...set2]);
+        
+        return intersection / union.size;
+    }
+    
+    // 計算n-gram相似度（考慮詞序）
+    function ngramSimilarity(str1, str2, n = 2) {
+        if (!str1 || !str2) return 0;
+        
+        const getNgrams = (str, n) => {
+            const ngrams = [];
+            for (let i = 0; i <= str.length - n; i++) {
+                ngrams.push(str.substr(i, n));
+            }
+            return ngrams;
+        };
+        
+        const ngrams1 = getNgrams(str1, n);
+        const ngrams2 = getNgrams(str2, n);
+        
+        if (ngrams1.length === 0 && ngrams2.length === 0) return 1;
+        if (ngrams1.length === 0 || ngrams2.length === 0) return 0;
+        
+        const set1 = new Set(ngrams1);
+        const set2 = new Set(ngrams2);
+        
+        let intersection = 0;
+        set1.forEach(item => {
+            if (set2.has(item)) {
+                intersection++;
+            }
+        });
+        
+        const union = new Set([...ngrams1, ...ngrams2]);
+        
+        return intersection / union.size;
+    }
+    
+    // 計算兩個字符串的相似度（0-100）- 改進版
+    function calculateSimilarity(str1, str2) {
+        if (!str1 || !str2) return 0;
+        
+        // 先進行同義詞標準化
+        const normalized1 = normalizeSynonyms(str1.toLowerCase().trim());
+        const normalized2 = normalizeSynonyms(str2.toLowerCase().trim());
+        
+        // 轉換為小寫並去除空格
+        const s1 = normalized1;
+        const s2 = normalized2;
+        
+        // 完全匹配（包括標準化後的匹配）
+        if (s1 === s2) return 100;
+        
+        // 原始文本也檢查（以防標準化後完全相同）
+        const original1 = str1.toLowerCase().trim();
+        const original2 = str2.toLowerCase().trim();
+        if (original1 === original2) return 100;
+        
+        // 1. 關鍵詞提取和Jaccard相似度
+        const keywords1 = extractKeywords(s1);
+        const keywords2 = extractKeywords(s2);
+        const jaccardSim = jaccardSimilarity(keywords1, keywords2) * 100;
+        
+        // 2. 包含關係匹配（提高權重）- 改進版
+        let containScore = 0;
+        const s1NoSpace = s1.replace(/\s+/g, '');
+        const s2NoSpace = s2.replace(/\s+/g, '');
+        
+        // 完全包含關係
+        if (s1NoSpace.includes(s2NoSpace) || s2NoSpace.includes(s1NoSpace)) {
+            const minLen = Math.min(s1NoSpace.length, s2NoSpace.length);
+            const maxLen = Math.max(s1NoSpace.length, s2NoSpace.length);
+            containScore = (minLen / maxLen) * 100;
+        } else {
+            // 部分包含關係：檢查是否一個問題的核心部分包含在另一個問題中
+            // 提取核心部分（移除常見修飾詞後的主要內容）
+            const getCorePart = (text) => {
+                return text.replace(/[附近周圍周邊旁邊的可以能夠能會要想想要請問請告訴告訴我]/g, '').trim();
+            };
+            const core1 = getCorePart(s1NoSpace);
+            const core2 = getCorePart(s2NoSpace);
+            
+            if (core1 && core2) {
+                if (s1NoSpace.includes(core2) || s2NoSpace.includes(core1)) {
+                    const minCoreLen = Math.min(core1.length, core2.length);
+                    const maxCoreLen = Math.max(core1.length, core2.length);
+                    if (maxCoreLen > 0) {
+                        containScore = (minCoreLen / maxCoreLen) * 80; // 部分包含得分較低
+                    }
+                }
+            }
+        }
+        
+        // 3. N-gram相似度（考慮詞序）
+        const ngramSim = ngramSimilarity(s1NoSpace, s2NoSpace, 2) * 100;
+        
+        // 4. Levenshtein距離（編輯距離）
+        const distance = levenshteinDistance(s1NoSpace, s2NoSpace);
+        const maxLen = Math.max(s1NoSpace.length, s2NoSpace.length);
+        const editSim = maxLen > 0 ? (1 - distance / maxLen) * 100 : 0;
+        
+        // 5. 共同字符比例
+        const commonChars = countCommonChars(s1NoSpace, s2NoSpace);
+        const charSim = maxLen > 0 ? (commonChars / maxLen) * 100 : 0;
+        
+        // 6. 關鍵詞匹配度（檢查重要關鍵詞是否都出現）
+        const importantKeywords1 = keywords1.filter(k => k.length > 1); // 長度大於1的關鍵詞
+        const importantKeywords2 = keywords2.filter(k => k.length > 1);
+        let keywordMatchScore = 0;
+        if (importantKeywords1.length > 0 && importantKeywords2.length > 0) {
+            const matchedKeywords = importantKeywords1.filter(k => 
+                importantKeywords2.some(k2 => k2.includes(k) || k.includes(k2))
+            );
+            keywordMatchScore = (matchedKeywords.length / Math.max(importantKeywords1.length, importantKeywords2.length)) * 100;
+        }
+        
+        // 加權平均（關鍵詞匹配和Jaccard相似度權重較高）
+        const finalScore = (
+            jaccardSim * 0.35 +           // 關鍵詞集合相似度
+            keywordMatchScore * 0.25 +    // 重要關鍵詞匹配
+            containScore * 0.15 +         // 包含關係
+            ngramSim * 0.10 +             // N-gram相似度
+            editSim * 0.10 +              // 編輯距離
+            charSim * 0.05                // 字符相似度
+        );
+        
+        return Math.min(100, Math.max(0, finalScore));
+    }
+    
+    // Levenshtein距離算法（編輯距離）
+    function levenshteinDistance(str1, str2) {
+        const len1 = str1.length;
+        const len2 = str2.length;
+        
+        if (len1 === 0) return len2;
+        if (len2 === 0) return len1;
+        
+        const matrix = [];
+        
+        // 初始化矩陣
+        for (let i = 0; i <= len1; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= len2; j++) {
+            matrix[0][j] = j;
+        }
+        
+        // 填充矩陣
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                if (str1[i - 1] === str2[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1,     // 刪除
+                        matrix[i][j - 1] + 1,     // 插入
+                        matrix[i - 1][j - 1] + 1  // 替換
+                    );
+                }
+            }
+        }
+        
+        return matrix[len1][len2];
+    }
+    
+    // 計算共同字符數量
+    function countCommonChars(str1, str2) {
+        const chars1 = str1.split('');
+        const chars2 = str2.split('');
+        let common = 0;
+        
+        const charCount1 = {};
+        const charCount2 = {};
+        
+        // 統計字符出現次數
+        chars1.forEach(char => {
+            charCount1[char] = (charCount1[char] || 0) + 1;
+        });
+        chars2.forEach(char => {
+            charCount2[char] = (charCount2[char] || 0) + 1;
+        });
+        
+        // 計算共同字符
+        Object.keys(charCount1).forEach(char => {
+            if (charCount2[char]) {
+                common += Math.min(charCount1[char], charCount2[char]);
+            }
+        });
+        
+        return common;
+    }
+    
+    // 在FAQ資料中尋找相似問題 - 改進版
+    function findSimilarFAQ(question, threshold = 60) {
+        if (!faqData || faqData.length === 0) {
+            return null;
+        }
+        
+        let bestMatch = null;
+        let bestSimilarity = 0;
+        const candidates = []; // 候選匹配
+        
+        // 提取用戶問題的關鍵詞
+        const userKeywords = extractKeywords(question);
+        const userKeywordsSet = new Set(userKeywords);
+        
+        for (let i = 0; i < faqData.length; i++) {
+            const faqQuestion = faqData[i].question;
+            
+            // 1. 計算綜合相似度
+            const similarity = calculateSimilarity(question, faqQuestion);
+            
+            // 2. 檢查關鍵詞匹配度（額外加分）
+            const faqKeywords = extractKeywords(faqQuestion);
+            const faqKeywordsSet = new Set(faqKeywords);
+            
+            // 計算關鍵詞交集比例
+            let keywordOverlap = 0;
+            if (userKeywordsSet.size > 0 && faqKeywordsSet.size > 0) {
+                let intersection = 0;
+                userKeywordsSet.forEach(k => {
+                    if (faqKeywordsSet.has(k)) {
+                        intersection++;
+                    }
+                });
+                keywordOverlap = intersection / Math.max(userKeywordsSet.size, faqKeywordsSet.size);
+            }
+            
+            // 如果關鍵詞匹配度高，給予額外加分
+            let adjustedSimilarity = similarity;
+            if (keywordOverlap > 0.5) {
+                adjustedSimilarity = Math.min(100, similarity + (keywordOverlap * 15)); // 最多加15分
+            }
+            
+            // 3. 檢查是否包含核心關鍵詞（如"康寧大學"、"美食"等）- 改進版
+            const coreKeywords = [
+                {word: '康寧大學', aliases: ['康寧', '康寧大']}, // 支持別名
+                {word: '美食', aliases: ['食物', '餐廳', '小吃']},
+                {word: '科系', aliases: ['科', '系', '專業']},
+                {word: '學費', aliases: ['費用', '學雜費', '收費']},
+                {word: '招生', aliases: ['招收', '錄取']},
+                {word: '報名', aliases: ['申請', '登記']},
+                {word: '申請', aliases: ['報名', '登記']}
+            ];
+            
+            let coreKeywordMatch = 0;
+            let coreKeywordBonus = 0;
+            
+            coreKeywords.forEach(core => {
+                // 檢查主關鍵詞
+                const hasMainInQuestion = question.includes(core.word);
+                const hasMainInFAQ = faqQuestion.includes(core.word);
+                
+                // 檢查別名
+                let hasAliasInQuestion = false;
+                let hasAliasInFAQ = false;
+                core.aliases.forEach(alias => {
+                    if (question.includes(alias)) hasAliasInQuestion = true;
+                    if (faqQuestion.includes(alias)) hasAliasInFAQ = true;
+                });
+                
+                // 如果兩邊都有主關鍵詞或別名，則匹配
+                if ((hasMainInQuestion || hasAliasInQuestion) && (hasMainInFAQ || hasAliasInFAQ)) {
+                    coreKeywordMatch++;
+                    // 如果兩邊都有主關鍵詞，額外加分
+                    if (hasMainInQuestion && hasMainInFAQ) {
+                        coreKeywordBonus += 3;
+                    } else {
+                        coreKeywordBonus += 2; // 別名匹配加分較少
+                    }
+                }
+            });
+            
+            // 核心關鍵詞匹配加分（更激進的加分策略）
+            if (coreKeywordMatch > 0) {
+                // 基礎加分 + 額外獎勵
+                adjustedSimilarity = Math.min(100, adjustedSimilarity + (coreKeywordMatch * 8) + coreKeywordBonus);
+            }
+            
+            // 4. 特殊處理：如果核心關鍵詞匹配度高（>=2個），即使相似度略低也給予機會
+            if (coreKeywordMatch >= 2 && adjustedSimilarity < threshold && adjustedSimilarity >= threshold - 15) {
+                adjustedSimilarity = threshold; // 提升到閾值
+            }
+            
+            // 4. 如果相似度達到閾值，加入候選列表（包括調整後的相似度）
+            // 即使原始相似度低於閾值，如果調整後達到閾值也加入
+            if (adjustedSimilarity >= threshold || (coreKeywordMatch >= 2 && adjustedSimilarity >= threshold - 10)) {
+                candidates.push({
+                    question: faqQuestion,
+                    answer: faqData[i].answer,
+                    similarity: adjustedSimilarity,
+                    originalSimilarity: similarity,
+                    keywordOverlap: keywordOverlap
+                });
+                
+                if (adjustedSimilarity > bestSimilarity) {
+                    bestSimilarity = adjustedSimilarity;
+                    bestMatch = {
+                        question: faqQuestion,
+                        answer: faqData[i].answer,
+                        similarity: adjustedSimilarity,
+                        originalSimilarity: similarity
+                    };
+                }
+            }
+        }
+        
+        // 5. 如果有多個候選，選擇相似度最高的
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => b.similarity - a.similarity);
+            const topCandidate = candidates[0];
+            
+            // 如果最高相似度明顯高於其他候選（差距>10%），使用它
+            if (candidates.length === 1 || (candidates.length > 1 && topCandidate.similarity - candidates[1].similarity > 10)) {
+                return {
+                    question: topCandidate.question,
+                    answer: topCandidate.answer,
+                    similarity: topCandidate.similarity,
+                    originalSimilarity: topCandidate.originalSimilarity
+                };
+            }
+        }
+        
+        return bestMatch;
+    }
+
     // 4. 智能問答功能 - 整合Ollama AI
     function findAnswer(question) {
         return new Promise((resolve, reject) => {
             const useAI = $('#use-ai').is(':checked');
             console.log('🔍 開始尋找答案，使用AI:', useAI);
+            
+            // 先檢查FAQ資料庫中的相似度匹配（閾值設為60%，更寬鬆的匹配以容納更多相似問題）
+            const similarFAQ = findSimilarFAQ(question, 60);
+            
+            if (similarFAQ) {
+                console.log('✅ 找到相似FAQ匹配，相似度:', similarFAQ.similarity.toFixed(2) + '%');
+                console.log('📝 原始相似度:', (similarFAQ.originalSimilarity || similarFAQ.similarity).toFixed(2) + '%');
+                console.log('📝 資料庫問題:', similarFAQ.question);
+                console.log('📝 用戶問題:', question);
+                
+                resolve({
+                    answer: similarFAQ.answer,
+                    source_type: 'database_match',
+                    confidence_score: similarFAQ.similarity / 100,
+                    response_time: 0,
+                    similarity: similarFAQ.similarity,
+                    matched_question: similarFAQ.question
+                });
+                return;
+            } else {
+                console.log('❌ 未找到相似FAQ匹配（閾值60%）');
+                console.log('📝 用戶問題:', question);
+                console.log('📊 嘗試匹配的FAQ數量:', faqData ? faqData.length : 0);
+                
+                // 顯示前3個最相似的結果（即使未達閾值）用於調試
+                if (faqData && faqData.length > 0) {
+                    const debugResults = [];
+                    for (let i = 0; i < Math.min(3, faqData.length); i++) {
+                        const sim = calculateSimilarity(question, faqData[i].question);
+                        debugResults.push({
+                            question: faqData[i].question,
+                            similarity: sim.toFixed(2) + '%'
+                        });
+                    }
+                    debugResults.sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity));
+                    console.log('🔍 最相似的3個問題:', debugResults);
+                }
+            }
             
             if (useAI) {
                 console.log('🤖 嘗試使用Ollama AI回答...');
@@ -408,7 +857,12 @@ $(document).ready(function() {
         let metadataHtml = '';
         if (metadata && !isUser) {
             let sourceBadge = '';
-            if (metadata.source_type === 'ollama_ai') {
+            if (metadata.source_type === 'database_match') {
+                sourceBadge = `<span class="badge bg-primary me-1">資料庫匹配</span>`;
+                if (metadata.similarity) {
+                    sourceBadge += `<span class="badge bg-secondary me-1">相似度: ${metadata.similarity.toFixed(1)}%</span>`;
+                }
+            } else if (metadata.source_type === 'ollama_ai') {
                 sourceBadge = '<span class="badge bg-success me-1">AI</span>';
             } else if (metadata.source_type === 'keyword_match') {
                 sourceBadge = '<span class="badge bg-info me-1">關鍵詞</span>';

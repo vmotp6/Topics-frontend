@@ -293,12 +293,16 @@ function sendNotificationEmail($to_email, $to_name, $template_name, $data = []) 
             error_log("郵件發送成功: {$to_email} - {$template_name}");
             return true;
         } else {
-            error_log("郵件發送失敗: {$to_email} - {$template_name}");
+            $error_info = $mail->ErrorInfo;
+            error_log("郵件發送失敗: {$to_email} - {$template_name} - 錯誤: {$error_info}");
+            error_log("SMTP配置: Host=" . SMTP_HOST . ", Port=" . SMTP_PORT . ", From=" . SMTP_FROM_EMAIL);
             return false;
         }
         
     } catch (Exception $e) {
-        error_log("郵件發送錯誤: " . $e->getMessage());
+        $error_message = $e->getMessage();
+        error_log("郵件發送錯誤: {$to_email} - {$template_name} - " . $error_message);
+        error_log("SMTP配置: Host=" . (defined('SMTP_HOST') ? SMTP_HOST : '未定義') . ", Port=" . (defined('SMTP_PORT') ? SMTP_PORT : '未定義') . ", From=" . (defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : '未定義'));
         return false;
     }
 }

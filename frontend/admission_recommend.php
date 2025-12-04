@@ -498,18 +498,38 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommender_grade_code = $_POST['recommender_grade'] ?? '';
         $recommender_department_code = $_POST['recommender_department'] ?? '';
         $student_grade_code = $_POST['student_grade'] ?? '';
-        $student_interest_code = !empty($_POST['student_interest']) ? trim($_POST['student_interest']) : null;
+        $student_interest_input = !empty($_POST['student_interest']) ? trim($_POST['student_interest']) : '';
+        $student_interest_code = null;
         
-        // 驗證 student_interest_code 是否在 departments 表中存在（如果提供了值）
-        if ($student_interest_code !== null && $student_interest_code !== '') {
+        // 驗證並轉換 student_interest（可能是 code 或名稱）
+        if (!empty($student_interest_input)) {
+            // 先檢查是否為有效的 code
             $dept_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
-            $dept_check->bind_param("s", $student_interest_code);
+            $dept_check->bind_param("s", $student_interest_input);
             $dept_check->execute();
             $dept_result = $dept_check->get_result();
-            if ($dept_result->num_rows == 0) {
-                // 如果提供的 code 不在 departments 表中，設為 null
-                error_log("警告：student_interest_code '$student_interest_code' 不在 departments 表中，將設為 NULL");
-                $student_interest_code = null;
+            
+            if ($dept_result->num_rows > 0) {
+                // 是有效的 code
+                $student_interest_code = $student_interest_input;
+            } else {
+                // 不是 code，可能是科系名稱，嘗試查找對應的 code
+                $dept_check2 = $conn->prepare("SELECT code FROM departments WHERE name = ? LIMIT 1");
+                $dept_check2->bind_param("s", $student_interest_input);
+                $dept_check2->execute();
+                $dept_result2 = $dept_check2->get_result();
+                
+                if ($dept_result2->num_rows > 0) {
+                    // 找到對應的 code
+                    $dept_row = $dept_result2->fetch_assoc();
+                    $student_interest_code = $dept_row['code'];
+                    error_log("將科系名稱 '$student_interest_input' 轉換為 code: '$student_interest_code'");
+                } else {
+                    // 既不是 code 也不是有效的科系名稱，設為 null
+                    error_log("警告：student_interest '$student_interest_input' 既不是有效的 code 也不是有效的科系名稱，將設為 NULL");
+                    $student_interest_code = null;
+                }
+                $dept_check2->close();
             }
             $dept_check->close();
         }
@@ -522,6 +542,11 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $additional_info = $_POST['additional_info'] ?? '';
         
         // 動態構建 INSERT 語句，只使用存在的欄位
+        // 注意：admission_recommendations 表的實際結構：
+        // id, recommendation_reason, student_interest (FK: departments.code), 
+        // additional_info, status, enrollment_status, admin_notes, 
+        // created_at, updated_at, proof_evidence, assigned_department, assigned_teacher_id
+        // 其他字段（如推薦人信息、學生信息等）可能存儲在其他表中
         $insert_fields = [];
         $insert_values = [];
         $insert_params = [];
@@ -643,9 +668,29 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         if (in_array('student_interest', $existing_columns)) {
             // student_interest 字段有外鍵約束，應該插入 code
             $insert_fields[] = 'student_interest';
-            // 如果為空，插入 NULL 而不是空字符串（外鍵約束要求）
-            $insert_values[] = ($student_interest_code !== null && $student_interest_code !== '') ? $student_interest_code : null;
-            $bind_types .= 's';
+            // 如果為空或無效，插入 NULL 而不是空字符串（外鍵約束要求）
+            // 注意：NULL 值需要使用特殊處理，不能直接綁定字符串
+            if ($student_interest_code !== null && $student_interest_code !== '') {
+                // 再次驗證確保 code 存在（雙重檢查）
+                $final_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
+                $final_check->bind_param("s", $student_interest_code);
+                $final_check->execute();
+                $final_result = $final_check->get_result();
+                if ($final_result->num_rows > 0) {
+                    $insert_values[] = $student_interest_code;
+                    $bind_types .= 's';
+                } else {
+                    // 即使驗證過，再次檢查時發現不存在，設為 NULL
+                    error_log("錯誤：student_interest_code '$student_interest_code' 在最終檢查時不存在於 departments 表中，將設為 NULL");
+                    $insert_values[] = null;
+                    $bind_types .= 's'; // NULL 仍然使用 's' 類型，但值為 null
+                }
+                $final_check->close();
+            } else {
+                // 為空或無效，插入 NULL
+                $insert_values[] = null;
+                $bind_types .= 's'; // NULL 使用 's' 類型
+            }
         }
         if (in_array('student_interest_code', $existing_columns)) {
             $insert_fields[] = 'student_interest_code';
@@ -682,7 +727,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             if (in_array($field, $existing_columns)) {
                 $valid_fields[] = $field;
                 // 使用對應索引的值，確保順序一致
-                $valid_values[] = $insert_values[$index] ?? '';
+                // 注意：如果原值是 null，保持為 null（不要轉換為空字符串）
+                $value = $insert_values[$index] ?? null;
+                // 對於 student_interest 字段，如果是空字符串，轉換為 null（外鍵約束要求）
+                if ($field === 'student_interest' && ($value === '' || $value === null)) {
+                    $value = null;
+                }
+                $valid_values[] = $value;
                 $valid_bind_types .= 's';
             } else {
                 error_log("警告：欄位 '$field' 不存在於資料表中，將被跳過");
@@ -771,6 +822,28 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $error_msg .= "\n\n嘗試插入的欄位: " . implode(', ', $insert_fields);
             $error_msg .= "\n\n缺少的欄位: " . implode(', ', array_diff($insert_fields, $existing_columns));
             $error_msg .= "\n\nSQL 語句: " . $sql;
+            
+            // 如果是外鍵約束錯誤，提供更詳細的信息
+            if (strpos($stmt->error, 'foreign key constraint') !== false || strpos($stmt->error, 'FOREIGN KEY') !== false) {
+                $error_msg .= "\n\n外鍵約束錯誤詳情：";
+                // 查找 student_interest 相關的錯誤
+                if (in_array('student_interest', $insert_fields)) {
+                    $interest_index = array_search('student_interest', $insert_fields);
+                    $interest_value = $insert_values[$interest_index] ?? '未設置';
+                    $error_msg .= "\n- student_interest 字段的值: " . ($interest_value === null ? 'NULL' : "'$interest_value'");
+                    $error_msg .= "\n- 此值必須存在於 departments 表的 code 字段中";
+                    $error_msg .= "\n- 請確認輸入的科系代碼是否正確";
+                    
+                    // 查詢所有可用的科系代碼
+                    $dept_list_query = $conn->query("SELECT code, name FROM departments ORDER BY code");
+                    if ($dept_list_query && $dept_list_query->num_rows > 0) {
+                        $error_msg .= "\n\n可用的科系代碼列表：";
+                        while ($dept_row = $dept_list_query->fetch_assoc()) {
+                            $error_msg .= "\n  - " . $dept_row['code'] . " (" . $dept_row['name'] . ")";
+                        }
+                    }
+                }
+            }
             
             // 如果錯誤訊息包含 "Unknown column"，提供更詳細的幫助
             if (strpos($stmt->error, 'Unknown column') !== false) {
@@ -865,7 +938,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 // 不中斷主流程，只記錄錯誤
             }
             
-            // 插入被推薦人資料到 recommended 表
+            // 插入被推薦人資料到 recommended 表（如果存在）
+            // 注意：推薦人信息和學生信息可能存儲在 recommended 表中
+            // admission_recommendations 表只存儲推薦申請的核心信息
             try {
                 // 檢查 recommended 表是否存在
                 $table_check = $conn->query("SHOW TABLES LIKE 'recommended'");
@@ -1017,17 +1092,35 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             
             // 準備郵件資料
             // 確保使用台灣時區顯示時間
+            // 將科系代碼轉換為名稱
+            $recommender_department_name = $_POST['recommender_department'];
+            if (!empty($recommender_department_code) && isset($departments[$recommender_department_code])) {
+                $recommender_department_name = $departments[$recommender_department_code];
+            }
+            
+            // 將年級代碼轉換為名稱
+            $student_grade_name = $_POST['student_grade'];
+            if (!empty($student_grade_code)) {
+                if ($student_grade_code === 'GRADUATED') {
+                    $student_grade_name = '已畢業';
+                } elseif (isset($grades[$student_grade_code])) {
+                    $student_grade_name = $grades[$student_grade_code];
+                }
+            }
+            
             $email_data = [
                 'recommender_name' => $_POST['recommender_name'],
                 'recommender_student_id' => $_POST['recommender_student_id'],
-                'recommender_department' => $_POST['recommender_department'],
+                'recommender_department' => $recommender_department_name, // 使用轉換後的名稱
                 'student_name' => $_POST['student_name'],
-                'student_school' => $_POST['student_school'],
-                'student_grade' => $_POST['student_grade'],
+                'student_school' => $student_school_name ?: $_POST['student_school'], // 使用驗證後的學校名稱
+                'student_grade' => $student_grade_name, // 使用轉換後的年級名稱
                 'submission_time' => date('Y-m-d H:i:s', time()) // 使用台灣時區 (UTC+8)，郵件模板會自動加上時區標示
             ];
             
             // 發送推薦成功通知郵件
+            $email_sent = false;
+            $email_error_msg = '';
             try {
                 $email_sent = sendNotificationEmail(
                     $_POST['recommender_email'],
@@ -1044,6 +1137,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                         $_POST['recommender_email'],
                         'sent'
                     );
+                    error_log("推薦成功郵件發送成功: {$_POST['recommender_email']}");
                 } else {
                     // 記錄郵件發送失敗
                     logNotification(
@@ -1052,10 +1146,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                         $_POST['recommender_email'],
                         'failed'
                     );
+                    $email_error_msg = "郵件發送失敗，請檢查您的電子郵件地址是否正確，或稍後聯繫我們。";
+                    error_log("推薦成功郵件發送失敗: {$_POST['recommender_email']}");
                 }
             } catch (Exception $email_error) {
                 // 郵件發送失敗不影響主要流程，只記錄錯誤
-                error_log("推薦成功郵件發送失敗: " . $email_error->getMessage());
+                $email_error_msg = "郵件發送時發生錯誤：" . $email_error->getMessage();
+                error_log("推薦成功郵件發送異常: {$_POST['recommender_email']} - " . $email_error->getMessage());
                 logNotification(
                     $recommendation_id,
                     'recommendation_success',
@@ -1064,7 +1161,17 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 );
             }
             
-            $message = "推薦報名表單提交成功！我們會盡快處理您的推薦申請。確認郵件已發送至您的信箱。";
+            // 根據郵件發送結果顯示不同的訊息
+            if ($email_sent) {
+                $message = "推薦報名表單提交成功！我們會盡快處理您的推薦申請。確認郵件已發送至您的信箱（{$_POST['recommender_email']}），請檢查收件匣或垃圾郵件資料夾。";
+            } else {
+                $message = "推薦報名表單提交成功！我們會盡快處理您的推薦申請。";
+                if (!empty($email_error_msg)) {
+                    $message .= " 注意：" . $email_error_msg;
+                } else {
+                    $message .= " 注意：確認郵件發送失敗，請確認您的電子郵件地址（{$_POST['recommender_email']}）是否正確，或稍後聯繫我們。";
+                }
+            }
             $messageType = "success";
             // 清空表單
             $_POST = array();
