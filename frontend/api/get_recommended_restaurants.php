@@ -6,6 +6,55 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
+// 載入 Google Maps API Key
+require_once __DIR__ . '/../config.php';
+
+/**
+ * 從 Google Places API 獲取餐廳資訊
+ */
+function getRestaurantFromGoogle($restaurantName, $apiKey) {
+    if (empty($restaurantName) || empty($apiKey)) {
+        return null;
+    }
+    
+    // 使用 Text Search API 搜尋餐廳
+    $query = urlencode($restaurantName . ' 台北');
+    $url = "https://maps.googleapis.com/maps/api/place/textsearch/json?query={$query}&key={$apiKey}&language=zh-TW&region=TW";
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200 || !$response) {
+        error_log("Google Places API 請求失敗: HTTP {$httpCode}");
+        return null;
+    }
+    
+    $data = json_decode($response, true);
+    
+    if ($data && isset($data['status']) && $data['status'] === 'OK' && !empty($data['results'])) {
+        // 返回第一個結果
+        $place = $data['results'][0];
+        return [
+            'place_id' => $place['place_id'] ?? null,
+            'name' => $place['name'] ?? $restaurantName,
+            'formatted_address' => $place['formatted_address'] ?? null,
+            'vicinity' => $place['vicinity'] ?? $place['formatted_address'] ?? null,
+            'lat' => isset($place['geometry']['location']['lat']) ? floatval($place['geometry']['location']['lat']) : null,
+            'lng' => isset($place['geometry']['location']['lng']) ? floatval($place['geometry']['location']['lng']) : null,
+            'rating' => isset($place['rating']) ? floatval($place['rating']) : null,
+            'user_ratings_total' => isset($place['user_ratings_total']) ? intval($place['user_ratings_total']) : 0,
+            'price_level' => isset($place['price_level']) ? intval($place['price_level']) : 0
+        ];
+    }
+    
+    return null;
+}
+
 // 資料庫連接
 $host = 'localhost';
 $dbname = 'topics_good';
@@ -109,13 +158,23 @@ try {
     // 轉換為與 Google Places API 類似的格式
     $formattedRestaurants = [];
     foreach ($recommendedRestaurants as $restaurant) {
-        // 獲取該餐廳的評價數量
+        // 獲取該餐廳的評價數量和平均評分
+        $reviewCount = 0;
+        $avgRating = null;
+        $avgDeliveryRating = null;
         try {
-            $reviewStmt = $pdo->prepare("SELECT COUNT(*) as count FROM restaurant_reviews WHERE message_id = ? AND is_published = 1");
+            $reviewStmt = $pdo->prepare("SELECT COUNT(*) as count, AVG(rating) as avg_rating, AVG(delivery_rating) as avg_delivery_rating FROM restaurant_reviews WHERE message_id = ? AND is_published = 1");
             $reviewStmt->execute([$restaurant['id']]);
-            $reviewCount = $reviewStmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
+            $reviewResult = $reviewStmt->fetch(PDO::FETCH_ASSOC);
+            if ($reviewResult) {
+                $reviewCount = intval($reviewResult['count'] ?? 0);
+                $avgRating = $reviewResult['avg_rating'] ? floatval($reviewResult['avg_rating']) : null;
+                $avgDeliveryRating = $reviewResult['avg_delivery_rating'] ? floatval($reviewResult['avg_delivery_rating']) : null;
+            }
         } catch(PDOException $e) {
             $reviewCount = 0;
+            $avgRating = null;
+            $avgDeliveryRating = null;
         }
         
         // 確定餐廳名稱（優先使用 restaurant_name，如果沒有則使用 title）
@@ -137,21 +196,66 @@ try {
         $lat = floatval($restaurant['restaurant_lat'] ?? 0);
         $lng = floatval($restaurant['restaurant_lng'] ?? 0);
         
-        // 如果沒有座標但有地址，仍然返回（前端可以進行地理編碼）
-        // 如果既沒有座標也沒有地址，仍然返回（至少可以顯示在列表中，只是不會在地圖上顯示標記）
-        // 移除跳過邏輯，讓所有推薦餐廳都能顯示在列表中
-        // if (($lat == 0 && $lng == 0) && empty($restaurantAddress)) {
-        //     error_log('跳過餐廳（無座標且無地址）: ' . $restaurantName);
-        //     continue;
-        // }
+        // 先初始化評分（稍後會從資料庫或 Google 獲取）
+        $restaurantRating = null;
+        if (!empty($restaurant['restaurant_rating']) && $restaurant['restaurant_rating'] != '0') {
+            $rawRating = $restaurant['restaurant_rating'];
+            $val = is_numeric($rawRating) ? floatval($rawRating) : 0;
+            if ($val >= 1 && $val <= 5) {
+                $restaurantRating = $val;
+            }
+        }
+        if ($restaurantRating === null && $avgRating !== null && $avgRating >= 1 && $avgRating <= 5) {
+            $restaurantRating = round($avgRating, 1);
+        }
+        if ($restaurantRating === null) {
+            $restaurantRating = 0;
+        }
+        
+        // 如果沒有地址或座標，嘗試從 Google Places API 獲取
+        $googlePlaceId = $restaurant['restaurant_place_id'] ?? null;
+        if (($lat == 0 && $lng == 0) && empty($restaurantAddress)) {
+            $apiKey = defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : '';
+            if (!empty($apiKey)) {
+                error_log('嘗試從 Google 獲取餐廳資訊: ' . $restaurantName);
+                $googleInfo = getRestaurantFromGoogle($restaurantName, $apiKey);
+                if ($googleInfo) {
+                    // 使用從 Google 獲取的資訊
+                    if (empty($restaurantAddress) && !empty($googleInfo['formatted_address'])) {
+                        $restaurantAddress = $googleInfo['formatted_address'];
+                    }
+                    if ($lat == 0 && $lng == 0 && $googleInfo['lat'] !== null && $googleInfo['lng'] !== null) {
+                        $lat = $googleInfo['lat'];
+                        $lng = $googleInfo['lng'];
+                    }
+                    if (empty($googlePlaceId) && !empty($googleInfo['place_id'])) {
+                        $googlePlaceId = $googleInfo['place_id'];
+                    }
+                    // 如果沒有評分，使用 Google 的評分
+                    if ($restaurantRating == 0 && $googleInfo['rating'] !== null) {
+                        $restaurantRating = $googleInfo['rating'];
+                    }
+                    // 如果沒有評價數量，使用 Google 的評價數量
+                    if ($reviewCount == 0 && $googleInfo['user_ratings_total'] > 0) {
+                        $reviewCount = $googleInfo['user_ratings_total'];
+                    }
+                    // 如果沒有價格等級，使用 Google 的價格等級
+                    if (empty($restaurant['price_level']) && $googleInfo['price_level'] > 0) {
+                        $restaurant['price_level'] = $googleInfo['price_level'];
+                    }
+                    error_log('成功從 Google 獲取餐廳資訊: ' . $restaurantName . ', 地址: ' . $restaurantAddress);
+                } else {
+                    error_log('無法從 Google 獲取餐廳資訊: ' . $restaurantName);
+                }
+            }
+        }
         
         // 如果沒有座標但有地址，標記為需要地理編碼
         $needsGeocoding = ($lat == 0 && $lng == 0) && !empty($restaurantAddress);
         
-        // 如果沒有座標也沒有地址，仍然返回（顯示在列表中，但不在地圖上顯示標記）
-        // 使用 null 作為座標標記，前端會跳過地圖標記但顯示在列表中
+        // 如果還是沒有座標也沒有地址，設置為 null
         if ($lat == 0 && $lng == 0 && empty($restaurantAddress)) {
-            error_log('推薦餐廳無座標且無地址，將顯示在列表中但不顯示地圖標記: ' . $restaurantName);
+            error_log('推薦餐廳無座標且無地址: ' . $restaurantName);
             $lat = null;
             $lng = null;
             $needsGeocoding = false;
@@ -173,14 +277,30 @@ try {
             ];
         }
         
+        
+        // 確定外送評分（優先順序：delivery_rating > restaurant_reviews 平均外送評分）
+        $deliveryRating = null;
+        if (!empty($restaurant['delivery_rating']) && $restaurant['delivery_rating'] != '0') {
+            $rawDeliveryRating = $restaurant['delivery_rating'];
+            $val = is_numeric($rawDeliveryRating) ? intval($rawDeliveryRating) : 0;
+            if ($val >= 1 && $val <= 5) {
+                $deliveryRating = $val;
+            }
+        }
+        
+        // 如果沒有從 delivery_rating 獲取到評分，使用 restaurant_reviews 的平均外送評分
+        if ($deliveryRating === null && $avgDeliveryRating !== null && $avgDeliveryRating >= 1 && $avgDeliveryRating <= 5) {
+            $deliveryRating = round($avgDeliveryRating);
+        }
+        
         $formattedRestaurants[] = [
-            'place_id' => $restaurant['restaurant_place_id'] ?? 'recommended_' . $restaurant['id'],
+            'place_id' => $googlePlaceId ?? ($restaurant['restaurant_place_id'] ?? 'recommended_' . $restaurant['id']),
             'name' => $restaurantName,
             'vicinity' => $restaurantAddress ?: $restaurantName,
             'formatted_address' => $restaurantAddress ?: $restaurantName,
             'geometry' => $geometry,
             'needs_geocoding' => $needsGeocoding, // 標記是否需要地理編碼
-            'rating' => floatval($restaurant['restaurant_rating'] ?? 0),
+            'rating' => $restaurantRating,
             'user_ratings_total' => $reviewCount,
             'price_level' => intval($restaurant['price_level'] ?? 0),
             'types' => ['restaurant', 'food', 'point_of_interest', 'establishment'],
@@ -192,10 +312,10 @@ try {
             'recommendation_created_at' => $restaurant['created_at'],
             'recommendation_view_count' => intval($restaurant['view_count'] ?? 0),
             'recommendation_like_count' => intval($restaurant['like_count'] ?? 0),
-            'delivery_rating' => $restaurant['delivery_rating'] ? intval($restaurant['delivery_rating']) : null,
-            'hasDelivery' => $restaurant['delivery_rating'] !== null,
-            'deliveryRating' => $restaurant['delivery_rating'] ? [
-                'deliveryRating' => number_format($restaurant['delivery_rating'], 1)
+            'delivery_rating' => $deliveryRating,
+            'hasDelivery' => $deliveryRating !== null,
+            'deliveryRating' => $deliveryRating ? [
+                'deliveryRating' => number_format($deliveryRating, 1)
             ] : null
         ];
     }

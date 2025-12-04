@@ -163,6 +163,17 @@ require_once 'config.php';
                             <h4><i class="fas fa-utensils"></i> 附近餐廳</h4>
                             <span id="restaurants-count" class="restaurants-count"></span>
                         </div>
+                        <div id="restaurants-sort" class="restaurants-sort" style="display: none; padding: 12px 0; border-bottom: 1px solid var(--border-color, #e1e8ed);">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="restaurant-sort-select" style="font-size: 13px; font-weight: 600; color: var(--text-color, #000); white-space: nowrap;">排序：</label>
+                                <select id="restaurant-sort-select" class="restaurant-sort-select" style="flex: 1; padding: 8px 32px 8px 12px; background: white; border: 1px solid var(--border-color, #e1e8ed); border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-color, #000); cursor: pointer; appearance: none; transition: all 0.3s ease;">
+                                    <option value="newest">由新到舊</option>
+                                    <option value="oldest">由舊到新</option>
+                                    <option value="rating-high">評價高優先</option>
+                                    <option value="rating-low">評價低優先</option>
+                                </select>
+                            </div>
+                        </div>
                         <div id="restaurants-content" class="restaurants-content">
                             <p class="loading-text">正在搜尋附近餐廳...</p>
                         </div>

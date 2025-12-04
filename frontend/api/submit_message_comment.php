@@ -45,13 +45,26 @@ try {
         exit;
     }
     
-    // 獲取用戶ID
-    $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
+    // 獲取用戶ID和email
+    $stmt = $pdo->prepare("SELECT id, email FROM user WHERE username = ?");
     $stmt->execute([$_SESSION['username']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$user) {
         echo json_encode(['success' => false, 'error' => '找不到用戶資料']);
+        exit;
+    }
+    
+    // 檢查留言權限（只有 @stu.ukn.edu.tw 的 email 可以留言）
+    $user_email = $user['email'] ?? '';
+    if (empty($user_email)) {
+        echo json_encode(['success' => false, 'error' => '您的帳號沒有設定 email，無法留言']);
+        exit;
+    }
+    
+    // 檢查是否為 @stu.ukn.edu.tw 結尾的 email
+    if (strpos($user_email, '@stu.ukn.edu.tw') === false) {
+        echo json_encode(['success' => false, 'error' => '只有 @stu.ukn.edu.tw 的學生帳號可以留言']);
         exit;
     }
     

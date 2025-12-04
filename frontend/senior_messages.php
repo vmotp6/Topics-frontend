@@ -1702,7 +1702,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             </div>
                             
                             <!-- 留言輸入表單 -->
-                            <?php if ($isLoggedIn): ?>
+                            <?php if ($can_post_message): ?>
                                 <div class="comment-form" style="display: flex; gap: 10px; align-items: flex-start;">
                                     <?php 
                                     // 獲取當前用戶頭像
@@ -1745,6 +1745,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+                            <?php elseif ($isLoggedIn): ?>
+                                <div style="padding: 15px; text-align: center; background: var(--hover-bg); border-radius: 8px; color: var(--secondary-text); font-size: 14px;">
+                                    只有 @stu.ukn.edu.tw 的學生帳號可以留言
+                                    <?php if (isset($permission_result['error'])): ?>
+                                        <br><small><?php echo htmlspecialchars($permission_result['error']); ?></small>
+                                    <?php endif; ?>
                                 </div>
                             <?php else: ?>
                                 <div style="padding: 15px; text-align: center; background: var(--hover-bg); border-radius: 8px; color: var(--secondary-text); font-size: 14px;">

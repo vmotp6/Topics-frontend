@@ -908,18 +908,12 @@ class CampusMap {
         return null;
     }
 
-    displayRestaurants(restaurants) {
-        // 保存餐廳列表到實例變數，以便點擊時使用
-        // 對餐廳列表進行排序，推薦餐廳優先顯示
-        const sortedRestaurants = [...restaurants].sort((a, b) => {
-            // 推薦餐廳排在前面
-            if (a.is_recommended && !b.is_recommended) return -1;
-            if (!a.is_recommended && b.is_recommended) return 1;
-            // 如果都是推薦餐廳或都不是，按評分排序（評分高的在前）
-            const ratingA = a.rating || 0;
-            const ratingB = b.rating || 0;
-            return ratingB - ratingA;
-        });
+    displayRestaurants(restaurants, sortType = 'newest') {
+        // 保存原始餐廳列表到實例變數
+        this.allRestaurants = [...restaurants];
+        
+        // 根據排序類型對餐廳列表進行排序
+        const sortedRestaurants = this.sortRestaurants([...restaurants], sortType);
         
         this.restaurants = sortedRestaurants;
         
@@ -1026,6 +1020,20 @@ class CampusMap {
         html += '</div>';
         restaurantsContent.innerHTML = html;
         
+        // 顯示排序選項
+        const restaurantsSort = document.getElementById('restaurants-sort');
+        if (restaurantsSort) {
+            restaurantsSort.style.display = 'block';
+            // 設置當前排序選項
+            const sortSelect = document.getElementById('restaurant-sort-select');
+            if (sortSelect) {
+                sortSelect.value = sortType;
+            }
+        }
+        
+        // 添加排序下拉選單事件監聽器
+        this.setupSortSelect();
+        
         // 添加點擊事件監聽器（使用事件委派）
         const restaurantItems = restaurantsContent.querySelectorAll('.restaurant-item');
         restaurantItems.forEach((item, index) => {
@@ -1037,6 +1045,76 @@ class CampusMap {
                 }
             });
         });
+    }
+    
+    // 排序餐廳列表
+    sortRestaurants(restaurants, sortType) {
+        const sorted = [...restaurants].sort((a, b) => {
+            switch(sortType) {
+                case 'newest':
+                    // 由新到舊：推薦餐廳使用 created_at，Google Maps 餐廳排在後面
+                    if (a.is_recommended && b.is_recommended) {
+                        const dateA = new Date(a.recommendation_created_at || 0);
+                        const dateB = new Date(b.recommendation_created_at || 0);
+                        return dateB - dateA; // 新的在前
+                    }
+                    if (a.is_recommended && !b.is_recommended) return -1;
+                    if (!a.is_recommended && b.is_recommended) return 1;
+                    // 都不是推薦餐廳，保持原順序
+                    return 0;
+                    
+                case 'oldest':
+                    // 由舊到新：推薦餐廳使用 created_at，Google Maps 餐廳排在後面
+                    if (a.is_recommended && b.is_recommended) {
+                        const dateA = new Date(a.recommendation_created_at || 0);
+                        const dateB = new Date(b.recommendation_created_at || 0);
+                        return dateA - dateB; // 舊的在前
+                    }
+                    if (a.is_recommended && !b.is_recommended) return -1;
+                    if (!a.is_recommended && b.is_recommended) return 1;
+                    // 都不是推薦餐廳，保持原順序
+                    return 0;
+                    
+                case 'rating-high':
+                    // 評價高優先：推薦餐廳優先，然後按評分排序
+                    if (a.is_recommended && !b.is_recommended) return -1;
+                    if (!a.is_recommended && b.is_recommended) return 1;
+                    const ratingA = a.rating || 0;
+                    const ratingB = b.rating || 0;
+                    return ratingB - ratingA; // 評分高的在前
+                    
+                case 'rating-low':
+                    // 評價低優先：推薦餐廳優先，然後按評分排序（低到高）
+                    if (a.is_recommended && !b.is_recommended) return -1;
+                    if (!a.is_recommended && b.is_recommended) return 1;
+                    const ratingALow = a.rating || 0;
+                    const ratingBLow = b.rating || 0;
+                    return ratingALow - ratingBLow; // 評分低的在前
+                    
+                default:
+                    return 0;
+            }
+        });
+        return sorted;
+    }
+    
+    // 設置排序下拉選單事件監聽器
+    setupSortSelect() {
+        const sortSelect = document.getElementById('restaurant-sort-select');
+        if (sortSelect) {
+            // 移除舊的事件監聽器（如果有的話）
+            const newSortSelect = sortSelect.cloneNode(true);
+            sortSelect.parentNode.replaceChild(newSortSelect, sortSelect);
+            
+            // 添加新的事件監聽器
+            newSortSelect.addEventListener('change', (e) => {
+                e.stopPropagation();
+                const sortType = newSortSelect.value;
+                if (this.allRestaurants && this.allRestaurants.length > 0) {
+                    this.displayRestaurants(this.allRestaurants, sortType);
+                }
+            });
+        }
     }
 
     getStarRating(rating) {

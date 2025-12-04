@@ -1340,6 +1340,32 @@ body.custom-spacing {
     font-size: 0.9rem;
 }
 
+.restaurants-sort {
+    margin-bottom: 12px;
+}
+
+.restaurant-sort-select {
+    transition: all 0.3s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px;
+    padding-right: 32px;
+}
+
+.restaurant-sort-select:hover {
+    border-color: #667eea !important;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.restaurant-sort-select:focus {
+    outline: none;
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
 .restaurants-content {
     max-height: calc(100vh - 400px);
     overflow-y: auto;
