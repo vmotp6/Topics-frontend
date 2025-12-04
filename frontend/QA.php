@@ -91,9 +91,7 @@ function getFAQFromDatabase() {
                             <label class="form-check-label" for="use-ai">
                                 🤖 使用AI回答
                             </label>
-                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="testAIConnection()">
-                                🔧 測試AI連接
-                            </button>
+
                         </div>
                     </div>
                 </div>
