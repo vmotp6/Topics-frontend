@@ -27,6 +27,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 創建聯絡人表（如果不存在）- 所有角色都需要
+    // 注意：不使用外鍵約束，避免約束問題導致插入失敗
     $pdo->exec("CREATE TABLE IF NOT EXISTS user_contacts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL COMMENT '用戶ID',
@@ -35,9 +36,7 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uk_user_contact (user_id, contact_user_id),
         INDEX idx_user_id (user_id),
-        INDEX idx_contact_user_id (contact_user_id),
-        FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
-        FOREIGN KEY (contact_user_id) REFERENCES user(id) ON DELETE CASCADE
+        INDEX idx_contact_user_id (contact_user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     
     // 檢查角色（支援代碼和中文名稱）
@@ -159,16 +158,274 @@ try {
     
     // 根據角色獲取不同的資料
     if ($isStudent) {
-        // 學生：先檢查是否已有聯絡人（從 user_contacts 表）
+        // 學生：先處理選中的聯絡人（如果有），然後再檢查是否已有聯絡人
         $contacts = [];
         $hasContacts = false;
         $allTeachersByDepartment = [];
         $admissionCenter = null;
         $showContactList = false; // 是否顯示聯絡資訊列表
+        $selectedContact = null;
         
-        if ($currentUserId) {
-            // 從 user_contacts 表載入已添加的聯絡人
+        // 優先處理：檢查是否有選中的聯絡人（從 GET 參數）
+        // 當點擊「開始聊天」按鈕時，會帶上 contact_username 參數
+        error_log("=== 檢查 contact_username 參數 ===");
+        error_log("isset(\$_GET['contact_username']): " . (isset($_GET['contact_username']) ? 'true' : 'false'));
+        error_log("\$_GET['contact_username']: " . ($_GET['contact_username'] ?? 'NOT SET'));
+        error_log("!empty(\$_GET['contact_username']): " . (!empty($_GET['contact_username'] ?? '') ? 'true' : 'false'));
+        error_log("\$currentUserId: " . ($currentUserId ?? 'NULL'));
+        error_log("條件檢查結果: " . ((isset($_GET['contact_username']) && !empty($_GET['contact_username']) && $currentUserId) ? 'PASS' : 'FAIL'));
+        
+        if (isset($_GET['contact_username']) && !empty($_GET['contact_username']) && $currentUserId) {
+            $contactUsername = $_GET['contact_username'];
+            
+            error_log("=== 處理選中的聯絡人 ===");
+            error_log("contact_username: " . $contactUsername);
+            error_log("currentUserId: " . $currentUserId);
+            error_log("currentUserId: " . ($currentUserId ?? 'NULL'));
+            
+            // 查詢選中的聯絡人（從 user 表查詢，因為需要 user_id）
+            // 支援 username 或 user_id（數字）
             try {
+                // 先嘗試作為 username 查詢，如果是數字則也嘗試作為 id 查詢
+                $isNumeric = is_numeric($contactUsername);
+                
+                if ($isNumeric) {
+                    // 如果是數字，嘗試作為 id 查詢
+                    $stmt = $pdo->prepare("SELECT 
+                                u.id as user_id,
+                                COALESCE(u.name, u.username, '未知用戶') as name,
+                                COALESCE(d.name, s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                t.phone,
+                                t.email
+                         FROM user u
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
+                         WHERE u.id = ? OR u.username = ?
+                         LIMIT 1");
+                    $stmt->execute([$contactUsername, $contactUsername]);
+                } else {
+                    // 如果是字串，作為 username 查詢
+                    $stmt = $pdo->prepare("SELECT 
+                                u.id as user_id,
+                                COALESCE(u.name, u.username, '未知用戶') as name,
+                                COALESCE(d.name, s.department, t.department, '未設定') as department,
+                                u.username,
+                                u.profile_picture,
+                                CASE 
+                                    WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    ELSE '其他'
+                                END as contact_type,
+                                t.phone,
+                                t.email
+                         FROM user u
+                         LEFT JOIN student s ON u.id = s.user_id
+                         LEFT JOIN teacher t ON u.id = t.user_id
+                         LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
+                         WHERE u.username = ?
+                         LIMIT 1");
+                    $stmt->execute([$contactUsername]);
+                }
+                
+                $selectedContact = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                error_log("查詢結果: " . ($selectedContact ? "找到聯絡人" : "未找到聯絡人"));
+                if ($selectedContact) {
+                    error_log("找到選中的聯絡人: user_id=" . $selectedContact['user_id'] . ", name=" . $selectedContact['name'] . ", username=" . ($selectedContact['username'] ?? 'N/A'));
+                    
+                    // 如果選中了聯絡人，將該聯絡人添加到 user_contacts（如果還沒有）
+                    if ($currentUserId) {
+                        error_log("開始添加聯絡人到 user_contacts 表");
+                        try {
+                            // 確保 user_contacts 表存在（不使用外鍵約束，避免約束問題）
+                            $pdo->exec("CREATE TABLE IF NOT EXISTS user_contacts (
+                                id INT AUTO_INCREMENT PRIMARY KEY,
+                                user_id INT NOT NULL COMMENT '用戶ID',
+                                contact_user_id INT NOT NULL COMMENT '聯絡人用戶ID',
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                UNIQUE KEY uk_user_contact (user_id, contact_user_id),
+                                INDEX idx_user_id (user_id),
+                                INDEX idx_contact_user_id (contact_user_id)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+                            
+                            error_log("準備添加聯絡人: currentUserId=" . $currentUserId . ", contact_user_id=" . $selectedContact['user_id']);
+                            
+                            // 添加聯絡人到 user_contacts 表
+                            // 先檢查是否已存在
+                            $checkStmt = $pdo->prepare("SELECT id FROM user_contacts WHERE user_id = ? AND contact_user_id = ?");
+                            $checkStmt->execute([$currentUserId, $selectedContact['user_id']]);
+                            $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                            
+                            $insertSuccess = false;
+                            
+                            if (!$existing) {
+                                // 如果不存在，才插入
+                                error_log("開始執行 INSERT 語句");
+                                error_log("   INSERT INTO user_contacts (user_id, contact_user_id) VALUES (" . $currentUserId . ", " . $selectedContact['user_id'] . ")");
+                                
+                                try {
+                                    $insertStmt = $pdo->prepare("INSERT INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+                                    error_log("   Prepared statement 創建成功");
+                                    
+                                    error_log("   執行 execute()，參數: [" . $currentUserId . ", " . $selectedContact['user_id'] . "]");
+                                    $insertResult = $insertStmt->execute([$currentUserId, $selectedContact['user_id']]);
+                                    error_log("   execute() 返回: " . ($insertResult ? 'true' : 'false'));
+                                    
+                                    if ($insertResult) {
+                                        $insertId = $pdo->lastInsertId();
+                                        error_log("✅ INSERT 執行成功，lastInsertId: " . $insertId);
+                                        
+                                        // 立即驗證是否真的寫入資料庫（使用新的連接確保讀取到最新數據）
+                                        $verifyStmt = $pdo->prepare("SELECT id, user_id, contact_user_id, created_at FROM user_contacts WHERE id = ?");
+                                        $verifyStmt->execute([$insertId]);
+                                        $verifyResult = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+                                        
+                                        if ($verifyResult) {
+                                            error_log("✅ 驗證成功：聯絡人已寫入資料庫");
+                                            error_log("   記錄ID: " . $verifyResult['id']);
+                                            error_log("   user_id: " . $verifyResult['user_id']);
+                                            error_log("   contact_user_id: " . $verifyResult['contact_user_id']);
+                                            error_log("   created_at: " . $verifyResult['created_at']);
+                                            $insertSuccess = true;
+                                        } else {
+                                            error_log("❌ 驗證失敗：聯絡人未寫入資料庫！insertId=" . $insertId);
+                                            
+                                            // 再次查詢所有記錄以調試
+                                            $allStmt = $pdo->query("SELECT * FROM user_contacts WHERE user_id = " . $currentUserId . " ORDER BY id DESC LIMIT 5");
+                                            $allRecords = $allStmt->fetchAll(PDO::FETCH_ASSOC);
+                                            error_log("資料庫中當前用戶的所有記錄: " . json_encode($allRecords, JSON_UNESCAPED_UNICODE));
+                                        }
+                                    } else {
+                                        error_log("❌ INSERT execute() 返回 false");
+                                        $errorInfo = $insertStmt->errorInfo();
+                                        error_log("SQL 錯誤資訊: " . print_r($errorInfo, true));
+                                    }
+                                } catch (PDOException $insertError) {
+                                    error_log("❌ INSERT 執行時發生異常: " . $insertError->getMessage());
+                                    error_log("錯誤代碼: " . $insertError->getCode());
+                                    error_log("SQL 狀態: " . $insertError->errorInfo[0] ?? 'N/A');
+                                    error_log("錯誤詳情: " . print_r($insertError->errorInfo, true));
+                                }
+                            } else {
+                                error_log("聯絡人已存在於 user_contacts 表中，ID: " . $existing['id']);
+                                $insertSuccess = true; // 已存在也算成功
+                            }
+                            
+                            // 只有插入成功或已存在時才重定向
+                            if ($insertSuccess) {
+                                // 重新載入聯絡人列表以確認
+                                $stmt = $pdo->prepare("SELECT DISTINCT 
+                                            uc.contact_user_id as user_id,
+                                            u.id as contact_user_table_id,
+                                            COALESCE(u.name, u.username, '未知用戶') as name,
+                                            COALESCE(d.name, s.department, t.department, '未設定') as department,
+                                            u.username,
+                                            u.profile_picture,
+                                            CASE 
+                                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                                ELSE '其他'
+                                            END as contact_type,
+                                            COALESCE(s.grade, '未設定') as grade,
+                                            COALESCE(s.class_name, '未設定') as class_name
+                                     FROM user_contacts uc
+                                     LEFT JOIN user u ON uc.contact_user_id = u.id
+                                     LEFT JOIN student s ON uc.contact_user_id = s.user_id
+                                     LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
+                                     LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
+                                     WHERE uc.user_id = ?
+                                     ORDER BY 
+                                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                                         COALESCE(u.name, u.username, '未知用戶')");
+                                $stmt->execute([$currentUserId]);
+                                $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                                $hasContacts = !empty($contacts);
+                                
+                                error_log("重新載入後，聯絡人數量: " . count($contacts));
+                                error_log("✅ 聯絡人已添加，準備重定向到私訊系統");
+                                
+                                // 重定向到沒有參數的頁面，這樣會重新執行邏輯並顯示私訊系統
+                                // 先嘗試使用 PHP header 重定向
+                                if (!headers_sent()) {
+                                    header("Location: chat.php");
+                                    exit;
+                                } else {
+                                    // 如果 headers 已發送，使用 JavaScript 重定向
+                                    echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.location.href = "chat.php";</script></head><body>正在跳轉...</body></html>';
+                                    exit;
+                                }
+                            } else {
+                                error_log("❌ 插入失敗，不進行重定向");
+                                error_log("   插入狀態: insertSuccess = false");
+                                error_log("   請檢查上面的錯誤日誌以了解插入失敗的原因");
+                                
+                                // 即使插入失敗，也顯示錯誤訊息給用戶
+                                $_SESSION['contact_add_error'] = "添加聯絡人失敗，請稍後再試或聯繫管理員";
+                            }
+                            
+                        } catch (PDOException $e) {
+                            error_log("❌ 添加聯絡人到 user_contacts 失敗: " . $e->getMessage());
+                            error_log("錯誤詳情: " . $e->getTraceAsString());
+                            error_log("SQL 錯誤代碼: " . $e->getCode());
+                            
+                            // 即使插入失敗，也嘗試重定向（可能聯絡人已存在）
+                            // 先檢查是否真的存在
+                            try {
+                                $checkStmt = $pdo->prepare("SELECT id FROM user_contacts WHERE user_id = ? AND contact_user_id = ?");
+                                $checkStmt->execute([$currentUserId, $selectedContact['user_id']]);
+                                $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                                
+                                if ($exists) {
+                                    error_log("聯絡人已存在，繼續重定向");
+                                    // 重定向到沒有參數的頁面
+                                    if (!headers_sent()) {
+                                        header("Location: chat.php");
+                                        exit;
+                                    } else {
+                                        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.location.href = "chat.php";</script></head><body>正在跳轉...</body></html>';
+                                        exit;
+                                    }
+                                } else {
+                                    error_log("❌ 聯絡人不存在且插入失敗，無法繼續");
+                                }
+                            } catch (PDOException $checkError) {
+                                error_log("❌ 檢查聯絡人是否存在時發生錯誤: " . $checkError->getMessage());
+                            }
+                        }
+                    } else {
+                        error_log("❌ currentUserId 為空，無法添加聯絡人");
+                        error_log("   在 if (\$currentUserId) 檢查時，currentUserId 為: " . var_export($currentUserId, true));
+                    }
+                } else {
+                    error_log("❌ 找不到 contact_username=" . $contactUsername . " 的用戶");
+                    error_log("   查詢語句: " . ($isNumeric ? "WHERE u.id = ? OR u.username = ?" : "WHERE u.username = ?"));
+                    error_log("   查詢參數: " . json_encode([$contactUsername, $contactUsername]));
+                }
+            } catch (PDOException $e) {
+                error_log("❌ 查詢選中聯絡人失敗: " . $e->getMessage());
+                error_log("錯誤詳情: " . $e->getTraceAsString());
+            }
+        } else {
+            error_log("⚠️ 條件檢查失敗，不處理 contact_username");
+            error_log("   isset(\$_GET['contact_username']): " . (isset($_GET['contact_username']) ? 'true' : 'false'));
+            error_log("   !empty(\$_GET['contact_username']): " . (!empty($_GET['contact_username'] ?? '') ? 'true' : 'false'));
+            error_log("   \$currentUserId: " . ($currentUserId ?? 'NULL'));
+        }
+        
+        // 檢查是否已有聯絡人（從 user_contacts 表）
+        // 如果沒有聯絡人，才顯示聯絡資訊列表
+        if ($currentUserId) {
+            try {
+                // 從 user_contacts 表載入已添加的聯絡人
                 $stmt = $pdo->prepare("SELECT DISTINCT 
                             uc.contact_user_id as user_id,
                             u.id as contact_user_table_id,
@@ -197,6 +454,9 @@ try {
                 
                 if (!empty($contacts)) {
                     $hasContacts = true;
+                    error_log("STU 已有 " . count($contacts) . " 位聯絡人，將顯示私訊系統");
+                } else {
+                    error_log("STU 沒有聯絡人，將顯示聯絡資訊列表");
                 }
             } catch (PDOException $e) {
                 error_log("載入已添加聯絡人失敗: " . $e->getMessage());
@@ -204,132 +464,58 @@ try {
         }
         
         // 如果沒有聯絡人，才顯示聯絡資訊列表
+        // 邏輯：全部從 teacher 表查詢
+        // teacher.user_id -> user.id 獲取名稱
+        // teacher.department -> departments.code 獲取科系名稱
+        $allContactsList = [];
+        
         if (!$hasContacts) {
             $showContactList = true;
             
-            // 查詢招生中心（role=STU，名字是招生中心）
-            try {
-                $stmt = $pdo->prepare("SELECT id, username, name, profile_picture 
-                                       FROM user 
-                                       WHERE (role = 'STU' OR role = '學生') 
-                                       AND (name = '招生中心' OR username LIKE '%admission%' OR username LIKE '%enrollment%')
-                                       LIMIT 1");
-                $stmt->execute();
-                $admissionCenter = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($admissionCenter) {
-                    $admissionCenter['department'] = '招生中心';
-                    $admissionCenter['contact_type'] = '招生中心';
-                }
-            } catch (PDOException $e) {
-                error_log("查詢招生中心失敗: " . $e->getMessage());
-            }
-            
-            // 查詢所有科系的老師，按科系分組
+            // 從 teacher 表查詢所有資料
             try {
                 $stmt = $pdo->prepare("SELECT 
-                                u.id as user_id,
-                                COALESCE(u.name, u.username, '未知用戶') as name,
-                                COALESCE(d.name, t.department, '未設定') as department,
-                                d.code as department_code,
+                                t.user_id,
+                                t.department as teacher_department,
+                                u.name,
                                 u.username,
                                 u.profile_picture,
-                                '老師' as contact_type,
+                                COALESCE(d.name, t.department, '未設定') as department,
                                 t.phone,
-                                t.email
-                         FROM user u
-                         INNER JOIN teacher t ON u.id = t.user_id
+                                CASE 
+                                    WHEN u.name = '招生中心' THEN '招生中心'
+                                    ELSE '老師'
+                                END as contact_type
+                         FROM teacher t
+                         INNER JOIN user u ON t.user_id = u.id
                          LEFT JOIN departments d ON t.department = d.code
-                         WHERE (u.role = 'TEA' OR u.role = '老師')
                          ORDER BY 
+                             CASE WHEN u.name = '招生中心' THEN 0 ELSE 1 END,
                              COALESCE(d.name, t.department, '未設定'),
-                             COALESCE(u.name, u.username, '未知用戶')");
+                             u.name");
                 $stmt->execute();
-                $allTeachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 
-                // 按科系分組
-                foreach ($allTeachers as $teacher) {
-                    $dept = $teacher['department'] ?? '未設定';
-                    if (!isset($allTeachersByDepartment[$dept])) {
-                        $allTeachersByDepartment[$dept] = [];
-                    }
-                    $allTeachersByDepartment[$dept][] = $teacher;
+                // 格式化資料
+                foreach ($teachers as $teacher) {
+                    $allContactsList[] = [
+                        'user_id' => $teacher['user_id'],
+                        'name' => $teacher['name'],
+                        'username' => $teacher['username'],
+                        'department' => $teacher['contact_type'] === '招生中心' ? '招生中心' : $teacher['department'],
+                        'profile_picture' => $teacher['profile_picture'],
+                        'contact_type' => $teacher['contact_type'],
+                        'phone' => $teacher['phone'] ?? ''
+                    ];
                 }
+                
+                error_log("從 teacher 表查詢到 " . count($allContactsList) . " 位聯絡人");
+                
             } catch (PDOException $e) {
-                error_log("查詢所有科系老師失敗: " . $e->getMessage());
+                error_log("查詢 teacher 表失敗: " . $e->getMessage());
             }
         }
         
-        // 檢查是否有選中的聯絡人（從 GET 參數）
-        $selectedContact = null;
-        if (isset($_GET['contact_username']) && !empty($_GET['contact_username'])) {
-            $contactUsername = $_GET['contact_username'];
-            
-            // 查詢選中的聯絡人
-            try {
-                $stmt = $pdo->prepare("SELECT 
-                            u.id as user_id,
-                            COALESCE(u.name, u.username, '未知用戶') as name,
-                            COALESCE(d.name, s.department, t.department, '未設定') as department,
-                            u.username,
-                            u.profile_picture,
-                            CASE 
-                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
-                                ELSE '其他'
-                            END as contact_type,
-                            t.phone,
-                            t.email
-                     FROM user u
-                     LEFT JOIN student s ON u.id = s.user_id
-                     LEFT JOIN teacher t ON u.id = t.user_id
-                     LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
-                     WHERE u.username = ?
-                     LIMIT 1");
-                $stmt->execute([$contactUsername]);
-                $selectedContact = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                // 如果選中了聯絡人，將該聯絡人添加到 user_contacts（如果還沒有）
-                if ($selectedContact && $currentUserId) {
-                    try {
-                        $insertStmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
-                        $insertStmt->execute([$currentUserId, $selectedContact['user_id']]);
-                        
-                        // 重新載入聯絡人列表
-                        $stmt = $pdo->prepare("SELECT DISTINCT 
-                                    uc.contact_user_id as user_id,
-                                    u.id as contact_user_table_id,
-                                    COALESCE(u.name, u.username, '未知用戶') as name,
-                                    COALESCE(d.name, s.department, t.department, '未設定') as department,
-                                    u.username,
-                                    u.profile_picture,
-                                    CASE 
-                                        WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                        WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
-                                        ELSE '其他'
-                                    END as contact_type,
-                                    COALESCE(s.grade, '未設定') as grade,
-                                    COALESCE(s.class_name, '未設定') as class_name
-                             FROM user_contacts uc
-                             LEFT JOIN user u ON uc.contact_user_id = u.id
-                             LEFT JOIN student s ON uc.contact_user_id = s.user_id
-                             LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
-                             LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
-                             WHERE uc.user_id = ?
-                             ORDER BY 
-                                 CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
-                                 COALESCE(u.name, u.username, '未知用戶')");
-                        $stmt->execute([$currentUserId]);
-                        $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                        $hasContacts = !empty($contacts);
-                        $showContactList = false;
-                    } catch (PDOException $e) {
-                        error_log("添加聯絡人到 user_contacts 失敗: " . $e->getMessage());
-                    }
-                }
-            } catch (PDOException $e) {
-                error_log("查詢選中聯絡人失敗: " . $e->getMessage());
-            }
-        }
     } elseif ($isTeacher || $isStaff) {
         // 老師和學校行政人員：從 user_contacts 表載入聯絡人
         $contacts = [];
@@ -916,101 +1102,238 @@ try {
   <?php if ($isStudent): ?>
     <!-- 學生聊天介面 -->
     <?php if ($showContactList): ?>
-      <!-- 顯示聯絡資訊列表（僅在沒有聯絡人時顯示） -->
-      <!-- 顯示所有科系老師的聯絡資訊表格 -->
+      <!-- 顯示聯絡資訊表格（僅在沒有聯絡人時顯示） -->
       <div style="max-width: 1200px; margin: 20px auto; padding: 20px;">
-        <h2 style="text-align: center; margin-bottom: 30px; color: #333;">聯絡資訊</h2>
+        <h2 style="text-align: center; margin-bottom: 20px; color: #333;">聯絡資訊</h2>
         
-        <!-- 招生中心 -->
+        <!-- 說明文字 -->
         <?php if (isset($admissionCenter) && $admissionCenter): ?>
-        <div style="margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 2px solid #667eea;">
-          <h3 style="color: #667eea; margin-bottom: 15px;">📞 招生中心</h3>
-          <div style="display: flex; align-items: center; gap: 15px; cursor: pointer; padding: 15px; background: white; border-radius: 6px; transition: background 0.3s;" 
-               onmouseover="this.style.background='#e8eaf6'" 
-               onmouseout="this.style.background='white'"
-               onclick="selectContactForChat('<?php echo htmlspecialchars($admissionCenter['username'], ENT_QUOTES, 'UTF-8'); ?>')">
-            <div style="width: 50px; height: 50px; border-radius: 50%; overflow: hidden; background: #667eea; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
-              <?php if ($admissionCenter['profile_picture']): ?>
-                <img src="<?php echo htmlspecialchars($admissionCenter['profile_picture'], ENT_QUOTES, 'UTF-8'); ?>" style="width: 100%; height: 100%; object-fit: cover;">
-              <?php else: ?>
-                📞
-              <?php endif; ?>
-            </div>
-            <div style="flex: 1;">
-              <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;"><?php echo htmlspecialchars($admissionCenter['name'], ENT_QUOTES, 'UTF-8'); ?></div>
-              <div style="color: #666; font-size: 14px;">點擊開始聊天</div>
-            </div>
-          </div>
+        <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+          <p style="margin: 0; color: #1976d2; font-size: 14px;">
+            <strong>💡 提示：</strong>如果您不知道要選擇哪些科系，可以找<strong>招生中心</strong>解答相關問題。
+          </p>
         </div>
         <?php endif; ?>
         
-        <!-- 各科系老師 -->
-        <?php if (isset($allTeachersByDepartment) && !empty($allTeachersByDepartment)): ?>
-        <?php foreach ($allTeachersByDepartment as $department => $teachers): ?>
-        <div style="margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px;">
-          <h3 style="color: #333; margin-bottom: 15px; border-bottom: 2px solid #667eea; padding-bottom: 10px;"><?php echo htmlspecialchars($department, ENT_QUOTES, 'UTF-8'); ?></h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
-            <?php foreach ($teachers as $teacher): ?>
-            <div style="background: white; padding: 15px; border-radius: 6px; cursor: pointer; transition: all 0.3s; border: 1px solid #ddd;" 
-                 onmouseover="this.style.background='#e8eaf6'; this.style.borderColor='#667eea'; this.style.transform='translateY(-2px)'" 
-                 onmouseout="this.style.background='white'; this.style.borderColor='#ddd'; this.style.transform='translateY(0)'"
-                 onclick="selectContactForChat('<?php echo htmlspecialchars($teacher['username'], ENT_QUOTES, 'UTF-8'); ?>')">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="width: 45px; height: 45px; border-radius: 50%; overflow: hidden; background: #667eea; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; flex-shrink: 0;">
-                  <?php if ($teacher['profile_picture']): ?>
-                    <img src="<?php echo htmlspecialchars($teacher['profile_picture'], ENT_QUOTES, 'UTF-8'); ?>" style="width: 100%; height: 100%; object-fit: cover;">
+        <!-- 聯絡資訊表格 -->
+        <?php 
+        // 調試資訊
+        $contactsCount = isset($allContactsList) ? count($allContactsList) : 0;
+        error_log("顯示聯絡資訊表格 - allContactsList 數量: " . $contactsCount);
+        error_log("showContactList 狀態: " . ($showContactList ? 'true' : 'false'));
+        
+        // 強制顯示調試資訊（臨時）
+        if (isset($allContactsList) && !empty($allContactsList)) {
+            error_log("準備顯示 " . count($allContactsList) . " 位聯絡人");
+        } else {
+            error_log("警告：allContactsList 為空或未定義，無法顯示表格");
+        }
+        
+        if (isset($allContactsList) && !empty($allContactsList)): 
+        ?>
+        <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #667eea; color: white;">
+                <th style="padding: 15px; text-align: left; font-weight: bold; border-bottom: 2px solid #5568d3;">科系</th>
+                <th style="padding: 15px; text-align: left; font-weight: bold; border-bottom: 2px solid #5568d3;">姓名</th>
+                <th style="padding: 15px; text-align: center; font-weight: bold; border-bottom: 2px solid #5568d3; width: 120px;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($allContactsList as $index => $contact): ?>
+              <tr style="border-bottom: 1px solid #eee; <?php echo ($index % 2 == 0) ? 'background: #f9f9f9;' : 'background: white;'; ?> <?php echo ($contact['contact_type'] === '招生中心') ? 'background: #e8eaf6 !important; font-weight: bold;' : ''; ?>">
+                <td style="padding: 15px; color: #333;">
+                  <?php if ($contact['contact_type'] === '招生中心'): ?>
+                    <span style="color: #667eea; font-weight: bold;">📞 <?php echo htmlspecialchars($contact['department'], ENT_QUOTES, 'UTF-8'); ?></span>
                   <?php else: ?>
-                    👤
+                    <?php echo htmlspecialchars($contact['department'], ENT_QUOTES, 'UTF-8'); ?>
                   <?php endif; ?>
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                  <div style="font-weight: bold; font-size: 15px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($teacher['name'], ENT_QUOTES, 'UTF-8'); ?></div>
-                  <div style="color: #666; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($department, ENT_QUOTES, 'UTF-8'); ?></div>
-                  <?php if (!empty($teacher['phone'])): ?>
-                  <div style="color: #888; font-size: 12px; margin-top: 3px;">📞 <?php echo htmlspecialchars($teacher['phone'], ENT_QUOTES, 'UTF-8'); ?></div>
-                  <?php endif; ?>
-                </div>
-              </div>
-            </div>
-            <?php endforeach; ?>
-          </div>
+                </td>
+                <td style="padding: 15px; color: #333;">
+                  <?php echo htmlspecialchars($contact['name'], ENT_QUOTES, 'UTF-8'); ?>
+                </td>
+                <td style="padding: 15px; text-align: center;">
+                  <button onclick="selectContactForChat('<?php echo htmlspecialchars($contact['username'], ENT_QUOTES, 'UTF-8'); ?>', <?php echo isset($contact['user_id']) ? (int)$contact['user_id'] : 'null'; ?>)" 
+                          style="padding: 8px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;"
+                          onmouseover="this.style.background='#5568d3'"
+                          onmouseout="this.style.background='#667eea'">
+                    開始聊天
+                  </button>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
         </div>
-        <?php endforeach; ?>
         <?php else: ?>
-        <div style="text-align: center; padding: 40px; color: #666;">
-          <p>目前沒有可用的聯絡人資訊</p>
+        <div style="text-align: center; padding: 40px; color: #666; background: white; border-radius: 8px;">
+          <p style="font-size: 16px;">目前沒有可用的聯絡人資訊</p>
+          <?php 
+          // 調試資訊
+          error_log("顯示空狀態 - allContactsList 是否設定: " . (isset($allContactsList) ? '是' : '否'));
+          if (isset($allContactsList)) {
+              error_log("allContactsList 數量: " . count($allContactsList));
+          }
+          if (isset($allTeachers)) {
+              error_log("allTeachers 數量: " . count($allTeachers));
+          }
+          ?>
         </div>
         <?php endif; ?>
       </div>
       
       <script>
-      function selectContactForChat(username) {
-        // 跳轉到聊天頁面，帶上聯絡人參數
-        window.location.href = 'chat.php?contact_username=' + encodeURIComponent(username);
+      async function selectContactForChat(username, userId) {
+        console.log('=== 開始添加聯絡人 ===');
+        console.log('username:', username);
+        console.log('userId:', userId);
+        
+        if (!userId) {
+          alert('錯誤：缺少聯絡人ID，無法添加聯絡人');
+          console.error('❌ userId 為空');
+          return;
+        }
+        
+        // 顯示載入提示
+        const button = event?.target || document.querySelector(`button[onclick*="'${username}'"]`);
+        let originalText = '開始聊天';
+        if (button) {
+          originalText = button.textContent;
+          button.textContent = '處理中...';
+          button.disabled = true;
+        }
+        
+        try {
+          // 使用 AJAX 調用 API 添加聯絡人
+          const formData = new URLSearchParams();
+          formData.append('contact_user_id', userId);
+          
+          console.log('發送 API 請求到 add_contact_api.php');
+          console.log('contact_user_id:', userId);
+          
+          const response = await fetch('add_contact_api.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+          });
+          
+          console.log('API 響應狀態:', response.status, response.statusText);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API 響應錯誤:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+          }
+          
+          const data = await response.json();
+          console.log('API 響應數據:', data);
+          
+          if (data.success) {
+            console.log('✅ 聯絡人已成功添加到資料庫');
+            console.log('插入ID:', data.insert_id);
+            console.log('驗證結果:', data.verified);
+            
+            if (data.verified) {
+              // 顯示成功訊息
+              alert('聯絡人已添加成功！正在跳轉到私訊系統...');
+              
+              // 成功後重定向到私訊系統
+              window.location.href = 'chat.php';
+            } else {
+              console.warn('⚠️ 插入成功但驗證失敗');
+              alert('聯絡人已添加，但驗證失敗。請重新整理頁面查看。');
+              
+              // 恢復按鈕狀態
+              if (button) {
+                button.textContent = originalText;
+                button.disabled = false;
+              }
+            }
+          } else {
+            console.error('❌ 添加聯絡人失敗:', data.message);
+            alert('添加聯絡人失敗：' + (data.message || '未知錯誤'));
+            
+            // 恢復按鈕狀態
+            if (button) {
+              button.textContent = originalText;
+              button.disabled = false;
+            }
+          }
+        } catch (error) {
+          console.error('❌ 添加聯絡人時發生錯誤:', error);
+          alert('添加聯絡人時發生錯誤：' + error.message + '\n\n請檢查瀏覽器控制台和 PHP 錯誤日誌以獲取詳細資訊。');
+          
+          // 恢復按鈕狀態
+          if (button) {
+            button.textContent = originalText;
+            button.disabled = false;
+          }
+        }
       }
       </script>
       
     <?php else: ?>
-      <!-- 已有聯絡人，直接顯示私訊系統 -->
+      <!-- 已有聯絡人，使用完整的私訊系統（和 TEA/STA 一樣） -->
+      <?php
+      // 將 STU 的聯絡人資料轉換為和 TEA/STA 一樣的格式
+      $allContacts = $contacts;
+      ?>
+      <!-- 使用和 TEA/STA 相同的完整聊天介面 -->
       <div class="chat-container">
         <!-- 左側聯絡人列表 -->
         <div class="sidebar">
           <div class="sidebar-header">
-            <h2 class="sidebar-title">聯絡人列表</h2>
+            <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
+            <div style="margin-top: 10px;">
+              <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+            </div>
           </div>
           
-          <!-- 搜尋聯絡人 -->
+          <!-- 搜尋和新增聯絡人區域 -->
           <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
-            <input type="text" id="studentContactSearch" placeholder="搜尋聯絡人..." 
-                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            <!-- 搜尋現有聯絡人 -->
+            <div style="margin-bottom: 10px;">
+              <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
+                     style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            
+            <!-- 新增聯絡人區域 -->
+            <div style="border-top: 1px solid #eee; padding-top: 10px;">
+              <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
+              <div style="display: flex; gap: 5px;">
+                <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
+                       style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
+              </div>
+              <!-- 搜尋結果區域 -->
+              <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
+                <div id="addContactResultsList" style="padding: 5px;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 群組列表 -->
+          <div id="groupList" style="margin-bottom: 20px;">
+            <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
+            <div id="groupsContainer"></div>
           </div>
           
           <!-- 聯絡人列表 -->
-          <div id="studentContactList">
-            <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人 <span id="studentContactCount"></span></h3>
-            <ul class="user-list" id="studentContactListItems">
+          <div id="contactList">
+            <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人 <span id="contactCount"></span></h3>
+            <ul class="user-list" id="contactListItems">
               <!-- 聯絡人項目將通過 JavaScript 動態生成 -->
             </ul>
+            <!-- 分頁控制 -->
+            <div id="contactPagination" style="padding: 10px; text-align: center; border-top: 1px solid #eee; display: none;">
+              <button id="prevPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">上一頁</button>
+              <span id="pageInfo" style="margin: 0 10px; color: #666;"></span>
+              <button id="nextPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">下一頁</button>
+            </div>
           </div>
         </div>
         
@@ -1021,203 +1344,46 @@ try {
               <div class="current-chat-name">選擇聯絡人開始聊天</div>
               <div class="current-chat-role"></div>
             </div>
+            <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
+              <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+                ➕ 新增成員
+              </button>
+              <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                👥 管理成員
+              </button>
+            </div>
           </div>
           
-          <div class="chat-messages" id="studentChatMessages">
+          <div class="chat-messages" id="chatMessages">
             <div class="no-chat-selected">
               請從左側選擇一位聯絡人開始聊天
             </div>
           </div>
           
           <div class="chat-input">
-            <input type="text" id="studentMessageInput" placeholder="輸入訊息..." disabled>
-            <button id="studentVoiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
+            <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
+            <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
             <button onclick="sendMessage()" disabled>發送</button>
+          </div>
+          
+          <!-- 語音錄製指示器 -->
+          <div id="recordingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+            <div style="text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 10px;">🎤</div>
+              <div>正在錄製語音...</div>
+              <div id="recordingTimer" style="font-size: 18px; margin-top: 5px;"></div>
+            </div>
+          </div>
+          
+          <!-- 處理中指示器 -->
+          <div id="processingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
+            <div style="text-align: center;">
+              <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+              <div>正在轉換語音為文字...</div>
+            </div>
           </div>
         </div>
       </div>
-      
-      <script>
-      // 載入聯絡人列表（STU 角色專用）
-      // 使用 DOMContentLoaded 確保 DOM 完全載入
-      document.addEventListener('DOMContentLoaded', function() {
-        const contacts = <?php echo json_encode($contacts, JSON_UNESCAPED_UNICODE); ?>;
-        const currentUsername = '<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>';
-        
-        // 如果有選中的聯絡人，自動選擇
-        <?php if (isset($selectedContact) && $selectedContact): ?>
-        const selectedContact = <?php echo json_encode($selectedContact, JSON_UNESCAPED_UNICODE); ?>;
-        <?php else: ?>
-        const selectedContact = null;
-        <?php endif; ?>
-        
-        // 確保 escapeHtml 函數存在
-        if (typeof escapeHtml === 'undefined') {
-          function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-          }
-        }
-        
-        // 使用唯一的 ID 選擇器
-        const contactListItems = document.getElementById('studentContactListItems');
-        const contactCount = document.getElementById('studentContactCount');
-        const messageInput = document.getElementById('studentMessageInput');
-        const chatMessages = document.getElementById('studentChatMessages');
-        
-        console.log('STU 角色：開始載入聯絡人，數量:', contacts ? contacts.length : 0);
-        console.log('contactListItems 元素:', contactListItems);
-        
-        // 載入聯絡人列表
-        if (contactListItems && contacts && contacts.length > 0) {
-          contactListItems.innerHTML = ''; // 清空現有內容
-          
-          contacts.forEach(function(contact) {
-            const li = document.createElement('li');
-            li.className = 'contact-item';
-            li.setAttribute('data-username', contact.username);
-            
-            const avatarSrc = contact.profile_picture || '../share/EIdROxGXsAE_LSs.jpg';
-            li.innerHTML = `
-              <div class="user-avatar">
-                <img src="${avatarSrc}" class="avatar-img" onerror="this.src='../share/EIdROxGXsAE_LSs.jpg'">
-              </div>
-              <div class="user-info">
-                <div class="user-name">${escapeHtml(contact.name || '未知用戶')}</div>
-                <div class="user-role">${escapeHtml(contact.department || '')}</div>
-              </div>
-            `;
-            
-            li.addEventListener('click', function() {
-              // 移除其他項目的 active 類
-              document.querySelectorAll('#studentContactListItems .contact-item').forEach(item => {
-                item.classList.remove('active');
-              });
-              li.classList.add('active');
-              
-              // 設置當前選中的聯絡人（用於發送訊息）
-              if (typeof currentUserId !== 'undefined') {
-                currentUserId = contact.username;
-              }
-              if (typeof currentUserName !== 'undefined') {
-                currentUserName = contact.name || '未知用戶';
-              }
-              
-              // 更新聊天標題
-              const chatName = document.querySelector('.current-chat-name');
-              const chatRole = document.querySelector('.current-chat-role');
-              if (chatName) chatName.textContent = contact.name || '未知用戶';
-              if (chatRole) chatRole.textContent = contact.department || '';
-              
-              // 啟用輸入框和按鈕
-              if (messageInput) {
-                messageInput.disabled = false;
-                messageInput.placeholder = '輸入訊息...';
-              }
-              const sendBtn = messageInput?.nextElementSibling?.nextElementSibling;
-              if (sendBtn) sendBtn.disabled = false;
-              const voiceBtn = document.getElementById('studentVoiceRecordBtn');
-              if (voiceBtn) voiceBtn.disabled = false;
-              
-              // 載入聊天記錄（STU 角色專用）
-              loadStudentChatHistory(contact.username, contact.name);
-            });
-            
-            contactListItems.appendChild(li);
-          });
-          
-          // 更新聯絡人數量
-          if (contactCount) {
-            contactCount.textContent = `(${contacts.length})`;
-          }
-          
-          console.log('STU 角色：已載入', contacts.length, '位聯絡人');
-          
-          // 如果有選中的聯絡人，自動選擇
-          if (selectedContact) {
-            setTimeout(function() {
-              const selectedLi = contactListItems.querySelector(`[data-username="${selectedContact.username}"]`);
-              if (selectedLi) {
-                selectedLi.click();
-              }
-            }, 100);
-          }
-        } else {
-          console.warn('STU 角色：無法載入聯絡人', {
-            contactListItems: !!contactListItems,
-            contacts: contacts ? contacts.length : 0
-          });
-        }
-        
-        // 搜尋功能
-        const contactSearch = document.getElementById('studentContactSearch');
-        if (contactSearch && contactListItems) {
-          contactSearch.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const items = contactListItems.querySelectorAll('.contact-item');
-            items.forEach(item => {
-              const name = item.querySelector('.user-name')?.textContent.toLowerCase() || '';
-              const department = item.querySelector('.user-role')?.textContent.toLowerCase() || '';
-              if (name.includes(searchTerm) || department.includes(searchTerm)) {
-                item.style.display = '';
-              } else {
-                item.style.display = 'none';
-              }
-            });
-          });
-        }
-      });
-      
-      // STU 角色專用的聊天記錄載入函數
-      async function loadStudentChatHistory(contactUsername, contactName) {
-        const chatMessages = document.getElementById('studentChatMessages');
-        if (!chatMessages) {
-          console.error('找不到聊天訊息容器 studentChatMessages');
-          return;
-        }
-        
-        // 顯示載入指示器
-        chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">載入中...</div>';
-        
-        try {
-          const response = await fetch('load_private_messages.php?from=' + encodeURIComponent(currentUsername) + '&to=' + encodeURIComponent(contactUsername));
-          const result = await response.json();
-          
-          if (result.success && result.messages) {
-            // 清空聊天區域
-            chatMessages.innerHTML = '';
-            
-            // 顯示訊息
-            result.messages.forEach(function(msg) {
-              const isFromMe = msg.from_user === currentUsername;
-              const messageDiv = document.createElement('div');
-              messageDiv.className = 'message ' + (isFromMe ? 'sent' : 'received');
-              
-              const messageContent = document.createElement('div');
-              messageContent.className = 'message-content';
-              messageContent.textContent = msg.message || '';
-              
-              const messageTime = document.createElement('div');
-              messageTime.className = 'message-time';
-              messageTime.textContent = msg.timestamp || '';
-              
-              messageDiv.appendChild(messageContent);
-              messageDiv.appendChild(messageTime);
-              chatMessages.appendChild(messageDiv);
-            });
-            
-            // 滾動到底部
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-          } else {
-            chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">暫無訊息</div>';
-          }
-        } catch (error) {
-          console.error('載入聊天記錄失敗:', error);
-          chatMessages.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">載入失敗，請稍後再試</div>';
-        }
-      }
-      </script>
     <?php endif; ?> <!-- 閉合 $showContactList 的 if -->
     
   <?php elseif ($role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'): ?>
