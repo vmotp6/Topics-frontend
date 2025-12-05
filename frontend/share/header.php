@@ -1152,7 +1152,7 @@ function getActiveClass($targetFile) {
           <input type="checkbox" id="remember" style="margin-right: 5px;">
           <span>記住我</span>
         </label>
-        <a href="#">忘記密碼</a>
+        <a href="#" id="openForgotPasswordBtn">忘記密碼</a>
       </div>
       <button type="submit">登入</button>
       <p id="loginMessage" style="color: red; margin-top: 10px;"></p>
@@ -1182,10 +1182,32 @@ function getActiveClass($targetFile) {
     <p class="helper-text">還沒有帳號？<a href="#" id="switchToRegister">註冊</a></p>
   </div>
 </div>
+
+<!-- 忘記密碼視窗 -->
+<div class="modal" id="forgotPasswordModal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeForgotPasswordBtn">&times;</span>
+    <h1>忘記密碼</h1>
+    <p style="color: #666; margin-bottom: 20px; font-size: 14px;">請輸入您的帳號或電子郵件，我們將發送重設密碼連結到您的註冊郵箱。</p>
+    <form id="forgotPasswordForm">
+      <div class="input-field">
+        <input type="text" name="username_or_email" id="username_or_email" required>
+        <label>帳號或電子郵件</label>
+      </div>
+      <button type="submit">發送重設密碼郵件</button>
+      <p id="forgotPasswordMessage" style="color: red; margin-top: 10px;"></p>
+    </form>
+    <p class="helper-text" style="margin-top: 15px;">
+      <a href="#" id="backToLoginFromForgot">返回登入</a>
+    </p>
+  </div>
+</div>
+
 <!-- JavaScript 控制 modal -->
 <script>
   const registerModal = document.getElementById("registerModal");
   const loginModal = document.getElementById("loginModal");
+  const forgotPasswordModal = document.getElementById("forgotPasswordModal");
 
   document.getElementById("openModalBtn")?.addEventListener("click", () => {
     registerModal.style.display = "flex";
@@ -1211,6 +1233,21 @@ function getActiveClass($targetFile) {
     registerModal.style.display = "none";
     loginModal.style.display = "flex";
   });
+  
+  // 忘記密碼模態視窗控制
+  document.getElementById("openForgotPasswordBtn")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    loginModal.style.display = "none";
+    forgotPasswordModal.style.display = "flex";
+  });
+  document.getElementById("closeForgotPasswordBtn")?.addEventListener("click", () => {
+    forgotPasswordModal.style.display = "none";
+  });
+  document.getElementById("backToLoginFromForgot")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    forgotPasswordModal.style.display = "none";
+    loginModal.style.display = "flex";
+  });
 
   // Google 登入按鈕載入效果
   document.querySelector('.google-login-btn')?.addEventListener('click', function(e) {
@@ -1225,6 +1262,7 @@ function getActiveClass($targetFile) {
   window.onclick = function (event) {
     if (event.target === registerModal) registerModal.style.display = "none";
     if (event.target === loginModal) loginModal.style.display = "none";
+    if (event.target === forgotPasswordModal) forgotPasswordModal.style.display = "none";
   };
 
   // 👉 註冊送出（呼叫 Flask /sign）
@@ -1326,6 +1364,43 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
   })
   .catch(err => {
     document.getElementById("loginMessage").innerText = "登入失敗，請稍後再試。";
+  });
+});
+
+// 👉 忘記密碼送出
+document.getElementById("forgotPasswordForm")?.addEventListener("submit", function (e) {
+  e.preventDefault();
+  const usernameOrEmail = document.getElementById("username_or_email").value.trim();
+  const messageElement = document.getElementById("forgotPasswordMessage");
+  
+  if (!usernameOrEmail) {
+    messageElement.style.color = "red";
+    messageElement.innerText = "請輸入帳號或電子郵件";
+    return;
+  }
+  
+  messageElement.innerText = "處理中...";
+  messageElement.style.color = "#666";
+  
+  fetch("http://localhost:5000/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username_or_email: usernameOrEmail })
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (res.ok) {
+      messageElement.style.color = "green";
+      messageElement.innerText = data.message || "重設密碼郵件已發送，請檢查您的郵箱。";
+      document.getElementById("forgotPasswordForm").reset();
+    } else {
+      messageElement.style.color = "red";
+      messageElement.innerText = data.message || "發送失敗，請稍後再試。";
+    }
+  })
+  .catch(err => {
+    messageElement.style.color = "red";
+    messageElement.innerText = "發送失敗，請稍後再試。";
   });
 });
 
