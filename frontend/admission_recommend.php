@@ -1691,7 +1691,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           
           <div class="form-group">
             <label for="recommender_student_id"><span class="required">*</span> 學號或教師編號 </label>
-            <input type="text" id="recommender_student_id" name="recommender_student_id" 
+            <input type="text" id="recommender_student_id" name="recommender_student_id" maxlength="10"
                    value="<?php echo isset($_POST['recommender_student_id']) ? htmlspecialchars($_POST['recommender_student_id']) : ''; ?>" required>
           </div>
         </div>

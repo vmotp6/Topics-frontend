@@ -1095,7 +1095,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡人電話</label>
-                            <input type="tel" name="contact_phone" placeholder="例如：02-1234-5678" required 
+                            <input type="tel" name="contact_phone" maxlength="10" placeholder="例如：02-1234-5678" required 
                                    value="<?php 
                                    $contact_phone_value = '';
                                    if ($application_data) {

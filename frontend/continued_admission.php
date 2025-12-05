@@ -78,7 +78,7 @@ foreach ($courses as $course) {
       <div class="query-form">
         <div class="form-group">
           <label>身分證字號 / 護照號碼</label>
-          <input type="text" id="queryIdNumber" placeholder="本國籍：例：A123456789 | 外籍生：例：護照號碼" maxlength="30">
+          <input type="text" id="queryIdNumber" placeholder="本國籍：例：A123456789 | 外籍生：例：護照號碼" maxlength="10">
         </div>
         <button type="button" id="queryBtn" class="query-btn" style="margin-bottom: 1px">查詢錄取狀態</button>
       </div>
@@ -158,7 +158,7 @@ foreach ($courses as $course) {
           <div class="form-row">
             <div class="form-group">
               <label>室內電話</label>
-              <input type="tel" name="phone" placeholder="例：02-12345678">
+              <input type="tel" name="phone" placeholder="例：02-12345678"  maxlength="10">
             </div>
             <div class="form-group">
               <label><span class="required">*</span>行動電話</label>
@@ -276,7 +276,7 @@ foreach ($courses as $course) {
           <div class="form-row">
             <div class="form-group">
               <label>監護人室內電話</label>
-              <input type="tel" name="guardian_phone" placeholder="例：02-12345678">
+              <input type="tel" name="guardian_phone" placeholder="例：02-12345678" maxlength="10">
             </div>
             <div class="form-group">
               <label><span class="required">*</span>監護人行動電話</label>

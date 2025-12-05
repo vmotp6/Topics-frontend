@@ -1055,7 +1055,7 @@ $conn->close();
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡電話：</label>
-                            <input type="tel" name="contact_phone" value="<?php echo isset($_POST['contact_phone']) ? htmlspecialchars($_POST['contact_phone']) : ''; ?>" required>
+                            <input type="tel" name="contact_phone" maxlength="10" value="<?php echo isset($_POST['contact_phone']) ? htmlspecialchars($_POST['contact_phone']) : ''; ?>" required>
                         </div>
                     </div>
                     <div class="form-row">
