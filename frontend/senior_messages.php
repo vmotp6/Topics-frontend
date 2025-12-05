@@ -171,8 +171,10 @@ try {
                   FROM senior_messages sm";
     
     // 只有在 is_published 欄位存在時才添加過濾條件
-    // 移除 is_published = 1 的條件，顯示所有記錄
     $where_conditions = [];
+    if ($has_is_published) {
+        $where_conditions[] = "sm.is_published = 1";
+    }
     if ($filter_code !== 'all') {
         $where_conditions[] = "COALESCE(sm.message_type, 'OTH') = :filter_type";
     }
@@ -247,8 +249,11 @@ try {
             LEFT JOIN identity_options g ON s.grade = g.code
             LEFT JOIN post_categories pc ON sm.message_type = pc.code";
     
-    // 構建 WHERE 條件（移除 is_published = 1 的過濾，顯示所有記錄）
+    // 構建 WHERE 條件
     $where_conditions = [];
+    if ($has_is_published) {
+        $where_conditions[] = "sm.is_published = 1";
+    }
     if ($filter_code !== 'all') {
         $where_conditions[] = "COALESCE(sm.message_type, 'OTH') = :filter_type";
     }
