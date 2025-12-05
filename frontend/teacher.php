@@ -1091,12 +1091,14 @@ if (!$is_teacher) {
 				<a href="admission_recommend.php" class="feature-link">推薦報名</a>
 			</div>
 
+			<?php if ($user_role === '老師' || $user_role === 'TEA'): ?>
 			<div class="feature-card">
 				<div class="feature-icon">✉️</div>
 				<h3 class="feature-title">活動紀錄填寫</h3>
 				<p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
 				<a href="records.php" class="feature-link">活動紀錄填寫</a>
 			</div>
+			<?php endif; ?>
 			
 			<div class="feature-card">
 				<div class="feature-icon">👨‍🎓</div>

@@ -941,7 +941,7 @@ function getActiveClass($targetFile) {
 
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
-    <?php if ($isLoggedIn && $is_header_teacher): ?>
+    <?php if ($isLoggedIn && ($header_role === '老師' || $header_role === 'TEA')): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
     
@@ -1096,7 +1096,7 @@ function getActiveClass($targetFile) {
     
     <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     
-    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
+    <?php if ($isLoggedIn && ($mobile_role === '老師' || $mobile_role === 'TEA')): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
     

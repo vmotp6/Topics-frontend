@@ -9,9 +9,9 @@ require_once 'generate_captcha.php';
 // 檢查登入狀態 (調試模式)
 $debug_mode = true; // 設為 false 可關閉調試模式
 
-// 檢查是否為老師角色（支援角色代碼和中文名稱，包含STA行政人員）
+// 檢查是否為老師角色（支援角色代碼和中文名稱，僅限老師，不包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
 
 if ($debug_mode) {
     // 調試模式：顯示詳細資訊
@@ -19,7 +19,7 @@ if ($debug_mode) {
     if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || !$is_teacher) {
         echo "<div style='background: #f8d7da; color: #721c24; padding: 20px; margin: 20px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
         echo "<h3>⚠️ 登入驗證失敗</h3>";
-        echo "<p><strong>原因分析：</strong></p>";
+        echo "<p><strong>原因分析：</strong>此功能僅限老師使用，行政人員無法使用此功能。</p>";
         echo "<ul>";
         
         if (!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) {
