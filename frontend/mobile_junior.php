@@ -854,8 +854,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
 <main>
     <div class="recruitment-container">
         <div class="header" style="background: #667eea !important; color: white !important; padding: 40px !important; border-radius: 10px !important; text-align: center !important; margin-bottom: 30px !important;">
-            <h1 style="color: white !important; font-size: 2.5rem !important; font-weight: 700 !important; margin: 0 !important;"><i class="fas fa-graduation-cap" style="color: white !important; margin-right: 10px !important;"></i> 康寧大學就讀意願登錄</h1>
-            <div class="subtitle" style="color: white !important; font-size: 1.1rem !important; margin: 10px 0 0 0 !important; opacity: 0.9 !important;">填寫您的就讀意願，我們將儘快與您聯絡</div>
+            <h1 style="color: white !important; font-size: 2.5rem !important; font-weight: 700 !important; margin: 0 !important;"><i class="fas fa-graduation-cap" style="color: white !important; margin-right: 10px !important;"></i> 國中學校招生報名網頁</h1>
         </div>
 
         <div class="info-box">

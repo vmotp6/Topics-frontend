@@ -51,7 +51,7 @@ try {
         $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
                      isset($_SESSION['username']) && !empty($_SESSION['username']) &&
                      isset($_SESSION['role']) && !empty($_SESSION['role']);
-        $isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA');
+        $isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA' || $_SESSION['role'] === 'STA' || $_SESSION['role'] === '學校行政人員');
         
         if (!$isLoggedIn || !$isTeacher) {
             http_response_code(403);
@@ -140,7 +140,7 @@ try {
                      isset($_SESSION['username']) && !empty($_SESSION['username']) &&
                      isset($_SESSION['role']) && !empty($_SESSION['role']);
         $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-        $isTeacher = ($user_role === '老師' || $user_role === 'TEA');
+        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
         $isDirector = ($user_role === 'DI');
         $isAdmissionCenter = in_array($user_role, ['ADM', 'STA']);
         

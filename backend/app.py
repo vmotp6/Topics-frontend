@@ -388,11 +388,13 @@ def google_callback():
                 # 確保學生角色正確識別（無論是從資料庫查到的名稱還是預設值）
                 print(f"🔍 角色判斷: role='{role}', role_code='{role_code if 'role_code' in locals() else 'N/A'}'")
                 
-                if role == '管理員' or (role_code if 'role_code' in locals() else None) == 'ADMIN':
+                role_code_value = role_code if 'role_code' in locals() else None
+                if role == '管理員' or role_code_value == 'ADMIN':
                     redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role=管理員"
-                elif role == '老師' or (role_code if 'role_code' in locals() else None) == 'TEACHER':
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role=老師"
-                elif role == '學生' or (role_code if 'role_code' in locals() else None) in ['STU', 'STUDENT']:
+                elif role == '老師' or role == '學校行政人員' or role_code_value == 'TEACHER' or role_code_value == 'STA':
+                    # 老師和行政人員都跳轉到 teacher.php
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
+                elif role == '學生' or role_code_value in ['STU', 'STUDENT']:
                     # 學生統一跳轉到 student.php
                     redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role=學生"
                 else:
@@ -503,14 +505,14 @@ def login():
             if user[2] == 0:  # status = 0 表示停用
                 return jsonify({"message": "您的帳號已被停用，請聯繫管理員。"}), 403
             
-            # 檢查 role，只允許 STU 和 TEA 登入
+            # 檢查 role，允許 STU、TEA 和 STA 登入
             user_role = user[1]  # role 欄位
-            allowed_roles = ['STU', 'TEA', 'STUDENT', 'TEACHER']  # 支援多種格式
+            allowed_roles = ['STU', 'TEA', 'STA', 'STUDENT', 'TEACHER', '學校行政人員']  # 支援多種格式
             
             # 檢查 role 是否在允許列表中
             if user_role not in allowed_roles:
                 return jsonify({
-                    "message": "您的帳號角色不允許登入此系統，僅限學生和老師使用。",
+                    "message": "您的帳號角色不允許登入此系統，僅限學生、老師和行政人員使用。",
                     "error": "role_not_allowed"
                 }), 403
             

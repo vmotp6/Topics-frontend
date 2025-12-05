@@ -11,9 +11,9 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師或學生角色（支援角色代碼）
+// 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 $is_student = ($user_role === '學生' || $user_role === 'STU');
 
 if (!$is_teacher && !$is_student) {
@@ -776,8 +776,8 @@ try {
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
-            // 根據角色判斷（支援代碼和中文名稱）
-            const isTeacherRole = (role === '老師' || role === 'TEA');
+            // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員）
+            const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員');
             const isStudentRole = (role === '學生' || role === 'STU');
             
             // 調試：輸出角色信息
@@ -992,9 +992,9 @@ try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
-                // 根據角色選擇不同的API
+                // 根據角色選擇不同的API（包含STA行政人員）
                 const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-                const isTeacherRole = (role === '老師' || role === 'TEA');
+                const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員');
                 const isStudentRole = (role === '學生' || role === 'STU');
                 
                 // 根據角色調用不同的API

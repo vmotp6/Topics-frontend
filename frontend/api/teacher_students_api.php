@@ -18,8 +18,8 @@ $debug_info = [
     'is_logged_in' => $isLoggedIn
 ];
 
-// 檢查角色：接受 '老師' 或 'TEA'
-$isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA');
+// 檢查角色：接受 '老師'、'TEA'、'STA' 或 '學校行政人員'
+$isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA' || $_SESSION['role'] === 'STA' || $_SESSION['role'] === '學校行政人員');
 
 if (!$isLoggedIn || !$isTeacher) {
     http_response_code(403);

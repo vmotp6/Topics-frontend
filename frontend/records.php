@@ -9,9 +9,9 @@ require_once 'generate_captcha.php';
 // 檢查登入狀態 (調試模式)
 $debug_mode = true; // 設為 false 可關閉調試模式
 
-// 檢查是否為老師角色（支援角色代碼和中文名稱）
+// 檢查是否為老師角色（支援角色代碼和中文名稱，包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 
 if ($debug_mode) {
     // 調試模式：顯示詳細資訊

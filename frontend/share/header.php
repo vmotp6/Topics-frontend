@@ -892,10 +892,8 @@ function getActiveClass($targetFile) {
       $role = $_SESSION['role'];
       if ($role === '學生' || $role === 'STU') {
         echo getCorrectPath('student.php');
-      } elseif ($role === '老師' || $role === 'TEA') {
+      } elseif ($role === '老師' || $role === 'TEA' || $role === 'STA' || $role === '學校行政人員') {
         echo getCorrectPath('teacher.php');
-      } elseif ($role === '學校行政人員' || $role === 'STA') {
-        echo getCorrectPath('admin.php');
       } else {
         echo getCorrectPath('index.php');
       }
@@ -916,7 +914,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $header_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-    $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA');
+    $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA' || $header_role === 'STA' || $header_role === '學校行政人員');
     $is_header_student = ($header_role === '學生' || $header_role === 'STU');
     ?>
     <!-- 共同可見的連結 -->
@@ -1035,7 +1033,7 @@ function getActiveClass($targetFile) {
             <?php 
             $user_role = $_SESSION['role'];
             // 支援角色代碼和中文名稱
-            if ($user_role === '老師' || $user_role === 'TEA'): ?>
+            if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員'): ?>
                 <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php elseif ($user_role === '學生' || $user_role === 'STU'): ?>
                 <a href="<?php echo getCorrectPath('student_profile.php'); ?>" class="btn-logout">個人資料</a>
@@ -1071,7 +1069,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $mobile_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-    $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA');
+    $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA' || $mobile_role === 'STA' || $mobile_role === '學校行政人員');
     $is_mobile_student = ($mobile_role === '學生' || $mobile_role === 'STU');
     if (!($isLoggedIn && $is_mobile_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
@@ -1295,12 +1293,10 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
         if (sessionResult.success) {
           // 在 set_session.php 成功後才進行頁面跳轉（支援角色代碼和中文名稱）
           console.log("準備跳轉，角色:", data.role);
-          if (data.role === "老師" || data.role === "TEA") {
+          if (data.role === "老師" || data.role === "TEA" || data.role === "STA" || data.role === "學校行政人員") {
             window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
           } else if (data.role === "學生" || data.role === "STU") {
             window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-          } else if (data.role === "學校行政人員") {
-            window.location.href = "<?php echo getCorrectPath('admin.php'); ?>";
           } else {
             // 預設跳轉或重新載入當前頁面
             console.log("未知角色，重新載入頁面");
@@ -1442,7 +1438,7 @@ function checkTeacherProfile() {
   // 等後端服務器修復後再啟用
   return;
   
-  if (username && (role === '老師' || role === 'TEA') && notificationDot) {
+  if (username && (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員') && notificationDot) {
     // 使用 AbortController 來設置超時
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超時

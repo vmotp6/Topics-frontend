@@ -42,7 +42,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
             $redirect_url = 'index.php';
             if ($role === '管理員' || $role === 'ADM') {
                 $redirect_url = 'admin_admission.php';
-            } elseif ($role === '老師' || $role === 'TEA') {
+            } elseif ($role === '老師' || $role === 'TEA' || $role === 'STA' || $role === '學校行政人員') {
                 $redirect_url = 'teacher.php';
             } elseif ($role === '學生' || $role === 'STU') {
                 $redirect_url = 'senior_messages.php';

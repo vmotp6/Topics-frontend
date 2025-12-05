@@ -42,7 +42,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
             $redirect_url = 'index.php';
             if ($role === '管理員' || $role === 'ADM') {
                 $redirect_url = 'admin_admission.php';
-            } elseif ($role === '老師' || $role === 'TEA') {
+            } elseif ($role === '老師' || $role === 'TEA' || $role === 'STA' || $role === '學校行政人員') {
                 $redirect_url = 'teacher.php';
             } elseif ($role === '學生' || $role === 'STU') {
                 $redirect_url = 'senior_messages.php';
@@ -66,9 +66,9 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師角色（支援角色代碼和中文名稱）
+// 檢查是否為老師角色（支援角色代碼和中文名稱，包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 if (!$is_teacher) {
     header("Location: index.php");
     exit;

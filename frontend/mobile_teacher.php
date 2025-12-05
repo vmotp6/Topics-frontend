@@ -15,10 +15,10 @@ require_once __DIR__ . '/PHPMailer/src/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// 檢查登入狀態和角色（支援角色代碼和中文名稱）
+// 檢查登入狀態和角色（支援角色代碼和中文名稱，包含STA行政人員）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 
 if (!$isLoggedIn || !isset($_SESSION['role']) || !$is_teacher) {
 	header("Location: index.php");

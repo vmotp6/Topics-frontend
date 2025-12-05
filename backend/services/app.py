@@ -422,7 +422,8 @@ def google_callback():
                 # 重定向到前端頁面
                 if role == '管理員':
                     redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role={role}"
-                elif role == '老師':
+                elif role == '老師' or role == '學校行政人員':
+                    # 老師和行政人員都跳轉到 teacher.php
                     redirect_url = f"http://localhost/Topics-frontend/frontend/teacher.php?google_login=success&username={username}&role={role}"
                 elif role == '學生':
                     redirect_url = f"http://localhost/Topics-frontend/frontend/student.php?google_login=success&username={username}&role={role}"
@@ -606,15 +607,15 @@ def login():
                         "error": "account_disabled"
                     }), 403
                 
-                # 檢查 role，只允許 STU 和 TEA 登入
+                # 檢查 role，允許 STU、TEA 和 STA 登入
                 user_role = user[1]  # role 欄位
-                allowed_roles = ['STU', 'TEA', 'STUDENT', 'TEACHER']  # 支援多種格式
+                allowed_roles = ['STU', 'TEA', 'STA', 'STUDENT', 'TEACHER', '學校行政人員']  # 支援多種格式
                 
                 # 檢查 role 是否在允許列表中
                 if user_role not in allowed_roles:
                     print(f"❌ 角色不允許登入: {username}, 角色: {user_role}")
                     return jsonify({
-                        "message": "您的帳號角色不允許登入此系統，僅限學生和老師使用。",
+                        "message": "您的帳號角色不允許登入此系統，僅限學生、老師和行政人員使用。",
                         "error": "role_not_allowed",
                         "role": user_role
                     }), 403
