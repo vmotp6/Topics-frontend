@@ -46,9 +46,7 @@ $isLoggedIn = isset($_SESSION['username']);
 			<small class="text-muted">💡 小提示：可以問我科系、學費、招生、校園生活等任何問題喔～</small>
 		</div>
 		<div id="ai-controls-buttons">
-			<button type="button" id="ai-test-btn" onclick="testAIConnection()">
-				🔧 測試AI
-			</button>
+
 		</div>
 	</div>
 </div>
@@ -62,7 +60,7 @@ $isLoggedIn = isset($_SESSION['username']);
   right: 30px;
   width: 60px;
   height: 60px;
-  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+  background: rgba(255, 107, 53, 1);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -236,7 +234,7 @@ $isLoggedIn = isset($_SESSION['username']);
 }
 
 #ai-header {
-  background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+  background: linear-gradient(#ff6b35);
   color: white;
   padding: 12px 18px;
   border-radius: 12px 12px 0 0;
