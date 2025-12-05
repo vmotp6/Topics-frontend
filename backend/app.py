@@ -12,7 +12,10 @@ import os
 import json
 import secrets
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 try:
     import bcrypt
     BCrypt_AVAILABLE = True
@@ -60,6 +63,20 @@ GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI') or globals().get('GOOGLE_
 # 存儲 state 參數（生產環境應使用 Redis 或資料庫）
 google_states = {}
 
+# 郵件配置 - 從環境變數或 config.py 讀取
+SMTP_CONFIG = {
+    'host': os.getenv('SMTP_HOST', 'smtp.gmail.com'),
+    'port': int(os.getenv('SMTP_PORT', '587')),
+    'username': os.getenv('SMTP_USERNAME', 'vichuang2005@gmail.com'),
+    'password': os.getenv('SMTP_PASSWORD', 'sulvmlfyysjdhrcp'),
+    'from_email': os.getenv('SMTP_FROM_EMAIL', 'vichuang2005@gmail.com'),
+    'from_name': os.getenv('SMTP_FROM_NAME', '康寧大學系統'),
+    'secure': os.getenv('SMTP_SECURE', 'tls')
+}
+
+# 網站基礎 URL（用於生成重設密碼連結）
+BASE_URL = os.getenv('BASE_URL', 'http://localhost/Topics-frontend')
+
 def get_db_connection(retries=3, retry_delay=1):
     """
     獲取資料庫連接，帶重試機制
@@ -105,6 +122,74 @@ def get_db_connection(retries=3, retry_delay=1):
             break
     
     return None
+
+def send_email(to_email, subject, body_html, body_text=None):
+    """發送郵件"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{SMTP_CONFIG['from_name']} <{SMTP_CONFIG['from_email']}>"
+        msg['To'] = to_email
+        
+        # 添加 HTML 和純文字版本
+        if body_text:
+            part1 = MIMEText(body_text, 'plain', 'utf-8')
+            msg.attach(part1)
+        part2 = MIMEText(body_html, 'html', 'utf-8')
+        msg.attach(part2)
+        
+        # 連接 SMTP 伺服器並發送
+        if SMTP_CONFIG['secure'] == 'tls':
+            server = smtplib.SMTP(SMTP_CONFIG['host'], SMTP_CONFIG['port'])
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(SMTP_CONFIG['host'], SMTP_CONFIG['port'])
+        
+        server.login(SMTP_CONFIG['username'], SMTP_CONFIG['password'])
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ 郵件發送成功: {to_email}")
+        return True
+    except Exception as e:
+        print(f"❌ 郵件發送失敗: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def create_password_reset_table():
+    """創建密碼重設 token 表（如果不存在）"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    token VARCHAR(255) NOT NULL UNIQUE,
+                    expires_at DATETIME NOT NULL,
+                    used BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_token (token),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_expires_at (expires_at),
+                    FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            conn.commit()
+            print("✅ 密碼重設 token 表已就緒")
+            return True
+    except Exception as e:
+        print(f"❌ 創建密碼重設表失敗: {e}")
+        return False
+    finally:
+        conn.close()
+
+# 在應用啟動時創建表
+create_password_reset_table()
 
 @app.route('/')
 def home():
@@ -651,6 +736,244 @@ def select_role():
         return jsonify({"error": "更新失敗"}), 500
     finally:
         conn.close()
+
+@app.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """忘記密碼 - 發送重設密碼郵件"""
+    try:
+        data = request.get_json()
+        username_or_email = data.get('username_or_email', '').strip()
+        
+        if not username_or_email:
+            return jsonify({"message": "請輸入帳號或電子郵件"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 查詢用戶（根據 username 或 email）
+                cursor.execute(
+                    "SELECT id, username, email, name FROM user WHERE username = %s OR email = %s",
+                    (username_or_email, username_or_email)
+                )
+                user = cursor.fetchone()
+                
+                if not user:
+                    # 為了安全，即使用戶不存在也返回成功訊息
+                    return jsonify({
+                        "message": "如果該帳號或電子郵件存在，我們已發送重設密碼連結到您的郵箱。"
+                    }), 200
+                
+                user_id, username, email, name = user
+                
+                if not email:
+                    return jsonify({"message": "該帳號未設定電子郵件，無法發送重設密碼郵件"}), 400
+                
+                # 生成 token
+                token = secrets.token_urlsafe(32)
+                expires_at = datetime.now() + timedelta(hours=1)  # 1小時後過期
+                
+                # 將舊的 token 標記為已使用
+                cursor.execute(
+                    "UPDATE password_reset_tokens SET used = TRUE WHERE user_id = %s AND used = FALSE",
+                    (user_id,)
+                )
+                
+                # 插入新的 token
+                cursor.execute(
+                    "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)",
+                    (user_id, token, expires_at)
+                )
+                conn.commit()
+                
+                # 生成重設密碼連結
+                reset_url = f"{BASE_URL}/frontend/reset_password.php?token={token}"
+                
+                # 發送郵件
+                subject = "重設密碼 - 康寧大學系統"
+                body_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                        .header {{ background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                        .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                        .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                        .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 14px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>重設密碼</h1>
+                        </div>
+                        <div class="content">
+                            <p>親愛的 {name or username}，</p>
+                            <p>您申請了重設密碼。請點擊以下連結來重設您的密碼：</p>
+                            <p style="text-align: center;">
+                                <a href="{reset_url}" class="button">重設密碼</a>
+                            </p>
+                            <p>或者複製以下連結到瀏覽器：</p>
+                            <p style="word-break: break-all; color: #667eea;">{reset_url}</p>
+                            <p><strong>此連結將在 1 小時後過期。</strong></p>
+                            <p>如果您沒有申請重設密碼，請忽略此郵件。</p>
+                        </div>
+                        <div class="footer">
+                            <p>此為系統自動發送郵件，請勿回覆。</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                
+                if send_email(email, subject, body_html):
+                    return jsonify({
+                        "message": "重設密碼郵件已發送，請檢查您的郵箱。"
+                    }), 200
+                else:
+                    return jsonify({"message": "郵件發送失敗，請稍後再試"}), 500
+                    
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ 忘記密碼處理錯誤: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"message": "處理失敗，請稍後再試"}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ 忘記密碼 API 錯誤: {e}")
+        return jsonify({"message": "發生錯誤，請稍後再試"}), 500
+
+@app.route('/reset-password', methods=['POST'])
+def reset_password():
+    """重設密碼"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        new_password = data.get('new_password', '').strip()
+        
+        if not token or not new_password:
+            return jsonify({"message": "請提供 token 和新密碼"}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({"message": "密碼長度至少需要 6 個字元"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 查詢 token
+                cursor.execute("""
+                    SELECT prt.user_id, prt.used, prt.expires_at, u.username
+                    FROM password_reset_tokens prt
+                    JOIN user u ON prt.user_id = u.id
+                    WHERE prt.token = %s
+                """, (token,))
+                token_data = cursor.fetchone()
+                
+                if not token_data:
+                    return jsonify({"message": "無效的重設連結"}), 400
+                
+                user_id, used, expires_at, username = token_data
+                
+                # 檢查是否已使用
+                if used:
+                    return jsonify({"message": "此重設連結已使用過"}), 400
+                
+                # 檢查是否過期
+                if datetime.now() > expires_at:
+                    return jsonify({"message": "此重設連結已過期，請重新申請"}), 400
+                
+                # 更新密碼
+                if BCrypt_AVAILABLE:
+                    hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                else:
+                    hashed_password = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+                
+                cursor.execute(
+                    "UPDATE user SET password = %s WHERE id = %s",
+                    (hashed_password, user_id)
+                )
+                
+                # 標記 token 為已使用
+                cursor.execute(
+                    "UPDATE password_reset_tokens SET used = TRUE WHERE token = %s",
+                    (token,)
+                )
+                
+                conn.commit()
+                
+                return jsonify({
+                    "message": "密碼重設成功，請使用新密碼登入"
+                }), 200
+                
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ 重設密碼處理錯誤: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"message": "處理失敗，請稍後再試"}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ 重設密碼 API 錯誤: {e}")
+        return jsonify({"message": "發生錯誤，請稍後再試"}), 500
+
+@app.route('/verify-reset-token', methods=['GET'])
+def verify_reset_token():
+    """驗證重設密碼 token 是否有效"""
+    try:
+        token = request.args.get('token', '').strip()
+        
+        if not token:
+            return jsonify({"valid": False, "message": "請提供 token"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"valid": False, "message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT prt.used, prt.expires_at, u.username
+                    FROM password_reset_tokens prt
+                    JOIN user u ON prt.user_id = u.id
+                    WHERE prt.token = %s
+                """, (token,))
+                token_data = cursor.fetchone()
+                
+                if not token_data:
+                    return jsonify({"valid": False, "message": "無效的重設連結"}), 200
+                
+                used, expires_at, username = token_data
+                
+                if used:
+                    return jsonify({"valid": False, "message": "此重設連結已使用過"}), 200
+                
+                if datetime.now() > expires_at:
+                    return jsonify({"valid": False, "message": "此重設連結已過期"}), 200
+                
+                return jsonify({"valid": True, "username": username}), 200
+                
+        except Exception as e:
+            print(f"❌ 驗證 token 錯誤: {e}")
+            return jsonify({"valid": False, "message": "驗證失敗"}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ 驗證 token API 錯誤: {e}")
+        return jsonify({"valid": False, "message": "發生錯誤"}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
