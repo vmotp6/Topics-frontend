@@ -1175,6 +1175,15 @@ $conn->close();
     </div>
 
     <script>
+        // 阻止所有非課程項目的拖曳行為
+        document.addEventListener('dragstart', function(e) {
+            // 只允許 .course-item 和 .selected-course-item 被拖曳
+            const isCourseItem = e.target.closest('.course-item') || e.target.closest('.selected-course-item');
+            if (!isCourseItem) {
+                e.preventDefault();
+                return false;
+            }
+        }, true);
         
         // 電話號碼格式驗證
         const phoneInput = document.querySelector('[name="contact_phone"]');
@@ -1221,20 +1230,45 @@ $conn->close();
         }
 
         function handleDragStart(e) {
+            // 確保只有 .course-item 元素可以被拖曳
             const courseItem = e.target.closest('.course-item');
+            if (!courseItem) {
+                e.preventDefault();
+                return;
+            }
+            
             const courseCode = courseItem.dataset.course;
             const courseName = courseItem.dataset.courseName || courseCode;
+            
+            if (!courseCode) {
+                e.preventDefault();
+                return;
+            }
+            
+            // 設置拖曳數據和標記
             e.dataTransfer.setData('text/plain', courseCode);
             e.dataTransfer.setData('text/course-name', courseName);
+            e.dataTransfer.setData('application/course-item', 'true'); // 標記這是有效的課程項目
+            e.dataTransfer.effectAllowed = 'copy';
         }
 
         function handleDragOver(e) {
             e.preventDefault();
+            // 只有有效的課程項目才允許放置
+            const isValidCourse = e.dataTransfer.types.includes('application/course-item');
+            e.dataTransfer.dropEffect = isValidCourse ? 'copy' : 'none';
         }
 
         function handleDragEnter(e) {
             e.preventDefault();
-            e.target.closest('.course-drop-zone').classList.add('drag-over');
+            // 只有有效的課程項目才顯示拖曳效果
+            const isValidCourse = e.dataTransfer.types.includes('application/course-item');
+            if (isValidCourse) {
+                const dropZone = e.target.closest('.course-drop-zone');
+                if (dropZone) {
+                    dropZone.classList.add('drag-over');
+                }
+            }
         }
 
         function handleDragLeave(e) {
@@ -1245,11 +1279,28 @@ $conn->close();
 
         function handleDrop(e) {
             e.preventDefault();
-            const courseCode = e.dataTransfer.getData('text/plain');
-            const courseName = e.dataTransfer.getData('text/course-name') || courseCode;
             const dropZone = e.target.closest('.course-drop-zone');
             
+            if (!dropZone) {
+                return;
+            }
+            
             dropZone.classList.remove('drag-over');
+
+            // 檢查是否為有效的課程項目（只有從 available-courses 拖來的才有效）
+            const isValidCourse = e.dataTransfer.getData('application/course-item') === 'true';
+            if (!isValidCourse) {
+                // 不是從課程列表拖來的，忽略
+                return;
+            }
+
+            const courseCode = e.dataTransfer.getData('text/plain');
+            const courseName = e.dataTransfer.getData('text/course-name') || courseCode;
+            
+            // 驗證 courseCode 是否為空或無效
+            if (!courseCode || courseCode.trim() === '') {
+                return;
+            }
 
             // 檢查是否已經選擇過這個科系
             if (selectedCourses.some(c => c.code === courseCode)) {

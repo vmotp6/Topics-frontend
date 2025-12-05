@@ -134,17 +134,13 @@ foreach ($courses as $course) {
           </div>
           
           <div class="form-row">
-            <div class="form-group small">
-              <label><span class="required">*</span>出生年</label>
-              <input type="number" name="birth_year" placeholder="年" min="1990" max="2010" required>
-            </div>
-            <div class="form-group small">
-              <label><span class="required">*</span>出生月</label>
-              <input type="number" name="birth_month" placeholder="月" min="1" max="12" required>
-            </div>
-            <div class="form-group small">
-              <label><span class="required">*</span>出生日</label>
-              <input type="number" name="birth_day" placeholder="日" min="1" max="31" required>
+            <div class="form-group">
+              <label><span class="required">*</span>出生日期</label>
+              <input type="date" id="birth_date" name="birth_date" min="1900-01-01" max="2025-12-31" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;">
+              <!-- 隱藏欄位，用於向後端提交年、月、日 -->
+              <input type="hidden" name="birth_year" id="birth_year">
+              <input type="hidden" name="birth_month" id="birth_month">
+              <input type="hidden" name="birth_day" id="birth_day">
             </div>
             <div class="form-group gender-group">
               <label><span class="required">*</span>性別</label>
@@ -400,7 +396,7 @@ foreach ($courses as $course) {
   <script>
     // 全域變數
     let selectedChoices = [];
-    const maxChoices = <?php echo count($courses); ?>; // 最多選擇的科系數量
+    const maxChoices = 2; // 最多選擇的科系數量
     
     // 科系名稱到隱藏欄位名稱的映射（從 PHP 傳遞）
     const choiceMap = <?php echo json_encode($courseNameToFieldMap, JSON_UNESCAPED_UNICODE); ?>;
@@ -613,16 +609,42 @@ foreach ($courses as $course) {
       }
 
       function handleDragStart(e) {
-        e.dataTransfer.setData('text/plain', e.target.dataset.choice);
+        // 確保只有 .choice-item 元素可以被拖曳
+        const choiceItem = e.target.closest('.choice-item');
+        if (!choiceItem) {
+          e.preventDefault();
+          return;
+        }
+        
+        const choiceName = choiceItem.dataset.choice;
+        if (!choiceName) {
+          e.preventDefault();
+          return;
+        }
+        
+        // 設置拖曳數據和標記
+        e.dataTransfer.setData('text/plain', choiceName);
+        e.dataTransfer.setData('application/choice-item', 'true'); // 標記這是有效的科系項目
+        e.dataTransfer.effectAllowed = 'copy';
       }
 
       function handleDragOver(e) {
         e.preventDefault();
+        // 只有有效的科系項目才允許放置
+        const isValidChoice = e.dataTransfer.types.includes('application/choice-item');
+        e.dataTransfer.dropEffect = isValidChoice ? 'copy' : 'none';
       }
 
       function handleDragEnter(e) {
         e.preventDefault();
-        e.target.closest('.choice-drop-zone').classList.add('drag-over');
+        // 只有有效的科系項目才顯示拖曳效果
+        const isValidChoice = e.dataTransfer.types.includes('application/choice-item');
+        if (isValidChoice) {
+          const dropZone = e.target.closest('.choice-drop-zone');
+          if (dropZone) {
+            dropZone.classList.add('drag-over');
+          }
+        }
       }
 
       function handleDragLeave(e) {
@@ -633,10 +655,27 @@ foreach ($courses as $course) {
 
       function handleDrop(e) {
         e.preventDefault();
-        const choiceName = e.dataTransfer.getData('text/plain');
         const dropZone = e.target.closest('.choice-drop-zone');
         
+        if (!dropZone) {
+          return;
+        }
+        
         dropZone.classList.remove('drag-over');
+
+        // 檢查是否為有效的科系項目（只有從 available-choices 拖來的才有效）
+        const isValidChoice = e.dataTransfer.getData('application/choice-item') === 'true';
+        if (!isValidChoice) {
+          // 不是從科系列表拖來的，忽略
+          return;
+        }
+
+        const choiceName = e.dataTransfer.getData('text/plain');
+        
+        // 驗證 choiceName 是否為空或無效
+        if (!choiceName || choiceName.trim() === '') {
+          return;
+        }
 
         // 檢查是否已經選擇過這個科系
         if (selectedChoices.includes(choiceName)) {
@@ -644,7 +683,7 @@ foreach ($courses as $course) {
           return;
         }
 
-        // 檢查是否超過最大選擇數量
+        // 檢查是否超過最大選擇數量（最多2個）
         if (selectedChoices.length >= maxChoices) {
           alert(`最多只能選擇 ${maxChoices} 個科系！`);
           return;
@@ -783,6 +822,32 @@ foreach ($courses as $course) {
     // 頁面載入完成後初始化所有功能
     document.addEventListener('DOMContentLoaded', function() {
       console.log('DOM loaded, initializing...');
+      
+      // 阻止所有非科系項目的拖曳行為
+      document.addEventListener('dragstart', function(e) {
+        // 只允許 .choice-item 和 .selected-choice-item 被拖曳
+        const isChoiceItem = e.target.closest('.choice-item') || e.target.closest('.selected-choice-item');
+        if (!isChoiceItem) {
+          e.preventDefault();
+          return false;
+        }
+      }, true);
+      
+      // 設置出生日期選擇器的事件監聽器
+      const birthDateInput = document.getElementById('birth_date');
+      if (birthDateInput) {
+        birthDateInput.addEventListener('change', function() {
+          const dateValue = this.value; // 格式：YYYY-MM-DD
+          if (dateValue) {
+            const dateParts = dateValue.split('-');
+            if (dateParts.length === 3) {
+              document.getElementById('birth_year').value = dateParts[0];
+              document.getElementById('birth_month').value = dateParts[1];
+              document.getElementById('birth_day').value = dateParts[2];
+            }
+          }
+        });
+      }
       
       // 調試：檢查所有表單元素
       const allForms = document.querySelectorAll('form');
@@ -1115,16 +1180,17 @@ foreach ($courses as $course) {
             }
             
             // 驗證出生日期合理性
-            const birthYear = parseInt(document.querySelector('input[name="birth_year"]').value);
-            const birthMonth = parseInt(document.querySelector('input[name="birth_month"]').value);
-            const birthDay = parseInt(document.querySelector('input[name="birth_day"]').value);
-            
-            if (birthYear && birthMonth && birthDay) {
-              const date = new Date(birthYear, birthMonth - 1, birthDay);
-              if (date.getFullYear() !== birthYear || date.getMonth() !== birthMonth - 1 || date.getDate() !== birthDay) {
-                showMessage('出生日期不正確，請檢查年月日', 'error');
+            const birthDateInput = document.getElementById('birth_date');
+            if (birthDateInput && birthDateInput.value) {
+              const selectedDate = new Date(birthDateInput.value);
+              const today = new Date();
+              if (selectedDate > today) {
+                showMessage('出生日期不能是未來日期', 'error');
                 return false;
               }
+            } else {
+              showMessage('請選擇出生日期', 'error');
+              return false;
             }
             
             // 驗證必填文件（114 年國中教育會考成績單）
@@ -1255,6 +1321,18 @@ foreach ($courses as $course) {
         
         // 再次確保隱藏字段已更新（用於顯示）
         updateHiddenFields();
+        
+        // 處理出生日期：將日期選擇器的值拆分為年、月、日
+        const birthDateInput = document.getElementById('birth_date');
+        if (birthDateInput && birthDateInput.value) {
+          const dateValue = birthDateInput.value; // 格式：YYYY-MM-DD
+          const dateParts = dateValue.split('-');
+          if (dateParts.length === 3) {
+            document.getElementById('birth_year').value = dateParts[0];
+            document.getElementById('birth_month').value = dateParts[1];
+            document.getElementById('birth_day').value = dateParts[2];
+          }
+        }
         
         // 創建 FormData
         const formData = new FormData(form);
@@ -2349,9 +2427,25 @@ foreach ($courses as $course) {
       console.log('收到的表單資料:', formData);
       console.log('開始填充表單資料，姓名值:', formData.student_name);
       
+      // 處理出生日期：將年、月、日組合成日期選擇器的值
+      if (formData.birth_year && formData.birth_month && formData.birth_day) {
+        const year = String(formData.birth_year).padStart(4, '0');
+        const month = String(formData.birth_month).padStart(2, '0');
+        const day = String(formData.birth_day).padStart(2, '0');
+        const birthDateValue = `${year}-${month}-${day}`;
+        const birthDateInput = document.getElementById('birth_date');
+        if (birthDateInput) {
+          birthDateInput.value = birthDateValue;
+          // 同時設置隱藏欄位
+          document.getElementById('birth_year').value = year;
+          document.getElementById('birth_month').value = month;
+          document.getElementById('birth_day').value = day;
+        }
+      }
+      
       // 填充基本資料
       const fields = [
-        'exam_no', 'student_name', 'id', 'birth_year', 'birth_month', 'birth_day', 'gender',
+        'exam_no', 'student_name', 'id', 'gender',
         'phone', 'mobile', 'school_city', 'school_name', 'zip', 'city', 'district',
         'village', 'neighbor', 'road', 'section', 'lane', 'alley', 'no', 'floor',
         'guardian', 'guardian_phone', 'guardian_mobile', 'self_intro', 'skills'
