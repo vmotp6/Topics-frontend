@@ -242,7 +242,7 @@ try {
                     error_log("找到選中的聯絡人: user_id=" . $selectedContact['user_id'] . ", name=" . $selectedContact['name'] . ", username=" . ($selectedContact['username'] ?? 'N/A'));
                     
                     // 如果選中了聯絡人，將該聯絡人添加到 user_contacts（如果還沒有）
-                    if ($currentUserId) {
+        if ($currentUserId) {
                         error_log("開始添加聯絡人到 user_contacts 表");
                         try {
                             // 確保 user_contacts 表存在（不使用外鍵約束，避免約束問題）
@@ -323,31 +323,31 @@ try {
                             // 只有插入成功或已存在時才重定向
                             if ($insertSuccess) {
                                 // 重新載入聯絡人列表以確認
-                                $stmt = $pdo->prepare("SELECT DISTINCT 
+            $stmt = $pdo->prepare("SELECT DISTINCT 
                                             uc.contact_user_id as user_id,
                                             u.id as contact_user_table_id,
                                             COALESCE(u.name, u.username, '未知用戶') as name,
                                             COALESCE(d.name, s.department, t.department, '未設定') as department,
-                                            u.username,
-                                            u.profile_picture,
-                                            CASE 
-                                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
-                                                ELSE '其他'
-                                            END as contact_type,
-                                            COALESCE(s.grade, '未設定') as grade,
-                                            COALESCE(s.class_name, '未設定') as class_name
-                                     FROM user_contacts uc
+                            u.username,
+                            u.profile_picture,
+                            CASE 
+                                WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
+                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                ELSE '其他'
+                            END as contact_type,
+                            COALESCE(s.grade, '未設定') as grade,
+                            COALESCE(s.class_name, '未設定') as class_name
+                     FROM user_contacts uc
                                      LEFT JOIN user u ON uc.contact_user_id = u.id
-                                     LEFT JOIN student s ON uc.contact_user_id = s.user_id
-                                     LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
+                     LEFT JOIN student s ON uc.contact_user_id = s.user_id
+                     LEFT JOIN teacher t ON uc.contact_user_id = t.user_id
                                      LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
                                      WHERE uc.user_id = ?
-                                     ORDER BY 
-                                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                     ORDER BY 
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
                                          COALESCE(u.name, u.username, '未知用戶')");
-                                $stmt->execute([$currentUserId]);
-                                $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt->execute([$currentUserId]);
+            $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 $hasContacts = !empty($contacts);
                                 
                                 error_log("重新載入後，聯絡人數量: " . count($contacts));
@@ -358,7 +358,7 @@ try {
                                 if (!headers_sent()) {
                                     header("Location: chat.php");
                                     exit;
-                                } else {
+            } else {
                                     // 如果 headers 已發送，使用 JavaScript 重定向
                                     echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.location.href = "chat.php";</script></head><body>正在跳轉...</body></html>';
                                     exit;
@@ -423,7 +423,7 @@ try {
         
         // 檢查是否已有聯絡人（從 user_contacts 表）
         // 如果沒有聯絡人，才顯示聯絡資訊列表
-        if ($currentUserId) {
+            if ($currentUserId) {
             try {
                 // 從 user_contacts 表載入已添加的聯絡人
                 $stmt = $pdo->prepare("SELECT DISTINCT 
@@ -431,8 +431,8 @@ try {
                             u.id as contact_user_table_id,
                             COALESCE(u.name, u.username, '未知用戶') as name,
                             COALESCE(d.name, s.department, t.department, '未設定') as department,
-                            u.username,
-                            u.profile_picture,
+                                u.username,
+                                u.profile_picture,
                             CASE 
                                 WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
                                 WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
@@ -511,7 +511,7 @@ try {
                 
                 error_log("從 teacher 表查詢到 " . count($allContactsList) . " 位聯絡人");
                 
-            } catch (PDOException $e) {
+        } catch (PDOException $e) {
                 error_log("查詢 teacher 表失敗: " . $e->getMessage());
             }
         }
@@ -1132,9 +1132,29 @@ try {
         if (isset($allContactsList) && !empty($allContactsList)): 
         ?>
         <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <!-- 批量操作按鈕區域 -->
+          <div style="padding: 15px 20px; background: #f5f5f5; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px; color: #333;">
+                <input type="checkbox" id="selectAllContacts" onchange="toggleSelectAll()" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+                <span>全選</span>
+              </label>
+            </div>
+            <div>
+              <button onclick="addSelectedContacts()" 
+                      id="addSelectedBtn"
+                      style="padding: 10px 25px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background 0.3s;"
+                      onmouseover="this.style.background='#45a049'"
+                      onmouseout="this.style.background='#4caf50'">
+                添加選中的聯絡人 (<span id="selectedCount">0</span>)
+              </button>
+            </div>
+          </div>
+          
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr style="background: #667eea; color: white;">
+                <th style="padding: 15px; text-align: center; font-weight: bold; border-bottom: 2px solid #5568d3; width: 50px;">選擇</th>
                 <th style="padding: 15px; text-align: left; font-weight: bold; border-bottom: 2px solid #5568d3;">科系</th>
                 <th style="padding: 15px; text-align: left; font-weight: bold; border-bottom: 2px solid #5568d3;">姓名</th>
                 <th style="padding: 15px; text-align: center; font-weight: bold; border-bottom: 2px solid #5568d3; width: 120px;">操作</th>
@@ -1143,6 +1163,15 @@ try {
             <tbody>
               <?php foreach ($allContactsList as $index => $contact): ?>
               <tr style="border-bottom: 1px solid #eee; <?php echo ($index % 2 == 0) ? 'background: #f9f9f9;' : 'background: white;'; ?> <?php echo ($contact['contact_type'] === '招生中心') ? 'background: #e8eaf6 !important; font-weight: bold;' : ''; ?>">
+                <td style="padding: 15px; text-align: center;">
+                  <input type="checkbox" 
+                         class="contact-checkbox" 
+                         data-user-id="<?php echo isset($contact['user_id']) ? (int)$contact['user_id'] : ''; ?>"
+                         data-username="<?php echo htmlspecialchars($contact['username'], ENT_QUOTES, 'UTF-8'); ?>"
+                         data-name="<?php echo htmlspecialchars($contact['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                         onchange="updateSelectedCount()"
+                         style="width: 18px; height: 18px; cursor: pointer;">
+                </td>
                 <td style="padding: 15px; color: #333;">
                   <?php if ($contact['contact_type'] === '招生中心'): ?>
                     <span style="color: #667eea; font-weight: bold;">📞 <?php echo htmlspecialchars($contact['department'], ENT_QUOTES, 'UTF-8'); ?></span>
@@ -1184,6 +1213,193 @@ try {
       </div>
       
       <script>
+      // 更新選中數量
+      function updateSelectedCount() {
+        const checkboxes = document.querySelectorAll('.contact-checkbox:checked');
+        const count = checkboxes.length;
+        const countSpan = document.getElementById('selectedCount');
+        if (countSpan) {
+          countSpan.textContent = count;
+        }
+        
+        // 更新批量添加按鈕狀態
+        const addBtn = document.getElementById('addSelectedBtn');
+        if (addBtn) {
+          if (count === 0) {
+            addBtn.disabled = true;
+            addBtn.style.opacity = '0.5';
+            addBtn.style.cursor = 'not-allowed';
+          } else {
+            addBtn.disabled = false;
+            addBtn.style.opacity = '1';
+            addBtn.style.cursor = 'pointer';
+          }
+        }
+        
+        // 更新全選按鈕狀態
+        const selectAllCheckbox = document.getElementById('selectAllContacts');
+        const allCheckboxes = document.querySelectorAll('.contact-checkbox');
+        if (selectAllCheckbox && allCheckboxes.length > 0) {
+          selectAllCheckbox.checked = count === allCheckboxes.length;
+          selectAllCheckbox.indeterminate = count > 0 && count < allCheckboxes.length;
+        }
+      }
+      
+      // 全選/取消全選
+      function toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAllContacts');
+        const checkboxes = document.querySelectorAll('.contact-checkbox');
+        
+        if (selectAllCheckbox && selectAllCheckbox.checked) {
+          // 全選
+          checkboxes.forEach(cb => cb.checked = true);
+        } else {
+          // 取消全選
+          checkboxes.forEach(cb => cb.checked = false);
+        }
+        
+        updateSelectedCount();
+      }
+      
+      // 批量添加選中的聯絡人
+      async function addSelectedContacts() {
+        const checkboxes = document.querySelectorAll('.contact-checkbox:checked');
+        
+        if (checkboxes.length === 0) {
+          alert('請至少選擇一個聯絡人');
+          return;
+        }
+        
+        // 收集選中的聯絡人資訊
+        const selectedContacts = [];
+        checkboxes.forEach(cb => {
+          const userId = cb.getAttribute('data-user-id');
+          const username = cb.getAttribute('data-username');
+          const name = cb.getAttribute('data-name');
+          
+          if (userId) {
+            selectedContacts.push({
+              user_id: parseInt(userId),
+              username: username,
+              name: name
+            });
+          }
+        });
+        
+        if (selectedContacts.length === 0) {
+          alert('錯誤：沒有有效的聯絡人ID');
+          return;
+        }
+        
+        console.log('=== 開始批量添加聯絡人 ===');
+        console.log('選中的聯絡人數量:', selectedContacts.length);
+        console.log('選中的聯絡人:', selectedContacts);
+        
+        // 顯示載入提示
+        const addBtn = document.getElementById('addSelectedBtn');
+        const originalBtnText = addBtn ? addBtn.innerHTML : '添加選中的聯絡人';
+        if (addBtn) {
+          addBtn.disabled = true;
+          addBtn.innerHTML = '處理中... (<span id="selectedCount">0</span>)';
+          addBtn.style.opacity = '0.7';
+        }
+        
+        // 禁用所有複選框
+        checkboxes.forEach(cb => cb.disabled = true);
+        const selectAllCheckbox = document.getElementById('selectAllContacts');
+        if (selectAllCheckbox) {
+          selectAllCheckbox.disabled = true;
+        }
+        
+        let successCount = 0;
+        let failCount = 0;
+        const errors = [];
+        
+        // 逐個添加聯絡人
+        for (let i = 0; i < selectedContacts.length; i++) {
+          const contact = selectedContacts[i];
+          console.log(`正在添加聯絡人 ${i + 1}/${selectedContacts.length}:`, contact);
+          
+          try {
+            const formData = new URLSearchParams();
+            formData.append('contact_user_id', contact.user_id);
+            
+            const response = await fetch('add_contact_api.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: formData.toString()
+            });
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            console.log(`聯絡人 ${contact.name} 的響應:`, data);
+            
+            if (data.success) {
+              successCount++;
+              console.log(`✅ ${contact.name} 添加成功`);
+            } else {
+              failCount++;
+              errors.push(`${contact.name}: ${data.message || '未知錯誤'}`);
+              console.error(`❌ ${contact.name} 添加失敗:`, data.message);
+            }
+          } catch (error) {
+            failCount++;
+            errors.push(`${contact.name}: ${error.message}`);
+            console.error(`❌ ${contact.name} 添加時發生錯誤:`, error);
+          }
+        }
+        
+        console.log('=== 批量添加完成 ===');
+        console.log('成功:', successCount, '失敗:', failCount);
+        
+        // 顯示結果
+        if (failCount === 0) {
+          alert(`成功添加 ${successCount} 位聯絡人！正在跳轉到私訊系統...`);
+          // 重定向到私訊系統
+          window.location.href = 'chat.php';
+        } else {
+          let message = `添加完成：成功 ${successCount} 位，失敗 ${failCount} 位`;
+          if (errors.length > 0) {
+            message += '\n\n失敗詳情：\n' + errors.slice(0, 5).join('\n');
+            if (errors.length > 5) {
+              message += `\n...還有 ${errors.length - 5} 個錯誤`;
+            }
+          }
+          alert(message);
+          
+          // 恢復按鈕狀態
+          if (addBtn) {
+            addBtn.disabled = false;
+            addBtn.innerHTML = originalBtnText;
+            addBtn.style.opacity = '1';
+          }
+          
+          // 恢復複選框狀態
+          checkboxes.forEach(cb => cb.disabled = false);
+          if (selectAllCheckbox) {
+            selectAllCheckbox.disabled = false;
+          }
+          
+          // 如果至少有一個成功，詢問是否跳轉
+          if (successCount > 0) {
+            if (confirm('部分聯絡人添加成功，是否跳轉到私訊系統？')) {
+              window.location.href = 'chat.php';
+            }
+          }
+        }
+      }
+      
+      // 初始化選中數量
+      document.addEventListener('DOMContentLoaded', function() {
+        updateSelectedCount();
+      });
+      
       async function selectContactForChat(username, userId) {
         console.log('=== 開始添加聯絡人 ===');
         console.log('username:', username);
@@ -1282,89 +1498,89 @@ try {
       $allContacts = $contacts;
       ?>
       <!-- 使用和 TEA/STA 相同的完整聊天介面 -->
-      <div class="chat-container">
-        <!-- 左側聯絡人列表 -->
-        <div class="sidebar">
-          <div class="sidebar-header">
-            <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
-            <div style="margin-top: 10px;">
-              <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
-            </div>
+    <div class="chat-container">
+      <!-- 左側聯絡人列表 -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2 class="sidebar-title">聯絡人列表 <span id="unreadBadge" style="background: #ff4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 12px; display: none;">0</span></h2>
+          <div style="margin-top: 10px;">
+            <button id="createGroupBtn" style="margin-right: 5px; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">建立群組</button>
+          </div>
+        </div>
+        
+        <!-- 搜尋和新增聯絡人區域 -->
+        <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
+          <!-- 搜尋現有聯絡人 -->
+          <div style="margin-bottom: 10px;">
+            <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
+                   style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
           </div>
           
-          <!-- 搜尋和新增聯絡人區域 -->
-          <div class="search-container" style="padding: 10px; border-bottom: 1px solid #eee;">
-            <!-- 搜尋現有聯絡人 -->
-            <div style="margin-bottom: 10px;">
-              <input type="text" id="contactSearch" placeholder="搜尋現有聯絡人..." 
-                     style="width: 100%; max-width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+          <!-- 新增聯絡人區域 -->
+          <div style="border-top: 1px solid #eee; padding-top: 10px;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
+            <div style="display: flex; gap: 5px;">
+              <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
+                     style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
             </div>
-            
-            <!-- 新增聯絡人區域 -->
-            <div style="border-top: 1px solid #eee; padding-top: 10px;">
-              <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold;">➕ 新增聯絡人</div>
-              <div style="display: flex; gap: 5px;">
-                <input type="text" id="addContactSearch" placeholder="輸入姓名或帳號搜尋用戶..." 
-                       style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
-                <button id="searchUserBtn" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap;">搜尋</button>
-              </div>
-              <!-- 搜尋結果區域 -->
-              <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
-                <div id="addContactResultsList" style="padding: 5px;"></div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 群組列表 -->
-          <div id="groupList" style="margin-bottom: 20px;">
-            <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
-            <div id="groupsContainer"></div>
-          </div>
-          
-          <!-- 聯絡人列表 -->
-          <div id="contactList">
-            <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人 <span id="contactCount"></span></h3>
-            <ul class="user-list" id="contactListItems">
-              <!-- 聯絡人項目將通過 JavaScript 動態生成 -->
-            </ul>
-            <!-- 分頁控制 -->
-            <div id="contactPagination" style="padding: 10px; text-align: center; border-top: 1px solid #eee; display: none;">
-              <button id="prevPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">上一頁</button>
-              <span id="pageInfo" style="margin: 0 10px; color: #666;"></span>
-              <button id="nextPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">下一頁</button>
+            <!-- 搜尋結果區域 -->
+            <div id="addContactResults" style="display: none; margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #666; font-size: 12px;">搜尋結果</div>
+              <div id="addContactResultsList" style="padding: 5px;"></div>
             </div>
           </div>
         </div>
         
-        <!-- 右側聊天區域 -->
-        <div class="chat-main">
-          <div class="chat-header">
-            <div class="current-chat-info">
+        <!-- 群組列表 -->
+        <div id="groupList" style="margin-bottom: 20px;">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">我的群組</h3>
+          <div id="groupsContainer"></div>
+        </div>
+        
+        <!-- 聯絡人列表 -->
+        <div id="contactList">
+          <h3 style="margin: 10px 0; color: #666; font-size: 14px;">聯絡人 <span id="contactCount"></span></h3>
+          <ul class="user-list" id="contactListItems">
+            <!-- 聯絡人項目將通過 JavaScript 動態生成 -->
+          </ul>
+          <!-- 分頁控制 -->
+          <div id="contactPagination" style="padding: 10px; text-align: center; border-top: 1px solid #eee; display: none;">
+            <button id="prevPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">上一頁</button>
+            <span id="pageInfo" style="margin: 0 10px; color: #666;"></span>
+            <button id="nextPageBtn" style="padding: 5px 15px; margin: 0 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">下一頁</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右側聊天區域 -->
+      <div class="chat-main">
+        <div class="chat-header">
+          <div class="current-chat-info">
               <div class="current-chat-name">選擇聯絡人開始聊天</div>
-              <div class="current-chat-role"></div>
-            </div>
-            <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
-              <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
-                ➕ 新增成員
-              </button>
-              <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
-                👥 管理成員
-              </button>
-            </div>
+            <div class="current-chat-role"></div>
           </div>
-          
-          <div class="chat-messages" id="chatMessages">
-            <div class="no-chat-selected">
+          <div class="chat-header-actions" id="chatHeaderActions" style="display: none;">
+            <button id="addMemberBtn" onclick="showAddMemberModal()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 14px;">
+              ➕ 新增成員
+            </button>
+            <button id="manageMembersBtn" onclick="showManageMembersModal()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+              👥 管理成員
+            </button>
+          </div>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+          <div class="no-chat-selected">
               請從左側選擇一位聯絡人開始聊天
-            </div>
           </div>
-          
-          <div class="chat-input">
-            <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
-            <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
-            <button onclick="sendMessage()" disabled>發送</button>
-          </div>
+        </div>
+        
+        <div class="chat-input">
+          <input type="text" id="messageInput" placeholder="輸入訊息..." disabled>
+          <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" disabled title="語音輸入">🎤 語音</button>
+          <button onclick="sendMessage()" disabled>發送</button>
+        </div>
           
           <!-- 語音錄製指示器 -->
           <div id="recordingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(255,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
@@ -1372,9 +1588,9 @@ try {
               <div style="font-size: 24px; margin-bottom: 10px;">🎤</div>
               <div>正在錄製語音...</div>
               <div id="recordingTimer" style="font-size: 18px; margin-top: 5px;"></div>
-            </div>
-          </div>
-          
+      </div>
+    </div>
+
           <!-- 處理中指示器 -->
           <div id="processingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 1000;">
             <div style="text-align: center;">
@@ -4010,13 +4226,13 @@ try {
               
               // 更新 lastMessageId
               if (typeof lastMessageId !== 'undefined') {
-                lastMessageId = Math.max(lastMessageId, result.saved_message.id);
+              lastMessageId = Math.max(lastMessageId, result.saved_message.id);
               }
               
               // 清除快取，確保下次載入時獲取最新資料
               const cacheKey = `${username}-${targetUserId}`;
               if (typeof messageCache !== 'undefined') {
-                messageCache.delete(cacheKey);
+              messageCache.delete(cacheKey);
               }
               
               console.log('訊息已立即顯示，ID:', result.saved_message.id);
@@ -4032,11 +4248,11 @@ try {
               // 其他角色：清除快取並重新載入
               const cacheKey = `${username}-${targetUserId}`;
               if (typeof messageCache !== 'undefined') {
-                messageCache.delete(cacheKey);
+              messageCache.delete(cacheKey);
               }
               // 重新載入聊天記錄以顯示新訊息
               if (typeof loadChatHistory === 'function') {
-                loadChatHistory();
+              loadChatHistory();
               }
             }
           } else {
@@ -4049,7 +4265,7 @@ try {
       } finally {
         // 發送完成後，根據輸入框內容更新按鈕狀態
         if (typeof updateSendButtonState === 'function') {
-          updateSendButtonState();
+        updateSendButtonState();
         } else if (sendButton) {
           // 簡單的按鈕狀態更新
           sendButton.disabled = !input.value.trim();

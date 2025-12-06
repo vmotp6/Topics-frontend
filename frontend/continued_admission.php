@@ -1567,36 +1567,47 @@ foreach ($courses as $course) {
           }
           
           // 檢查是否為護照號碼格式（外籍生）
-          const isPassportFormat = idNumber.startsWith('PASSPORT_');
-          let queryValue = idNumber;
+          // 如果輸入以 PASSPORT_ 開頭，保留原樣；否則檢查是否為身分證字號格式
+          const hasPassportPrefix = idNumber.startsWith('PASSPORT_');
+          let isPassportFormat = hasPassportPrefix;
+          let queryValue = idNumber; // 用於查詢的最終值
           
-          if (!isPassportFormat) {
-            // 本國籍：驗證身分證字號格式
-            if (idNumber.length !== 10) {
-              showQueryResult('身分證字號必須為10個字符', 'error');
-              return;
-            }
+          if (!hasPassportPrefix) {
+            // 檢查是否為身分證字號格式（10個字符，第一個是字母，後面9個是數字）
+            const isIdNumberFormat = (idNumber.length === 10 && /^[A-Za-z][0-9]{9}$/.test(idNumber));
             
-            if (!/^[A-Za-z][0-9]{9}$/.test(idNumber)) {
-              showQueryResult('身分證字號格式不正確，第一個字符必須是英文字母，後面9個字符必須是數字', 'error');
-              return;
+            if (!isIdNumberFormat) {
+              // 不是身分證字號格式，當作護照號碼處理
+              isPassportFormat = true;
+              // 驗證護照號碼長度
+              if (idNumber.length < 6 || idNumber.length > 20) {
+                showQueryResult('護照號碼長度應為6-20個字符', 'error');
+                return;
+              }
+              // 自動加上 PASSPORT_ 前綴
+              queryValue = 'PASSPORT_' + idNumber;
+            } else {
+              // 是身分證字號格式，直接使用
+              isPassportFormat = false;
+              queryValue = idNumber;
             }
           } else {
-            // 外籍生：移除PASSPORT_前綴進行查詢
-            queryValue = idNumber.replace(/^PASSPORT_/, '');
-            if (queryValue.length < 6 || queryValue.length > 20) {
+            // 已經有 PASSPORT_ 前綴，驗證護照號碼部分
+            const passportValue = idNumber.replace(/^PASSPORT_/, '');
+            if (passportValue.length < 6 || passportValue.length > 20) {
               showQueryResult('護照號碼長度應為6-20個字符', 'error');
               return;
             }
+            queryValue = idNumber; // 保持原樣
           }
           
           // 顯示載入狀態
           queryBtn.textContent = '查詢中...';
           queryBtn.disabled = true;
           
-          // 發送查詢請求（如果是護照號碼，需要加上PASSPORT_前綴）
+          // 發送查詢請求
           const formData = new FormData();
-          formData.append('id_number', isPassportFormat ? idNumber : idNumber);
+          formData.append('id_number', queryValue);
           
           fetch('check_admission_status.php', {
             method: 'POST',
@@ -2517,6 +2528,33 @@ foreach ($courses as $course) {
       if (formData.same_address === 'yes') {
         const sameAddressInput = document.querySelector('[name="same_address"][value="yes"]');
         if (sameAddressInput) sameAddressInput.checked = true;
+      }
+      
+      // 處理是否為外籍生選項
+      if (formData.is_foreign_student !== undefined) {
+        const foreignStudentValue = formData.is_foreign_student === 'yes' || formData.is_foreign_student === true ? 'yes' : 'no';
+        const foreignStudentRadio = document.querySelector(`input[name="is_foreign_student"][value="${foreignStudentValue}"]`);
+        if (foreignStudentRadio) {
+          foreignStudentRadio.checked = true;
+          // 觸發切換函數以更新顯示的欄位
+          if (typeof toggleIdentityFields === 'function') {
+            toggleIdentityFields();
+          }
+        }
+      }
+      
+      // 填充外籍生相關欄位（國籍、護照號碼）
+      if (formData.nationality !== undefined) {
+        const nationalityInput = document.getElementById('nationality');
+        if (nationalityInput) {
+          nationalityInput.value = formData.nationality || '';
+        }
+      }
+      if (formData.passport_number !== undefined) {
+        const passportInput = document.getElementById('passport_number');
+        if (passportInput) {
+          passportInput.value = formData.passport_number || '';
+        }
       }
       
       // 填充志願序
