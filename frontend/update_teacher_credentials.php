@@ -42,6 +42,18 @@ if (strlen($new_password) < 6) {
     exit;
 }
 
+// 驗證密碼必須包含至少一個英文字母
+if (!preg_match('/[a-zA-Z]/', $new_password)) {
+    echo json_encode(['success' => false, 'message' => '密碼必須包含至少一個英文字母']);
+    exit;
+}
+
+// 驗證密碼必須包含至少一個數字
+if (!preg_match('/[0-9]/', $new_password)) {
+    echo json_encode(['success' => false, 'message' => '密碼必須包含至少一個數字']);
+    exit;
+}
+
 // 如果要修改帳號，驗證帳號長度
 if (!empty($new_username) && $new_username !== $old_username) {
     if (strlen($new_username) < 3) {

@@ -303,17 +303,18 @@ def google_callback():
                     
                     # 如果已經有本地上傳的頭像（以 uploads/ 開頭），不要覆蓋
                     # 只有在沒有頭像或頭像是 Google URL 的情況下，才更新為新的 Google 頭像
+                    # Google 登入自動設 email_verified = 1
                     if current_picture_path and current_picture_path.startswith('uploads/'):
                         # 保留本地上傳的頭像，只更新其他資訊
                         cursor.execute(
-                            "UPDATE user SET google_id = %s, email = %s WHERE id = %s",
+                            "UPDATE user SET google_id = %s, email = %s, email_verified = 1 WHERE id = %s",
                             (google_id, email, user_id)
                         )
                         print(f"更新現有用戶（保留本地上傳頭像）: {username}")
                     else:
                         # 沒有頭像或頭像是 Google URL，更新為新的 Google 頭像
                         cursor.execute(
-                            "UPDATE user SET google_id = %s, profile_picture = %s, email = %s WHERE id = %s",
+                            "UPDATE user SET google_id = %s, profile_picture = %s, email = %s, email_verified = 1 WHERE id = %s",
                             (google_id, picture, email, user_id)
                         )
                         print(f"更新現有用戶（更新 Google 頭像）: {username}")
@@ -389,8 +390,8 @@ def google_callback():
                     
                     print(f"✅ 準備插入新用戶: username={username}, role_code={role_code}")
                     cursor.execute(
-                        """INSERT INTO user (username, name, email, google_id, role, password, profile_picture) 
-                           VALUES (%s, %s, %s, %s, %s, '', %s)""",
+                        """INSERT INTO user (username, name, email, google_id, role, password, profile_picture, email_verified) 
+                           VALUES (%s, %s, %s, %s, %s, '', %s, 1)""",
                         (username, name, email, google_id, role_code, picture)
                     )
                     user_id = cursor.lastrowid
@@ -544,7 +545,7 @@ def login():
                 # 先查詢用戶是否存在（不檢查密碼）
                 print(f"   查詢用戶: {username}")
                 cursor.execute(
-                    "SELECT username, role, status, password FROM user WHERE username = %s",
+                    "SELECT username, role, status, password, email_verified FROM user WHERE username = %s",
                     (username,)
                 )
                 user = cursor.fetchone()
@@ -605,6 +606,18 @@ def login():
                     return jsonify({
                         "message": "您的帳號已被停用，請聯繫管理員。",
                         "error": "account_disabled"
+                    }), 403
+                
+                # 檢查 email_verified 狀態（從查詢結果中獲取）
+                email_verified = user[4] if len(user) > 4 else 0
+                
+                if email_verified == 0:
+                    print(f"❌ Email 未驗證: {username}")
+                    return jsonify({
+                        "message": "您的 Email 尚未驗證，請檢查您的郵箱並輸入驗證碼以完成註冊。",
+                        "error": "email_not_verified",
+                        "requires_verification": True,
+                        "username": username
                     }), 403
                 
                 # 檢查 role，允許 STU、TEA 和 STA 登入
@@ -675,6 +688,12 @@ def register():
         return jsonify({"message": "兩次密碼輸入不一致"}), 400
     if len(password) < 6:
         return jsonify({"message": "密碼長度至少需 6 碼"}), 400
+    # 驗證密碼必須包含至少一個英文字母和一個數字
+    import re
+    if not re.search(r'[a-zA-Z]', password):
+        return jsonify({"message": "密碼必須包含至少一個英文字母"}), 400
+    if not re.search(r'[0-9]', password):
+        return jsonify({"message": "密碼必須包含至少一個數字"}), 400
     
     conn = get_db_connection()
     if not conn:
@@ -703,14 +722,46 @@ def register():
                 import hashlib
                 hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
             
-            # 插入新用戶（角色預設為學生，使用角色代碼 'STUDENT'）
+            # 插入新用戶（角色預設為學生，使用角色代碼 'STU'，email_verified 設為 0）
             print(f"📝 開始註冊用戶: username={username}, email={email}, name={name}")
             cursor.execute(
-                "INSERT INTO user (username, password, email, name, role) VALUES (%s, %s, %s, %s, 'STU')",
+                "INSERT INTO user (username, password, email, name, role, email_verified) VALUES (%s, %s, %s, %s, 'STU', 0)",
                 (username, hashed_password, email, name)
             )
             user_id = cursor.lastrowid
             print(f"✅ 已插入 user 表: user_id={user_id}")
+            
+            # 生成驗證碼
+            import random
+            verification_code = str(random.randint(1000, 9999)).zfill(4)
+            expires_at = datetime.now().replace(microsecond=0)
+            from datetime import timedelta
+            expires_at = expires_at + timedelta(hours=1)  # 1小時後過期
+            
+            # 確保 email_verification_codes 表存在
+            try:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS email_verification_codes (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        code VARCHAR(4) NOT NULL,
+                        expires_at DATETIME NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_user_id (user_id),
+                        INDEX idx_code (code),
+                        INDEX idx_expires_at (expires_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                print("✅ email_verification_codes 表已創建或已存在")
+            except Exception as table_error:
+                print(f"⚠️  創建驗證碼表時發生錯誤（可能已存在）: {table_error}")
+            
+            # 插入驗證碼
+            cursor.execute(
+                "INSERT INTO email_verification_codes (user_id, code, expires_at) VALUES (%s, %s, %s)",
+                (user_id, verification_code, expires_at)
+            )
+            print(f"✅ 已生成驗證碼: {verification_code}")
             
             # 同步插入 student_normalized 表（根據正規化結構）
             try:
@@ -728,7 +779,55 @@ def register():
             conn.commit()
             print(f"✅ 註冊成功並已提交: user_id={user_id}, username={username}")
             
-            return jsonify({"message": "註冊成功"}), 200
+            # 發送驗證碼郵件（使用 HTTP 請求調用 PHP API）
+            try:
+                print(f"📧 準備發送驗證碼郵件到: {email}")
+                print(f"   驗證碼: {verification_code}")
+                
+                # 使用 HTTP 請求調用 PHP API（更可靠，不依賴 PHP 在 PATH 中）
+                api_url = "http://localhost/Topics-frontend/frontend/api/send_verification_email.php"
+                payload = {
+                    'user_id': user_id,
+                    'code': verification_code,
+                    'email': email,
+                    'name': name
+                }
+                
+                try:
+                    response = requests.post(api_url, data=payload, timeout=15)
+                    print(f"   API 回應狀態碼: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        try:
+                            result_data = response.json()
+                            if result_data.get('success'):
+                                print(f"✅ 驗證碼郵件已發送到: {email}")
+                            else:
+                                print(f"⚠️  發送驗證碼郵件失敗: {result_data.get('message', '未知錯誤')}")
+                        except json.JSONDecodeError:
+                            print(f"⚠️  API 回應不是有效的 JSON: {response.text[:200]}")
+                    else:
+                        print(f"⚠️  發送驗證碼郵件 API 回應錯誤: HTTP {response.status_code}")
+                        print(f"   回應內容: {response.text[:200]}")
+                except requests.exceptions.ConnectionError:
+                    print(f"⚠️  無法連接到 PHP API，可能 Web 伺服器未運行")
+                    print(f"   請確保 Apache/XAMPP 正在運行，並可以訪問: {api_url}")
+                except requests.exceptions.Timeout:
+                    print(f"⚠️  發送郵件 API 請求超時（超過 15 秒）")
+                except requests.exceptions.RequestException as req_error:
+                    print(f"⚠️  發送驗證碼郵件 API 請求失敗: {req_error}")
+            except Exception as email_error:
+                print(f"❌ 發送驗證碼郵件時發生錯誤: {email_error}")
+                import traceback
+                traceback.print_exc()
+            
+            print(f"📤 返回註冊成功回應: requires_verification=True, username={username}, email={email}")
+            return jsonify({
+                "message": "註冊成功！請檢查您的 Email 並輸入驗證碼以完成註冊。",
+                "requires_verification": True,
+                "username": username,
+                "email": email
+            }), 200
             
     except pymysql.err.IntegrityError as e:
         # 可能的唯一鍵衝突或外鍵約束失敗

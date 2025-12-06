@@ -1189,11 +1189,56 @@ function getActiveClass($targetFile) {
   </div>
 </div>
 
+<!-- Email 驗證碼視窗 -->
+<div class="modal" id="verificationModal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeVerificationBtn">&times;</span>
+    <h1>Email 驗證</h1>
+    <p style="color: #666; margin-bottom: 10px; font-size: 14px;">我們已發送驗證碼到以下 Email：</p>
+    <p style="color: #667eea; font-weight: bold; margin-bottom: 20px; font-size: 16px; text-align: center; padding: 10px; background: #f0f4ff; border-radius: 8px;" id="verification_email_display"></p>
+    <p style="color: #666; margin-bottom: 20px; font-size: 14px;">請輸入驗證碼以完成註冊。</p>
+    <form id="verificationForm">
+      <div class="input-field" style="display: none;">
+        <input type="text" name="username" id="verification_username" readonly style="background: #f5f5f5;">
+        <label>帳號</label>
+      </div>
+      <div class="input-field">
+        <input type="text" name="code" id="verification_code" required maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align: center; font-size: 24px; letter-spacing: 8px;">
+        <label>驗證碼（4位數字）</label>
+      </div>
+      <button type="submit">驗證</button>
+      <p id="verificationMessage" style="color: red; margin-top: 10px;"></p>
+    </form>
+    <p class="helper-text" style="margin-top: 15px;">
+      <a href="#" id="resendCodeBtn">重新發送驗證碼</a>
+    </p>
+  </div>
+</div>
+
 <!-- JavaScript 控制 modal -->
 <script>
-  const registerModal = document.getElementById("registerModal");
-  const loginModal = document.getElementById("loginModal");
-  const forgotPasswordModal = document.getElementById("forgotPasswordModal");
+  // 確保 DOM 完全載入後再獲取元素
+  let registerModal, loginModal, forgotPasswordModal, verificationModal;
+  
+  function initModals() {
+    registerModal = document.getElementById("registerModal");
+    loginModal = document.getElementById("loginModal");
+    forgotPasswordModal = document.getElementById("forgotPasswordModal");
+    verificationModal = document.getElementById("verificationModal");
+    console.log("Modal 元素初始化:", {
+      registerModal: !!registerModal,
+      loginModal: !!loginModal,
+      forgotPasswordModal: !!forgotPasswordModal,
+      verificationModal: !!verificationModal
+    });
+  }
+  
+  // 立即初始化（如果 DOM 已載入）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initModals);
+  } else {
+    initModals();
+  }
 
   document.getElementById("openModalBtn")?.addEventListener("click", () => {
     registerModal.style.display = "flex";
@@ -1234,6 +1279,18 @@ function getActiveClass($targetFile) {
     forgotPasswordModal.style.display = "none";
     loginModal.style.display = "flex";
   });
+  
+  // Email 驗證碼視窗控制
+  document.getElementById("closeVerificationBtn")?.addEventListener("click", () => {
+    if (verificationModal) {
+      verificationModal.style.display = "none";
+    } else {
+      const modal = document.getElementById("verificationModal");
+      if (modal) {
+        modal.style.display = "none";
+      }
+    }
+  });
 
   // Google 登入按鈕載入效果
   document.querySelector('.google-login-btn')?.addEventListener('click', function(e) {
@@ -1249,11 +1306,43 @@ function getActiveClass($targetFile) {
     if (event.target === registerModal) registerModal.style.display = "none";
     if (event.target === loginModal) loginModal.style.display = "none";
     if (event.target === forgotPasswordModal) forgotPasswordModal.style.display = "none";
+    if (event.target === verificationModal) verificationModal.style.display = "none";
   };
 
   // 👉 註冊送出（呼叫 Flask /sign）
 document.getElementById("registerForm")?.addEventListener("submit", function (e) {
   e.preventDefault();
+  
+  // 前端密碼驗證
+  const password = this.querySelector('input[name="password"]').value;
+  const confirmPassword = this.querySelector('input[name="confirm_password"]').value;
+  
+  if (password.length < 6) {
+    document.getElementById("registerMessage").style.color = "red";
+    document.getElementById("registerMessage").innerText = "密碼長度至少需 6 碼";
+    return;
+  }
+  
+  // 驗證密碼必須包含至少一個英文字母
+  if (!/[a-zA-Z]/.test(password)) {
+    document.getElementById("registerMessage").style.color = "red";
+    document.getElementById("registerMessage").innerText = "密碼必須包含至少一個英文字母";
+    return;
+  }
+  
+  // 驗證密碼必須包含至少一個數字
+  if (!/[0-9]/.test(password)) {
+    document.getElementById("registerMessage").style.color = "red";
+    document.getElementById("registerMessage").innerText = "密碼必須包含至少一個數字";
+    return;
+  }
+  
+  if (password !== confirmPassword) {
+    document.getElementById("registerMessage").style.color = "red";
+    document.getElementById("registerMessage").innerText = "兩次密碼輸入不一致";
+    return;
+  }
+  
   const formData = new FormData(this);
 
               fetch("http://localhost:5000/sign", {
@@ -1262,15 +1351,30 @@ document.getElementById("registerForm")?.addEventListener("submit", function (e)
   })
   .then(async res => {
     const data = await res.json();
+    console.log("註冊回應:", data);
     if (res.ok) {
       document.getElementById("registerMessage").style.color = "green";
       document.getElementById("registerMessage").innerText = data.message;
-      setTimeout(() => {
-  document.getElementById("registerModal").style.display = "none";
-  document.getElementById("loginModal").style.display = "flex";  // 打開登入視窗
-  this.reset();
-  document.getElementById("registerMessage").innerText = "";     // 清除訊息
-}, 1500);
+      
+      // 如果需要驗證，顯示驗證碼輸入視窗
+      if (data.requires_verification && data.username) {
+        // 獲取 email（優先使用回應中的 email，否則從表單獲取）
+        const email = data.email || formData.get('email') || this.querySelector('input[name="email"]')?.value;
+        console.log("需要驗證，準備顯示驗證碼視窗，帳號:", data.username, "Email:", email);
+        setTimeout(() => {
+          document.getElementById("registerModal").style.display = "none";
+          showVerificationModal(data.username, email);
+          this.reset();
+          document.getElementById("registerMessage").innerText = "";
+        }, 1500);
+      } else {
+        setTimeout(() => {
+          document.getElementById("registerModal").style.display = "none";
+          document.getElementById("loginModal").style.display = "flex";  // 打開登入視窗
+          this.reset();
+          document.getElementById("registerMessage").innerText = "";     // 清除訊息
+        }, 1500);
+      }
 
     } else {
       document.getElementById("registerMessage").style.color = "red";
@@ -1297,7 +1401,20 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
     const data = await res.json();
     console.log("登入API回應數據:", data);
     
-    if (res.ok) {
+      // 檢查是否需要 Email 驗證
+      if (data.requires_verification && data.username) {
+        document.getElementById("loginMessage").style.color = "orange";
+        document.getElementById("loginMessage").innerText = data.message;
+        // 顯示驗證碼輸入視窗（登入時可能沒有 email，需要從資料庫查詢）
+        const email = data.email || "（請查看您的 Email）";
+        setTimeout(() => {
+          document.getElementById("loginModal").style.display = "none";
+          showVerificationModal(data.username, email);
+        }, 1000);
+        return;
+      }
+      
+      if (res.ok) {
       document.getElementById("loginMessage").style.color = "green";
       document.getElementById("loginMessage").innerText = data.message;
 
@@ -1380,6 +1497,163 @@ document.getElementById("forgotPasswordForm")?.addEventListener("submit", functi
     messageElement.style.color = "red";
     messageElement.innerText = "發送失敗，請稍後再試。";
   });
+});
+
+// 顯示驗證碼輸入視窗
+function showVerificationModal(username, email) {
+  console.log("顯示驗證碼視窗，帳號:", username, "Email:", email);
+  
+  // 等待 DOM 完全載入
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      showVerificationModal(username, email);
+    });
+    return;
+  }
+  
+  const verificationModal = document.getElementById("verificationModal");
+  const verificationUsername = document.getElementById("verification_username");
+  const verificationCode = document.getElementById("verification_code");
+  const verificationMessage = document.getElementById("verificationMessage");
+  const emailDisplay = document.getElementById("verification_email_display");
+  
+  console.log("驗證碼視窗元素檢查:", {
+    verificationModal: !!verificationModal,
+    verificationUsername: !!verificationUsername,
+    verificationCode: !!verificationCode,
+    verificationMessage: !!verificationMessage,
+    emailDisplay: !!emailDisplay
+  });
+  
+  if (verificationModal && verificationUsername && verificationCode) {
+    verificationUsername.value = username || "";
+    verificationCode.value = "";
+    if (verificationMessage) {
+      verificationMessage.innerText = "";
+    }
+    // 顯示 Email（優先使用傳入的 email，如果沒有則嘗試從表單獲取）
+    if (emailDisplay) {
+      if (email) {
+        emailDisplay.textContent = email;
+        console.log("已設置 Email 顯示:", email);
+      } else {
+        // 如果沒有傳入 email，嘗試從註冊表單獲取
+        const emailInput = document.querySelector('#registerForm input[name="email"]');
+        if (emailInput && emailInput.value) {
+          emailDisplay.textContent = emailInput.value;
+          console.log("從表單獲取 Email:", emailInput.value);
+        } else {
+          emailDisplay.textContent = "（未提供 Email）";
+          console.warn("無法獲取 Email");
+        }
+      }
+    } else {
+      console.error("找不到 verification_email_display 元素");
+    }
+    verificationModal.style.display = "flex";
+    console.log("驗證碼視窗已顯示");
+  } else {
+    console.error("找不到驗證碼視窗元素");
+    console.error("嘗試查找的元素:", {
+      verificationModal: document.getElementById("verificationModal"),
+      verificationUsername: document.getElementById("verification_username"),
+      verificationCode: document.getElementById("verification_code")
+    });
+  }
+}
+
+// 驗證碼表單提交
+document.getElementById("verificationForm")?.addEventListener("submit", function (e) {
+  e.preventDefault();
+  const username = document.getElementById("verification_username").value;
+  const code = document.getElementById("verification_code").value;
+  
+  if (!code || code.length !== 4) {
+    document.getElementById("verificationMessage").style.color = "red";
+    document.getElementById("verificationMessage").innerText = "請輸入4位數驗證碼";
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append("action", "verify_code");
+  formData.append("username", username);
+  formData.append("code", code);
+  
+  fetch("<?php echo getCorrectPath('api/verify_email.php'); ?>", {
+    method: "POST",
+    body: formData
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById("verificationMessage").style.color = "green";
+      document.getElementById("verificationMessage").innerText = data.message;
+      setTimeout(() => {
+        const modal = document.getElementById("verificationModal");
+        if (modal) {
+          modal.style.display = "none";
+        }
+        if (loginModal) {
+          loginModal.style.display = "flex";
+        } else {
+          const login = document.getElementById("loginModal");
+          if (login) {
+            login.style.display = "flex";
+          }
+        }
+        document.getElementById("verificationMessage").innerText = "";
+      }, 1500);
+    } else {
+      document.getElementById("verificationMessage").style.color = "red";
+      document.getElementById("verificationMessage").innerText = data.message;
+    }
+  })
+  .catch(err => {
+    document.getElementById("verificationMessage").style.color = "red";
+    document.getElementById("verificationMessage").innerText = "驗證失敗，請稍後再試。";
+  });
+});
+
+// 重新發送驗證碼
+document.getElementById("resendCodeBtn")?.addEventListener("click", function (e) {
+  e.preventDefault();
+  const username = document.getElementById("verification_username").value;
+  
+  if (!username) {
+    alert("請先完成註冊");
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append("action", "resend_code");
+  formData.append("username", username);
+  
+  document.getElementById("verificationMessage").style.color = "#666";
+  document.getElementById("verificationMessage").innerText = "正在發送驗證碼...";
+  
+  fetch("<?php echo getCorrectPath('api/verify_email.php'); ?>", {
+    method: "POST",
+    body: formData
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById("verificationMessage").style.color = "green";
+      document.getElementById("verificationMessage").innerText = data.message;
+    } else {
+      document.getElementById("verificationMessage").style.color = "red";
+      document.getElementById("verificationMessage").innerText = data.message;
+    }
+  })
+  .catch(err => {
+    document.getElementById("verificationMessage").style.color = "red";
+    document.getElementById("verificationMessage").innerText = "發送失敗，請稍後再試。";
+  });
+});
+
+// 驗證碼輸入限制為數字
+document.getElementById("verification_code")?.addEventListener("input", function (e) {
+  this.value = this.value.replace(/[^0-9]/g, "");
 });
 
 function toggleDropdown(event) {

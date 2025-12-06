@@ -701,6 +701,22 @@ try {
                     return;
                 }
                 
+                // 驗證密碼必須包含至少一個英文字母
+                if (!/[a-zA-Z]/.test(newPassword)) {
+                    const messageDiv = document.getElementById('credentialsMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼必須包含至少一個英文字母';
+                    return;
+                }
+                
+                // 驗證密碼必須包含至少一個數字
+                if (!/[0-9]/.test(newPassword)) {
+                    const messageDiv = document.getElementById('credentialsMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼必須包含至少一個數字';
+                    return;
+                }
+                
                 const formData = new FormData();
                 formData.append('old_username', oldUsername);
                 formData.append('current_password', currentPassword);
@@ -982,6 +998,22 @@ try {
                     const messageDiv = document.getElementById('passwordMessage');
                     messageDiv.className = 'message error';
                     messageDiv.textContent = '密碼長度至少需要 6 個字元';
+                    return;
+                }
+                
+                // 驗證密碼必須包含至少一個英文字母
+                if (!/[a-zA-Z]/.test(newPassword)) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼必須包含至少一個英文字母';
+                    return;
+                }
+                
+                // 驗證密碼必須包含至少一個數字
+                if (!/[0-9]/.test(newPassword)) {
+                    const messageDiv = document.getElementById('passwordMessage');
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = '密碼必須包含至少一個數字';
                     return;
                 }
                 
