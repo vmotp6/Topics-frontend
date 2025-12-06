@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ===============================================
 // 康寧大學 - 國中學校招生申請系統
 // ===============================================
@@ -75,6 +75,7 @@ $action = '';
 $result_message = '';
 $result_type = '';
 $selected_target_grades = []; // 已選的目標年級（用於更新時）
+$search_debug_info = ''; // 搜尋診斷信息
 
 // --------------------------------------------------
 // 處理 GET 搜尋邏輯
@@ -87,19 +88,287 @@ if (isset($_GET['action'])) {
 }
 
 if ($action === 'search' && isset($_GET['email'])) {
+    // 清理輸入的 email
     $search_email = trim($_GET['email']);
     if ($search_email !== '') {
         try {
-            // 先從 schools_contacts 找到聯絡人，再找對應的申請
-            $stmt = $pdo->prepare("
-                SELECT a.* 
-                FROM junior_school_recruitment_applications a
-                INNER JOIN schools_contacts c ON a.contacts_id = c.id
-                WHERE c.email = ? 
-                ORDER BY a.created_at DESC
-            ");
-            $stmt->execute([$search_email]);
-            $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // ============================================
+            // 重新編寫的搜尋邏輯 - 使用最簡單直接的方式
+            // ============================================
+            
+            $application_list = [];
+            
+            // 方法1: 先找到聯絡人 ID，然後用 ID 查詢申請記錄（最可靠的方式）
+            // 步驟1: 查找聯絡人（使用多種比對方式確保能找到）
+            $contact_ids = [];
+            
+            // 嘗試1: 精確比對
+            $stmt_contact = $pdo->prepare("SELECT id FROM schools_contacts WHERE email = ?");
+            $stmt_contact->execute([$search_email]);
+            $contact_ids = array_merge($contact_ids, $stmt_contact->fetchAll(PDO::FETCH_COLUMN));
+            
+            // 嘗試2: 大小寫不敏感比對
+            if (empty($contact_ids)) {
+                $stmt_contact = $pdo->prepare("SELECT id FROM schools_contacts WHERE LOWER(email) = LOWER(?)");
+                $stmt_contact->execute([$search_email]);
+                $contact_ids = array_merge($contact_ids, $stmt_contact->fetchAll(PDO::FETCH_COLUMN));
+            }
+            
+            // 嘗試3: 去除空格後比對
+            if (empty($contact_ids)) {
+                $stmt_contact = $pdo->prepare("SELECT id FROM schools_contacts WHERE TRIM(email) = TRIM(?)");
+                $stmt_contact->execute([$search_email]);
+                $contact_ids = array_merge($contact_ids, $stmt_contact->fetchAll(PDO::FETCH_COLUMN));
+            }
+            
+            // 去除重複的 ID 並重新索引數組
+            $contact_ids = array_values(array_unique($contact_ids));
+            
+            // 步驟2: 如果有找到聯絡人 ID，查詢對應的申請記錄
+            if (!empty($contact_ids)) {
+                $placeholders = implode(',', array_fill(0, count($contact_ids), '?'));
+                $stmt = $pdo->prepare("
+                    SELECT a.*,
+                           COALESCE(a.admin_comment, '') as admin_remarks
+                    FROM junior_school_recruitment_applications a
+                    WHERE a.contacts_id IN ($placeholders)
+                    ORDER BY a.created_at DESC
+                ");
+                $stmt->execute($contact_ids);
+                $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            
+            // 方法2: 如果還是沒有結果，嘗試使用 JOIN 查詢（備用方案）
+            if (empty($application_list)) {
+                $stmt = $pdo->prepare("
+                    SELECT a.*,
+                           COALESCE(a.admin_comment, '') as admin_remarks
+                    FROM junior_school_recruitment_applications a
+                    INNER JOIN schools_contacts c ON a.contacts_id = c.id
+                    WHERE c.email = ?
+                    ORDER BY a.created_at DESC
+                ");
+                $stmt->execute([$search_email]);
+                $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            
+            // 方法3: 如果還是沒有結果，嘗試大小寫不敏感的 JOIN
+            if (empty($application_list)) {
+                $stmt = $pdo->prepare("
+                    SELECT a.*,
+                           COALESCE(a.admin_comment, '') as admin_remarks
+                    FROM junior_school_recruitment_applications a
+                    INNER JOIN schools_contacts c ON a.contacts_id = c.id
+                    WHERE LOWER(c.email) = LOWER(?)
+                    ORDER BY a.created_at DESC
+                ");
+                $stmt->execute([$search_email]);
+                $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            
+            // 方法4: 嘗試查詢 contact_email 欄位（舊資料備用）
+            if (empty($application_list)) {
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT a.*,
+                               COALESCE(a.admin_comment, '') as admin_remarks
+                        FROM junior_school_recruitment_applications a
+                        WHERE a.contact_email = ?
+                        ORDER BY a.created_at DESC
+                    ");
+                    $stmt->execute([$search_email]);
+                    $application_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (PDOException $e) {
+                    // contact_email 欄位可能不存在，忽略錯誤
+                }
+            }
+            
+            // 如果沒有找到結果，進行詳細診斷
+            if (empty($application_list)) {
+                $debug_messages = [];
+                $debug_messages[] = "═══════════════════════════════════════════════════════════";
+                $debug_messages[] = "=== 搜尋診斷信息 ===";
+                $debug_messages[] = "═══════════════════════════════════════════════════════════";
+                $debug_messages[] = "";
+                $debug_messages[] = "搜尋的 Email: " . htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8');
+                $debug_messages[] = "原始 GET 參數: " . htmlspecialchars($_GET['email'] ?? '', ENT_QUOTES, 'UTF-8');
+                $debug_messages[] = "";
+                
+                // ============================================
+                // 直接顯示 schools_contacts 表的所有資料（簡化格式）
+                // ============================================
+                $debug_messages[] = "【資料表內容】schools_contacts 表的所有記錄：";
+                $debug_messages[] = "───────────────────────────────────────────────────────────";
+                try {
+                    $all_contacts_stmt = $pdo->query("SELECT id, email, contact_name, school_code, phone, title, is_active, created_at FROM schools_contacts ORDER BY id DESC LIMIT 50");
+                    $all_contacts = $all_contacts_stmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (count($all_contacts) > 0) {
+                        $debug_messages[] = "✓ 總共找到 " . count($all_contacts) . " 筆記錄（顯示前 50 筆）";
+                        $debug_messages[] = "";
+                        foreach ($all_contacts as $contact) {
+                            $match_indicator = (stripos($contact['email'], $search_email) !== false) ? " ⭐匹配" : "";
+                            $debug_messages[] = sprintf(
+                                "ID: %d | Email: %s%s | 姓名: %s | 學校: %s | 電話: %s | 職稱: %s | 啟用: %s | 建立: %s",
+                                $contact['id'],
+                                htmlspecialchars($contact['email'], ENT_QUOTES, 'UTF-8'),
+                                $match_indicator,
+                                htmlspecialchars($contact['contact_name'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                htmlspecialchars($contact['school_code'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                htmlspecialchars($contact['phone'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                htmlspecialchars($contact['title'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                $contact['is_active'] ? '是' : '否',
+                                $contact['created_at']
+                            );
+                        }
+                    } else {
+                        $debug_messages[] = "✗ schools_contacts 表是空的！";
+                    }
+                } catch (PDOException $e) {
+                    $debug_messages[] = "✗ 無法讀取 schools_contacts 表";
+                    $debug_messages[] = "錯誤訊息: " . $e->getMessage();
+                    $debug_messages[] = "錯誤代碼: " . $e->getCode();
+                    $debug_messages[] = "SQL 狀態: " . $e->getCode();
+                } catch (Exception $e) {
+                    $debug_messages[] = "✗ 發生未知錯誤";
+                    $debug_messages[] = "錯誤訊息: " . $e->getMessage();
+                }
+                
+                $debug_messages[] = "";
+                $debug_messages[] = "【搜尋比對】檢查 email 是否存在於 schools_contacts 表中";
+                $check_stmt = $pdo->prepare("
+                    SELECT id, email, contact_name, school_code
+                    FROM schools_contacts 
+                    WHERE email = ? OR LOWER(email) = LOWER(?) OR TRIM(email) = TRIM(?)
+                    LIMIT 10
+                ");
+                $check_stmt->execute([$search_email, $search_email, $search_email]);
+                $contacts_found = $check_stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                if (count($contacts_found) > 0) {
+                    $debug_messages[] = "✓ 找到 " . count($contacts_found) . " 筆聯絡人記錄";
+                    $found_contact_ids = array_column($contacts_found, 'id');
+                    $debug_messages[] = "聯絡人 ID: " . implode(', ', $found_contact_ids);
+                    foreach ($contacts_found as $contact) {
+                        $debug_messages[] = "  - ID " . $contact['id'] . ": " . htmlspecialchars($contact['email'], ENT_QUOTES, 'UTF-8') . " (" . ($contact['contact_name'] ?? '無姓名') . ")";
+                    }
+                    
+                    // 步驟2: 檢查這些聯絡人是否有對應的申請記錄
+                    $debug_messages[] = "";
+                    $debug_messages[] = "【步驟2】檢查申請記錄";
+                    if (!empty($found_contact_ids)) {
+                        $placeholders = implode(',', array_fill(0, count($found_contact_ids), '?'));
+                        $app_check_stmt = $pdo->prepare("
+                            SELECT id, contacts_id, school_code, created_at
+                            FROM junior_school_recruitment_applications 
+                            WHERE contacts_id IN ($placeholders)
+                            ORDER BY created_at DESC
+                        ");
+                        $app_check_stmt->execute($found_contact_ids);
+                        $apps_with_contact = $app_check_stmt->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        if (count($apps_with_contact) > 0) {
+                            $debug_messages[] = "✓ 找到 " . count($apps_with_contact) . " 筆申請記錄！";
+                            $debug_messages[] = "申請 ID: " . implode(', ', array_column($apps_with_contact, 'id'));
+                            foreach ($apps_with_contact as $app) {
+                                $debug_messages[] = "  - 申請 ID " . $app['id'] . ": contacts_id=" . $app['contacts_id'] . ", school_code=" . ($app['school_code'] ?? 'NULL');
+                            }
+                            $debug_messages[] = "";
+                            $debug_messages[] = "⚠️ 奇怪：資料庫中有申請記錄，但查詢沒有返回結果";
+                            $debug_messages[] = "這可能是 PHP 查詢邏輯的問題，請檢查程式碼";
+                        } else {
+                            $debug_messages[] = "✗ 沒有找到對應的申請記錄";
+                            $debug_messages[] = "";
+                            $debug_messages[] = "這表示：";
+                            $debug_messages[] = "  - 聯絡人記錄存在 ✓";
+                            $debug_messages[] = "  - 但沒有使用此聯絡人 ID 的申請記錄 ✗";
+                            $debug_messages[] = "";
+                            $debug_messages[] = "可能的原因：";
+                            $debug_messages[] = "  1. 尚未使用此 email 提交過申請";
+                            $debug_messages[] = "  2. 申請記錄的 contacts_id 欄位為 NULL";
+                            $debug_messages[] = "  3. 申請記錄使用了不同的聯絡人 ID";
+                        }
+                    }
+                } else {
+                    $debug_messages[] = "✗ 在 schools_contacts 表中找不到此 Email";
+                    
+                    // 嘗試模糊搜尋來幫助診斷
+                    $fuzzy_stmt = $pdo->prepare("
+                        SELECT id, email, contact_name 
+                        FROM schools_contacts 
+                        WHERE email LIKE ?
+                        LIMIT 5
+                    ");
+                    $fuzzy_stmt->execute(['%' . $search_email . '%']);
+                    $fuzzy_contacts = $fuzzy_stmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (count($fuzzy_contacts) > 0) {
+                        $debug_messages[] = "  找到相似的 Email:";
+                        foreach ($fuzzy_contacts as $fuzzy) {
+                            $debug_messages[] = "    - " . htmlspecialchars($fuzzy['email'], ENT_QUOTES, 'UTF-8') . " (ID: " . $fuzzy['id'] . ")";
+                        }
+                    }
+                }
+                
+                // ============================================
+                // 直接顯示 junior_school_recruitment_applications 表的相關資料（簡化格式）
+                // ============================================
+                $debug_messages[] = "";
+                $debug_messages[] = "【資料表內容】junior_school_recruitment_applications 表的所有記錄：";
+                $debug_messages[] = "───────────────────────────────────────────────────────────";
+                try {
+                    $all_apps_stmt = $pdo->query("SELECT id, contacts_id, school_code, preferred_date, status, created_at FROM junior_school_recruitment_applications ORDER BY id DESC LIMIT 50");
+                    $all_apps = $all_apps_stmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (count($all_apps) > 0) {
+                        $debug_messages[] = "✓ 總共找到 " . count($all_apps) . " 筆記錄（顯示前 50 筆）";
+                        $debug_messages[] = "";
+                        foreach ($all_apps as $app) {
+                            $match_indicator = (isset($found_contact_ids) && in_array($app['contacts_id'], $found_contact_ids)) ? " ⭐匹配" : "";
+                            $debug_messages[] = sprintf(
+                                "申請ID: %d | contacts_id: %s%s | 學校: %s | 日期: %s | 狀態: %s | 建立: %s",
+                                $app['id'],
+                                $app['contacts_id'] ?? 'NULL',
+                                $match_indicator,
+                                htmlspecialchars($app['school_code'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                htmlspecialchars($app['preferred_date'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                htmlspecialchars($app['status'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                                $app['created_at']
+                            );
+                        }
+                    } else {
+                        $debug_messages[] = "✗ junior_school_recruitment_applications 表是空的！";
+                    }
+                } catch (PDOException $e) {
+                    $debug_messages[] = "✗ 無法讀取 junior_school_recruitment_applications 表";
+                    $debug_messages[] = "錯誤訊息: " . $e->getMessage();
+                    $debug_messages[] = "錯誤代碼: " . $e->getCode();
+                } catch (Exception $e) {
+                    $debug_messages[] = "✗ 發生未知錯誤";
+                    $debug_messages[] = "錯誤訊息: " . $e->getMessage();
+                }
+                
+                // 檢查字符集和 collation
+                $debug_messages[] = "";
+                $debug_messages[] = "【資料庫設定】檢查字符集和 collation";
+                try {
+                    $charset_stmt = $pdo->prepare("
+                        SELECT TABLE_NAME, COLUMN_NAME, CHARACTER_SET_NAME, COLLATION_NAME
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                        AND TABLE_NAME = 'schools_contacts'
+                        AND COLUMN_NAME = 'email'
+                    ");
+                    $charset_stmt->execute();
+                    $charset_info = $charset_stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($charset_info) {
+                        $debug_messages[] = "  Email 欄位字符集: " . ($charset_info['CHARACTER_SET_NAME'] ?? 'N/A');
+                        $debug_messages[] = "  Email 欄位 collation: " . ($charset_info['COLLATION_NAME'] ?? 'N/A');
+                    }
+                } catch (PDOException $e) {
+                    $debug_messages[] = "  無法檢查字符集信息";
+                }
+                
+                // 將診斷信息儲存到變數中，供頁面顯示
+                $search_debug_info = implode("\n", $debug_messages);
+            }
 
             if ($selected_application_id > 0) {
                 foreach ($application_list as $app) {
@@ -159,6 +428,40 @@ if ($action === 'search' && isset($_GET['email'])) {
             }
         } catch (PDOException $e) {
             error_log("搜尋申請資料失敗: " . $e->getMessage());
+            // 即使發生錯誤，也設置診斷信息並顯示資料表內容
+            $debug_messages = [];
+            $debug_messages[] = "=== 搜尋診斷信息（發生錯誤）===";
+            $debug_messages[] = "";
+            $debug_messages[] = "✗ 搜尋時發生資料庫錯誤: " . $e->getMessage();
+            $debug_messages[] = "錯誤代碼: " . $e->getCode();
+            $debug_messages[] = "";
+            $debug_messages[] = "═══════════════════════════════════════════════════════════";
+            $debug_messages[] = "【資料表內容】schools_contacts 表的所有記錄";
+            $debug_messages[] = "═══════════════════════════════════════════════════════════";
+            try {
+                $all_contacts_stmt = $pdo->query("SELECT id, email, contact_name, school_code, phone, title, is_active, created_at FROM schools_contacts ORDER BY id DESC LIMIT 50");
+                $all_contacts = $all_contacts_stmt->fetchAll(PDO::FETCH_ASSOC);
+                if (count($all_contacts) > 0) {
+                    $debug_messages[] = "✓ 總共找到 " . count($all_contacts) . " 筆記錄";
+                    foreach ($all_contacts as $contact) {
+                        $debug_messages[] = sprintf("ID: %d | Email: %s | 姓名: %s | 學校: %s", 
+                            $contact['id'],
+                            htmlspecialchars($contact['email'], ENT_QUOTES, 'UTF-8'),
+                            htmlspecialchars($contact['contact_name'] ?? 'NULL', ENT_QUOTES, 'UTF-8'),
+                            htmlspecialchars($contact['school_code'] ?? 'NULL', ENT_QUOTES, 'UTF-8')
+                        );
+                    }
+                } else {
+                    $debug_messages[] = "✗ schools_contacts 表是空的！";
+                }
+            } catch (PDOException $e2) {
+                $debug_messages[] = "✗ 無法讀取 schools_contacts 表: " . $e2->getMessage();
+            }
+            $search_debug_info = implode("\n", $debug_messages);
+        } catch (Exception $e) {
+            error_log("搜尋申請資料發生未知錯誤: " . $e->getMessage());
+            // 即使發生錯誤，也設置診斷信息
+            $search_debug_info = "搜尋時發生錯誤: " . $e->getMessage();
         }
     }
 }
@@ -170,6 +473,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action_post = $_POST['action'] ?? 'submit';
     $application_id = isset($_POST['application_id']) ? (int)$_POST['application_id'] : 0;
 
+    // 讀取表單資料
     $school_code = trim($_POST['school_code'] ?? '');
     $school_address = trim($_POST['school_address'] ?? '');
     $contact_name = trim($_POST['contact_name'] ?? '');
@@ -185,63 +489,103 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $special_requirements = trim($_POST['special_requirements'] ?? '');
     $remarks = trim($_POST['remarks'] ?? '');
     $captcha = trim($_POST['captcha'] ?? '');
+    
+    // 記錄所有接收到的 POST 資料（用於調試）
+    error_log("=== 接收到的 POST 資料 ===");
+    error_log("POST keys: " . implode(', ', array_keys($_POST)));
+    foreach ($_POST as $key => $value) {
+        if (is_array($value)) {
+            error_log("  $key: [" . implode(', ', $value) . "]");
+        } else {
+            error_log("  $key: '" . substr($value, 0, 100) . "'");
+        }
+    }
 
-    // 表單驗證
-    if ($school_code === '' || $contact_name === '' ||
-        $contact_phone === '' || $contact_email === '' || $preferred_date === '' ||
-        $preferred_time === '' || empty($target_grades) || $expected_students === '') {
-        $result_message = '請填寫所有必填欄位。';
+    // 表單驗證 - 添加詳細的錯誤日誌
+    error_log("=== 開始表單驗證 ===");
+    error_log("POST 資料: " . print_r($_POST, true));
+    error_log("school_code: '" . $school_code . "'");
+    error_log("contact_name: '" . $contact_name . "'");
+    error_log("contact_phone: '" . $contact_phone . "'");
+    error_log("contact_email: '" . $contact_email . "'");
+    error_log("preferred_date: '" . $preferred_date . "'");
+    error_log("preferred_time: '" . $preferred_time . "'");
+    error_log("target_grades: " . print_r($target_grades, true));
+    error_log("expected_students: '" . $expected_students . "'");
+    
+    // 檢查每個必填欄位
+    $missing_fields = [];
+    if ($school_code === '') {
+        $missing_fields[] = '學校名稱';
+        error_log("❌ 缺少：school_code");
+    }
+    if ($contact_name === '') {
+        $missing_fields[] = '聯絡人姓名';
+        error_log("❌ 缺少：contact_name");
+    }
+    if ($contact_phone === '') {
+        $missing_fields[] = '聯絡人電話';
+        error_log("❌ 缺少：contact_phone");
+    }
+    if ($contact_email === '') {
+        $missing_fields[] = '聯絡人 Email';
+        error_log("❌ 缺少：contact_email");
+    }
+    if ($preferred_date === '') {
+        $missing_fields[] = '首選日期';
+        error_log("❌ 缺少：preferred_date");
+    }
+    if ($preferred_time === '') {
+        $missing_fields[] = '首選時段';
+        error_log("❌ 缺少：preferred_time");
+    }
+    if (empty($target_grades)) {
+        $missing_fields[] = '目標年級';
+        error_log("❌ 缺少：target_grades");
+    }
+    if ($expected_students === '') {
+        $missing_fields[] = '預期參與學生數';
+        error_log("❌ 缺少：expected_students");
+    }
+    
+    if (!empty($missing_fields)) {
+        $result_message = '請填寫所有必填欄位。缺少的欄位：' . implode('、', $missing_fields);
         $result_type = 'error';
+        error_log("驗證失敗：缺少欄位 - " . implode(', ', $missing_fields));
     } elseif (empty($school_code)) {
         // 驗證學校代號必須存在
         $result_message = '請從系統提供的選項中選擇學校，不能自行輸入';
         $result_type = 'error';
-    } elseif (!empty($school_name) && !empty($city)) {
-        // 驗證縣市與學校是否一致
-        // 從學校名稱中提取學校名稱（去除括號部分）
-        $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
+        error_log("驗證失敗：school_code 為空");
+    } else {
+        // 驗證通過，繼續處理
+        error_log("✅ 表單驗證通過，繼續處理");
         
-        // 查詢學校實際所在的縣市和區/鄉鎮市
+        // 根據 school_code 查詢學校資訊（用於後續處理，如郵件）
+        // 注意：不再需要驗證縣市與學校是否一致，因為現在使用 school_code 作為唯一識別
         try {
-            $school_check_stmt = $pdo->prepare("SELECT city, district FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1");
-            $school_check_stmt->execute([$school_name_only]);
-            $school_result = $school_check_stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($school_result) {
-                $school_city_actual = $school_result['city'] ?? '';
-                $school_district_actual = $school_result['district'] ?? '';
-                    
-                    // 標準化縣市名稱（處理「臺」vs「台」等變體）
-                    $normalizeCity = function($city) {
-                        if (empty($city)) return '';
-                        $city = str_replace('臺', '台', $city);
-                        return trim($city);
-                    };
-                    
-                    // 驗證並修正縣市
-                    if (!empty($school_city_actual)) {
-                        $normalized_selected = $normalizeCity($city);
-                        $normalized_actual = $normalizeCity($school_city_actual);
-                        
-                        if ($normalized_selected !== $normalized_actual) {
-                            // 縣市不一致，自動修正為學校實際所在的縣市
-                            $city = $school_city_actual;
-                            error_log("警告：用戶選擇的縣市 ({$normalized_selected}) 與學校實際所在縣市 ({$normalized_actual}) 不一致，已自動修正為 {$school_city_actual}");
-                        }
-                    }
-                    
-                    // 驗證並修正區/鄉鎮市
-                    if (!empty($school_district_actual) && !empty($district) && $district !== $school_district_actual) {
-                        // 區/鄉鎮市不一致，自動修正為學校實際所在的區/鄉鎮市
-                        $district = $school_district_actual;
-                        error_log("警告：用戶選擇的區/鄉鎮市 ({$district}) 與學校實際所在區/鄉鎮市 ({$school_district_actual}) 不一致，已自動修正為 {$school_district_actual}");
-                    }
+            if (!empty($school_code)) {
+                $school_check_stmt = $pdo->prepare("SELECT name, city, district FROM school_data WHERE school_code = ? AND is_active = 1 LIMIT 1");
+                $school_check_stmt->execute([$school_code]);
+                $school_result = $school_check_stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($school_result) {
+                    error_log("查詢到學校資訊: " . print_r($school_result, true));
+                    // 學校資訊可用於後續處理（如郵件）
+                } else {
+                    error_log("警告：找不到 school_code = " . $school_code . " 的學校記錄");
                 }
+            }
         } catch (PDOException $e) {
-            error_log("查詢學校縣市失敗: " . $e->getMessage());
+            error_log("查詢學校資訊失敗: " . $e->getMessage());
             // 查詢失敗時不阻擋提交，但記錄錯誤
         }
-    } elseif ($captcha === '') {
+        
+        // 繼續處理表單提交（進入資料庫操作）
+    }
+    
+    // 驗證碼檢查（如果前面的驗證都通過）
+    if (empty($result_message) && $captcha === '') {
         $result_message = '請輸入驗證碼。';
         $result_type = 'error';
     } elseif (!filter_var($contact_email, FILTER_VALIDATE_EMAIL)) {
@@ -295,16 +639,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         throw new PDOException("無法取得聯絡人ID");
                     }
                     
-                    // 更新申請資料
+                    // 更新申請資料（當用戶修改資料時，將狀態改為 PE（待審核））
                     $upd = $pdo->prepare("UPDATE junior_school_recruitment_applications SET
                         school_code=?, school_address=?, contacts_id=?, preferred_date=?, preferred_time=?,
-                        expected_students=?, venue_type=?, special_requirements=?, remarks=?, updated_at=CURRENT_TIMESTAMP
+                        expected_students=?, venue_type=?, special_requirements=?, remarks=?, 
+                        status=?, updated_at=CURRENT_TIMESTAMP
                         WHERE id=?");
 
+                    // 驗證狀態代碼是否存在
+                    $reset_status = 'PE'; // 重新提交時將狀態改為待審核
+                    try {
+                        $stmt = $pdo->prepare("SELECT code FROM application_statuses WHERE code = ? LIMIT 1");
+                        $stmt->execute([$reset_status]);
+                        $status_row = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if (!$status_row) {
+                            $reset_status = null;
+                            error_log("警告：application_statuses 表中沒有 'PE' 狀態，使用 NULL");
+                        }
+                    } catch (PDOException $e) {
+                        error_log("無法查詢狀態代碼: " . $e->getMessage());
+                        $reset_status = null;
+                    }
+                    
                     $upd->execute([
                         $school_code, $school_address ?: null, $contacts_id,
                         $preferred_date, $preferred_time,
                         $expected_students_int, $venue_type ?: null, $special_requirements ?: null, $remarks ?: null,
+                        $reset_status, // 將狀態重置為待審核
                         $application_id
                     ]);
 
@@ -407,24 +768,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     // 確保所有必填欄位不為空字串
                     // 注意：preferred_date 和 expected_students 在資料表中是 DEFAULT NULL，但我們驗證為必填
+                    
+                    // 詳細記錄所有參數值（用於調試）
+                    error_log("=== 準備插入申請資料 ===");
+                    error_log("school_code: " . ($school_code ?: 'NULL/空'));
+                    error_log("school_address: " . ($school_address ?: 'NULL/空'));
+                    error_log("contacts_id: " . ($contacts_id ?: 'NULL/空'));
+                    error_log("preferred_date: " . ($preferred_date ?: 'NULL/空'));
+                    error_log("preferred_time: " . ($preferred_time ?: 'NULL/空'));
+                    error_log("expected_students_int: " . ($expected_students_int > 0 ? $expected_students_int : 'NULL/0'));
+                    error_log("venue_type: " . ($venue_type ?: 'NULL/空'));
+                    error_log("special_requirements: " . ($special_requirements ?: 'NULL/空'));
+                    error_log("remarks: " . ($remarks ?: 'NULL/空'));
+                    error_log("default_status: " . ($default_status ?: 'NULL/空'));
+                    
+                    // 驗證必填欄位
+                    if (empty($school_code)) {
+                        error_log("❌ 錯誤：school_code 為空");
+                        throw new PDOException("學校代號為空，請從系統選項中選擇學校");
+                    }
+                    if (empty($contacts_id)) {
+                        error_log("❌ 錯誤：contacts_id 為空");
+                        throw new PDOException("聯絡人ID為空");
+                    }
+                    if (empty($preferred_date)) {
+                        error_log("❌ 錯誤：preferred_date 為空");
+                        throw new PDOException("首選日期為空");
+                    }
+                    if (empty($preferred_time)) {
+                        error_log("❌ 錯誤：preferred_time 為空");
+                        throw new PDOException("首選時段為空");
+                    }
+                    if ($expected_students_int <= 0) {
+                        error_log("❌ 錯誤：expected_students 為空或無效");
+                        throw new PDOException("預期參與學生數為空或無效");
+                    }
+                    
+                    // 確保必填欄位不為空或 null
+                    // 再次驗證（雙重檢查）
+                    if (empty($school_code)) {
+                        throw new PDOException("學校代號為空");
+                    }
+                    if (empty($contacts_id) || $contacts_id <= 0) {
+                        throw new PDOException("聯絡人ID無效: " . $contacts_id);
+                    }
+                    if (empty($preferred_date)) {
+                        throw new PDOException("首選日期為空");
+                    }
+                    if (empty($preferred_time)) {
+                        throw new PDOException("首選時段為空");
+                    }
+                    if ($expected_students_int <= 0) {
+                        throw new PDOException("預期參與學生數無效: " . $expected_students);
+                    }
+                    
                     $ins_params = [
-                        $school_code ?: null, 
-                        $school_address ?: null,
-                        $contacts_id,
-                        $preferred_date ?: null, 
-                        $preferred_time ?: null,
-                        $expected_students_int > 0 ? $expected_students_int : null, 
-                        $venue_type ?: null, 
-                        $special_requirements ?: null, 
-                        $remarks ?: null,
+                        $school_code, // 必填，不允許 null
+                        !empty($school_address) ? $school_address : null, // 可選
+                        $contacts_id, // 必填，不允許 null
+                        $preferred_date, // 必填，不允許 null
+                        $preferred_time, // 必填，不允許 null
+                        $expected_students_int, // 必填，不允許 null
+                        !empty($venue_type) ? $venue_type : null, // 可選
+                        !empty($special_requirements) ? $special_requirements : null, // 可選
+                        !empty($remarks) ? $remarks : null, // 可選
                         $default_status // status 欄位
                     ];
                     
                     // 記錄插入參數以便除錯
                     error_log("插入參數數量: " . count($ins_params));
-                    error_log("插入參數: " . print_r($ins_params, true));
+                    error_log("插入參數詳細: " . print_r($ins_params, true));
+                    error_log("參數類型檢查:");
+                    error_log("  school_code: " . gettype($ins_params[0]) . " = '" . $ins_params[0] . "'");
+                    error_log("  contacts_id: " . gettype($ins_params[2]) . " = " . $ins_params[2]);
+                    error_log("  preferred_date: " . gettype($ins_params[3]) . " = '" . $ins_params[3] . "'");
+                    error_log("  preferred_time: " . gettype($ins_params[4]) . " = '" . $ins_params[4] . "'");
+                    error_log("  expected_students: " . gettype($ins_params[5]) . " = " . $ins_params[5]);
                     
-                    $ins->execute($ins_params);
+                    try {
+                        $ins->execute($ins_params);
+                        error_log("✅ INSERT 執行成功");
+                    } catch (PDOException $insert_error) {
+                        error_log("❌ INSERT 執行失敗: " . $insert_error->getMessage());
+                        error_log("❌ 錯誤代碼: " . $insert_error->getCode());
+                        error_log("❌ SQL 狀態: " . $insert_error->errorInfo[0] ?? 'N/A');
+                        error_log("❌ 錯誤資訊: " . print_r($insert_error->errorInfo, true));
+                        throw $insert_error;
+                    }
 
                     $application_id = (int)$pdo->lastInsertId();
                     
@@ -866,14 +1296,22 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
         <div class="form-container" style="margin-bottom: 20px;">
             <div class="form-section">
                 <h3><i class="fas fa-search"></i> 搜尋/查詢申請資料</h3>
-                <form method="get" action="" style="display: flex; gap: 10px; align-items: flex-end;">
+                <?php if ($action === 'search' && $search_email !== ''): ?>
+                    <div style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 4px;">
+                        <p style="margin: 0; color: #1976d2; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-info-circle"></i>
+                            <span>正在搜尋：<strong><?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?></strong></span>
+                        </p>
+                    </div>
+                <?php endif; ?>
+                <form method="get" id="searchForm" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" style="display: flex; gap: 10px; align-items: flex-end;">
                     <input type="hidden" name="action" value="search">
                     <div class="field-group" style="width: 50%;">
                         <label>請輸入 Email 搜尋申請資料</label>
-                        <input type="email" name="email" placeholder="請輸入您申請時使用的 Email" 
+                        <input type="email" name="email" id="search_email_input" placeholder="請輸入您申請時使用的 Email" 
                                value="<?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?>" required>
                     </div>
-                    <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%; margin-bottom: 1px">
+                    <button type="submit" id="search_submit_btn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%; margin-bottom: 1px; transition: all 0.3s ease;">
                         <i class="fas fa-search"></i> 搜尋
                     </button>
                 </form>
@@ -906,13 +1344,19 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                     }
                                 } 
                                 $is_selected = ($application_data && $application_data['id'] == $app['id']);
-                                $status_text = [
-                                    'pending' => ['text' => '審核中', 'color' => '#ff9800'],
+                                // 狀態對應表（支援多種狀態格式）
+                                $status_code = $app['status'] ?? '';
+                                $status_text_map = [
+                                    'PE' => ['text' => '待審核', 'color' => '#ff9800'],
+                                    'pending' => ['text' => '待審核', 'color' => '#ff9800'],
+                                    'AP' => ['text' => '已通過', 'color' => '#28a745'],
                                     'approved' => ['text' => '已通過', 'color' => '#28a745'],
-                                    'rejected' => ['text' => '已拒絕', 'color' => '#dc3545'],
+                                    'RE' => ['text' => '未通過', 'color' => '#dc3545'],
+                                    'rejected' => ['text' => '未通過', 'color' => '#dc3545'],
+                                    'AD' => ['text' => '備取', 'color' => '#17a2b8'],
                                     'completed' => ['text' => '已完成', 'color' => '#17a2b8']
                                 ];
-                                $status = $status_text[$app['status']] ?? ['text' => $app['status'], 'color' => '#6c757d'];
+                                $status = $status_text_map[$status_code] ?? ['text' => $status_code ?: '待審核', 'color' => '#6c757d'];
                             ?>
                                 <div style="padding: 15px; border-bottom: 1px solid #eee; <?php echo $is_selected ? 'background: #e3f2fd; border-left: 4px solid #2196f3;' : ''; ?>">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -973,24 +1417,137 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         </div>
                     </div>
                 <?php elseif ($search_email !== ''): ?>
-                    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
-                        <p style="margin: 0; color: #856404;">
-                            <i class="fas fa-exclamation-triangle"></i> 找不到該 Email 的申請資料
-                        </p>
+                    <div style="margin-top: 20px; padding: 20px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #ff9800;"></i>
+                            <div>
+                                <p style="margin: 0; color: #856404; font-weight: 600; font-size: 16px;">
+                                    找不到該 Email 的申請資料
+                                </p>
+                                <p style="margin: 5px 0 0 0; color: #856404; font-size: 13px;">
+                                    搜尋的 Email: <strong><?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?></strong>
+                                </p>
+                            </div>
+                        </div>
+                        <?php if (!empty($search_debug_info)): ?>
+                            <details open style="margin-top: 15px; border-top: 1px solid #ffc107; padding-top: 15px;">
+                                <summary style="cursor: pointer; color: #856404; font-weight: 600; user-select: none; padding: 10px; background: #fff; border-radius: 4px; border: 1px solid #ffc107; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-bug"></i> 
+                                    <span>查看詳細診斷信息（點擊展開/收起）</span>
+                                    <i class="fas fa-chevron-down" style="margin-left: auto; font-size: 12px;"></i>
+                                </summary>
+                                <div style="margin-top: 15px; padding: 15px; background: #fff; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: #333; white-space: pre-line; border: 1px solid #ddd; max-height: 500px; overflow-y: auto; line-height: 1.6;">
+                                    <?php echo htmlspecialchars($search_debug_info, ENT_QUOTES, 'UTF-8'); ?>
+                                </div>
+                            </details>
+                        <?php else: ?>
+                            <div style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+                                <p style="margin: 0; color: #666; font-size: 13px;">
+                                    <i class="fas fa-info-circle"></i> 提示：請確認您輸入的 Email 與申請時填寫的 Email 完全一致（包括大小寫）。
+                                </p>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
         </div>
         
         <?php if ($result_message !== ''): ?>
-            <div class="message <?php echo $result_type; ?>">
-                <i class="fas fa-<?php echo ($result_type === 'success') ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
-                <?php echo htmlspecialchars($result_message, ENT_QUOTES, 'UTF-8'); ?>
+            <div class="message <?php echo $result_type; ?>" id="result_message" style="padding: 15px 20px; margin-bottom: 20px; border-radius: 8px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; animation: slideDown 0.3s ease; <?php if ($result_type === 'error'): ?>background: #ffebee; border: 1px solid #ffcdd2; border-left: 4px solid #d32f2f; color: #c62828;<?php else: ?>background: #e8f5e9; border: 1px solid #c8e6c9; border-left: 4px solid #2e7d32; color: #1b5e20;<?php endif; ?>">
+                <i class="fas fa-<?php echo ($result_type === 'success') ? 'check-circle' : 'exclamation-triangle'; ?>" style="font-size: 20px;"></i>
+                <div style="flex: 1;">
+                    <?php echo nl2br(htmlspecialchars($result_message, ENT_QUOTES, 'UTF-8')); ?>
+                </div>
+                <button onclick="document.getElementById('result_message').style.display='none'" style="
+                    background: none;
+                    border: none;
+                    color: inherit;
+                    cursor: pointer;
+                    font-size: 18px;
+                    padding: 0;
+                    width: 24px;
+                    height: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.7;
+                " title="關閉">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <script>
+                // 自動滾動到錯誤訊息
+                document.addEventListener('DOMContentLoaded', function() {
+                    const resultMsg = document.getElementById('result_message');
+                    if (resultMsg) {
+                        resultMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // 如果是錯誤訊息，3秒後高亮顯示
+                        if (resultMsg.classList.contains('error')) {
+                            setTimeout(function() {
+                                resultMsg.style.boxShadow = '0 0 20px rgba(211, 47, 47, 0.3)';
+                                setTimeout(function() {
+                                    resultMsg.style.boxShadow = '';
+                                }, 2000);
+                            }, 500);
+                        }
+                    }
+                });
+            </script>
+        <?php endif; ?>
+        
+        <?php
+        // 檢查申請狀態並顯示相應提示
+        $application_status = $application_data['status'] ?? null;
+        $admin_remarks = $application_data['admin_remarks'] ?? '';
+        $is_approved = ($application_status === 'AP' || $application_status === 'approved');
+        $is_rejected = ($application_status === 'RE' || $application_status === 'rejected');
+        $is_pending = ($application_status === 'PE' || $application_status === 'pending' || empty($application_status));
+        
+        // 用於表單欄位的 disabled 屬性
+        $form_disabled = $is_approved ? 'disabled' : '';
+        $form_readonly = $is_approved ? 'readonly' : '';
+        ?>
+        
+        <?php if ($application_data && ($is_approved || $is_rejected)): ?>
+            <div class="form-container" style="margin-bottom: 20px;">
+                <?php if ($is_approved): ?>
+                    <div style="background: #d4edda; border: 1px solid #c3e6cb; border-left: 4px solid #28a745; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <i class="fas fa-check-circle" style="color: #28a745; font-size: 24px;"></i>
+                            <h3 style="margin: 0; color: #155724; font-size: 18px; font-weight: 600;">✅ 申請已通過審核</h3>
+                        </div>
+                        <p style="margin: 10px 0 0 0; color: #155724; font-size: 14px;">
+                            您的申請已經通過審核，目前無法修改資料。如需變更，請聯繫管理員。
+                        </p>
+                        <?php if (!empty($admin_remarks)): ?>
+                            <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #28a745;">
+                                <strong style="color: #155724; display: block; margin-bottom: 5px;">管理員備註：</strong>
+                                <p style="margin: 0; color: #495057; white-space: pre-wrap;"><?php echo htmlspecialchars($admin_remarks, ENT_QUOTES, 'UTF-8'); ?></p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php elseif ($is_rejected): ?>
+                    <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-left: 4px solid #dc3545; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <i class="fas fa-times-circle" style="color: #dc3545; font-size: 24px;"></i>
+                            <h3 style="margin: 0; color: #721c24; font-size: 18px; font-weight: 600;">❌ 申請未通過審核</h3>
+                        </div>
+                        <p style="margin: 10px 0 0 0; color: #721c24; font-size: 14px;">
+                            您的申請未通過審核，請修改資料後重新提交。修改後，申請狀態將變更為「待審核」。
+                        </p>
+                        <?php if (!empty($admin_remarks)): ?>
+                            <div style="margin-top: 15px; padding: 12px; background: #fff; border-radius: 6px; border-left: 3px solid #dc3545;">
+                                <strong style="color: #721c24; display: block; margin-bottom: 5px;">管理員備註：</strong>
+                                <p style="margin: 0; color: #495057; white-space: pre-wrap;"><?php echo htmlspecialchars($admin_remarks, ENT_QUOTES, 'UTF-8'); ?></p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 
         <div class="form-container">
-            <form method="post" id="recruitmentForm" onsubmit="return validateFormBeforeSubmit(event)">
+            <form method="post" id="recruitmentForm"<?php if ($is_approved): ?> onsubmit="event.preventDefault(); alert('申請已通過審核，無法修改資料。'); return false;"<?php endif; ?>>
                 <input type="hidden" name="action" id="form_action" value="submit">
                 <input type="hidden" name="application_id" id="application_id" value="<?php echo $application_data ? $application_data['id'] : '0'; ?>">
                 
@@ -1011,13 +1568,35 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                            }
                                            echo $school_code_value;
                                            ?>" />
-                                    <input type="text" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" required 
+                                    <input type="hidden" id="school_name_display" name="school_name_display" value="<?php 
+                                           $school_name_display_hidden = '';
+                                           if ($application_data && isset($application_data['school_name_display'])) {
+                                               $school_name_display_hidden = htmlspecialchars($application_data['school_name_display'], ENT_QUOTES, 'UTF-8');
+                                           } elseif (isset($_POST['school_name_display'])) {
+                                               $school_name_display_hidden = htmlspecialchars($_POST['school_name_display'], ENT_QUOTES, 'UTF-8');
+                                           }
+                                           echo $school_name_display_hidden;
+                                           ?>" />
+                                    <input type="text" id="school_name" placeholder="請輸入學校名稱..." autocomplete="off" <?php echo $form_disabled; ?>
                                            value="<?php 
                                            $school_name_display = '';
                                            if ($application_data && isset($application_data['school_name_display'])) {
                                                $school_name_display = htmlspecialchars($application_data['school_name_display'], ENT_QUOTES, 'UTF-8');
                                            } elseif (isset($_POST['school_name_display'])) {
                                                $school_name_display = htmlspecialchars($_POST['school_name_display'], ENT_QUOTES, 'UTF-8');
+                                           } elseif (isset($_POST['school_code']) && !empty($_POST['school_code'])) {
+                                               // 如果只有 school_code，嘗試從資料庫查詢學校名稱
+                                               try {
+                                                   $stmt = $pdo->prepare("SELECT name, city, district FROM school_data WHERE school_code = ? AND is_active = 1 LIMIT 1");
+                                                   $stmt->execute([$_POST['school_code']]);
+                                                   $school_data = $stmt->fetch(PDO::FETCH_ASSOC);
+                                                   if ($school_data && !empty($school_data['name'])) {
+                                                       $school_name_display = $school_data['name'] . ' (' . $school_data['city'] . $school_data['district'] . ')';
+                                                       $school_name_display = htmlspecialchars($school_name_display, ENT_QUOTES, 'UTF-8');
+                                                   }
+                                               } catch (PDOException $e) {
+                                                   // 忽略錯誤
+                                               }
                                            }
                                            echo $school_name_display;
                                            ?>" />
@@ -1041,7 +1620,9 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label>學校地址</label>
-                            <input type="text" name="school_address" id="school_address" placeholder="將根據縣市和區/鄉鎮市自動產生" readonly
+                            <input type="text" name="school_address" id="school_address" placeholder="將根據學校資訊自動產生" 
+                                   readonly
+                                   style="background-color: #f5f5f5; cursor: not-allowed;"
                                    value="<?php 
                                    $school_address_value = '';
                                    if ($application_data) {
@@ -1051,6 +1632,9 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    }
                                    echo $school_address_value;
                                    ?>" />
+                            <small style="color: #666; margin-top: 5px; display: block;">
+                                <i class="fas fa-info-circle"></i> 地址會根據選擇的學校自動填入，無法手動修改
+                            </small>
                         </div>
                     </div>
                     <div id="city_school_mismatch_error" class="field-error" style="display: none; color: #d32f2f; font-size: 13px; margin-top: 8px; padding: 8px 12px; background-color: #ffebee; border-left: 3px solid #d32f2f; border-radius: 4px; animation: slideDown 0.3s ease;">
@@ -1067,7 +1651,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡人姓名</label>
-                            <input type="text" name="contact_name" placeholder="請輸入聯絡人姓名" required 
+                            <input type="text" name="contact_name" placeholder="請輸入聯絡人姓名" required <?php echo $form_disabled; ?>
                                    value="<?php 
                                    $contact_name_value = '';
                                    if ($application_data) {
@@ -1079,8 +1663,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    ?>" />
                         </div>
                         <div class="field-group">
-                            <label>職稱</label>
-                            <input type="text" name="contact_title" placeholder="例如：教務主任、輔導主任" 
+                            <label><span class="required">*</span> 職稱</label>
+                            <input type="text" id="contact_title" name="contact_title" placeholder="例如：教務主任、輔導主任（選填）" <?php echo $form_disabled; ?>
                                    value="<?php 
                                    $contact_title_value = '';
                                    if ($application_data) {
@@ -1090,12 +1674,15 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    }
                                    echo $contact_title_value;
                                    ?>" />
+                            <small style="color: #666; margin-top: 5px; display: block; font-size: 12px;">
+                                <i class="fas fa-info-circle"></i> 此欄位為選填，如無職稱可留空
+                            </small>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡人電話</label>
-                            <input type="tel" name="contact_phone" maxlength="10" placeholder="例如：02-1234-5678" required 
+                            <input type="tel" id="contact_phone" name="contact_phone" pattern="[0-9]{10}" maxlength="10" placeholder="請輸入電話號碼" required 
                                    value="<?php 
                                    $contact_phone_value = '';
                                    if ($application_data) {
@@ -1105,10 +1692,11 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                                    }
                                    echo $contact_phone_value;
                                    ?>" />
+                            <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡人 Email</label>
-                            <input type="email" name="contact_email" placeholder="例如：contact@school.edu.tw" required 
+                            <input type="email" name="contact_email" placeholder="例如：contact@school.edu.tw" required <?php echo $form_disabled; ?>
                                    value="<?php 
                                    $contact_email_value = '';
                                    if ($application_data) {
@@ -1144,7 +1732,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span><i class="fas fa-clock" style="color:#667eea;"></i> 首選時段</label>
-                            <select name="preferred_time" required>
+                            <select name="preferred_time" required <?php echo $form_disabled; ?>>
                                 <option value="">請選擇</option>
                                 <?php
                                 $preferred_time_value = '';
@@ -1191,7 +1779,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 預期參與學生數</label>
-                            <input type="number" name="expected_students" min="1" placeholder="例如：100" required
+                            <input type="number" name="expected_students" min="1" placeholder="例如：100" required <?php echo $form_disabled; ?>
                                    value="<?php 
                                    $expected_students_value = '';
                                    if ($application_data) {
@@ -1229,7 +1817,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label>特殊需求</label>
-                            <textarea name="special_requirements" placeholder="請描述任何特殊需求或注意事項（選填）"><?php 
+                            <textarea name="special_requirements" placeholder="請描述任何特殊需求或注意事項（選填）" <?php echo $form_disabled; ?>><?php 
                             $special_requirements_value = '';
                             if ($application_data) {
                                 $special_requirements_value = htmlspecialchars($application_data['special_requirements'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -1243,7 +1831,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     <div class="form-row">
                         <div class="field-group">
                             <label>備註</label>
-                            <textarea name="remarks" placeholder="其他需要補充的資訊（選填）"><?php 
+                            <textarea name="remarks" placeholder="其他需要補充的資訊（選填）" <?php echo $form_disabled; ?>><?php 
                             $remarks_value = '';
                             if ($application_data) {
                                 $remarks_value = htmlspecialchars($application_data['remarks'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -1260,7 +1848,7 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                 <div class="form-section">
                     <h3> <span class="required">*</span> <i class="fas fa-shield-alt"></i> 驗證碼 </h3>
                     <div class="captcha-section" style="display: flex; align-items: center; gap: 10px; margin: 15px 0; flex-wrap: wrap;">
-                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; background-color: #ffffff; color: #333; transition: all 0.3s; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
+                        <input type="text" name="captcha" id="captchaInput" placeholder="請輸入驗證碼" maxlength="6" required autocomplete="off" <?php echo $form_disabled; ?> style="flex: 1; min-width: 150px; padding: 12px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; background-color: #ffffff; color: #333; transition: all 0.3s; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
                         <img src="captcha_image.php" id="captchaImage" alt="驗證碼" onclick="refreshCaptcha()" style="height: 50px; width: 150px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer;" title="點擊刷新驗證碼" onerror="this.onerror=null; this.src='captcha_image.php?t='+Date.now();">
                         <button type="button" onclick="refreshCaptcha()" style="padding: 12px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                             <i class="fas fa-sync-alt"></i> 刷新
@@ -1271,8 +1859,8 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                     </small>
                 </div>
 
-                <button type="submit" class="submit-btn" id="submit_btn">
-                    <i class="fas fa-paper-plane"></i> <span id="submit_btn_text">提交申請</span>
+                <button type="submit" class="submit-btn" id="submit_btn" <?php echo $form_disabled; ?>>
+                    <i class="fas fa-paper-plane"></i> <span id="submit_btn_text"><?php echo $is_approved ? '申請已通過，無法修改' : '提交申請'; ?></span>
                 </button>
             </form>
         </div>
@@ -1281,18 +1869,190 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
     <?php include("share/footer.php"); ?>
     
 <script>
-// 檢查必填欄位並更新提交按鈕狀態（不再禁用按鈕）
+// 檢查必填欄位並更新提交按鈕狀態
 function checkRequiredFields() {
-    // 此函數保留用於其他用途，但不再禁用提交按鈕
-    // 提交按鈕將始終保持可用狀態
     const submitBtn = document.getElementById('submit_btn');
     if (submitBtn) {
-        submitBtn.disabled = false;
+        // 如果申請已通過，保持按鈕禁用狀態
+        const isApproved = submitBtn.hasAttribute('data-approved') || submitBtn.disabled;
+        if (!isApproved) {
+            submitBtn.disabled = false;
+        }
     }
 }
 
+// 如果申請已通過，禁用所有表單欄位
+<?php if ($is_approved): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    // 禁用所有輸入欄位
+    const form = document.getElementById('recruitmentForm');
+    if (form) {
+        const inputs = form.querySelectorAll('input, textarea, select, button');
+        inputs.forEach(function(input) {
+            if (input.type !== 'hidden' && input.id !== 'captchaInput' && !input.onclick) {
+                input.disabled = true;
+                input.style.cursor = 'not-allowed';
+                input.style.opacity = '0.6';
+            }
+        });
+        
+        // 特別確保送出按鈕被禁用
+        const submitBtn = document.getElementById('submit_btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.style.cursor = 'not-allowed';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.setAttribute('data-approved', 'true');
+        }
+        
+        // 禁用驗證碼相關元素
+        const captchaInput = document.getElementById('captchaInput');
+        const captchaImage = document.getElementById('captchaImage');
+        if (captchaInput) {
+            captchaInput.disabled = true;
+            captchaInput.style.cursor = 'not-allowed';
+        }
+        if (captchaImage) {
+            captchaImage.style.pointerEvents = 'none';
+            captchaImage.style.opacity = '0.5';
+            captchaImage.style.cursor = 'not-allowed';
+        }
+    }
+    
+    // 禁用學校搜尋功能
+    const schoolNameInput = document.getElementById('school_name');
+    if (schoolNameInput) {
+        schoolNameInput.disabled = true;
+        schoolNameInput.style.cursor = 'not-allowed';
+    }
+    
+    // 禁用所有表單相關的按鈕（不包括搜尋按鈕）
+    const formButtons = form.querySelectorAll('button');
+    formButtons.forEach(function(btn) {
+        if (btn.id !== 'search_submit_btn') { // 保留搜尋按鈕可用
+            btn.disabled = true;
+            btn.style.cursor = 'not-allowed';
+            btn.style.opacity = '0.6';
+        }
+    });
+    
+    // 禁用所有輸入欄位、選擇框和文字區域
+    const allFormFields = form.querySelectorAll('input:not([type="hidden"]), textarea, select');
+    allFormFields.forEach(function(field) {
+        field.disabled = true;
+        field.style.cursor = 'not-allowed';
+        field.style.opacity = '0.6';
+    });
+    
+    // 防止表單提交
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('申請已通過審核，無法修改資料。');
+            return false;
+        });
+    }
+});
+<?php endif; ?>
+
+// 搜尋表單處理
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('searchForm');
+    const searchSubmitBtn = document.getElementById('search_submit_btn');
+    
+    if (searchForm && searchSubmitBtn) {
+        // 在表單提交時顯示載入狀態
+        searchForm.addEventListener('submit', function(e) {
+            const emailInput = document.getElementById('search_email_input');
+            if (emailInput && emailInput.value.trim() === '') {
+                e.preventDefault();
+                alert('請輸入 Email 進行搜尋');
+                emailInput.focus();
+                return false;
+            }
+            
+            // 顯示載入狀態
+            searchSubmitBtn.disabled = true;
+            searchSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 搜尋中...';
+            searchSubmitBtn.style.opacity = '0.7';
+            searchSubmitBtn.style.cursor = 'wait';
+        });
+        
+        // 如果有診斷信息，自動展開並滾動到該位置
+        const formSection = searchForm.closest('.form-section');
+        if (formSection) {
+            const debugDetails = formSection.querySelector('details');
+            if (debugDetails) {
+                // 確保診斷信息是展開的
+                debugDetails.open = true;
+                // 延遲滾動，確保頁面已完全載入
+                setTimeout(function() {
+                    debugDetails.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 300);
+            }
+        }
+    }
+});
+
 // 頁面載入時初始化輸入框視覺效果和學校搜尋
 document.addEventListener('DOMContentLoaded', function() {
+    // 電話號碼驗證功能（參考 cooperation_upload.php）
+    const contactPhoneInput = document.getElementById('contact_phone');
+    
+    if (contactPhoneInput) {
+        const phoneHint = contactPhoneInput.nextElementSibling;
+        
+        // 驗證函數
+        function validatePhone() {
+            const value = contactPhoneInput.value.trim();
+            if (value.length > 0 && value.length !== 10) {
+                // 顯示錯誤狀態
+                if (phoneHint && phoneHint.classList.contains('phone-hint')) {
+                    phoneHint.textContent = '電話號碼必須為10位數字';
+                    phoneHint.style.display = 'block';
+                }
+                contactPhoneInput.style.borderColor = '#d32f2f';
+                contactPhoneInput.style.borderWidth = '2px';
+                contactPhoneInput.classList.add('phone-error');
+            } else {
+                // 清除錯誤狀態
+                if (phoneHint && phoneHint.classList.contains('phone-hint')) {
+                    phoneHint.style.display = 'none';
+                }
+                contactPhoneInput.style.borderColor = '';
+                contactPhoneInput.style.borderWidth = '';
+                contactPhoneInput.classList.remove('phone-error');
+            }
+        }
+        
+        // 只允許輸入數字
+        contactPhoneInput.addEventListener('input', function(e) {
+            // 移除非數字字元
+            this.value = this.value.replace(/[^0-9]/g, '');
+            
+            // 限制最大長度為10
+            if (this.value.length > 10) {
+                this.value = this.value.slice(0, 10);
+            }
+            
+            // 即時驗證
+            validatePhone();
+        });
+        
+        // 失去焦點時驗證
+        contactPhoneInput.addEventListener('blur', function() {
+            validatePhone();
+        });
+        
+        // 獲得焦點時也檢查（處理初始值）
+        contactPhoneInput.addEventListener('focus', function() {
+            validatePhone();
+        });
+        
+        // 頁面載入時檢查初始值
+        validatePhone();
+    }
+    
     // 初始化縣市和區/鄉鎮市下拉選單
     const citySelect = document.getElementById('citySelect');
     const districtSelect = document.getElementById('districtSelect');
@@ -1384,14 +2144,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 表單提交前驗證
     function validateFormBeforeSubmit(e) {
+        console.log('=== 開始表單驗證 ===');
+        
         const schoolCodeInput = document.getElementById('school_code');
         const schoolNameInput = document.getElementById('school_name');
         
         // 驗證學校代號是否存在
         if (schoolCodeInput) {
             const schoolCode = schoolCodeInput.value.trim();
+            console.log('學校代號檢查:', schoolCode);
             if (!schoolCode) {
                 e.preventDefault();
+                console.error('❌ 學校代號為空');
                 showSchoolError('請從系統提供的選項中選擇學校，不能自行輸入');
                 if (schoolNameInput) {
                     schoolNameInput.focus();
@@ -1399,10 +2163,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return false;
             }
+        } else {
+            console.error('❌ 找不到 school_code 輸入框');
+            e.preventDefault();
+            alert('系統錯誤：找不到學校代號欄位，請重新整理頁面後再試');
+            return false;
+        }
+        
+        // 驗證學校名稱格式（可選，但建議檢查）
+        if (schoolNameInput) {
+            const schoolName = schoolNameInput.value.trim();
+            console.log('學校名稱檢查:', schoolName);
+            // 檢查格式是否為：學校名稱 (縣市區)
+            const schoolFormatPattern = /^.+ \(.+\)$/;
+            if (schoolName && !schoolFormatPattern.test(schoolName)) {
+                console.warn('⚠️ 學校名稱格式不正確:', schoolName);
+                // 不阻止提交，因為主要依賴 school_code
+            }
         }
         
         // 驗證目標年級至少選擇一個
         const targetGradesCheckboxes = document.querySelectorAll('input[name="target_grades[]"]:checked');
+        console.log('目標年級檢查:', targetGradesCheckboxes.length);
         if (targetGradesCheckboxes.length === 0) {
             e.preventDefault();
             alert('請至少選擇一個目標年級');
@@ -1414,6 +2196,48 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
+        // 驗證其他必填欄位
+        const requiredFields = [
+            { id: 'contact_name', name: '聯絡人姓名' },
+            { id: 'contact_phone', name: '聯絡人電話' },
+            { id: 'contact_email', name: '聯絡人 Email' },
+            { id: 'preferred_date', name: '首選日期' },
+            { id: 'preferred_time', name: '首選時段' },
+            { id: 'expected_students', name: '預期參與學生數' }
+        ];
+        
+        for (const field of requiredFields) {
+            const input = document.getElementById(field.id) || document.querySelector(`[name="${field.id}"]`);
+            if (input) {
+                const value = input.value ? input.value.trim() : '';
+                console.log(`${field.name} 檢查:`, value ? '✓' : '✗');
+                if (!value) {
+                    e.preventDefault();
+                    alert(`請填寫「${field.name}」`);
+                    input.focus();
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+                }
+            } else {
+                console.warn(`⚠️ 找不到 ${field.name} 欄位`);
+            }
+        }
+        
+        // 驗證驗證碼
+        const captchaInput = document.getElementById('captchaInput');
+        if (captchaInput) {
+            const captcha = captchaInput.value.trim();
+            console.log('驗證碼檢查:', captcha ? '✓' : '✗');
+            if (!captcha) {
+                e.preventDefault();
+                alert('請輸入驗證碼');
+                captchaInput.focus();
+                captchaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+        }
+        
+        console.log('✅ 表單驗證通過');
         return true;
     }
     
@@ -1448,10 +2272,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 確保提交按鈕始終可用（不再禁用）
+    // 確保提交按鈕可用（但如果申請已通過則保持禁用）
     const submitBtn = document.getElementById('submit_btn');
     if (submitBtn) {
-        submitBtn.disabled = false;
+        // 如果申請已通過，保持按鈕禁用狀態
+        const isApproved = submitBtn.hasAttribute('data-approved');
+        if (!isApproved) {
+            submitBtn.disabled = false;
+        }
     }
     
     // 監聽所有必填欄位的變化（保留用於其他用途，但不再禁用按鈕）
@@ -1480,10 +2308,208 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtnText = document.getElementById('submit_btn_text');
     
     if (form) {
+        // 移除舊的 onsubmit 處理器，統一使用 addEventListener
+        form.onsubmit = null;
+        
         form.addEventListener('submit', function(e) {
+            console.log('=== 開始表單驗證 ===');
+            console.log('表單提交事件觸發');
+            
+            // 檢查是否已經驗證通過（避免無限循環）
+            if (form.getAttribute('data-validated') === 'true') {
+                console.log('表單已驗證通過，允許提交');
+                form.removeAttribute('data-validated');
+                return true; // 允許提交
+            }
+            
+            console.log('阻止預設行為以進行驗證');
+            // 先阻止預設提交行為，驗證通過後再允許提交
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // 防止重複提交
+            if (isSubmitting) {
+                console.log('⚠️ 表單正在提交中，阻止重複提交');
+                return false;
+            }
+            
+            // 完整的必填欄位驗證
+            const missingFields = [];
+            
+            // 1. 驗證學校名稱（school_code）
+            const schoolCodeInput = document.getElementById('school_code');
+            const schoolNameInput = document.getElementById('school_name');
+            if (!schoolCodeInput || !schoolCodeInput.value || schoolCodeInput.value.trim() === '') {
+                missingFields.push({ field: '學校名稱', element: schoolNameInput || schoolCodeInput });
+                console.log('❌ 缺少：學校名稱 (school_code)');
+            } else {
+                console.log('✓ 學校名稱:', schoolCodeInput.value);
+            }
+            
+            // 2. 驗證聯絡人姓名
+            const contactNameInput = form.querySelector('input[name="contact_name"]');
+            if (!contactNameInput || !contactNameInput.value || contactNameInput.value.trim() === '') {
+                missingFields.push({ field: '聯絡人姓名', element: contactNameInput });
+                console.log('❌ 缺少：聯絡人姓名');
+            } else {
+                console.log('✓ 聯絡人姓名:', contactNameInput.value);
+            }
+            
+            // 3. 驗證聯絡人電話
+            const contactPhoneInput = form.querySelector('input[name="contact_phone"]') || document.getElementById('contact_phone');
+            if (!contactPhoneInput || !contactPhoneInput.value || contactPhoneInput.value.trim() === '') {
+                missingFields.push({ field: '聯絡人電話', element: contactPhoneInput });
+                console.log('❌ 缺少：聯絡人電話');
+            } else {
+                const phoneValue = contactPhoneInput.value.trim();
+                // 驗證電話號碼必須為10位數字
+                if (phoneValue.length !== 10 || !/^[0-9]{10}$/.test(phoneValue)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    isSubmitting = false;
+                    
+                    const errorMessage = '聯絡人電話輸入錯誤';
+                    alert(errorMessage);
+                    
+                    contactPhoneInput.focus();
+                    contactPhoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    contactPhoneInput.style.borderColor = '#d32f2f';
+                    contactPhoneInput.style.boxShadow = '0 0 0 2px rgba(211, 47, 47, 0.2)';
+                    
+                    // 顯示錯誤提示
+                    const phoneHint = contactPhoneInput.nextElementSibling;
+                    if (phoneHint && phoneHint.classList.contains('phone-hint')) {
+                        phoneHint.textContent = errorMessage;
+                        phoneHint.style.display = 'block';
+                    }
+                    
+                    setTimeout(() => {
+                        contactPhoneInput.style.borderColor = '';
+                        contactPhoneInput.style.boxShadow = '';
+                        if (phoneHint && phoneHint.classList.contains('phone-hint')) {
+                            phoneHint.style.display = 'none';
+                        }
+                    }, 3000);
+                    
+                    console.log('❌ 聯絡人電話格式錯誤:', phoneValue);
+                    return false;
+                }
+                console.log('✓ 聯絡人電話:', phoneValue);
+            }
+            
+            // 4. 驗證聯絡人 Email
+            const contactEmailInput = form.querySelector('input[name="contact_email"]');
+            if (!contactEmailInput || !contactEmailInput.value || contactEmailInput.value.trim() === '') {
+                missingFields.push({ field: '聯絡人 Email', element: contactEmailInput });
+                console.log('❌ 缺少：聯絡人 Email');
+            } else {
+                console.log('✓ 聯絡人 Email:', contactEmailInput.value);
+            }
+            
+            // 5. 驗證首選日期
+            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
+            if (!preferredDateInput || !preferredDateInput.value || preferredDateInput.value.trim() === '') {
+                missingFields.push({ field: '首選日期', element: preferredDateInput });
+                console.log('❌ 缺少：首選日期');
+            } else {
+                console.log('✓ 首選日期:', preferredDateInput.value);
+                // 驗證日期不能是過去的日期
+                const selectedDate = new Date(preferredDateInput.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                selectedDate.setHours(0, 0, 0, 0);
+                
+                if (selectedDate < today) {
+                    e.preventDefault();
+                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
+                    preferredDateInput.focus();
+                    preferredDateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    isSubmitting = false;
+                    return false;
+                }
+            }
+            
+            // 6. 驗證首選時段
+            const preferredTimeInput = form.querySelector('select[name="preferred_time"]');
+            if (!preferredTimeInput || !preferredTimeInput.value || preferredTimeInput.value.trim() === '') {
+                missingFields.push({ field: '首選時段', element: preferredTimeInput });
+                console.log('❌ 缺少：首選時段');
+            } else {
+                console.log('✓ 首選時段:', preferredTimeInput.value);
+            }
+            
+            // 7. 驗證目標年級（至少選擇一個）
+            const targetGradesCheckboxes = form.querySelectorAll('input[name="target_grades[]"]:checked');
+            if (!targetGradesCheckboxes || targetGradesCheckboxes.length === 0) {
+                const firstCheckbox = form.querySelector('input[name="target_grades[]"]');
+                missingFields.push({ field: '目標年級', element: firstCheckbox });
+                console.log('❌ 缺少：目標年級（至少需選擇一個）');
+            } else {
+                console.log('✓ 目標年級:', Array.from(targetGradesCheckboxes).map(cb => cb.value).join(', '));
+            }
+            
+            // 8. 驗證預期參與學生數
+            const expectedStudentsInput = form.querySelector('input[name="expected_students"]');
+            if (!expectedStudentsInput || !expectedStudentsInput.value || expectedStudentsInput.value.trim() === '') {
+                missingFields.push({ field: '預期參與學生數', element: expectedStudentsInput });
+                console.log('❌ 缺少：預期參與學生數');
+            } else {
+                const studentsNum = parseInt(expectedStudentsInput.value);
+                if (isNaN(studentsNum) || studentsNum <= 0) {
+                    e.preventDefault();
+                    alert('預期參與學生數必須為大於 0 的數字。');
+                    expectedStudentsInput.focus();
+                    expectedStudentsInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    isSubmitting = false;
+                    return false;
+                }
+                console.log('✓ 預期參與學生數:', expectedStudentsInput.value);
+            }
+            
+            // 9. 驗證驗證碼
+            const captchaInput = document.getElementById('captchaInput');
+            if (!captchaInput || !captchaInput.value || captchaInput.value.trim() === '') {
+                missingFields.push({ field: '驗證碼', element: captchaInput });
+                console.log('❌ 缺少：驗證碼');
+            } else {
+                console.log('✓ 驗證碼:', captchaInput.value);
+            }
+            
+            // 如果有缺少的欄位，阻止提交並顯示錯誤
+            if (missingFields.length > 0) {
+                e.preventDefault();
+                isSubmitting = false;
+                
+                const missingFieldNames = missingFields.map(f => f.field).join('、');
+                const errorMessage = `請填寫所有必填欄位。\n\n缺少的欄位：\n${missingFields.map(f => '• ' + f.field).join('\n')}`;
+                
+                alert(errorMessage);
+                
+                // 聚焦到第一個缺少的欄位
+                const firstMissingField = missingFields[0].element;
+                if (firstMissingField) {
+                    firstMissingField.focus();
+                    firstMissingField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // 添加視覺提示（紅色邊框）
+                    firstMissingField.style.borderColor = '#d32f2f';
+                    firstMissingField.style.boxShadow = '0 0 0 2px rgba(211, 47, 47, 0.2)';
+                    setTimeout(() => {
+                        firstMissingField.style.borderColor = '';
+                        firstMissingField.style.boxShadow = '';
+                    }, 3000);
+                }
+                
+                console.log('❌ 表單驗證失敗，缺少欄位：', missingFieldNames);
+                return false;
+            }
+            
             // 驗證縣市與學校是否一致
             if (!validateCitySchoolMatch()) {
                 e.preventDefault();
+                isSubmitting = false;
                 const citySelect = document.getElementById('citySelect');
                 if (citySelect) {
                     citySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1492,28 +2518,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             
-            // 防止重複提交
-            if (isSubmitting) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // 驗證日期不能是過去的日期
-            const preferredDateInput = form.querySelector('input[name="preferred_date"]');
-            if (preferredDateInput && preferredDateInput.value) {
-                const selectedDate = new Date(preferredDateInput.value);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0); // 設定為今天的開始時間
-                selectedDate.setHours(0, 0, 0, 0);
-                
-                if (selectedDate < today) {
-                    e.preventDefault();
-                    alert('期望招生日期不能是過去的日期，請選擇今天或未來的日期。');
-                    preferredDateInput.focus();
-                    isSubmitting = false;
-                    return false;
-                }
-            }
+            console.log('✅ 所有必填欄位驗證通過');
             
             if (formAction) {
                 const action = formAction.value;
@@ -1528,8 +2533,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 設定提交狀態
             isSubmitting = true;
+            console.log('✅ 驗證通過，準備提交表單');
             
-            // 更新按鈕文字（但不禁用按鈕）
+            // 更新按鈕文字
             if (submitBtn && submitBtnText) {
                 const originalText = submitBtnText.textContent;
                 submitBtnText.textContent = '處理中...';
@@ -1542,6 +2548,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }, 5000);
             }
+            
+            // 驗證通過，使用原生表單提交（不觸發事件監聽器）
+            console.log('提交表單到伺服器...');
+            
+            // 保存事件處理器引用
+            const submitHandler = arguments.callee;
+            
+            // 移除事件監聽器，避免無限循環
+            form.removeEventListener('submit', submitHandler);
+            
+            // 使用原生 submit 方法提交表單（不會觸發 submit 事件）
+            // 但為了確保，我們使用一個標記
+            form.setAttribute('data-validated', 'true');
+            
+            // 直接調用原生 submit（不觸發事件）
+            HTMLFormElement.prototype.submit.call(form);
         });
     }
     
@@ -1559,7 +2581,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function selectApplication(applicationId) {
     // 優先從搜索框獲取 email
     let email = '';
-    const emailInput = document.querySelector('input[name="email"]');
+    const emailInput = document.getElementById('search_email_input') || document.querySelector('#searchForm input[name="email"]');
     if (emailInput) {
         email = emailInput.value.trim();
     }
@@ -1623,8 +2645,9 @@ function performSchoolSearch() {
         .then(response => response.json())
         .then(data => {
             console.log('搜尋結果:', data);
+            console.log('調試資訊:', data.debug);
             if (data.schools && data.schools.length > 0) {
-                resultsDiv.innerHTML = data.schools.map(school => {
+                resultsDiv.innerHTML = data.schools.map((school, index) => {
                     let displayName = school.name;
                     let additionalInfo = '';
                     
@@ -1634,14 +2657,43 @@ function performSchoolSearch() {
                     
                     // 確保 school_code 存在，如果沒有則使用空字串
                     const schoolCode = school.school_code || '';
-                    return `<div class="search-result-item" onclick="selectSchool('${schoolCode}', '${school.name}', '${school.city}', '${school.district}')">
-                        <i class="fas fa-school"></i>
-                        <div class="school-info">
-                            <span class="school-name">${displayName}</span>
-                            <span class="school-location">${school.city || ''} ${school.district || ''}</span>
-                            ${additionalInfo}
-                        </div>
-                    </div>`;
+                    // 使用 data 屬性儲存學校資訊，避免 JavaScript 字串轉義問題
+                    // 顯示地址資訊，幫助用戶區分相同名稱的學校
+                    const schoolAddress = school.address || '';
+                    console.log('處理學校搜尋結果:', {
+                        schoolCode: schoolCode,
+                        schoolName: school.name,
+                        address: schoolAddress,
+                        addressLength: schoolAddress.length
+                    });
+                    
+                    const addressDisplay = schoolAddress ? `<div class="school-address" style="font-size: 12px; color: #666; margin-top: 4px;">
+                        <i class="fas fa-map-marker-alt"></i> ${schoolAddress}
+                    </div>` : '';
+                    
+                    // 轉義地址中的特殊字元，確保正確儲存到 data 屬性
+                    const escapedAddress = schoolAddress
+                        .replace(/&/g, '&amp;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    
+                    return `<div class="search-result-item" 
+                                data-school-code="${schoolCode}"
+                                data-school-name="${(school.name || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+                                data-school-city="${(school.city || '').replace(/"/g, '&quot;')}"
+                                data-school-district="${(school.district || '').replace(/"/g, '&quot;')}"
+                                data-school-address="${escapedAddress}"
+                                onclick="selectSchoolFromData(this)">
+                            <i class="fas fa-school"></i>
+                            <div class="school-info">
+                                <span class="school-name">${displayName}</span>
+                                <span class="school-location">${school.city || ''} ${school.district || ''}</span>
+                                ${addressDisplay}
+                                ${additionalInfo}
+                            </div>
+                        </div>`;
                 }).join('');
 
                 if (data.total > 20) {
@@ -2015,11 +3067,38 @@ function validateCitySchoolMatch() {
     return !hasError;
 }
 
-// 選擇學校
-function selectSchool(schoolCode, schoolName, city, district) {
+// 從 data 屬性選擇學校（新方法，避免編碼問題）
+function selectSchoolFromData(element) {
+    const schoolCode = element.getAttribute('data-school-code') || '';
+    const schoolName = element.getAttribute('data-school-name') || '';
+    const city = element.getAttribute('data-school-city') || '';
+    const district = element.getAttribute('data-school-district') || '';
+    let fullAddress = element.getAttribute('data-school-address') || '';
+    
+    // 解碼 HTML 實體（如果有的話）
+    if (fullAddress) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = fullAddress;
+        fullAddress = tempDiv.textContent || tempDiv.innerText || fullAddress;
+    }
+    
+    console.log('選擇學校 - 原始資料:', {
+        schoolCode,
+        schoolName,
+        city,
+        district,
+        fullAddress: fullAddress,
+        rawAddress: element.getAttribute('data-school-address')
+    });
+    
+    selectSchool(schoolCode, schoolName, city, district, fullAddress);
+}
+
+// 選擇學校（保留舊方法以向後兼容）
+function selectSchool(schoolCode, schoolName, city, district, fullAddress) {
     // 驗證 schoolCode 是否存在
     if (!schoolCode || schoolCode.trim() === '') {
-        console.error('錯誤：學校代號為空', {schoolCode, schoolName, city, district});
+        console.error('錯誤：學校代號為空', {schoolCode, schoolName, city, district, fullAddress});
         alert('錯誤：無法取得學校代號，請重新選擇學校');
         return;
     }
@@ -2039,6 +3118,102 @@ function selectSchool(schoolCode, schoolName, city, district) {
     // 顯示學校名稱（顯示欄位）
     if (schoolNameInput) {
         schoolNameInput.value = fullSchoolName;
+    }
+    
+    // 同時設置隱藏的 school_name_display 欄位，以便表單提交時保留
+    const schoolNameDisplayInput = document.getElementById('school_name_display');
+    if (schoolNameDisplayInput) {
+        schoolNameDisplayInput.value = fullSchoolName;
+        console.log('已設置 school_name_display:', fullSchoolName);
+    } else {
+        console.warn('⚠️ 找不到 school_name_display 隱藏欄位');
+    }
+    
+    // 更新縣市和區/鄉鎮市下拉選單
+    const citySelect = document.getElementById('citySelect');
+    const districtSelect = document.getElementById('districtSelect');
+    const schoolAddressInput = document.getElementById('school_address');
+    
+    // 優先使用完整地址，如果沒有則使用「縣市+區/鄉鎮市」
+    if (schoolAddressInput) {
+        console.log('設置地址前的狀態:', {
+            fullAddress: fullAddress,
+            fullAddressTrimmed: fullAddress ? fullAddress.trim() : '',
+            city: city,
+            district: district,
+            currentValue: schoolAddressInput.value
+        });
+        
+        if (fullAddress && fullAddress.trim() !== '') {
+            // 使用完整地址
+            const trimmedAddress = fullAddress.trim();
+            schoolAddressInput.value = trimmedAddress;
+            console.log('✅ 已設置完整學校地址:', trimmedAddress);
+            console.log('✅ 驗證設置後的地址值:', schoolAddressInput.value);
+        } else if (city && district) {
+            // 如果沒有完整地址，使用「縣市+區/鄉鎮市」
+            const normalizedCity = normalizeCityName(city);
+            const fallbackAddress = normalizedCity + district;
+            schoolAddressInput.value = fallbackAddress;
+            console.log('✅ 已設置學校地址（縣市+區）:', fallbackAddress);
+            console.log('⚠️ 注意：使用備用地址，因為完整地址為空');
+        } else {
+            schoolAddressInput.value = '';
+            console.log('⚠️ 沒有地址資訊，已清空地址欄位');
+        }
+        
+        // 最終驗證
+        setTimeout(function() {
+            console.log('最終地址值驗證:', schoolAddressInput.value);
+        }, 100);
+    } else {
+        console.error('❌ 找不到學校地址輸入框');
+    }
+    
+    if (citySelect && city) {
+        // 標準化縣市名稱（處理「臺」vs「台」等變體）
+        const normalizedCity = normalizeCityName(city);
+        console.log('選擇學校 - 縣市:', city, '標準化後:', normalizedCity, '區/鄉鎮市:', district);
+        
+        // 設置縣市下拉選單的值
+        citySelect.value = normalizedCity;
+        
+        // 更新區/鄉鎮市選項（不保留值，因為我們要設置新的值）
+        if (typeof updateDistricts === 'function') {
+            updateDistricts(false); // 先清空，然後設置新值
+        }
+        
+        // 等待區/鄉鎮市選項更新後再設置區/鄉鎮市值
+        setTimeout(function() {
+            if (districtSelect && district) {
+                districtSelect.value = district;
+                console.log('已設置區/鄉鎮市下拉選單:', district);
+            }
+            
+            // 重新設置完整地址（因為 updateDistricts(false) 可能清空了地址）
+            if (schoolAddressInput) {
+                if (fullAddress && fullAddress.trim() !== '') {
+                    // 使用完整地址
+                    schoolAddressInput.value = fullAddress.trim();
+                    console.log('✅ 重新設置完整學校地址（避免被 updateDistricts 覆蓋）:', schoolAddressInput.value);
+                } else if (city && district) {
+                    // 如果沒有完整地址，使用「縣市+區/鄉鎮市」
+                    const normalizedCity = normalizeCityName(city);
+                    schoolAddressInput.value = normalizedCity + district;
+                    console.log('✅ 重新設置學校地址（縣市+區）:', schoolAddressInput.value);
+                }
+            }
+        }, 150); // 增加延遲時間，確保 DOM 更新完成
+    } else if (citySelect && !city) {
+        // 如果沒有縣市資訊，清空下拉選單
+        citySelect.value = '';
+        if (typeof updateDistricts === 'function') {
+            updateDistricts(false);
+        }
+        // 清空學校地址
+        if (schoolAddressInput) {
+            schoolAddressInput.value = '';
+        }
     }
     
     // 注意：縣市和區/鄉鎮市不再存到資料庫，僅用於顯示（如果有顯示欄位的話）
@@ -2132,6 +3307,16 @@ function loadApplicationData() {
         if (clearBtn) {
             clearBtn.style.display = 'block';
         }
+    }
+    
+    // 檢查申請狀態
+    const applicationStatus = data.status || '';
+    const isApproved = (applicationStatus === 'AP' || applicationStatus === 'approved');
+    
+    // 如果已通過，阻止載入並提示
+    if (isApproved) {
+        alert('此申請已通過審核，無法修改資料。如需變更，請聯繫管理員。');
+        return;
     }
     
     // 設定為更新模式

@@ -275,20 +275,6 @@ switch ($action) {
             }
             
             if ($match) {
-                // 創建學校的唯一識別碼（使用城市+學校名稱的標準化版本，忽略區域差異）
-                $normalized_name = normalizeSchoolName($school['name']);
-                $normalized_city = normalizeCityName($school['city']);
-                
-                // 進一步簡化學校名稱，移除「高中」等詞彙
-                $simplified_name = str_replace(['高中', '附設', '部'], '', $normalized_name);
-                $simplified_name = trim($simplified_name);
-                
-                $unique_key = $normalized_city . '_' . $simplified_name; // 使用簡化後的名稱
-                
-                // 檢查是否已經存在相同的學校
-                if (!isset($seen_schools[$unique_key])) {
-                    $seen_schools[$unique_key] = true;
-                    
                     // 確保所有必需字段都存在
                     if (!isset($school['district'])) $school['district'] = '';
                     if (!isset($school['city'])) $school['city'] = '';
@@ -300,14 +286,37 @@ switch ($action) {
                         continue;
                     }
                     
+                    // 如果 address 為空，自動生成地址（使用 city + district）
+                    if (empty($school['address']) && !empty($school['city']) && !empty($school['district'])) {
+                        $school['address'] = $school['city'] . $school['district'];
+                        error_log("自動生成地址: " . $school['name'] . " -> " . $school['address']);
+                    } elseif (empty($school['address']) && !empty($school['city'])) {
+                        $school['address'] = $school['city'];
+                        error_log("自動生成地址（僅縣市）: " . $school['name'] . " -> " . $school['address']);
+                    }
+                
+                // 使用 school_code 作為唯一識別碼，避免合併不同地址的相同名稱學校
+                $unique_key = $school['school_code'];
+                
+                // 檢查是否已經存在相同的 school_code
+                if (!isset($seen_schools[$unique_key])) {
+                    $seen_schools[$unique_key] = true;
+                    
                     // 選擇最佳的學校名稱顯示（優先選擇較短、較簡潔的名稱）
                     $school['display_name'] = $school['name'];
                     $school['all_names'] = [$school['name']]; // 記錄所有找到的名稱
                     
                     $matches[] = $school;
                 } else {
-                    // 如果找到重複的學校，整合資訊
-                    $existing_index = findExistingSchoolIndex($matches, $unique_key);
+                    // 如果找到相同的 school_code，只更新名稱資訊（不更新地址，因為地址應該是一致的）
+                    $existing_index = -1;
+                    foreach ($matches as $idx => $match) {
+                        if ($match['school_code'] === $school['school_code']) {
+                            $existing_index = $idx;
+                            break;
+                        }
+                    }
+                    
                     if ($existing_index !== -1) {
                         // 將新名稱添加到所有名稱列表中
                         if (!in_array($school['name'], $matches[$existing_index]['all_names'])) {
@@ -332,13 +341,15 @@ switch ($action) {
                         $matches[$existing_index]['name'] = $best_name;
                         $matches[$existing_index]['display_name'] = $best_name;
                         
-                        // 合併其他可能有用的資訊
+                        // 只有在現有記錄沒有地址時，才使用新記錄的地址（保持地址一致性）
                         if (empty($matches[$existing_index]['address']) && !empty($school['address'])) {
                             $matches[$existing_index]['address'] = $school['address'];
                         }
+                        // 只有在現有記錄沒有電話時，才使用新記錄的電話
                         if (empty($matches[$existing_index]['phone']) && !empty($school['phone'])) {
                             $matches[$existing_index]['phone'] = $school['phone'];
                         }
+                        // 只有在現有記錄沒有網站時，才使用新記錄的網站
                         if (empty($matches[$existing_index]['website']) && !empty($school['website'])) {
                             $matches[$existing_index]['website'] = $school['website'];
                         }
@@ -350,8 +361,29 @@ switch ($action) {
         // 限制結果數量
         $matches = array_slice($matches, 0, 20);
         
+        // 確保所有學校都有地址（如果為空，自動生成）
+        foreach ($matches as &$match) {
+            if (empty($match['address'])) {
+                if (!empty($match['city']) && !empty($match['district'])) {
+                    $match['address'] = $match['city'] . $match['district'];
+                } elseif (!empty($match['city'])) {
+                    $match['address'] = $match['city'];
+                } else {
+                    $match['address'] = '';
+                }
+            }
+        }
+        unset($match); // 釋放引用
+        
         // 调试信息
         error_log("搜索匹配结果: 找到 " . count($matches) . " 条匹配记录");
+        
+        // 記錄每筆匹配記錄的詳細資訊（用於調試）
+        foreach ($matches as $idx => $match) {
+            error_log("匹配記錄 #" . ($idx + 1) . ": school_code=" . ($match['school_code'] ?? 'NULL') . 
+                     ", name=" . ($match['name'] ?? 'NULL') . 
+                     ", address=" . ($match['address'] ?? 'NULL'));
+        }
         
         // 确保返回正确的JSON格式
         $response = [
@@ -361,7 +393,14 @@ switch ($action) {
             'debug' => [
                 'total_schools' => count($schools),
                 'unique_keys' => array_keys($seen_schools),
-                'deduplication_enabled' => true
+                'deduplication_enabled' => true,
+                'matches_detail' => array_map(function($m) {
+                    return [
+                        'school_code' => $m['school_code'] ?? null,
+                        'name' => $m['name'] ?? null,
+                        'address' => $m['address'] ?? null
+                    ];
+                }, $matches)
             ]
         ];
         

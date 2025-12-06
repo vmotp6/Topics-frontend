@@ -31,10 +31,35 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // 查詢記錄
+    // 先嘗試直接查詢
     $sql = "SELECT * FROM continued_admission WHERE id_number = ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$id_number]);
     $record = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // 如果沒有找到，且輸入不是以 PASSPORT_ 開頭，嘗試加上 PASSPORT_ 前綴查詢（外籍生）
+    if (!$record && strpos($id_number, 'PASSPORT_') !== 0) {
+        $passport_id = 'PASSPORT_' . $id_number;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$passport_id]);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($record) {
+            // 如果找到記錄，更新查詢的 id_number 為帶前綴的版本
+            $id_number = $passport_id;
+        }
+    }
+    
+    // 如果還是沒有找到，且輸入是以 PASSPORT_ 開頭，嘗試移除前綴查詢
+    if (!$record && strpos($id_number, 'PASSPORT_') === 0) {
+        $passport_only = str_replace('PASSPORT_', '', $id_number);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$passport_only]);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($record) {
+            // 如果找到記錄，更新查詢的 id_number 為不帶前綴的版本
+            $id_number = $passport_only;
+        }
+    }
     
     if (!$record) {
         echo json_encode([
@@ -59,7 +84,6 @@ try {
         '已錄取' => '已錄取',
         '未錄取' => '未錄取',
         '錄取' => '已錄取',
-        '未錄取' => '未錄取',
         'AP' => '已錄取',
         'RE' => '未錄取',
         'AD' => '備取'
