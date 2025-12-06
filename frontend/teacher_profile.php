@@ -547,7 +547,7 @@ try {
             <div id="passwordMessage"></div>
         </div>
         
-        <a href="<?php echo $is_teacher ? 'teacher.php' : 'student.php'; ?>" class="back-btn">← 返回<?php echo $is_teacher ? '老師' : '學生'; ?>頁面</a>
+        <a href="index.php" class="back-btn">← 返回首頁</a>
     </div>
 
     <script>

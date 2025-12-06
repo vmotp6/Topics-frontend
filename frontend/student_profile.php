@@ -483,7 +483,7 @@ try {
             <div id="passwordMessage"></div>
         </div>
         
-        <a href="student.php" class="back-btn">← 返回學生頁面</a>
+        <a href="index.php" class="back-btn">← 返回首頁</a>
     </div>
 
     <script>

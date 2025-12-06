@@ -886,21 +886,7 @@ function getActiveClass($targetFile) {
 <div class="navbar">
 <div class="container">
   <!-- Logo 區域 -->
-  <a href="<?php 
-    // 根據登入狀態和角色決定導向頁面（支援角色代碼和中文名稱）
-    if ($isLoggedIn && isset($_SESSION['role'])) {
-      $role = $_SESSION['role'];
-      if ($role === '學生' || $role === 'STU') {
-        echo getCorrectPath('student.php');
-      } elseif ($role === '老師' || $role === 'TEA' || $role === 'STA' || $role === '學校行政人員') {
-        echo getCorrectPath('teacher.php');
-      } else {
-        echo getCorrectPath('index.php');
-      }
-    } else {
-      echo getCorrectPath('index.php');
-    }
-  ?>" class="logo" style="text-decoration: none; color: inherit;">
+  <a href="<?php echo getCorrectPath('index.php'); ?>" class="logo" style="text-decoration: none; color: inherit;">
     <div class="logo-icon">
       <i class="fas fa-university"></i>
     </div>
@@ -1329,17 +1315,9 @@ document.getElementById("loginForm")?.addEventListener("submit", function (e) {
       .then((sessionResult) => {
         console.log("Session 設定結果:", sessionResult);
         if (sessionResult.success) {
-          // 在 set_session.php 成功後才進行頁面跳轉（支援角色代碼和中文名稱）
-          console.log("準備跳轉，角色:", data.role);
-          if (data.role === "老師" || data.role === "TEA" || data.role === "STA" || data.role === "學校行政人員") {
-            window.location.href = "<?php echo getCorrectPath('teacher.php'); ?>";
-          } else if (data.role === "學生" || data.role === "STU") {
-            window.location.href = "<?php echo getCorrectPath('student.php'); ?>";
-          } else {
-            // 預設跳轉或重新載入當前頁面
-            console.log("未知角色，重新載入頁面");
-            window.location.reload();
-          }
+          // 所有角色統一跳轉到 index.php，內容根據權限顯示
+          console.log("準備跳轉到首頁，角色:", data.role);
+          window.location.href = "<?php echo getCorrectPath('index.php'); ?>";
         } else {
           console.error('Session 設定失敗:', sessionResult);
           document.getElementById("loginMessage").innerText = "登入狀態同步失敗，請重試。";

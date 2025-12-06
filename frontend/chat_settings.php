@@ -257,19 +257,11 @@ $chatHidden = isset($_COOKIE['chat_hidden']);
             <a href="<?php 
                 // 根據登入狀態和角色決定導向頁面
                 if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['role'])) {
-                    switch ($_SESSION['role']) {
-                        case '學生':
-                            echo 'student.php';
-                            break;
-                        case '老師':
-                            echo 'teacher.php';
-                            break;
-                        case '學校行政人員':
-                            echo 'admin.php';
-                            break;
-                        default:
-                            echo 'index.php';
-                            break;
+                    // 所有角色統一返回 index.php（學校行政人員除外）
+                    if ($_SESSION['role'] === '學校行政人員') {
+                        echo 'admin.php';
+                    } else {
+                        echo 'index.php';
                     }
                 } else {
                     echo 'index.php';

@@ -12,16 +12,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         $_SESSION['login_method'] = 'google';
         
         // 重定向到相應頁面（避免URL參數顯示）
-        $redirect_url = 'index.php';
-        if ($_GET['role'] === '管理員') {
-            $redirect_url = 'admin_admission.php';
-        } elseif ($_GET['role'] === '老師') {
-            $redirect_url = 'teacher.php';
-        } elseif ($_GET['role'] === '學生') {
-            $redirect_url = 'student.php';
-        }
-        
-        header("Location: $redirect_url");
+            // 所有角色統一重定向到 index.php（管理員除外，管理員仍跳轉到 admin_admission.php）
+            $redirect_url = 'index.php';
+            if ($_GET['role'] === '管理員' || $_GET['role'] === 'ADM') {
+                $redirect_url = 'admin_admission.php';
+            }
+            
+            header("Location: $redirect_url");
         exit();
     }
 }

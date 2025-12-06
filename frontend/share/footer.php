@@ -9,22 +9,8 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-// 根據登入狀態和角色決定首頁連結
-$homePage = '/Topics-frontend/frontend/index.php'; // 預設為訪客首頁
-
-if ($isLoggedIn && isset($_SESSION['role'])) {
-    switch ($_SESSION['role']) {
-        case '學生':
-            $homePage = '/Topics-frontend/frontend/student.php';
-            break;
-        case '老師':
-            $homePage = '/Topics-frontend/frontend/teacher.php';
-            break;
-        default:
-            $homePage = '/Topics-frontend/frontend/index.php';
-            break;
-    }
-}
+// 所有角色統一使用 index.php 作為首頁
+$homePage = '/Topics-frontend/frontend/index.php';
 ?>
 <!-- footer.php -->
 <footer class="footer">
