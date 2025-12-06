@@ -966,7 +966,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                     }
                     if (in_array('name', $recommended_columns)) {
                         $recommended_fields[] = 'name';
-                        $recommended_values[] = $_POST['student_name'];
+                        $recommended_values[] = !empty($_POST['student_name']) ? $_POST['student_name'] : '';
                         $recommended_bind_types .= 's';
                     }
                     if (in_array('school', $recommended_columns)) {
@@ -1039,20 +1039,19 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                         $recommended_bind_types .= 's';
                     }
                     
-                    if (!empty($recommended_fields)) {
+                    // 確保至少有 recommendations_id 和 name 才能插入
+                    if (!empty($recommended_fields) && in_array('recommendations_id', $recommended_fields) && in_array('name', $recommended_fields)) {
                         $recommended_fields_str = implode(', ', $recommended_fields);
                         $recommended_placeholders = implode(', ', array_fill(0, count($recommended_fields), '?'));
                         $recommended_sql = "INSERT INTO recommended ($recommended_fields_str) VALUES ($recommended_placeholders)";
                         
                         // 調試：記錄要插入的資料
-                        if (isset($_GET['debug']) && $_GET['debug'] == '1') {
-                            error_log("插入 recommended 表 - SQL: " . $recommended_sql);
-                            error_log("插入 recommended 表 - 欄位: " . implode(', ', $recommended_fields));
-                            error_log("插入 recommended 表 - 值: " . print_r($recommended_values, true));
-                            error_log("插入 recommended 表 - recommendations_id: " . $recommendation_id);
-                            error_log("插入 recommended 表 - student_school_code: " . ($student_school_code ?? 'NULL'));
-                            error_log("插入 recommended 表 - student_grade_code: " . ($student_grade_code ?? 'NULL'));
-                        }
+                        error_log("插入 recommended 表 - SQL: " . $recommended_sql);
+                        error_log("插入 recommended 表 - 欄位: " . implode(', ', $recommended_fields));
+                        error_log("插入 recommended 表 - 值: " . print_r($recommended_values, true));
+                        error_log("插入 recommended 表 - recommendations_id: " . $recommendation_id);
+                        error_log("插入 recommended 表 - student_school_code: " . ($student_school_code ?? 'NULL'));
+                        error_log("插入 recommended 表 - student_grade_code: " . ($student_grade_code ?? 'NULL'));
                         
                         $recommended_stmt = $conn->prepare($recommended_sql);
                         if ($recommended_stmt) {
@@ -1067,19 +1066,29 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                                 error_log("插入 recommended 表執行失敗: " . $recommended_stmt->error);
                                 error_log("SQL: " . $recommended_sql);
                                 error_log("值: " . print_r($recommended_values, true));
+                                // 拋出異常以便調試
+                                throw new Exception("插入 recommended 表失敗: " . $recommended_stmt->error);
                             } else {
-                                if (isset($_GET['debug']) && $_GET['debug'] == '1') {
-                                    error_log("插入 recommended 表成功，插入 ID: " . $conn->insert_id);
-                                }
+                                error_log("插入 recommended 表成功，插入 ID: " . $conn->insert_id);
                             }
                             $recommended_stmt->close();
                         } else {
                             error_log("插入 recommended 表準備失敗: " . $conn->error);
                             error_log("SQL: " . $recommended_sql);
+                            throw new Exception("插入 recommended 表準備失敗: " . $conn->error);
                         }
                     } else {
-                        error_log("插入 recommended 表：沒有可插入的欄位");
+                        $missing_fields = [];
+                        if (!in_array('recommendations_id', $recommended_fields)) {
+                            $missing_fields[] = 'recommendations_id';
+                        }
+                        if (!in_array('name', $recommended_fields)) {
+                            $missing_fields[] = 'name';
+                        }
+                        error_log("插入 recommended 表：缺少必要欄位: " . implode(', ', $missing_fields));
                         error_log("recommended 表現有欄位: " . implode(', ', $recommended_columns));
+                        error_log("準備插入的欄位: " . implode(', ', $recommended_fields));
+                        throw new Exception("插入 recommended 表失敗：缺少必要欄位 " . implode(', ', $missing_fields));
                     }
                 } else {
                     error_log("插入 recommended 表：表不存在");
