@@ -2,6 +2,21 @@
 // 載入 session 配置
 require_once 'session_config.php';
 
+// 處理Google登入回調（必須在登入檢查之前）
+if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
+    if (isset($_GET['username']) && isset($_GET['role'])) {
+        // 設定Session
+        $_SESSION['logged_in'] = true;
+        $_SESSION['username'] = $_GET['username'];
+        $_SESSION['role'] = $_GET['role'];
+        $_SESSION['login_method'] = 'google';
+        
+        // 重定向到相應頁面（避免URL參數顯示）
+        header("Location: student_profile.php");
+        exit();
+    }
+}
+
 // 檢查登入狀態
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 
