@@ -476,7 +476,7 @@ try {
                 
                 <div class="form-group">
                     <label for="phone">電話</label>
-                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>">
                 </div>
             <?php else: ?>
                 <!-- 學生專用欄位 -->
@@ -528,7 +528,7 @@ try {
                 
                 <div class="form-group">
                     <label for="phone">電話</label>
-                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>" required>
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>">
                 </div>
             <?php endif; ?>
             
@@ -823,23 +823,7 @@ try {
             });
             
             // 驗證必填欄位（根據角色不同）
-            if (isTeacherRole) {
-                // 老師必填：科系、電話
-                if (!department || !phone) {
-                    const messageDiv = document.getElementById('message');
-                    messageDiv.className = 'message error';
-                    messageDiv.textContent = '請填寫所有必填欄位（科系、電話）';
-                    return;
-                }
-            } else if (isStudentRole) {
-                // 學生必填：姓名、科系、電話
-                if (!name || !department || !phone) {
-                    const messageDiv = document.getElementById('message');
-                    messageDiv.className = 'message error';
-                    messageDiv.textContent = '請填寫所有必填欄位（姓名、科系、電話）';
-                    return;
-                }
-            }
+            // 所有欄位都是可選的，不需要驗證
             
             const formData = new FormData();
             formData.append('username', username);

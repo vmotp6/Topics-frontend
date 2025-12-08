@@ -36,9 +36,9 @@ $class_name = $_POST['class_name'] ?? '';
 $avatar_only = isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK && 
                empty($name) && empty($department) && empty($phone);
 
-// 如果不是只上傳頭像，驗證必填欄位
-if (!$avatar_only && (empty($username) || empty($name) || empty($department) || empty($phone))) {
-    echo json_encode(['success' => false, 'message' => '請填寫所有必填欄位（姓名、科系、電話）']);
+// 驗證 username 是否為空（這是唯一必填的）
+if (empty($username)) {
+    echo json_encode(['success' => false, 'message' => '使用者名稱不能為空']);
     exit;
 }
 
@@ -168,9 +168,9 @@ try {
             if ($dept_result) {
                 $department_code = $dept_result['code'];
             } else {
-                error_log("無法找到科系代碼: {$department}");
-                echo json_encode(['success' => false, 'message' => '無效的科系']);
-                exit;
+                // 如果找不到對應的代碼，設為 null（允許為空）
+                error_log("無法找到科系代碼: {$department}，將設為空值");
+                $department_code = null;
             }
         }
     }
