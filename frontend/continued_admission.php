@@ -357,7 +357,8 @@ foreach ($courses as $course) {
             <div class="available-choices">
               <h4><i class="fas fa-list"></i> 可選科系</h4>
               <div class="choice-list" id="availableChoices">
-                <?php foreach ($courses as $course): ?>
+                <?php foreach ($courses as $course): 
+                  if ($course['code'] === 'AA') continue; ?>  
                 <div class="choice-item" draggable="true" data-choice="<?php echo htmlspecialchars($course['course_name']); ?>">
                   <i class="fas fa-grip-vertical"></i>
                   <span><?php echo htmlspecialchars($course['course_name']); ?></span>
