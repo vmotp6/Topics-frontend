@@ -425,9 +425,9 @@ def google_callback():
                     redirect_url = f"http://localhost/Topics-frontend/frontend/admin_admission.php?google_login=success&username={username}&role={role}"
                 elif role == '老師' or role == '學校行政人員':
                     # 老師和行政人員都跳轉到 teacher_profile.php
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/teacher_profile.php?google_login=success&username={username}&role={role}"
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
                 elif role == '學生':
-                    redirect_url = f"http://localhost/Topics-frontend/frontend/student_profile.php?google_login=success&username={username}&role={role}"
+                    redirect_url = f"http://localhost/Topics-frontend/frontend/index.php?google_login=success&username={username}&role={role}"
                 else:
                     # 預設重定向到聊天系統登入頁面
                     redirect_url = f"http://localhost/Topics-frontend/frontend/chat/google_chat_integration.php?google_login=success&username={username}&role={role}"
