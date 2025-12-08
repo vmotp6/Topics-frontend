@@ -115,34 +115,8 @@ try {
             $current_department = '';
         }
         
-        // 將年級代碼轉換為名稱
-        $grade_code = isset($result['grade']) && $result['grade'] !== null ? $result['grade'] : '';
-        if (!empty($grade_code)) {
-            $stmt_grade = $pdo->prepare("SELECT name FROM identity_options WHERE code = ?");
-            $stmt_grade->execute([$grade_code]);
-            $grade_result = $stmt_grade->fetch(PDO::FETCH_ASSOC);
-            if ($grade_result && !empty($grade_result['name'])) {
-                $grade_name = $grade_result['name'];
-                // 將年級代碼/名稱轉換為表單顯示格式
-                $grade_display_mapping = [
-                    'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
-                    'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
-                    'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
-                ];
-                // 先檢查代碼映射，如果沒有則使用資料庫中的名稱
-                $current_grade = $grade_display_mapping[$grade_code] ?? $grade_name;
-            } else {
-                // 如果找不到，嘗試直接使用代碼映射
-                $grade_display_mapping = [
-                    'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
-                    'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
-                    'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
-                ];
-                $current_grade = $grade_display_mapping[$grade_code] ?? '';
-            }
-        } else {
-            $current_grade = '';
-        }
+        // 保留年級代碼供表單使用（不轉換為名稱）
+        $current_grade = isset($result['grade']) && $result['grade'] !== null ? $result['grade'] : '';
         
         // 調試：記錄處理後的變數值
         error_log("Loaded values - name: {$user_name}, dept: {$current_department}, grade: {$current_grade}, phone: {$current_phone}, student_id: {$current_student_id}, class: {$current_class_name}");
@@ -444,16 +418,16 @@ try {
                 <select id="grade" name="grade">
                     <option value="" <?php echo empty($current_grade ?? '') ? 'selected' : ''; ?>>請選擇年級</option>
                     <optgroup label="五專">
-                        <option value="專一" <?php echo $current_grade === '專一' ? 'selected' : ''; ?>>專一</option>
-                        <option value="專二" <?php echo $current_grade === '專二' ? 'selected' : ''; ?>>專二</option>
-                        <option value="專三" <?php echo $current_grade === '專三' ? 'selected' : ''; ?>>專三</option>
-                        <option value="專四" <?php echo $current_grade === '專四' ? 'selected' : ''; ?>>專四</option>
-                        <option value="專五" <?php echo $current_grade === '專五' ? 'selected' : ''; ?>>專五</option>
+                        <option value="F1" <?php echo $current_grade === 'F1' ? 'selected' : ''; ?>>專一</option>
+                        <option value="F2" <?php echo $current_grade === 'F2' ? 'selected' : ''; ?>>專二</option>
+                        <option value="F3" <?php echo $current_grade === 'F3' ? 'selected' : ''; ?>>專三</option>
+                        <option value="F4" <?php echo $current_grade === 'F4' ? 'selected' : ''; ?>>專四</option>
+                        <option value="F5" <?php echo $current_grade === 'F5' ? 'selected' : ''; ?>>專五</option>
                     </optgroup>
                     <optgroup label="國中">
-                        <option value="國一" <?php echo $current_grade === '國一' ? 'selected' : ''; ?>>國一</option>
-                        <option value="國二" <?php echo $current_grade === '國二' ? 'selected' : ''; ?>>國二</option>
-                        <option value="國三" <?php echo $current_grade === '國三' ? 'selected' : ''; ?>>國三</option>
+                        <option value="J1" <?php echo $current_grade === 'J1' ? 'selected' : ''; ?>>國一</option>
+                        <option value="J2" <?php echo $current_grade === 'J2' ? 'selected' : ''; ?>>國二</option>
+                        <option value="J3" <?php echo $current_grade === 'J3' ? 'selected' : ''; ?>>國三</option>
                     </optgroup>
                 </select>
             </div>
