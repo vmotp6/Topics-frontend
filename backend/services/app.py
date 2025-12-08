@@ -545,7 +545,7 @@ def login():
                 # 先查詢用戶是否存在（不檢查密碼）
                 print(f"   查詢用戶: {username}")
                 cursor.execute(
-                    "SELECT username, role, status, password, email_verified FROM user WHERE username = %s",
+                    "SELECT username, role, status, password, email, email_verified FROM user WHERE username = %s",
                     (username,)
                 )
                 user = cursor.fetchone()
@@ -609,15 +609,17 @@ def login():
                     }), 403
                 
                 # 檢查 email_verified 狀態（從查詢結果中獲取）
-                email_verified = user[4] if len(user) > 4 else 0
+                email = user[4]     
+                email_verified = user[5] if len(user) > 4 else 0
                 
                 if email_verified == 0:
-                    print(f"❌ Email 未驗證: {username}")
+                    print(f"❌ Email 未驗證: {username}, email: {email}")
                     return jsonify({
                         "message": "您的 Email 尚未驗證，請檢查您的郵箱並輸入驗證碼以完成註冊。",
                         "error": "email_not_verified",
                         "requires_verification": True,
-                        "username": username
+                        "username": username,
+                        "email": email
                     }), 403
                 
                 # 檢查 role，允許 STU、TEA 和 STA 登入
