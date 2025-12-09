@@ -28,7 +28,7 @@ if (!$isLoggedIn) {
 
 // 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI');
 $is_student = ($user_role === '學生' || $user_role === 'STU');
 
 if (!$is_teacher && !$is_student) {
@@ -147,7 +147,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <?php include("share/header.php"); ?>
-    <title><?php echo $is_teacher ? '老師' : '學生'; ?>個人資料</title>
+    <title><?php echo $is_teacher ? '老師' || 'DI' : '學生'; ?>個人資料</title>
     <link rel="stylesheet" href="assets/csp/QA.css">
     <style>
         .profile-container {
@@ -808,7 +808,7 @@ try {
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
             // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員）
-            const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員');
+            const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI');
             const isStudentRole = (role === '學生' || role === 'STU');
             
             // 調試：輸出角色信息
@@ -1025,7 +1025,7 @@ try {
                 
                 // 根據角色選擇不同的API（包含STA行政人員）
                 const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-                const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員');
+                const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === '主任');
                 const isStudentRole = (role === '學生' || role === 'STU');
                 
                 // 根據角色調用不同的API
