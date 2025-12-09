@@ -1816,6 +1816,24 @@ try {
   <script>
     const username = "<?php echo $username; ?>";
     const role = "<?php echo $role; ?>";
+    // 年級代碼 -> 顯示名稱映射（前端顯示用）
+    const gradeMap = {
+      'F1': '專一', 'F2': '專二', 'F3': '專三', 'F4': '專四', 'F5': '專五',
+      'J1': '國一', 'J2': '國二', 'J3': '國三',
+      'H1': '高一', 'H2': '高二', 'H3': '高三'
+    };
+
+    function mapGradeToDisplay(g) {
+      if (!g) return '';
+      // 如果是已知代碼，回傳對應中文
+      if (gradeMap[g]) return gradeMap[g];
+      // 如果已經是中文顯示名稱，直接回傳
+      for (const k in gradeMap) {
+        if (gradeMap[k] === g) return g;
+      }
+      // 其他情況直接回傳原始值
+      return g;
+    }
     
     let currentUserId = null;
     let currentUserName = null;
@@ -4917,7 +4935,7 @@ try {
             <div class="user-role">${escapeHtml(contact.department || '')}</div>
             ${contact.contact_type === '學生' && contact.grade ? `
               <div class="student-info" style="font-size: 12px; color: #666;">
-                ${escapeHtml(contact.grade)}${contact.class_name ? ' - ' + escapeHtml(contact.class_name) : ''}
+                ${escapeHtml(mapGradeToDisplay(contact.grade))}${contact.class_name ? ' - ' + escapeHtml(contact.class_name) : ''}
               </div>
             ` : ''}
             <div class="contact-type">${contact.contact_type || ''}</div>

@@ -115,8 +115,46 @@ try {
             $current_department = '';
         }
         
-        // 保留年級代碼供表單使用（不轉換為名稱）
-        $current_grade = isset($result['grade']) && $result['grade'] !== null ? $result['grade'] : '';
+        // 將年級代碼或名稱轉換為顯示名稱（支援儲存為代碼或已儲存為顯示名稱）
+        $grade_code = isset($result['grade']) && $result['grade'] !== null ? $result['grade'] : '';
+
+        // 代碼 -> 顯示名稱 映射（用於常見情況）
+        $grade_display_mapping = [
+            'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五',
+            'J1' => '國一', 'J2' => '國二', 'J3' => '國三',
+            'H1' => '高一', 'H2' => '高二', 'H3' => '高三'
+        ];
+
+        if (!empty($grade_code)) {
+            // 如果欄位已經是顯示名稱（例如 '專一'），直接使用
+            if (in_array($grade_code, $grade_display_mapping, true)) {
+                $current_grade = $grade_code;
+            }
+            // 如果是已知的代碼，使用映射轉換
+            elseif (array_key_exists($grade_code, $grade_display_mapping)) {
+                $current_grade = $grade_display_mapping[$grade_code];
+            }
+            else {
+                // 嘗試從資料表中以 code 或 name 查找（容錯處理）
+                try {
+                    $stmt_grade = $pdo->prepare("SELECT name, code FROM identity_options WHERE code = ? OR name = ? LIMIT 1");
+                    $stmt_grade->execute([$grade_code, $grade_code]);
+                    $grade_result = $stmt_grade->fetch(PDO::FETCH_ASSOC);
+                    if ($grade_result && !empty($grade_result['name'])) {
+                        $current_grade = $grade_result['name'];
+                    } else {
+                        // 最後退回原始值（避免顯示空白）
+                        $current_grade = $grade_code;
+                    }
+                } catch (PDOException $e) {
+                    // 若查詢失敗，退回原始值並記錄錯誤
+                    error_log('年級名稱查詢錯誤: ' . $e->getMessage());
+                    $current_grade = $grade_code;
+                }
+            }
+        } else {
+            $current_grade = '';
+        }
         
         // 調試：記錄處理後的變數值
         error_log("Loaded values - name: {$user_name}, dept: {$current_department}, grade: {$current_grade}, phone: {$current_phone}, student_id: {$current_student_id}, class: {$current_class_name}");
@@ -417,18 +455,27 @@ try {
                 <label for="grade">年級</label>
                 <select id="grade" name="grade">
                     <option value="" <?php echo empty($current_grade ?? '') ? 'selected' : ''; ?>>請選擇年級</option>
-                    <optgroup label="五專">
-                        <option value="F1" <?php echo $current_grade === 'F1' ? 'selected' : ''; ?>>專一</option>
-                        <option value="F2" <?php echo $current_grade === 'F2' ? 'selected' : ''; ?>>專二</option>
-                        <option value="F3" <?php echo $current_grade === 'F3' ? 'selected' : ''; ?>>專三</option>
-                        <option value="F4" <?php echo $current_grade === 'F4' ? 'selected' : ''; ?>>專四</option>
-                        <option value="F5" <?php echo $current_grade === 'F5' ? 'selected' : ''; ?>>專五</option>
-                    </optgroup>
-                    <optgroup label="國中">
-                        <option value="J1" <?php echo $current_grade === 'J1' ? 'selected' : ''; ?>>國一</option>
-                        <option value="J2" <?php echo $current_grade === 'J2' ? 'selected' : ''; ?>>國二</option>
-                        <option value="J3" <?php echo $current_grade === 'J3' ? 'selected' : ''; ?>>國三</option>
-                    </optgroup>
+                        <?php
+                            // 以代碼作為 option 的 value，但顯示中文名稱給使用者
+                            $grade_groups = [
+                                '五專' => [
+                                    'F1' => '專一', 'F2' => '專二', 'F3' => '專三', 'F4' => '專四', 'F5' => '專五'
+                                ],
+                                '國中' => [
+                                    'J1' => '國一', 'J2' => '國二', 'J3' => '國三'
+                                ]
+                            ];
+
+                            foreach ($grade_groups as $group_label => $items) {
+                                echo "<optgroup label=\"" . htmlspecialchars($group_label) . "\">";
+                                foreach ($items as $code => $name) {
+                                    // 支援 current_grade 可能為顯示名稱或代碼
+                                    $is_selected = ($current_grade === $name || $current_grade === $code) ? 'selected' : '';
+                                    echo "<option value=\"" . htmlspecialchars($code) . "\" $is_selected>" . htmlspecialchars($name) . "</option>";
+                                }
+                                echo "</optgroup>";
+                            }
+                        ?>
                 </select>
             </div>
             
