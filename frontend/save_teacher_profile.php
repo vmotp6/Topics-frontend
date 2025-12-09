@@ -11,12 +11,6 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
     exit;
 }
 
-// 檢查是否為老師角色（支援角色代碼 'TEA' 和中文名稱 '老師'）
-if (!isset($_SESSION['role']) || ($_SESSION['role'] !== '老師' && $_SESSION['role'] !== 'TEA')) {
-    echo json_encode(['success' => false, 'message' => '只有老師可以保存個人資料']);
-    exit;
-}
-
 // 檢查是否為 POST 請求
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'message' => '請使用 POST 方法提交']);
