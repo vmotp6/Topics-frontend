@@ -814,7 +814,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
     <?php
     // 根據角色顯示不同的歡迎訊息
     $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-    $is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+    $is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI');
     $is_student = ($user_role === '學生' || $user_role === 'STU');
     $is_admin = ($user_role === '管理員' || $user_role === 'ADM');
     
@@ -934,12 +934,6 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         
       <?php elseif ($is_teacher): ?>
         <!-- 老師/行政人員：顯示老師相關功能 -->
-        <div class="feature-card">
-          <div class="feature-icon">🤝</div>
-          <h3 class="feature-title">招生QA問答</h3>
-          <p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
-          <a href="QA.php" class="feature-link">招生QA問答</a>
-        </div>
         
         <div class="feature-card">
           <div class="feature-icon">📚</div>
@@ -955,7 +949,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <a href="admission_recommend.php" class="feature-link">推薦報名</a>
         </div>
 
-        <?php if ($user_role === '老師' || $user_role === 'TEA'): ?>
+        <?php if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'DI'): ?>
         <div class="feature-card">
           <div class="feature-icon">✉️</div>
           <h3 class="feature-title">活動紀錄填寫</h3>
