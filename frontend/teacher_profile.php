@@ -459,6 +459,7 @@ try {
                             $stmt_depts->execute();
                             $departments = $stmt_depts->fetchAll(PDO::FETCH_ASSOC);
                             foreach ($departments as $dept) {
+                                if ($dept['code'] === 'AA') continue;
                                 $dept_name = htmlspecialchars($dept['name']);
                                 $is_selected = ($current_department === $dept_name) ? 'selected' : '';
                                 echo "<option value=\"{$dept_name}\" {$is_selected}>{$dept_name}</option>";
