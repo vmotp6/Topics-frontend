@@ -934,6 +934,12 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         
       <?php elseif ($is_teacher): ?>
         <!-- 老師/行政人員：顯示老師相關功能 -->
+       <div class="feature-card">
+          <div class="feature-icon">🗺️</div>
+          <h3 class="feature-title">校園地圖</h3>
+          <p class="feature-description">查看校園地圖，了解校園設施和位置。</p>
+          <a href="campus_map.php" class="feature-link">校園地圖</a>
+        </div>
         
         <div class="feature-card">
           <div class="feature-icon">📚</div>
