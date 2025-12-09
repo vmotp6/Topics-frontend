@@ -11,7 +11,7 @@ $debug_mode = true; // 設為 false 可關閉調試模式
 
 // 檢查是否為老師角色（支援角色代碼和中文名稱，僅限老師，不包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'DI');
 
 if ($debug_mode) {
     // 調試模式：顯示詳細資訊
