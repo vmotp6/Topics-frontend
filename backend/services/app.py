@@ -252,7 +252,7 @@ def google_callback():
                     if not valid_role:
                         print(f"⚠️  發現無效的角色代碼 '{role_code}'，嘗試修正")
                         # 優先順序：STUDENT -> MEMBER -> 第一個可用的角色
-                        fallback_codes = ['STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        fallback_codes = ['STU', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
                         new_role_code = None
                         for code in fallback_codes:
                             cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
@@ -345,7 +345,7 @@ def google_callback():
                     if not valid_role:
                         print(f"⚠️  角色代碼 '{role_code}' 不存在於 role_types 表中，嘗試查找可用的角色")
                         # 優先順序：STUDENT -> MEMBER -> 第一個可用的角色
-                        fallback_codes = ['STUDENT', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
+                        fallback_codes = ['STU', 'MEMBER', 'TEACHER', 'ADMIN', 'STAFF']
                         role_code = None
                         for code in fallback_codes:
                             cursor.execute("SELECT code FROM role_types WHERE code = %s", (code,))
