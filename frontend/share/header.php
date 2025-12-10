@@ -925,7 +925,9 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
 
-    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    <?php if ($isLoggedIn): ?>
+      <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    <?php endif; ?>
     
     <?php if ($isLoggedIn &&  $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
@@ -1080,7 +1082,9 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php endif; ?>
     
-    <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    <?php if ($isLoggedIn): ?>
+      <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
+    <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_mobile_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
