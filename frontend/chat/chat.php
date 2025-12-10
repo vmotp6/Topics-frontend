@@ -43,9 +43,9 @@ try {
     $isStudent = ($role === 'STU' || $role === '學生' || $role === 'student');
     $isTeacher = ($role === 'TEA' || $role === '老師' || $role === 'teacher');
     $isStaff = ($role === 'STA' || $role === '學校行政人員' || $role === '行政人員');
-    
+    $isDirector = ($role === 'DI');
     // 調試：記錄角色信息
-    error_log("用戶角色檢查 - role: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStudent: " . ($isStudent ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'));
+    error_log("用戶角色檢查 - role: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStudent: " . ($isStudent ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'). ", isDirector: " . ($isDirector ? 'true' : 'false'));
     
     // 獲取當前用戶ID（所有角色都需要）
     $stmt = $pdo->prepare("SELECT id FROM user WHERE username = ?");
@@ -61,7 +61,7 @@ try {
                 error_log("TEA 角色登入，開始自動同步其他 TEA 用戶到 user_contacts 表");
                 
                 // 查詢所有其他 TEA 用戶
-                $stmt = $pdo->prepare("SELECT id FROM user WHERE (role = 'TEA' OR role = '老師') AND id != ?");
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE (role = 'TEA' OR role = '老師' OR role='DI')");
                 $stmt->execute([$currentUserId]);
                 $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 
@@ -101,6 +101,50 @@ try {
                     error_log("⚠️ TEA 角色：沒有找到其他 TEA 用戶");
                 }
             }
+            // 關於主任的聯絡人判斷
+            if ($isDirector) {
+              error_log("DI 角色登入，開始自動同步其他 TEA 用戶到 user_contacts 表");
+              
+              // 查詢所有其他 TEA 用戶
+              $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師'");
+              $stmt->execute();  // 不要傳任何參數
+              $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);             
+              error_log("查詢到的其他 TEA 用戶 ID 列表: " . json_encode($teaUsers));
+              
+              if (!empty($teaUsers)) {
+                  // 檢查哪些已經存在於 user_contacts
+                  $placeholders = implode(',', array_fill(0, count($teaUsers), '?'));
+                  $checkStmt = $pdo->prepare("SELECT contact_user_id FROM user_contacts WHERE user_id = ? AND contact_user_id IN ($placeholders)");
+                  $checkStmt->execute(array_merge([$currentUserId], $teaUsers));
+                  $existingIds = $checkStmt->fetchAll(PDO::FETCH_COLUMN);
+                  
+                  error_log("已存在於 user_contacts 的 TEA 用戶 ID: " . json_encode($existingIds));
+                  
+                  // 找出需要新增的
+                  $newIds = array_diff($teaUsers, $existingIds);
+                  error_log("需要新增的 TEA 用戶 ID: " . json_encode($newIds));
+                  
+                  if (!empty($newIds)) {
+                      // 批量插入
+                      $insertStmt = $pdo->prepare("INSERT IGNORE INTO user_contacts (user_id, contact_user_id) VALUES (?, ?)");
+                      $insertedCount = 0;
+                      foreach ($newIds as $teaId) {
+                          $result = $insertStmt->execute([$currentUserId, $teaId]);
+                          if ($insertStmt->rowCount() > 0) {
+                              $insertedCount++;
+                              error_log("成功插入聯絡人: user_id=" . $currentUserId . ", contact_user_id=" . $teaId);
+                          } else {
+                              error_log("插入失敗或已存在: user_id=" . $currentUserId . ", contact_user_id=" . $teaId);
+                          }
+                      }
+                      error_log("✅ DI 角色：已自動同步 " . $insertedCount . " 位其他 TEA 用戶到 user_contacts 表");
+                  } else {
+                      error_log("✅ DI 角色：所有其他 TEA 用戶已存在於 user_contacts 表");
+                  }
+              } else {
+                  error_log("⚠️ DI 角色：沒有找到其他 TEA 用戶");
+              }
+          }
             
             // STU 角色：不再自動同步聯絡人，改為顯示聯絡資訊表格讓用戶選擇
             // 移除自動同步邏輯，改為在介面中顯示所有科系老師的聯絡資訊
@@ -516,12 +560,12 @@ try {
             }
         }
         
-    } elseif ($isTeacher || $isStaff) {
+    } elseif ($isTeacher || $isStaff ||$isDirector) {
         // 老師和學校行政人員：從 user_contacts 表載入聯絡人
         $contacts = [];
         
         error_log("=== 進入老師/行政角色區塊 ===");
-        error_log("角色: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'));
+        error_log("角色: " . $role . ", isTeacher: " . ($isTeacher ? 'true' : 'false') . ", isStaff: " . ($isStaff ? 'true' : 'false'). ", isDirector: " . ($isDirector ? 'true' : 'false'));
         error_log("當前用戶ID（外層）: " . ($currentUserId ?? 'null'));
         
         try {
@@ -2021,7 +2065,7 @@ try {
         console.log('清除所有聊天記錄快取');
     }
     
-    <?php if ($role === 'STU' || $role === '學生' || $role === 'student' || $role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'): ?>
+    <?php if ($role === 'STU' || $role === '學生' || $role === 'student' || $role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'|| $role === 'DI'): ?>
     // 載入群組列表
     async function loadGroups() {
       try {
