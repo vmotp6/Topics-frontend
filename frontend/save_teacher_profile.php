@@ -13,10 +13,10 @@ if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in'] || !isset($_SESSIO
 
 // 目前登入者角色
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === 'TEA' || $user_role === 'STA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 $is_director = ($user_role === 'DI');
 
-// 限定只有 TEA / DI 可以編輯此頁
+// 限定只有老師 / DI 可以編輯此頁
 if (!$is_teacher && !$is_director) {
     echo json_encode(['success' => false, 'message' => '您沒有權限修改此資料']);
     exit;

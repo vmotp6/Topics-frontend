@@ -26,13 +26,15 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員）
+// 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員和DI主任）
 $user_role = $_SESSION['role'] ?? '';
 $is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
 $is_director = ($user_role === 'DI');
+// DI 身分應該使用老師的介面
+$is_teacher_interface = $is_teacher || $is_director;
 $is_student = ($user_role === '學生' || $user_role === 'STU');
 
-if (!$is_teacher && !$is_student && !$is_director) {
+if (!$is_teacher_interface && !$is_student) {
     header("Location: index.php");
     exit;
 }
@@ -92,13 +94,13 @@ try {
     }
     
     // 根據角色從不同表獲取詳細資料
-    if ($is_teacher || $is_director) {
+    if ($is_teacher_interface) {
 
         // 根據角色挑選資料表
-        if ($is_teacher) {
-            $table = "teacher";
-        } else {
+        if ($is_director) {
             $table = "director";
+        } else {
+            $table = "teacher";
         }
     
         // 從 teacher 或 director 表取資料
@@ -382,7 +384,7 @@ try {
             <div id="avatarMessage"></div>
         </div>
         
-        <?php if ($is_teacher && $is_auto_generated): ?>
+        <?php if ($is_teacher_interface && $is_auto_generated): ?>
         <div class="credentials-section">
             <h2>帳號密碼設定</h2>
             <?php if ($username_changed === 0): ?>
@@ -433,8 +435,8 @@ try {
         <?php endif; ?>
         
         <form id="profileForm" enctype="multipart/form-data">
-            <?php if ($is_teacher): ?>
-                <!-- 老師專用欄位 -->
+            <?php if ($is_teacher_interface): ?>
+                <!-- 老師專用欄位（包含DI主任） -->
                 <div class="form-group">
                     <label for="name">姓名</label>
                     <input type="text" id="name" name="name" placeholder="請輸入姓名" value="<?php echo htmlspecialchars($user_name); ?>">
@@ -680,7 +682,7 @@ try {
         });
 
         // 帳號密碼表單提交（僅老師且為系統生成帳號時顯示）
-        <?php if ($is_teacher && $is_auto_generated): ?>
+        <?php if ($is_teacher_interface && $is_auto_generated): ?>
         const credentialsForm = document.getElementById('credentialsForm');
         if (credentialsForm) {
             credentialsForm.addEventListener('submit', function(e) {
@@ -800,7 +802,7 @@ try {
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
-            // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員）
+            // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員和DI）
             const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI');
             const isStudentRole = (role === '學生' || role === 'STU');
             
@@ -827,7 +829,7 @@ try {
             formData.append('phone', phone);
             formData.append('role', role); // 添加角色資訊
             
-            <?php if ($is_student): ?>
+            <?php if (!$is_teacher_interface): ?>
             // 學生專用欄位
             const studentId = document.getElementById('student_id') ? document.getElementById('student_id').value : '';
             const grade = document.getElementById('grade') ? document.getElementById('grade').value : '';
@@ -1016,9 +1018,9 @@ try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
-                // 根據角色選擇不同的API（包含STA行政人員）
+                // 根據角色選擇不同的API（包含STA行政人員和DI）
                 const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-                const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === '主任');
+                const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI');
                 const isStudentRole = (role === '學生' || role === 'STU');
                 
                 // 根據角色調用不同的API
