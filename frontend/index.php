@@ -1674,100 +1674,108 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
       currentContactStudentId = null;
     }
 
-    // 提交新增聯絡紀錄
-    async function submitAddContactLog() {
-      if (!currentContactStudentId) return;
-      const contact_date = document.getElementById('contactDate').value;
-      const contact_method = document.getElementById('contactMethod').value;
-      const notes = document.getElementById('contactNotes').value.trim();
+// 提交新增聯絡紀錄
+async function submitAddContactLog() {
+  if (!currentContactStudentId) return;
+  const contact_date = document.getElementById('contactDate').value;
+  const contact_method = document.getElementById('contactMethod').value;
+  const notes = document.getElementById('contactNotes').value.trim();
 
-      if (!contact_date || !notes) {
-        alert('請填寫聯絡日期和聯絡紀錄');
-        return;
+  if (!contact_date || !notes) {
+    alert('請填寫聯絡日期和聯絡紀錄');
+    return;
+  }
+
+  try {
+    
+    const response = await fetch('api/contact_logs_api.php', {  
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        student_id: currentContactStudentId,
+        contact_date: contact_date,
+        contact_method: contact_method,
+        notes: notes
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('聯絡紀錄已新增');
+      closeAddContactLog();
+      // 如果正在查看該學生的聯絡紀錄，重新載入
+      if (document.getElementById('viewContactLogsModal').style.display === 'flex') {
+        viewContactLogs(currentContactStudentId, document.getElementById('viewLogsStudentName').textContent);
       }
-
-      try {
-        const response = await fetch('api/add_contact_log.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            student_id: currentContactStudentId,
-            contact_date: contact_date,
-            contact_method: contact_method,
-            notes: notes
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          alert('聯絡紀錄已新增');
-          closeAddContactLog();
-          // 如果正在查看該學生的聯絡紀錄，重新載入
-          if (document.getElementById('viewContactLogsModal').style.display === 'flex') {
-            viewContactLogs(currentContactStudentId, document.getElementById('viewLogsStudentName').textContent);
-          }
-        } else {
-          alert('新增失敗：' + (data.message || '未知錯誤'));
-        }
-      } catch (error) {
-        console.error('新增聯絡紀錄錯誤:', error);
-        alert('新增失敗，請稍後再試');
-      }
+    } else {
+      alert('新增失敗：' + (data.message || '未知錯誤'));
     }
+  } catch (error) {
+    console.error('新增聯絡紀錄錯誤:', error);
+    alert('新增失敗，請稍後再試');
+  }
+}
 
-    // 查看聯絡紀錄
-    async function viewContactLogs(studentId, studentName) {
-      document.getElementById('viewLogsStudentName').textContent = studentName;
-      const contactLogsList = document.getElementById('contactLogsList');
-      contactLogsList.innerHTML = '<div class="loading">載入中...</div>';
-      document.getElementById('viewContactLogsModal').style.display = 'flex';
+// 查看聯絡紀錄
+async function viewContactLogs(studentId, studentName) {
+  document.getElementById('viewLogsStudentName').textContent = studentName;
+  const contactLogsList = document.getElementById('contactLogsList');
+  contactLogsList.innerHTML = '<div class="loading">載入中...</div>';
+  document.getElementById('viewContactLogsModal').style.display = 'flex';
 
-      try {
-        const response = await fetch(`api/get_contact_logs.php?student_id=${studentId}`);
-        const data = await response.json();
+  try {
+    // 修改這裡：將 api/get_contact_logs.php 改為 api/contact_logs_api.php
+    const response = await fetch(`api/contact_logs_api.php?student_id=${studentId}`);
+    
+    // 增加錯誤檢查，避免 JSON 解析失敗
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
 
-        if (data.success) {
-          if (data.logs.length === 0) {
-            contactLogsList.innerHTML = `
-              <div class="empty-state">
-                <i class="fas fa-inbox"></i>
-                <p>目前沒有聯絡紀錄</p>
-              </div>
-            `;
-          } else {
-            contactLogsList.innerHTML = data.logs.map(log => `
-              <div class="student-item">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <div>
-                    <strong>${escapeHtml(log.contact_date)}</strong>
-                    <span style="margin-left: 10px; background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${escapeHtml(log.contact_method)}</span>
-                  </div>
-                </div>
-                <div style="color: #666; line-height: 1.6;">${escapeHtml(log.notes)}</div>
-              </div>
-            `).join('');
-          }
-        } else {
-          contactLogsList.innerHTML = `
-            <div class="empty-state">
-              <i class="fas fa-exclamation-triangle"></i>
-              <p>載入失敗：${data.message || '未知錯誤'}</p>
-            </div>
-          `;
-        }
-      } catch (error) {
-        console.error('載入聯絡紀錄錯誤:', error);
+    if (data.success) {
+      if (data.logs.length === 0) {
         contactLogsList.innerHTML = `
           <div class="empty-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <p>載入失敗，請稍後再試</p>
+            <i class="fas fa-inbox"></i>
+            <p>目前沒有聯絡紀錄</p>
           </div>
         `;
+      } else {
+        contactLogsList.innerHTML = data.logs.map(log => `
+          <div class="student-item">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <div>
+                <strong>${escapeHtml(log.contact_date)}</strong>
+                <span style="margin-left: 10px; background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${escapeHtml(log.method || log.contact_method)}</span>
+              </div>
+            </div>
+            <div style="color: #666; line-height: 1.6;">${escapeHtml(log.notes)}</div>
+          </div>
+        `).join('');
       }
+    } else {
+      contactLogsList.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>載入失敗：${data.message || '未知錯誤'}</p>
+        </div>
+      `;
     }
+  } catch (error) {
+    console.error('載入聯絡紀錄錯誤:', error);
+    contactLogsList.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>載入失敗，請稍後再試</p>
+      </div>
+    `;
+  }
+}
 
     // 關閉查看聯絡紀錄模態視窗
     function closeViewContactLogs() {
