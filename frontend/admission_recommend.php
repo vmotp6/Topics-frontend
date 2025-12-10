@@ -1721,6 +1721,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                   <?php echo htmlspecialchars($name); ?>
                 </option>
               <?php endforeach; ?>
+              <option value="O1" <?php echo (isset($_POST['recommender_grade']) && $_POST['recommender_grade'] === 'O1') ? 'selected' : ''; ?>>
+  其他
+</option>
             </select>
           </div>
           
@@ -1730,7 +1733,11 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <option value="">請選擇科系</option>
               <?php 
               // 推薦人科系：關聯 departments.code
-              foreach ($departments as $code => $name): ?>
+              foreach ($departments as $code => $name): 
+              if ($code == 'AA'){
+                continue; // 跳過代碼為 'AA' 的科系 
+              }
+              ?>
                 <option value="<?php echo htmlspecialchars($code); ?>" 
                         <?php echo (isset($_POST['recommender_department']) && $_POST['recommender_department'] === $code) ? 'selected' : ''; ?>>
                   <?php echo htmlspecialchars($name); ?>
