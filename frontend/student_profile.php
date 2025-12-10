@@ -422,7 +422,7 @@ try {
             <!-- 學生專用欄位 -->
             <div class="form-group">
                 <label for="student_id">學號</label>
-                <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" value="<?php echo htmlspecialchars($current_student_id ?? ''); ?>">
+                <input type="text" id="student_id" name="student_id" placeholder="請輸入學號" maxlength="10" value="<?php echo htmlspecialchars($current_student_id ?? ''); ?>">
             </div>
             
             <div class="form-group">
@@ -486,7 +486,7 @@ try {
             
             <div class="form-group">
                 <label for="phone">電話</label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>">
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" maxlength="10" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>">
             </div>
             
             <button type="submit" class="submit-btn">儲存資料</button>
