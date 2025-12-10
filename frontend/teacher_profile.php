@@ -28,10 +28,11 @@ if (!$isLoggedIn) {
 
 // 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+$is_director = ($user_role === 'DI');
 $is_student = ($user_role === '學生' || $user_role === 'STU');
 
-if (!$is_teacher && !$is_student) {
+if (!$is_teacher && !$is_student && !$is_director) {
     header("Location: index.php");
     exit;
 }
@@ -91,51 +92,42 @@ try {
     }
     
     // 根據角色從不同表獲取詳細資料
-    if ($is_teacher) {
-        // 從 teacher 表獲取（包括代碼轉換為名稱）
+    if ($is_teacher || $is_director) {
+
+        // 根據角色挑選資料表
+        if ($is_teacher) {
+            $table = "teacher";
+        } else {
+            $table = "director";
+        }
+    
+        // 從 teacher 或 director 表取資料
         $stmt = $pdo->prepare("
-            SELECT t.department, t.phone 
-            FROM teacher t
+            SELECT t.department, t.phone
+            FROM {$table} t
             JOIN user u ON t.user_id = u.id
             WHERE u.username = ?
         ");
         $stmt->execute([$_SESSION['username']]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
         if ($result) {
             $current_phone = $result['phone'] ?? '';
-            
-            // 將科系代碼轉換為名稱
+    
+            // 轉換科系代碼
             $dept_code = $result['department'] ?? '';
             if (!empty($dept_code)) {
                 $stmt_dept = $pdo->prepare("SELECT name FROM departments WHERE code = ?");
                 $stmt_dept->execute([$dept_code]);
                 $dept_result = $stmt_dept->fetch(PDO::FETCH_ASSOC);
-                $current_department = $dept_result['name'] ?? $dept_code; // 如果找不到名稱，使用代碼
+    
+                // 找不到名稱則退回代碼
+                $current_department = $dept_result['name'] ?? $dept_code;
             } else {
                 $current_department = '';
             }
         }
-    } elseif ($is_student) {
-        // 從 student 表獲取所有欄位
-        $stmt = $pdo->prepare("
-            SELECT s.department, s.phone, s.student_id, s.grade, s.class_name, s.email 
-            FROM student s
-            JOIN user u ON s.user_id = u.id
-            WHERE u.username = ?
-        ");
-        $stmt->execute([$_SESSION['username']]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($result) {
-            $current_department = $result['department'] ?? '';
-            $current_phone = $result['phone'] ?? '';
-            $current_student_id = $result['student_id'] ?? '';
-            $current_grade = $result['grade'] ?? '';
-            $current_class_name = $result['class_name'] ?? '';
-            // 如果student表有email，優先使用；否則使用之前從user表獲取的
-            if (!empty($result['email'])) {
-                $current_email = $result['email'];
-            }
-        }
+    
     }
 } catch (PDOException $e) {
     error_log("無法從資料庫獲取用戶資料: " . $e->getMessage());
