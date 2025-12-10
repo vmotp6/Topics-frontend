@@ -479,7 +479,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
 		}
 
 		.stat-card {
-			background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%);
+			background: linear-gradient(90deg, #68bbb9);
 			color: white;
 			padding: 20px;
 			border-radius: 10px;
