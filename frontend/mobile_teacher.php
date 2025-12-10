@@ -709,7 +709,7 @@ try {
 						</div>
 						<div class="field-group">
 							<label><span class="required">*</span> 電話</label>
-							<input type="tel" name="phone" placeholder="例如：02-1234-5678" required />
+							<input type="tel" name="phone" placeholder="例如：02-1234-5678" maxlength="10" required />
 						</div>
 					</div>
 					<div class="form-row">
