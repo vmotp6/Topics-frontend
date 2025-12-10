@@ -6,63 +6,55 @@ require_once 'session_config.php';
 require_once 'config.php';
 require_once 'generate_captcha.php';
 
-// 檢查登入狀態 (調試模式)
-$debug_mode = true; // 設為 false 可關閉調試模式
+// 調試模式開關
+$debug_mode = true; // 設為 false 關閉調試模式
 
-// 檢查是否為老師角色（支援角色代碼和中文名稱，僅限老師，不包含STA行政人員）
+// 判斷角色
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'DI');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_director = ($user_role === 'DI');
+$allowed = $is_teacher || $is_director;
 
+// 登入驗證
 if ($debug_mode) {
-    // 調試模式：顯示詳細資訊
-    // 檢查 user_id、id 或 username 其中之一存在即可
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || !$is_teacher) {
-        echo "<div style='background: #f8d7da; color: #721c24; padding: 20px; margin: 20px; border-radius: 5px; border: 1px solid #f5c6cb;'>";
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
+        || !isset($_SESSION['role']) 
+        || !$allowed) {
+
+        echo "<div style='background: #f8d7da; color: #721c24; padding:20px; border-radius:5px;'>";
         echo "<h3>⚠️ 登入驗證失敗</h3>";
-        echo "<p><strong>原因分析：</strong>此功能僅限老師使用，行政人員無法使用此功能。</p>";
         echo "<ul>";
-        
+
         if (!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) {
             echo "<li>❌ 缺少識別資訊 (SESSION中沒有 user_id、id 或 username)</li>";
         } else {
-            if (isset($_SESSION['user_id'])) {
-                echo "<li>✅ user_id 存在: " . $_SESSION['user_id'] . "</li>";
-            }
-            if (isset($_SESSION['id'])) {
-                echo "<li>✅ id 存在: " . $_SESSION['id'] . "</li>";
-            }
-            if (isset($_SESSION['username'])) {
-                echo "<li>✅ username 存在: " . $_SESSION['username'] . "</li>";
-            }
+            if (isset($_SESSION['user_id'])) echo "<li>✅ user_id 存在: " . $_SESSION['user_id'] . "</li>";
+            if (isset($_SESSION['id'])) echo "<li>✅ id 存在: " . $_SESSION['id'] . "</li>";
+            if (isset($_SESSION['username'])) echo "<li>✅ username 存在: " . $_SESSION['username'] . "</li>";
         }
-        
+
         if (!isset($_SESSION['role'])) {
             echo "<li>❌ 缺少 role (role)</li>";
         } else {
             echo "<li>✅ role 存在: " . $_SESSION['role'];
-            if (!$is_teacher) {
-                echo " (但不是 '老師' 或 'TEA')";
-            }
+            if (!$allowed) echo " (但不是 '老師' / 'TEA' 或 'DI')";
             echo "</li>";
         }
-        
+
         echo "</ul>";
         echo "<p><strong>SESSION 內容：</strong></p>";
-        echo "<pre style='background: #f8f9fa; padding: 10px; border-radius: 3px;'>";
+        echo "<pre>";
         print_r($_SESSION);
         echo "</pre>";
-        
-        echo "<div style='margin-top: 15px;'>";
-        echo "<a href='debug_session.php' style='background: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 3px; margin-right: 10px;'>檢查 SESSION 狀態</a>";
-        echo "<a href='login.php' style='background: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 3px;'>前往登入頁面</a>";
-        echo "</div>";
         echo "</div>";
         exit();
     }
 } else {
-    // 正常模式：直接跳轉
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) || !isset($_SESSION['role']) || !$is_teacher) {
-        header("Location: login.php");
+    // 正常模式
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
+        || !isset($_SESSION['role']) 
+        || !$allowed) {
+        header("Location:index.php");
         exit();
     }
 }
@@ -70,94 +62,83 @@ if ($debug_mode) {
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
-// 獲取登入教師的資訊
-$teacher_id = null;
+// 選擇資料表與別名
+$table = $is_director ? "director" : "teacher";
+$alias = $is_director ? "d" : "t";
+
+// 獲取登入使用者識別資訊
+$teacher_id = $_SESSION['user_id'] ?? $_SESSION['id'] ?? null;
+$username = $_SESSION['username'] ?? null;
+
+// SQL 查詢準備
 $teacher_info = null;
 
-// 從 teacher 表和 user 表獲取教師詳細資訊（包含帳號、姓名、email）
-// 注意：name 和 email 欄位在 user 表中，不在 teacher 表中
-if (isset($_SESSION['user_id'])) {
-    // 使用 user_id 查詢 (如果 SESSION 中有 user_id)
-    $teacher_id = $_SESSION['user_id'];
-    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
-                    INNER JOIN user u ON t.user_id = u.id 
-                    WHERE t.user_id = ?";
-    $teacher_stmt = $conn->prepare($teacher_sql);
-    if ($teacher_stmt) {
-        $teacher_stmt->bind_param("i", $teacher_id);
-    }
-} elseif (isset($_SESSION['id'])) {
-    // 使用 id 查詢 (如果 SESSION 中有 id)
-    $teacher_id = $_SESSION['id'];
-    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
-                    INNER JOIN user u ON t.user_id = u.id 
-                    WHERE t.user_id = ?";
-    $teacher_stmt = $conn->prepare($teacher_sql);
-    if ($teacher_stmt) {
-        $teacher_stmt->bind_param("i", $teacher_id);
-    }
-} elseif (isset($_SESSION['username'])) {
-    // 使用 username 查詢：先從 user 表找到對應的 id，再用這個 id 去 teacher 表找 user_id
-    $teacher_sql = "SELECT t.*, u.username, u.name, u.email FROM teacher t 
-                    INNER JOIN user u ON t.user_id = u.id 
-                    WHERE u.username = ?";
-    $teacher_stmt = $conn->prepare($teacher_sql);
-    if ($teacher_stmt) {
-        $teacher_stmt->bind_param("s", $_SESSION['username']);
-    }
+if ($teacher_id !== null) {
+    $sql = "SELECT $alias.*, u.username, u.name, u.email
+            FROM $table $alias
+            INNER JOIN user u ON $alias.user_id = u.id
+            WHERE $alias.user_id = ?";
+    $param_type = "i";
+    $param_value = $teacher_id;
+} elseif ($username !== null) {
+    $sql = "SELECT $alias.*, u.username, u.name, u.email
+            FROM $table $alias
+            INNER JOIN user u ON $alias.user_id = u.id
+            WHERE u.username = ?";
+    $param_type = "s";
+    $param_value = $username;
 }
 
-if (isset($teacher_stmt) && $teacher_stmt !== false) {
-    $teacher_stmt->execute();
-    $teacher_result = $teacher_stmt->get_result();
+if (isset($sql)) {
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $stmt->bind_param($param_type, $param_value);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $teacher_info = $result->fetch_assoc() ?: null;
+        $stmt->close();
 
-    if ($teacher_result && $teacher_result->num_rows > 0) {
-        $teacher_info = $teacher_result->fetch_assoc();
-        // 如果是用 username 查詢的，設定 teacher_id
+        // 如果使用 username 查詢，設定 teacher_id
         if (!$teacher_id && $teacher_info) {
             $teacher_id = $teacher_info['user_id'];
         }
-        
-        // 將科系代碼轉換為名稱（department 欄位存儲的是代碼，需要轉換為名稱）
-        if (!empty($teacher_info['department'])) {
-            $dept_code = $teacher_info['department'];
-            $dept_stmt = $conn->prepare("SELECT name FROM departments WHERE code = ?");
-            if ($dept_stmt) {
-                $dept_stmt->bind_param("s", $dept_code);
-                $dept_stmt->execute();
-                $dept_result = $dept_stmt->get_result();
-                if ($dept_result && $dept_result->num_rows > 0) {
-                    $dept_row = $dept_result->fetch_assoc();
-                    $teacher_info['department_name'] = $dept_row['name'];
-                } else {
-                    // 如果找不到名稱，使用代碼本身
-                    $teacher_info['department_name'] = $dept_code;
-                }
-                $dept_stmt->close();
-            }
-        } else {
-            $teacher_info['department_name'] = '';
-        }
+
+    } else {
+        echo "<div style='background: #f8d7da; color: #721c24; padding:20px; border-radius:5px;'>";
+        echo "<h3>❌ SQL 準備失敗</h3>";
+        echo "<p>資料表: $table, 別名: $alias</p>";
+        echo "<p>錯誤訊息: " . $conn->error . "</p>";
+        echo "<p><strong>SESSION 內容：</strong></p>";
+        echo "<pre>";
+        print_r($_SESSION);
+        echo "</pre></div>";
+        exit();
     }
-    $teacher_stmt->close();
 } else {
-    // SQL 準備失敗，顯示錯誤資訊
-    echo "<div style='background: #f8d7da; color: #721c24; padding: 20px; margin: 20px; border-radius: 5px;'>";
-    echo "<h3>❌ 資料庫查詢錯誤</h3>";
-    echo "<p><strong>錯誤訊息：</strong> " . $conn->error . "</p>";
-    echo "<p><strong>可能原因：</strong></p>";
-    echo "<ul>";
-    echo "<li>teacher 表不存在</li>";
-    echo "<li>欄位名稱錯誤 (username, teacher_name, user_id)</li>";
-    echo "<li>資料庫連線問題</li>";
-    echo "</ul>";
-    echo "<p><strong>SESSION 內容：</strong></p>";
-    echo "<pre>";
-    print_r($_SESSION);
-    echo "</pre>";
-    echo "</div>";
+    echo "❌ 無法取得使用者識別資訊";
     exit();
 }
+
+// ✅ 可選：將 department code 轉換成名稱
+if ($teacher_info && !empty($teacher_info['department'])) {
+    $dept_code = $teacher_info['department'];
+    $dept_stmt = $conn->prepare("SELECT name FROM departments WHERE code = ?");
+    if ($dept_stmt) {
+        $dept_stmt->bind_param("s", $dept_code);
+        $dept_stmt->execute();
+        $dept_result = $dept_stmt->get_result();
+        if ($dept_result && $dept_result->num_rows > 0) {
+            $dept_row = $dept_result->fetch_assoc();
+            $teacher_info['department_name'] = $dept_row['name'];
+        } else {
+            $teacher_info['department_name'] = $dept_code; // 找不到名稱就用 code
+        }
+        $dept_stmt->close();
+    }
+}
+
+// 此時 $teacher_info 已包含登入使用者的完整資訊
+// TEA / DI 都能進入，不會出現 stmt already closed
 
 // 查詢該教師的活動記錄（通過 JOIN 獲取 teacher 名稱）
 // 注意：name 欄位在 user 表中，不在 teacher 表中

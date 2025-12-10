@@ -18,9 +18,11 @@ use PHPMailer\PHPMailer\Exception;
 // 檢查登入狀態和角色（支援角色代碼和中文名稱，包含STA行政人員）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+$is_director = ($user_role === 'DI');
 
-if (!$isLoggedIn || !isset($_SESSION['role']) || !$is_teacher) {
+// ★ 正確的登入檢查：要是老師 OR 要是主任才能進入
+if (!$isLoggedIn || !($is_teacher || $is_director)) {
 	header("Location: index.php");
 	exit;
 }
@@ -39,27 +41,37 @@ $default_teacher_name = '';
 $default_teacher_email = '';
 $current_user_id = null;
 try {
-	// 從 teacher 表和 user 表獲取老師資訊
-	// 注意：name 和 email 欄位在 user 表中，不在 teacher 表中
-	$stmt = $pdo->prepare("
-		SELECT u.id, u.name, t.department, u.email 
-		FROM teacher t
-		INNER JOIN user u ON t.user_id = u.id 
-		WHERE u.username = ?
-	");
+
+	// ★ 依據身分決定查哪張資料表
+	if ($is_director) {
+		$sql = "
+			SELECT u.id, u.name, d.department, u.email
+			FROM director d
+			INNER JOIN user u ON d.user_id = u.id
+			WHERE u.username = ?
+		";
+	} else {
+		$sql = "
+			SELECT u.id, u.name, t.department, u.email
+			FROM teacher t
+			INNER JOIN user u ON t.user_id = u.id
+			WHERE u.username = ?
+		";
+	}
+
+	$stmt = $pdo->prepare($sql);
 	$stmt->execute([$_SESSION['username']]);
 	$teacher_info = $stmt->fetch(PDO::FETCH_ASSOC);
-	
+
 	if ($teacher_info) {
 		$current_user_id = (int)$teacher_info['id'];
 		$default_teacher_name = $teacher_info['name'] ?? '';
-		// 優先使用 user 表的 email，如果沒有則使用其他來源
 		$default_teacher_email = $teacher_info['email'] ?? '';
 	}
+
 } catch (PDOException $e) {
-	error_log("獲取老師資訊失敗: " . $e->getMessage());
-	// 如果查詢失敗，繼續使用空值（不影響主要功能）
-}
+	error_log("獲取老師/主任資訊失敗: " . $e->getMessage());
+} 
 
 
 // 處理表單送出
