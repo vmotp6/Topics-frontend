@@ -54,7 +54,7 @@ if (empty($grades)) {
 $departments = [];
 $departments_map = []; // code => name 映射
 
-$departments_query = "SELECT code, name FROM departments ORDER BY name";
+$departments_query = "SELECT code, name FROM departments ORDER BY code, name";
 $departments_result = $conn->query($departments_query);
 
 if ($departments_result) {
