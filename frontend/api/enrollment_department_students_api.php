@@ -38,7 +38,7 @@ try {
     // 查詢該科系的學生資料
     $students = [];
     
-    // 查詢 enrollment_intention 表
+    // 優先嘗試使用 enrollment_intention 表（舊結構）
     $table_check = $conn->query("SHOW TABLES LIKE 'enrollment_intention'");
     if ($table_check && $table_check->num_rows > 0) {
         // 檢查 enrollment_intention 表的欄位結構
@@ -84,9 +84,68 @@ try {
         }
         
         if (empty($available_intention_fields)) {
-            echo json_encode(['error' => '找不到意願相關欄位，可用欄位: ' . implode(', ', $available_columns)], JSON_UNESCAPED_UNICODE);
-            $conn->close();
-            exit;
+            // 如果 enrollment_intention 表存在但沒有 intention 欄位，改為嘗試使用 enrollment_choices（正規化結構）
+            $choices_check = $conn->query("SHOW TABLES LIKE 'enrollment_choices'");
+            if ($choices_check && $choices_check->num_rows > 0) {
+                // 與下方 enrollment_choices 路徑相同：先以 departments.name 找 code，再查 enrollment_choices -> enrollment_intention
+                $dept_codes = [];
+                $dept_stmt = $conn->prepare("SELECT code FROM departments WHERE name = ?");
+                if ($dept_stmt) {
+                    $dept_stmt->bind_param('s', $department);
+                    $dept_stmt->execute();
+                    $res = $dept_stmt->get_result();
+                    while ($r = $res->fetch_assoc()) {
+                        $dept_codes[] = $r['code'];
+                    }
+                    $dept_stmt->close();
+                }
+
+                if (empty($dept_codes)) {
+                    $dept_codes[] = $department;
+                }
+
+                $escaped_codes = array_map(function($c) use ($conn) {
+                    return "'" . $conn->real_escape_string($c) . "'";
+                }, $dept_codes);
+                $in_clause = implode(', ', $escaped_codes);
+
+                $sql = "SELECT ei.id, ei.name, ei.junior_high, ei.current_grade, ei.phone1, ei.phone2, ei.email, ei.line_id, ei.facebook, ei.recommended_teacher, ei.remarks, ei.assigned_department, ei.assigned_teacher_id, ei.created_at
+                        FROM enrollment_choices ec
+                        INNER JOIN enrollment_intention ei ON ec.enrollment_id = ei.id
+                        WHERE ec.department_code IN ($in_clause)
+                        ORDER BY ei.created_at DESC";
+
+                $result = $conn->query($sql);
+                if (!$result) {
+                    echo json_encode(['error' => '查詢學生資料失敗: ' . $conn->error], JSON_UNESCAPED_UNICODE);
+                    $conn->close();
+                    exit;
+                }
+
+                while ($row = $result->fetch_assoc()) {
+                    $student_data = [
+                        'name' => $row['name'] ?? '未填寫',
+                        'school' => $row['junior_high'] ?? '未填寫',
+                        'grade' => $row['current_grade'] ?? '未填寫',
+                        'department' => $department,
+                        'created_at' => $row['created_at'] ?? '未填寫'
+                    ];
+
+                    if (isset($row['phone1'])) $student_data['phone1'] = $row['phone1'] ?: '未填寫';
+                    if (isset($row['phone2'])) $student_data['phone2'] = $row['phone2'] ?: '未填寫';
+                    if (isset($row['email'])) $student_data['email'] = $row['email'] ?: '未填寫';
+
+                    $students[] = $student_data;
+                }
+
+                echo json_encode($students, JSON_UNESCAPED_UNICODE);
+                $conn->close();
+                exit;
+            } else {
+                echo json_encode(['error' => '找不到意願相關欄位，可用欄位: ' . implode(', ', $available_columns)], JSON_UNESCAPED_UNICODE);
+                $conn->close();
+                exit;
+            }
         }
         
         // 構建WHERE子句 - 查詢任一意願欄位包含該科系
@@ -151,10 +210,72 @@ try {
         }
         $stmt->close();
     } else {
-        // 如果沒有 enrollment_intention 表，返回錯誤
-        echo json_encode(['error' => '找不到 enrollment_intention 表'], JSON_UNESCAPED_UNICODE);
-        $conn->close();
-        exit;
+        // 如果沒有 enrollment_intention 表，嘗試使用正規化的 enrollment_choices 表
+        $choices_check = $conn->query("SHOW TABLES LIKE 'enrollment_choices'");
+        if ($choices_check && $choices_check->num_rows > 0) {
+            // 先嘗試從 departments 表根據中文名稱找出對應的 code
+            $dept_codes = [];
+            $dept_stmt = $conn->prepare("SELECT code FROM departments WHERE name = ?");
+            if ($dept_stmt) {
+                $dept_stmt->bind_param('s', $department);
+                $dept_stmt->execute();
+                $res = $dept_stmt->get_result();
+                while ($r = $res->fetch_assoc()) {
+                    $dept_codes[] = $r['code'];
+                }
+                $dept_stmt->close();
+            }
+
+            // 如果沒找到對應 code，也嘗試把傳入名稱當成 code 使用
+            if (empty($dept_codes)) {
+                $dept_codes[] = $department;
+            }
+
+            // 構建 IN 子句（安全地轉義）
+            $escaped_codes = array_map(function($c) use ($conn) {
+                return "'" . $conn->real_escape_string($c) . "'";
+            }, $dept_codes);
+            $in_clause = implode(', ', $escaped_codes);
+
+            // 從 enrollment_choices 取得 enrollment_id，再 JOIN enrollment_intention 取得學生資訊
+            $sql = "SELECT ei.id, ei.name, ei.junior_high, ei.current_grade, ei.phone1, ei.phone2, ei.email, ei.line_id, ei.facebook, ei.recommended_teacher, ei.remarks, ei.assigned_department, ei.assigned_teacher_id, ei.created_at
+                    FROM enrollment_choices ec
+                    INNER JOIN enrollment_intention ei ON ec.enrollment_id = ei.id
+                    WHERE ec.department_code IN ($in_clause)
+                    ORDER BY ei.created_at DESC";
+
+            $result = $conn->query($sql);
+            if (!$result) {
+                echo json_encode(['error' => '查詢學生資料失敗: ' . $conn->error], JSON_UNESCAPED_UNICODE);
+                $conn->close();
+                exit;
+            }
+
+            while ($row = $result->fetch_assoc()) {
+                $student_data = [
+                    'name' => $row['name'] ?? '未填寫',
+                    'school' => $row['junior_high'] ?? '未填寫',
+                    'grade' => $row['current_grade'] ?? '未填寫',
+                    'department' => $department,
+                    'created_at' => $row['created_at'] ?? '未填寫'
+                ];
+
+                if (isset($row['phone1'])) $student_data['phone1'] = $row['phone1'] ?: '未填寫';
+                if (isset($row['phone2'])) $student_data['phone2'] = $row['phone2'] ?: '未填寫';
+                if (isset($row['email'])) $student_data['email'] = $row['email'] ?: '未填寫';
+
+                $students[] = $student_data;
+            }
+
+            // 回傳結果
+            echo json_encode($students, JSON_UNESCAPED_UNICODE);
+            $conn->close();
+            exit;
+        } else {
+            echo json_encode(['error' => '找不到 enrollment_intention 或 enrollment_choices 表，無法查詢學生資料'], JSON_UNESCAPED_UNICODE);
+            $conn->close();
+            exit;
+        }
     }
     
     // 關閉資料庫連接
@@ -168,4 +289,4 @@ try {
     error_log('API錯誤堆疊: ' . $e->getTraceAsString());
     echo json_encode(['error' => '伺服器內部錯誤: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
-?>
+

@@ -41,35 +41,35 @@ try {
     switch ($action) {
         case 'overview':
             $stats = getOverviewStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'grade':
             $stats = getGradeStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'school':
             $stats = getSchoolStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'session':
             $stats = getSessionStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'course':
             $stats = getCourseStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'monthly':
             $stats = getMonthlyStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'receive_info':
             $stats = getReceiveInfoStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         default:
-            http_response_code(400);
-            echo json_encode(['error' => '無效的操作']);
+                http_response_code(400);
+                echo json_encode(['error' => '無效的操作'], JSON_UNESCAPED_UNICODE);
     }
 
 } catch (PDOException $e) {
@@ -115,11 +115,13 @@ function getOverviewStats($pdo, $department_filter = '') {
 function getGradeStats($pdo) {
     try {
         $sql = "SELECT 
-                    COALESCE(grade, '未填寫') as grade_name,
+                    COALESCE(a.grade, '未填寫') as grade_code,
+                    COALESCE(io.name, a.grade, '未填寫') as grade_name,
                     COUNT(*) as count
-                FROM admission_applications 
-                GROUP BY grade
-                ORDER BY count DESC";
+                FROM admission_applications a
+                LEFT JOIN identity_options io ON a.grade = io.code
+                GROUP BY a.grade
+                ORDER BY COALESCE(io.name, a.grade)";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
@@ -208,22 +210,24 @@ function getCourseStats($pdo) {
     try {
         // 統計第一選擇課程
         $sql1 = "SELECT 
-                    COALESCE(course_priority_1, '未選擇') as course_name,
+                    COALESCE(d1.name, course_priority_1, '未選擇') as course_name,
                     COUNT(*) as count
-                FROM admission_applications 
+                FROM admission_applications a
+                LEFT JOIN departments d1 ON a.course_priority_1 = d1.code
                 WHERE course_priority_1 IS NOT NULL AND course_priority_1 != ''
-                GROUP BY course_priority_1
+                GROUP BY course_priority_1, d1.name
                 ORDER BY count DESC";
         $stmt1 = $pdo->query($sql1);
         $results1 = $stmt1->fetchAll(PDO::FETCH_ASSOC);
         
         // 統計第二選擇課程
         $sql2 = "SELECT 
-                    COALESCE(course_priority_2, '未選擇') as course_name,
+                    COALESCE(d2.name, course_priority_2, '未選擇') as course_name,
                     COUNT(*) as count
-                FROM admission_applications 
+                FROM admission_applications a
+                LEFT JOIN departments d2 ON a.course_priority_2 = d2.code
                 WHERE course_priority_2 IS NOT NULL AND course_priority_2 != ''
-                GROUP BY course_priority_2
+                GROUP BY course_priority_2, d2.name
                 ORDER BY count DESC";
         $stmt2 = $pdo->query($sql2);
         $results2 = $stmt2->fetchAll(PDO::FETCH_ASSOC);
@@ -302,23 +306,39 @@ function getMonthlyStats($pdo) {
 function getReceiveInfoStats($pdo) {
     try {
         $sql = "SELECT 
-                    COALESCE(receive_info, '未填寫') as receive_info,
+                    COALESCE(receive_info, '') as receive_info,
                     COUNT(*) as count
                 FROM admission_applications 
                 GROUP BY receive_info
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        return array_map(function($row) {
-            return [
-                'name' => $row['receive_info'],
+
+        // 將 0/1 或 '0'/'1' 映射為 中文 標籤
+        $mapped = [];
+        foreach ($results as $row) {
+            $raw = $row['receive_info'];
+            if ($raw === null || $raw === '') {
+                $label = '未填寫';
+            } elseif ($raw === 1 || $raw === '1') {
+                $label = '是';
+            } elseif ($raw === 0 || $raw === '0') {
+                $label = '否';
+            } else {
+                // 其他可能的值，直接轉為字串顯示
+                $label = (string)$raw;
+            }
+
+            $mapped[] = [
+                'name' => $label,
                 'value' => (int)$row['count']
             ];
-        }, $results);
+        }
+
+        return $mapped;
     } catch (PDOException $e) {
         error_log("資訊接收統計錯誤: " . $e->getMessage());
         return ['error' => '無法獲取資訊接收統計'];
     }
 }
-?>
+

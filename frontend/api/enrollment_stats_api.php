@@ -112,6 +112,12 @@ try {
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
+        case 'assigned_department':
+            // 已分配科系（assigned_department）統計，顯示中文名稱
+            $stats = getAssignedDepartmentStats($pdo, $department_filter);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
+            break;
+            
         default:
             http_response_code(400);
             echo json_encode(['error' => '無效的操作'], JSON_UNESCAPED_UNICODE);
@@ -690,25 +696,20 @@ function getGradeStats($pdo, $department_filter = '') {
         
         $stmt = $pdo->query("
             SELECT 
-                COALESCE(current_grade, '未填寫') as grade,
+                COALESCE(ei.current_grade, '未填寫') as grade_code,
+                COALESCE(io.name, ei.current_grade, '未填寫') as grade_name,
                 COUNT(*) as count
-            FROM enrollment_intention 
+            FROM enrollment_intention ei
+            LEFT JOIN identity_options io ON ei.current_grade = io.code
             WHERE $filter
-            GROUP BY current_grade
-            ORDER BY 
-                CASE current_grade
-                    WHEN '國一' THEN 1
-                    WHEN '國二' THEN 2
-                    WHEN '國三' THEN 3
-                    WHEN '已畢業' THEN 4
-                    ELSE 5
-                END
+            GROUP BY ei.current_grade
+            ORDER BY COALESCE(io.name, ei.current_grade)
         ");
         
         $stats = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $stats[] = [
-                'name' => $row['grade'],
+                'name' => $row['grade_name'],
                 'value' => (int)$row['count']
             ];
         }
@@ -738,15 +739,24 @@ function getGenderStats($pdo, $department_filter = '') {
         
         $stmt = $pdo->query("
             SELECT 
-                COALESCE(gender, '未填寫') as gender,
+                COALESCE(gender, '未填寫') as gender_code,
+                CASE COALESCE(gender, '未填寫')
+                    WHEN 1 THEN '男'
+                    WHEN 2 THEN '女'
+                    WHEN '1' THEN '男'
+                    WHEN '2' THEN '女'
+                    ELSE COALESCE(gender, '未填寫')
+                END as gender_name,
                 COUNT(*) as count
             FROM enrollment_intention 
             WHERE $filter
             GROUP BY gender
             ORDER BY 
-                CASE gender
-                    WHEN '男' THEN 1
-                    WHEN '女' THEN 2
+                CASE COALESCE(gender, '未填寫')
+                    WHEN 1 THEN 1
+                    WHEN '1' THEN 1
+                    WHEN 2 THEN 2
+                    WHEN '2' THEN 2
                     ELSE 3
                 END
         ");
@@ -754,7 +764,7 @@ function getGenderStats($pdo, $department_filter = '') {
         $stats = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $stats[] = [
-                'name' => $row['gender'],
+                'name' => $row['gender_name'],
                 'value' => (int)$row['count']
             ];
         }
@@ -784,15 +794,24 @@ function getIdentityStats($pdo, $department_filter = '') {
         
         $stmt = $pdo->query("
             SELECT 
-                COALESCE(identity, '未填寫') as identity,
+                COALESCE(identity, '未填寫') as identity_code,
+                CASE COALESCE(identity, '未填寫')
+                    WHEN 1 THEN '學生'
+                    WHEN 2 THEN '家長'
+                    WHEN '1' THEN '學生'
+                    WHEN '2' THEN '家長'
+                    ELSE COALESCE(identity, '未填寫')
+                END as identity_name,
                 COUNT(*) as count
             FROM enrollment_intention 
             WHERE $filter
             GROUP BY identity
             ORDER BY 
-                CASE identity
-                    WHEN '學生' THEN 1
-                    WHEN '家長' THEN 2
+                CASE COALESCE(identity, '未填寫')
+                    WHEN 1 THEN 1
+                    WHEN '1' THEN 1
+                    WHEN 2 THEN 2
+                    WHEN '2' THEN 2
                     ELSE 3
                 END
         ");
@@ -800,7 +819,7 @@ function getIdentityStats($pdo, $department_filter = '') {
         $stats = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $stats[] = [
-                'name' => $row['identity'],
+                'name' => $row['identity_name'],
                 'value' => (int)$row['count']
             ];
         }
@@ -990,4 +1009,44 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
         return ['error' => '無法獲取國中選擇科系統計: ' . $e->getMessage()];
     }
 }
-?>
+
+    // 已分配科系統計（assigned_department） — 顯示 departments.name 中文名稱
+    function getAssignedDepartmentStats($pdo, $department_filter = '') {
+        try {
+            // 檢查 enrollment_intention 表是否存在
+            $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+            if ($table_check->rowCount() === 0) {
+                error_log("enrollment_intention 表不存在，無法獲取已分配科系統計");
+                return [];
+            }
+
+            // 使用專門針對 enrollment_intention 表的篩選函數
+            $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+
+            // 統計 assigned_department，並 LEFT JOIN departments 取得中文名稱
+            $stmt = $pdo->query("SELECT \
+                    COALESCE(ei.assigned_department, '未填寫') as dept_code, \
+                    COALESCE(d.name, ei.assigned_department, '未填寫') as dept_name, \
+                    COUNT(*) as count \
+                FROM enrollment_intention ei \
+                LEFT JOIN departments d ON ei.assigned_department = d.code \
+                WHERE $filter \
+                GROUP BY ei.assigned_department \
+                ORDER BY COUNT(*) DESC");
+
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stats = [];
+            foreach ($results as $row) {
+                $name = $row['dept_name'] ?: ($row['dept_code'] ?: '未填寫');
+                $stats[] = [
+                    'name' => $name,
+                    'value' => (int)$row['count']
+                ];
+            }
+
+            return $stats;
+        } catch (PDOException $e) {
+            error_log("已分配科系統計錯誤: " . $e->getMessage());
+            return ['error' => '無法獲取已分配科系統計'];
+        }
+    }

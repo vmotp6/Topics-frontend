@@ -111,10 +111,13 @@ function getGenderStats($pdo, $department_filter = '') {
     try {
         $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
+                    COALESCE(gender, '未填寫') as gender_code,
                     CASE 
+                        WHEN gender = 1 OR gender = '1' THEN '男'
+                        WHEN gender = 2 OR gender = '2' THEN '女'
                         WHEN gender = 'male' THEN '男'
                         WHEN gender = 'female' THEN '女'
-                        ELSE '未填寫'
+                        ELSE COALESCE(gender, '未填寫')
                     END as gender_name,
                     COUNT(*) as count
                 FROM continued_admission 
@@ -315,16 +318,20 @@ function getStatusStats($pdo, $department_filter = '') {
     try {
         $filter = buildDepartmentFilter($department_filter);
         $sql = "SELECT 
-                    CASE 
-                        WHEN status = 'pending' THEN '待審核'
-                        WHEN status = 'approved' THEN '已錄取'
-                        WHEN status = 'rejected' THEN '未錄取'
-                        ELSE '未知狀態'
-                    END as status_name,
+                    ca.status as status_code,
+                    COALESCE(ast.name, 
+                        CASE 
+                            WHEN ca.status = 'pending' THEN '待審核'
+                            WHEN ca.status = 'approved' THEN '已錄取'
+                            WHEN ca.status = 'rejected' THEN '未錄取'
+                            ELSE COALESCE(ca.status, '未知狀態')
+                        END
+                    ) as status_name,
                     COUNT(*) as count
-                FROM continued_admission 
+                FROM continued_admission ca
+                LEFT JOIN application_statuses ast ON ca.status = ast.code
                 WHERE $filter
-                GROUP BY status
+                GROUP BY ca.status
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
