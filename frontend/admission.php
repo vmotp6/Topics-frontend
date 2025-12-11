@@ -50,17 +50,20 @@ if (empty($grades)) {
     }
 }
 
-// 取得科系選項（從 departments 表）
+// 1. 取得科系資料
 $departments = [];
 $departments_map = []; // code => name 映射
+
 $departments_query = "SELECT code, name FROM departments ORDER BY name";
 $departments_result = $conn->query($departments_query);
+
 if ($departments_result) {
     while ($row = $departments_result->fetch_assoc()) {
         $departments[] = ['code' => $row['code'], 'name' => $row['name']];
         $departments_map[$row['code']] = $row['name'];
     }
 }
+
 // 如果查詢失敗或沒有資料，使用預設值
 if (empty($departments)) {
     $departments = [
@@ -73,16 +76,25 @@ if (empty($departments)) {
     }
 }
 
-// 取得招生諮詢老師資訊 (user_id=12的老師資料)
+// 2. 取得招生諮詢老師資訊 (user_id=90的老師資料)
 $admission_teacher = [];
 $teacher_query = "SELECT u.name, t.department, t.phone 
                   FROM teacher t 
                   LEFT JOIN user u ON t.user_id = u.id 
                   WHERE t.user_id = 90";
 $teacher_result = $conn->query($teacher_query);
+
 if ($teacher_result && $teacher_result->num_rows > 0) {
     $admission_teacher = $teacher_result->fetch_assoc();
+
+    // 3. ★ 將 department 代碼轉換成中文科系名稱
+    if (!empty($admission_teacher['department']) && isset($departments_map[$admission_teacher['department']])) {
+        $admission_teacher['department_name'] = $departments_map[$admission_teacher['department']];
+    } else {
+        $admission_teacher['department_name'] = $admission_teacher['department']; // fallback
+    }
 }
+
 
 $message = "";
 $messageType = "";
@@ -876,7 +888,7 @@ $conn->close();
                         <div><i class="fas fa-user"></i> 招生諮詢：
                             <?php echo !empty($admission_teacher['name']) ? htmlspecialchars($admission_teacher['name']) : '請洽學校總機'; ?>
                             <?php if (!empty($admission_teacher['department'])): ?>
-                                - <?php echo htmlspecialchars($admission_teacher['department']); ?>
+                                - <?php echo htmlspecialchars($admission_teacher['department_name']); ?>
                             <?php endif; ?>
                         </div>
             </div>
