@@ -403,6 +403,11 @@ function getDepartmentStats($pdo, $department_filter = '') {
             $merged[$dept]['priorities'][$priority] = ($merged[$dept]['priorities'][$priority] ?? 0) + $count;
         }
         
+        // 計算實際的學生總數（去重）
+        $total_students_stmt = $pdo->query("SELECT COUNT(DISTINCT id) as total FROM enrollment_intention");
+        $total_students_result = $total_students_stmt->fetch(PDO::FETCH_ASSOC);
+        $total_students = (int)($total_students_result['total'] ?? 0);
+        
         // 轉換為前端需要的格式
         foreach ($merged as $department => $data) {
             // 創建詳細的志願分布描述
@@ -428,7 +433,11 @@ function getDepartmentStats($pdo, $department_filter = '') {
             return $b['value'] - $a['value'];
         });
         
-        return $stats;
+        // 回傳物件包含科系分布和實際學生總數
+        return [
+            'data' => $stats,
+            'total_students' => $total_students
+        ];
     } catch (PDOException $e) {
         error_log("科系統計錯誤: " . $e->getMessage());
         error_log("SQL 錯誤詳情: " . print_r($e->errorInfo, true));

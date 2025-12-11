@@ -41,31 +41,31 @@ try {
     switch ($action) {
         case 'overview':
             $stats = getOverviewStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'gender':
             $stats = getGenderStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'school_city':
             $stats = getSchoolCityStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'choices':
             $stats = getChoicesStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'monthly':
             $stats = getMonthlyStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         case 'status':
             $stats = getStatusStats($pdo, $department_filter);
-            echo json_encode($stats);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
         default:
             http_response_code(400);
-            echo json_encode(['error' => '無效的操作']);
+            echo json_encode(['error' => '無效的操作'], JSON_UNESCAPED_UNICODE);
     }
 
 } catch (PDOException $e) {
@@ -74,35 +74,45 @@ try {
     echo json_encode(['error' => '資料庫連接失敗']);
 }
 
-// 輔助函數：建立科系篩選的 WHERE 條件（針對續招報名的 choices JSON 欄位）
+// 輔助函數：建立科系篩選的 WHERE 條件
 function buildDepartmentFilter($department) {
     if (empty($department)) {
         return '1=1'; // 不篩選
     }
-    // 篩選 choices JSON 中包含指定科系的記錄
-    return "JSON_CONTAINS(choices, '\"$department\"')";
+    // 篩選 assigned_department 欄位
+    return "assigned_department = '" . addslashes($department) . "'";
 }
 
 // 總覽統計
 function getOverviewStats($pdo, $department_filter = '') {
     try {
         $filter = buildDepartmentFilter($department_filter);
-        $sql = "SELECT 
-                    COUNT(*) as total_applications,
-                    COUNT(DISTINCT school_city) as total_cities,
-                    COUNT(DISTINCT school_name) as total_schools
-                FROM continued_admission WHERE $filter";
+        
+        // 查詢基本統計（不依賴不存在的欄位）
+        if ($filter === '1=1') {
+            // 沒有部門篩選時，直接統計所有記錄
+            $sql = "SELECT 
+                        COUNT(*) as total_applications
+                    FROM continued_admission";
+        } else {
+            // 有部門篩選時，篩選 assigned_department
+            $sql = "SELECT 
+                        COUNT(*) as total_applications
+                    FROM continued_admission 
+                    WHERE $filter";
+        }
+        
         $stmt = $pdo->query($sql);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         
         return [
-            'total_applications' => (int)$result['total_applications'],
-            'total_cities' => (int)$result['total_cities'],
-            'total_schools' => (int)$result['total_schools']
+            'total_applications' => (int)($result['total_applications'] ?? 0),
+            'total_cities' => 0,
+            'total_schools' => 0
         ];
     } catch (PDOException $e) {
         error_log("總覽統計錯誤: " . $e->getMessage());
-        return ['error' => '無法獲取總覽統計'];
+        return ['error' => '無法獲取總覽統計', 'total_applications' => 0];
     }
 }
 
@@ -347,4 +357,3 @@ function getStatusStats($pdo, $department_filter = '') {
         return ['error' => '無法獲取狀態統計'];
     }
 }
-?>
