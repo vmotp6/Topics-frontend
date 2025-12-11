@@ -428,7 +428,7 @@ try {
             <div class="form-group">
                 <label for="department">科系</label>
                 <select id="department" name="department">
-                    <option value="" <?php echo empty($current_department ?? '') ? 'selected' : ''; ?>>請選擇科系</option>
+                    <option value="" <?php echo empty($current_department ?? '') ? 'selected' : '';?>>請選擇科系</option>
                     <?php
                     // 從資料庫動態載入科系選項
                     try {
@@ -437,6 +437,9 @@ try {
                         $departments = $stmt_depts->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($departments as $dept) {
                             $dept_name = htmlspecialchars($dept['name']);
+                            if($dept['code']=='AA') {
+                                continue;
+                            }
                             $is_selected = ($current_department === $dept_name) ? 'selected' : '';
                             echo "<option value=\"{$dept_name}\" {$is_selected}>{$dept_name}</option>";
                         }
