@@ -310,11 +310,23 @@ try {
     ]);
     
 } catch (PDOException $e) {
+
+    // MySQL Duplicate entry 錯誤
+    if ($e->getCode() == 23000 && strpos($e->getMessage(), 'student_id') !== false) {
+        echo json_encode([
+            'success' => false,
+            'message' => '此學號已經被使用，請確認是否輸入正確或聯絡系統管理員。'
+        ]);
+        exit;
+    }
+
+    // 其他資料庫錯誤 → 顯示一般錯誤，但寫入 log
     error_log("保存學生個人資料錯誤: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => '資料庫錯誤，請稍後再試']);
-} catch (Exception $e) {
-    error_log("保存學生個人資料錯誤: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => '系統錯誤，請稍後再試']);
+    echo json_encode([
+        'success' => false,
+        'message' => '資料庫錯誤，請稍後再試'
+    ]);
+    exit;
 }
 ?>
 

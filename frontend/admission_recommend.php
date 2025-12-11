@@ -7,6 +7,56 @@ require_once 'session_config.php';
 require_once 'config.php';
 require_once 'config/email_notification_config.php';
 
+// 判斷角色
+$user_role = $_SESSION['role'] ?? '';
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STU');
+$is_director = ($user_role === 'DI');
+$allowed = $is_teacher || $is_director;
+$debug_mode = false;
+// 登入驗證
+if ($debug_mode) {
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
+        || !isset($_SESSION['role']) 
+        || !$allowed) {
+
+        echo "<div style='background: #f8d7da; color: #721c24; padding:20px; border-radius:5px;'>";
+        echo "<h3>⚠️ 登入驗證失敗</h3>";
+        echo "<ul>";
+
+        if (!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) {
+            echo "<li>❌ 缺少識別資訊 (SESSION中沒有 user_id、id 或 username)</li>";
+        } else {
+            if (isset($_SESSION['user_id'])) echo "<li>✅ user_id 存在: " . $_SESSION['user_id'] . "</li>";
+            if (isset($_SESSION['id'])) echo "<li>✅ id 存在: " . $_SESSION['id'] . "</li>";
+            if (isset($_SESSION['username'])) echo "<li>✅ username 存在: " . $_SESSION['username'] . "</li>";
+        }
+
+        if (!isset($_SESSION['role'])) {
+            echo "<li>❌ 缺少 role (role)</li>";
+        } else {
+            echo "<li>✅ role 存在: " . $_SESSION['role'];
+            if (!$allowed) echo " (但不是 '老師' / 'TEA' 或 'DI')";
+            echo "</li>";
+        }
+
+        echo "</ul>";
+        echo "<p><strong>SESSION 內容：</strong></p>";
+        echo "<pre>";
+        print_r($_SESSION);
+        echo "</pre>";
+        echo "</div>";
+        exit();
+    }
+} else {
+    // 正常模式
+    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
+        || !isset($_SESSION['role']) 
+        || !$allowed) {
+        header("Location:index.php");
+        exit();
+    }
+}
+
 $message = '';
 $messageType = '';
 $departments = []; // 科系資料 (code => name)

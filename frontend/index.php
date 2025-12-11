@@ -888,13 +888,6 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <a href="senior_messages.php" class="feature-link">在校生留言板</a>
         </div>
         
-        <div class="feature-card">
-          <div class="feature-icon">👑</div>
-          <h3 class="feature-title">推薦報名</h3>
-          <p class="feature-description">查看推薦報名情況和進度。</p>
-          <a href="admission_recommend.php" class="feature-link">推薦報名</a>
-        </div>
-        
       <?php elseif ($is_student): ?>
         <!-- 學生：顯示學生相關功能 -->
         <div class="feature-card">
@@ -977,6 +970,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">查看和管理學校活動通知。</p>
           <a href="mobile_teacher.php" class="feature-link">學校活動通知系統</a>
         </div>
+        
         
       <?php elseif ($is_admin): ?>
         <!-- 管理員：顯示管理員相關功能 -->
