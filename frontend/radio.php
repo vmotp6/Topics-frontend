@@ -14,12 +14,34 @@ $offset = ($page - 1) * $perPage;
 
 // 取得分類清單
 $categories = [];
-$catSql = "SELECT DISTINCT IFNULL(category, '') AS category FROM videos WHERE published = 1 ORDER BY category";
+
+// 1. 先抓所有不同的 category_id（只抓已發布影片）
+$catSql = "SELECT DISTINCT category_id FROM videos WHERE published = 1 ORDER BY category_id";
 if ($res = $conn->query($catSql)) {
+    $categoryIds = [];
     while ($row = $res->fetch_assoc()) {
-        if ($row['category'] !== '') $categories[] = $row['category'];
+        if (!empty($row['category_id'])) {
+            $categoryIds[] = intval($row['category_id']); // 轉成整數避免 SQL 注入
+        }
     }
     $res->free();
+
+    // 2. 再用 video_categories 對應 category_id => name
+    if (!empty($categoryIds)) {
+        $idsStr = implode(',', $categoryIds);
+        $catNameSql = "SELECT id, name FROM video_categories WHERE id IN ($idsStr) ORDER BY name";
+        if ($res2 = $conn->query($catNameSql)) {
+            while ($row2 = $res2->fetch_assoc()) {
+                $categories[$row2['id']] = $row2['name']; // key = id, value = name
+            }
+            $res2->free();
+        }
+    }
+}
+
+// $categories 現在是 array(id => name)，可以用來顯示下拉選單或列表
+foreach ($categories as $id => $name) {
+    echo "<option value='{$id}'>" . htmlspecialchars($name) . "</option>";
 }
 
 // 建立查詢條件
@@ -32,8 +54,9 @@ if ($search !== '') {
     $params[] = $like;
 }
 if ($category !== '') {
-    $where .= " AND category = ?";
-    $params[] = $category;
+    // 假設前端傳來的就是 category_id
+    $where .= " AND category_id = ?";
+    $params[] = intval($category); // 轉成整數
 }
 
 // 計算總數
@@ -55,7 +78,7 @@ if ($stmt) {
 
 // 取得影片
 $list = [];
-$listSql = "SELECT * FROM videos $where ORDER BY created_at DESC LIMIT ? OFFSET ?";
+$listSql = "SELECT * FROM videos $where ORDER BY category_id  DESC LIMIT ? OFFSET ?";
 $stmt = $conn->prepare($listSql);
 if ($stmt) {
     // bind params: existing params + two integers
@@ -77,6 +100,16 @@ if ($stmt) {
 }
 
 $totalPages = max(1, ceil($total / $perPage));
+
+// 取得所有已發布的影片用於自動輪播
+$allVideos = [];
+$allVideosSql = "SELECT id, title, video_url, thumbnail_url, duration, description, category_id FROM videos WHERE published = 1 ORDER BY created_at DESC";
+if ($res = $conn->query($allVideosSql)) {
+    while ($row = $res->fetch_assoc()) {
+        $allVideos[] = $row;
+    }
+    $res->free();
+}
 
 $conn->close();
 ?>
@@ -149,11 +182,12 @@ header h1 {
     padding: 13px 15px;
     border: none;
     border-radius: 10px 0 0 10px;
-    background: #ffffff;
+    background: #f6f8fb;
     font-size: 15px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.06);
     outline: none;
     transition: 0.2s ease;
+    height: 46px;
 }
 
 .search-bar input[type=text]:focus {
@@ -356,7 +390,75 @@ header h1 {
     text-decoration: none;
 }
 
+/* ====== 自動輪播影片區 ====== */
+.auto-play-section {
+    background: #f6f8fb;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 30px;
+}
 
+.auto-play-section .video-box {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+.auto-play-section video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.auto-play-section .meta {
+    color: #666;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.auto-play-section h4 {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #222;
+}
+
+.auto-play-section .desc {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.6;
+}
+/* 確保 footer 填滿整個螢幕寬度，不受 container 影響 */
+body footer.footer,
+footer.footer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* 確保 footer 不受任何父容器限制 */
+    transform: none !important;
+    clear: both !important;
+    display: block !important;
+}
+
+/* 確保 body 不會限制 footer */
+body {
+    overflow-x: hidden; /* 防止橫向滾動條 */
+}
     </style>
 </head>
 <body>
@@ -368,6 +470,16 @@ header h1 {
         <p style="color:#666;margin-top:6px">搜尋與分類瀏覽影片，點擊縮圖可進入播放頁面。</p>
     </header>
 
+    <?php if (!empty($allVideos)): ?>
+    <div class="auto-play-section">
+        <div class="video-box">
+            <video id="autoPlayVideo" controls preload="metadata" autoplay muted>
+                您的瀏覽器不支援影片播放。
+            </video>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="search-bar">
         <form id="searchForm" method="get" style="display:flex;width:100%">
             <input type="hidden" name="category" value="<?php echo htmlspecialchars($category); ?>">
@@ -378,9 +490,12 @@ header h1 {
 
     <div class="categories">
         <a class="category-btn <?php echo $category === '' ? 'active' : ''; ?>" href="radio.php">全部</a>
-        <?php foreach ($categories as $c): ?>
-            <a class="category-btn <?php echo $category === $c ? 'active' : ''; ?>" href="radio.php?category=<?php echo urlencode($c); ?>"><?php echo htmlspecialchars($c); ?></a>
+        <?php foreach ($categories as $id => $name): ?>
+        <a class="category-btn <?php echo $category == $id ? 'active' : ''; ?>" href="radio.php?category=<?php echo $id; ?>">
+            <?php echo htmlspecialchars($name); ?>
+        </a>
         <?php endforeach; ?>
+
     </div>
 
     <div class="grid">
@@ -417,7 +532,81 @@ header h1 {
     </div>
 
 </div>
-</div>
+
+
+<?php if (!empty($allVideos)): ?>
+<script>
+// 影片資料
+const videos = <?php echo json_encode($allVideos, JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+const categories = <?php echo json_encode($categories, JSON_UNESCAPED_UNICODE); ?>;
+
+let currentVideoIndex = 0;
+const videoElement = document.getElementById('autoPlayVideo');
+const videoTitle = document.getElementById('videoTitle');
+const videoDesc = document.getElementById('videoDesc');
+const videoCategory = document.getElementById('videoCategory');
+const videoDuration = document.getElementById('videoDuration');
+function loadVideo(index) {
+    if (!videos.length) return;
+
+    if (index >= videos.length) index = 0; // 循環播放
+    currentIndex = index;
+
+    const video = videos[index];
+
+    videoEl.src = video.video_url;
+    videoEl.poster = video.thumbnail_url || '';
+    
+
+    videoEl.load();
+    videoEl.play().catch(err => {
+        console.log('自動播放被阻止:', err);
+    });
+}
+
+
+// 載入影片
+function loadVideo(index) {
+    if (index >= videos.length) {
+        // 如果已經播放完所有影片，重新從第一個開始
+        currentVideoIndex = 0;
+        index = 0;
+    }
+    
+    const video = videos[index];
+    currentVideoIndex = index;
+    
+    // 更新影片來源
+    videoElement.src = video.video_url;
+    videoElement.poster = video.thumbnail_url || '';
+    
+    // 載入並播放
+    videoElement.load();
+    videoElement.play().catch(function(error) {
+        console.log('自動播放被阻止:', error);
+        // 如果自動播放失敗，用戶可以手動點擊播放
+    });
+}
+
+// 當影片播放完畢時，自動切換到下一個
+videoElement.addEventListener('ended', function() {
+    loadVideo(currentVideoIndex + 1);
+});
+
+// 當影片載入錯誤時，跳過並播放下一個
+videoElement.addEventListener('error', function() {
+    console.log('影片載入錯誤，跳過此影片');
+    setTimeout(function() {
+        loadVideo(currentVideoIndex + 1);
+    }, 1000);
+});
+
+// 初始化：載入第一個影片
+if (videos.length > 0) {
+    loadVideo(0);
+}
+</script>
+<?php endif; ?>
 <?php include('share/footer.php'); ?>
 </body>
 </html>
