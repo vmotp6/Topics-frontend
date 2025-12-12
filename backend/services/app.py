@@ -1578,6 +1578,312 @@ def get_faq():
         if conn:
             conn.close()
 
+# ✅ 忘記密碼 API
+@app.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """處理忘記密碼請求，生成重置 token 並發送郵件"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"message": "請輸入帳號或電子郵件"}), 400
+        
+        username_or_email = data.get('username_or_email', '').strip()
+        
+        if not username_or_email:
+            return jsonify({"message": "請輸入帳號或電子郵件"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 查詢用戶（根據用戶名或郵箱）
+                cursor.execute(
+                    "SELECT id, username, name, email FROM user WHERE username = %s OR email = %s",
+                    (username_or_email, username_or_email)
+                )
+                user = cursor.fetchone()
+                
+                if not user:
+                    # 為了安全，不透露用戶是否存在
+                    return jsonify({
+                        "message": "如果該帳號或郵箱存在，我們已發送重設密碼連結到您的註冊郵箱。"
+                    }), 200
+                
+                user_id, username, name, email = user
+                
+                # 處理 None 值
+                username = username or ''
+                name = name or username or ''
+                email = email or ''
+                
+                if not email:
+                    return jsonify({"message": "該帳號未綁定電子郵件，無法重設密碼"}), 400
+                
+                # 生成重置 token
+                reset_token = secrets.token_urlsafe(32)
+                expires_at = datetime.now().timestamp() + 3600  # 1小時後過期
+                
+                # 確保 password_reset_tokens 表存在
+                try:
+                    # 先檢查表是否存在
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM information_schema.tables 
+                        WHERE table_schema = DATABASE() 
+                        AND table_name = 'password_reset_tokens'
+                    """)
+                    table_exists = cursor.fetchone()[0] > 0
+                    
+                    if not table_exists:
+                        # 創建表（不使用 FOREIGN KEY 約束以避免問題）
+                        cursor.execute("""
+                            CREATE TABLE password_reset_tokens (
+                                id INT AUTO_INCREMENT PRIMARY KEY,
+                                user_id INT NOT NULL,
+                                token VARCHAR(255) NOT NULL UNIQUE,
+                                expires_at BIGINT NOT NULL,
+                                used TINYINT(1) DEFAULT 0,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                INDEX idx_token (token),
+                                INDEX idx_user_id (user_id)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                        """)
+                        conn.commit()
+                        print("✅ password_reset_tokens 表已創建")
+                    else:
+                        print("✅ password_reset_tokens 表已存在")
+                except pymysql.Error as table_error:
+                    # 表可能已存在，繼續執行
+                    print(f"⚠️  創建表時發生錯誤（可能已存在）: {table_error}")
+                    conn.rollback()
+                    # 嘗試繼續執行，如果表已存在應該沒問題
+                
+                # 將舊的 token 標記為已使用
+                try:
+                    cursor.execute(
+                        "UPDATE password_reset_tokens SET used = 1 WHERE user_id = %s AND used = 0",
+                        (user_id,)
+                    )
+                except pymysql.Error:
+                    # 如果表不存在或沒有舊 token，忽略錯誤
+                    pass
+                
+                # 插入新的 token
+                cursor.execute(
+                    "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (%s, %s, %s)",
+                    (user_id, reset_token, int(expires_at))
+                )
+                conn.commit()
+                
+                print(f"✅ 已生成重置 token: user_id={user_id}, username={username}, email={email}")
+                
+                # 發送重設密碼郵件（使用 HTTP 請求調用 PHP API）
+                try:
+                    api_url = "http://localhost/Topics-frontend/frontend/api/send_reset_password_email.php"
+                    payload = {
+                        'user_id': user_id,
+                        'token': reset_token,
+                        'email': email,
+                        'name': name or username
+                    }
+                    
+                    try:
+                        response = requests.post(api_url, data=payload, timeout=15)
+                        print(f"   郵件 API 回應狀態碼: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            try:
+                                result_data = response.json()
+                                if result_data.get('success'):
+                                    print(f"✅ 重設密碼郵件已發送到: {email}")
+                                else:
+                                    print(f"⚠️  發送重設密碼郵件失敗: {result_data.get('message', '未知錯誤')}")
+                            except json.JSONDecodeError:
+                                print(f"⚠️  API 回應不是有效的 JSON: {response.text[:200]}")
+                        else:
+                            print(f"⚠️  發送重設密碼郵件 API 回應錯誤: HTTP {response.status_code}")
+                            print(f"   回應內容: {response.text[:200]}")
+                    except requests.exceptions.ConnectionError:
+                        print(f"⚠️  無法連接到 PHP API，可能 Web 伺服器未運行")
+                        print(f"   請確保 Apache/XAMPP 正在運行，並可以訪問: {api_url}")
+                    except requests.exceptions.Timeout:
+                        print(f"⚠️  發送郵件 API 請求超時（超過 15 秒）")
+                    except requests.exceptions.RequestException as req_error:
+                        print(f"⚠️  發送重設密碼郵件 API 請求失敗: {req_error}")
+                except Exception as email_error:
+                    print(f"❌ 發送重設密碼郵件時發生錯誤: {email_error}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # 為了安全，不透露用戶是否存在
+                return jsonify({
+                    "message": "如果該帳號或郵箱存在，我們已發送重設密碼連結到您的註冊郵箱。"
+                }), 200
+                
+        except pymysql.Error as e:
+            conn.rollback()
+            error_msg = str(e)
+            print(f"❌ 資料庫錯誤: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            # 返回更詳細的錯誤訊息（僅在開發模式下）
+            if app.debug:
+                return jsonify({"message": f"資料庫錯誤: {error_msg}"}), 500
+            return jsonify({"message": "處理請求時發生錯誤，請稍後再試"}), 500
+        finally:
+            if conn:
+                conn.close()
+            
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ 忘記密碼處理錯誤: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        # 返回更詳細的錯誤訊息（僅在開發模式下）
+        if app.debug:
+            return jsonify({"message": f"處理錯誤: {error_msg}"}), 500
+        return jsonify({"message": "處理請求時發生錯誤，請稍後再試"}), 500
+
+# ✅ 驗證重置 token API
+@app.route('/verify-reset-token', methods=['GET'])
+def verify_reset_token():
+    """驗證重置密碼 token 是否有效"""
+    try:
+        token = request.args.get('token')
+        
+        if not token:
+            return jsonify({"valid": False, "message": "缺少 token 參數"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"valid": False, "message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 查詢 token
+                cursor.execute("""
+                    SELECT prt.user_id, prt.expires_at, prt.used, u.username, u.name
+                    FROM password_reset_tokens prt
+                    JOIN user u ON prt.user_id = u.id
+                    WHERE prt.token = %s
+                """, (token,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return jsonify({"valid": False, "message": "無效的重設連結"}), 200
+                
+                user_id, expires_at, used, username, name = result
+                
+                # 檢查是否已使用
+                if used:
+                    return jsonify({"valid": False, "message": "此重設連結已使用過"}), 200
+                
+                # 檢查是否過期
+                current_time = datetime.now().timestamp()
+                if expires_at < current_time:
+                    return jsonify({"valid": False, "message": "此重設連結已過期"}), 200
+                
+                return jsonify({
+                    "valid": True,
+                    "username": username,
+                    "name": name or username
+                }), 200
+                
+        except pymysql.Error as e:
+            print(f"❌ 資料庫錯誤: {e}")
+            return jsonify({"valid": False, "message": "驗證失敗，請稍後再試"}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ 驗證 token 錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"valid": False, "message": "驗證失敗，請稍後再試"}), 500
+
+# ✅ 重置密碼 API
+@app.route('/reset-password', methods=['POST'])
+def reset_password():
+    """使用 token 重置密碼"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        new_password = data.get('new_password', '').strip()
+        
+        if not token or not new_password:
+            return jsonify({"message": "缺少必要參數"}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({"message": "密碼長度至少需要 6 個字元"}), 400
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"message": "資料庫連接失敗"}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 查詢 token
+                cursor.execute("""
+                    SELECT prt.user_id, prt.expires_at, prt.used
+                    FROM password_reset_tokens prt
+                    WHERE prt.token = %s
+                """, (token,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return jsonify({"message": "無效的重設連結"}), 400
+                
+                user_id, expires_at, used = result
+                
+                # 檢查是否已使用
+                if used:
+                    return jsonify({"message": "此重設連結已使用過"}), 400
+                
+                # 檢查是否過期
+                current_time = datetime.now().timestamp()
+                if expires_at < current_time:
+                    return jsonify({"message": "此重設連結已過期"}), 400
+                
+                # 雜湊新密碼
+                if BCrypt_AVAILABLE:
+                    hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                else:
+                    # 如果沒有 bcrypt，使用 SHA256（不推薦，但作為後備）
+                    hashed_password = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+                
+                # 更新密碼
+                cursor.execute(
+                    "UPDATE user SET password = %s WHERE id = %s",
+                    (hashed_password, user_id)
+                )
+                
+                # 標記 token 為已使用
+                cursor.execute(
+                    "UPDATE password_reset_tokens SET used = 1 WHERE token = %s",
+                    (token,)
+                )
+                
+                conn.commit()
+                print(f"✅ 密碼已重設: user_id={user_id}")
+                
+                return jsonify({
+                    "message": "密碼重設成功！請使用新密碼登入。"
+                }), 200
+                
+        except pymysql.Error as e:
+            conn.rollback()
+            print(f"❌ 資料庫錯誤: {e}")
+            return jsonify({"message": "重設密碼失敗，請稍後再試"}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ 重置密碼錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"message": "重設密碼失敗，請稍後再試"}), 500
+
 if __name__ == '__main__':
     print("🚀 啟動康寧大學聊天系統後端...")
     print(f"Google Client ID: {GOOGLE_CLIENT_ID[:20]}...")

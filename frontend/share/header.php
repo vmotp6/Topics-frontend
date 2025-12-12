@@ -1481,25 +1481,62 @@ document.getElementById("forgotPasswordForm")?.addEventListener("submit", functi
   messageElement.innerText = "處理中...";
   messageElement.style.color = "#666";
   
+  const requestPayload = { username_or_email: usernameOrEmail };
+  // #region agent log
+  console.log('[DEBUG] 發送忘記密碼請求', {url: 'http://localhost:5000/forgot-password', payload: requestPayload});
+  fetch('http://127.0.0.1:7243/ingest/38fc1b08-ca61-4fb8-8158-2bccfce761e5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'header.php:1484',message:'Sending forgot password request',data:{url:'http://localhost:5000/forgot-password',payload:requestPayload},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/38fc1b08-ca61-4fb8-8158-2bccfce761e5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'header.php:1494',message:'Before fetch call',data:{targetUrl:'http://localhost:5000/forgot-password',method:'POST'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
   fetch("http://localhost:5000/forgot-password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username_or_email: usernameOrEmail })
+    body: JSON.stringify(requestPayload)
   })
   .then(async res => {
-    const data = await res.json();
-    if (res.ok) {
-      messageElement.style.color = "green";
-      messageElement.innerText = data.message || "重設密碼郵件已發送，請檢查您的郵箱。";
-      document.getElementById("forgotPasswordForm").reset();
-    } else {
-      messageElement.style.color = "red";
-      messageElement.innerText = data.message || "發送失敗，請稍後再試。";
+    let responseText = '';
+    try {
+      responseText = await res.text();
+      // #region agent log
+      console.log('[DEBUG] 回應內容', {responseText, length: responseText.length});
+      fetch('http://127.0.0.1:7243/ingest/38fc1b08-ca61-4fb8-8158-2bccfce761e5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'header.php:1508',message:'Response text received',data:{responseText:responseText,length:responseText.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        throw parseErr;
+      }
+      
+      if (res.ok) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/df4e40a7-29fb-4588-a7c2-d2869ede0fa9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'header.php:1503',message:'Success response handled',data:{message:data.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+        // #endregion
+        messageElement.style.color = "green";
+        messageElement.innerText = data.message || "重設密碼郵件已發送，請檢查您的郵箱。";
+        document.getElementById("forgotPasswordForm").reset();
+      } else {
+        messageElement.style.color = "red";
+        messageElement.innerText = data.message || "發送失敗，請稍後再試。";
+      }
+    } catch (textErr) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/df4e40a7-29fb-4588-a7c2-d2869ede0fa9',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'header.php:1513',message:'Error reading response text',data:{error:textErr.message,errorName:textErr.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
+      throw textErr;
     }
   })
   .catch(err => {
+    console.error('忘記密碼錯誤:', err);
     messageElement.style.color = "red";
-    messageElement.innerText = "發送失敗，請稍後再試。";
+    if (err.message && err.message.includes('Failed to fetch')) {
+      messageElement.innerText = "無法連接到伺服器，請確認後端服務是否運行在 port 5000。";
+    } else {
+      messageElement.innerText = "發送失敗：" + (err.message || "請稍後再試。");
+    }
   });
 });
 
