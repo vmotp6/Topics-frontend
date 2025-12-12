@@ -1311,10 +1311,126 @@ if (isset($_GET['updated']) && $_GET['updated'] == '1' && isset($_GET['id'])) {
                         <input type="email" name="email" id="search_email_input" placeholder="請輸入您申請時使用的 Email" 
                                value="<?php echo htmlspecialchars($search_email, ENT_QUOTES, 'UTF-8'); ?>" required>
                     </div>
-                    <button type="submit" id="search_submit_btn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%; margin-bottom: 1px; transition: all 0.3s ease;">
+                    <button type="button" id="search_submit_btn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 40%; margin-bottom: 1px; transition: all 0.3s ease;">
                         <i class="fas fa-search"></i> 搜尋
                     </button>
                 </form>
+                <script>
+                (function(){
+                    function el(id){return document.getElementById(id);}
+
+                    async function sendVerification(email){
+                        try{
+                            const resp = await fetch('api/send_admission_verification.php', {
+                                method:'POST',
+                                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                                body:new URLSearchParams({email: email}),
+                                credentials: 'same-origin'
+                            });
+                            return await resp.json();
+                        }catch(e){
+                            return {success:false, message:'發生錯誤，請稍後再試'};
+                        }
+                    }
+
+                    async function verifyCode(email, code){
+                        try{
+                            const resp = await fetch('api/verify_admission_code.php', {
+                                method:'POST',
+                                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                                body:new URLSearchParams({email: email, code: code}),
+                                credentials: 'same-origin'
+                            });
+                            return await resp.json();
+                        }catch(e){
+                            return {success:false, message:'驗證失敗，請稍後再試'};
+                        }
+                    }
+
+                    document.addEventListener('DOMContentLoaded', function(){
+                        const searchBtn = el('search_submit_btn');
+                        const emailInput = el('search_email_input');
+
+                        function openModalAndAttach(email){
+                            if (typeof showVerificationModal === 'function') {
+                                try { showVerificationModal('', email); } catch (e) { console.error(e); }
+                            } else {
+                                const headerEmailDisplay = el('verification_email_display');
+                                const headerModal = el('verificationModal');
+                                if (headerEmailDisplay) headerEmailDisplay.textContent = email;
+                                if (headerModal) headerModal.style.display = 'flex';
+                            }
+
+                            setTimeout(() => {
+                                const verificationForm = document.getElementById('verificationForm');
+                                const verificationCodeEl = document.getElementById('verification_code');
+                                const verificationMessageEl = document.getElementById('verificationMessage');
+                                const resendBtnHeader = document.getElementById('resendCodeBtn');
+
+                                if (verificationForm && verificationCodeEl) {
+                                    verificationForm.removeEventListener('submit', window.__mobileJuniorVerifyHandler);
+                                    window.__mobileJuniorVerifyHandler = async function(e){
+                                        const verificationUsername = document.getElementById('verification_username');
+                                        if (verificationUsername && verificationUsername.value.trim() !== '') return;
+
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.stopImmediatePropagation();
+                                        const code = (verificationCodeEl.value || '').trim();
+                                        if (!code || code.length !== 4) {
+                                            if (verificationMessageEl) { verificationMessageEl.style.color = 'red'; verificationMessageEl.innerText = '請輸入4位數驗證碼'; }
+                                            return;
+                                        }
+                                        if (verificationMessageEl) { verificationMessageEl.style.color = '#666'; verificationMessageEl.innerText = '驗證中...'; }
+                                        const emailForVerify = document.getElementById('verification_email_display')?.textContent || (document.getElementById('search_email_input')?.value || '');
+                                        const res = await verifyCode(emailForVerify, code);
+                                        if (res.success) {
+                                            if (verificationMessageEl) { verificationMessageEl.style.color = 'green'; verificationMessageEl.innerText = res.message || '驗證成功'; }
+                                            setTimeout(() => { window.location.href = window.location.pathname + '?action=search&email=' + encodeURIComponent(emailForVerify); }, 900);
+                                        } else {
+                                            if (verificationMessageEl) { verificationMessageEl.style.color = 'red'; verificationMessageEl.innerText = res.message || '驗證失敗'; }
+                                        }
+                                    };
+                                    verificationForm.addEventListener('submit', function(e){ window.__mobileJuniorVerifyHandler(e); }, true);
+                                }
+
+                                if (resendBtnHeader) {
+                                    resendBtnHeader.removeEventListener('click', window.__mobileJuniorResendHandler);
+                                    window.__mobileJuniorResendHandler = async function(e){
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        e.stopImmediatePropagation();
+                                        const emailForResend = document.getElementById('verification_email_display')?.textContent || (document.getElementById('search_email_input')?.value || '');
+                                        if (!emailForResend) { alert('找不到要發送的 Email'); return; }
+                                        if (verificationMessageEl) { verificationMessageEl.style.color = '#666'; verificationMessageEl.innerText = '正在發送驗證碼...'; }
+                                        const r = await sendVerification(emailForResend);
+                                        if (verificationMessageEl) { verificationMessageEl.style.color = r.success ? 'green' : 'red'; verificationMessageEl.innerText = r.message || (r.success ? '驗證碼已發送' : '發送失敗'); }
+                                    };
+                                    resendBtnHeader.addEventListener('click', function(e){ window.__mobileJuniorResendHandler(e); }, true);
+                                }
+                            }, 200);
+                        }
+
+                        if (searchBtn) {
+                            searchBtn.addEventListener('click', async function(){
+                                const email = (emailInput && emailInput.value || '').trim();
+                                if(!email || !/.+@.+\..+/.test(email)){
+                                    alert('請輸入有效的電子郵件地址');
+                                    return;
+                                }
+                                searchBtn.disabled = true;
+                                const res = await sendVerification(email);
+                                searchBtn.disabled = false;
+                                if(res.success){
+                                    openModalAndAttach(email);
+                                } else {
+                                    alert(res.message || '發送驗證碼失敗');
+                                }
+                            });
+                        }
+                    });
+                })();
+                </script>
                 
                 <?php if (count($application_list) > 0): ?>
                     <div style="margin-top: 20px;">
