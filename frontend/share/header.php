@@ -100,7 +100,7 @@ function getActiveClass($targetFile) {
   }
 
   .container {
-    max-width: 1800px;
+    max-width: 2100px;
     margin: 0 auto;
     padding: 0 20px;
     min-height: 60px;
@@ -309,7 +309,7 @@ function getActiveClass($targetFile) {
     color: #2c3e50;
     text-decoration: none;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 1.0rem;
     padding: 8px 12px;
     border-radius: 8px;
     transition: all 0.3s ease;
@@ -907,8 +907,16 @@ function getActiveClass($targetFile) {
     <?php if (!($isLoggedIn && $is_header_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
     <?php endif; ?>
+    <?php if (!($isLoggedIn && $is_header_teacher)): ?>
+      <a href="<?php echo getCorrectPath('radio.php'); ?>" class="<?php echo getActiveClass('radio.php'); ?>">招生影片列表</a>
+    <?php endif; ?>
+    <?php if ($isLoggedIn && $is_header_student): ?>
+      <a href="<?php echo getCorrectPath('game.php'); ?>" class="<?php echo getActiveClass('game.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">遊戲中心</a>
+    <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
-    
+    <?php if (($isLoggedIn && $is_header_teacher)): ?>
+      <a href="<?php echo getCorrectPath('radio.php'); ?>" class="<?php echo getActiveClass('radio.php'); ?>">招生影片列表</a>
+    <?php endif; ?>
     <?php if (!$isLoggedIn): ?>
       <!-- 僅訪客可見的連結 -->
       <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
@@ -921,6 +929,9 @@ function getActiveClass($targetFile) {
       <!-- 僅登入用戶可見的連結 -->
       <?php if ($isLoggedIn && $is_header_student): ?>
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
+    <?php endif; ?>
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
+      <a href="<?php echo getCorrectPath('game.php'); ?>" class="<?php echo getActiveClass('game.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">遊戲中心</a>
     <?php endif; ?>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>

@@ -86,6 +86,28 @@ if (file_exists('C:/Topics/game/fight01.gif')) {
     box-sizing: border-box;
 }
 
+/* 返回按鈕樣式 */
+.btn-back-fight {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+    font-family: "Microsoft JhengHei", "微軟正黑體", Arial, sans-serif;
+    width: 200px;
+}
+
+.btn-back-fight:hover {
+    background: linear-gradient(135deg, #5568d3 0%, #6a3d8f 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+}
+
 body {
     background: #f8f9fa;
     color: #2c3e50;
@@ -212,7 +234,6 @@ body {
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     overflow: hidden;
-    margin-top: 110px;
 }
 
 .fight-area {
@@ -1144,6 +1165,12 @@ body {
 </div>
 
 <div class="game-main">
+    <!-- 返回按鈕 -->
+    <div style="padding: 20px; margin: 0 auto; margin-top: 110px; text-align: right;">
+        <button class="btn-back-fight" onclick="window.location.href='game.php'" title="返回遊戲列表">
+            ← 返回遊戲列表
+        </button>
+    </div>
 <!-- ====== 對戰區域（包含血量顯示） ====== -->
 <div class="fight-area-wrapper">
     <!-- ====== 血量顯示 ====== -->

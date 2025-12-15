@@ -534,7 +534,7 @@ $games = [
 
         <div class="games-grid">
             <?php foreach ($games as $index => $game): ?>
-            <div class="game-card" data-game="<?= htmlspecialchars($game['id']) ?>" onclick="window.location.href='<?= htmlspecialchars($game['link']) ?>'">
+            <div class="game-card" data-game="<?= htmlspecialchars($game['id']) ?>" onclick="window.location.href='<?= htmlspecialchars($game['link']) ?><?= $game['id'] === 'code' ? '?from_game=1' : '' ?>'">
                 <?php if ($index === 0): ?>
                 <div class="game-badge">🔥 熱門</div>
                 <?php endif; ?>
@@ -559,7 +559,7 @@ $games = [
                     </div>
                 </div>
 
-                <a href="<?= htmlspecialchars($game['link']) ?>" class="play-button" onclick="event.stopPropagation(); return true;">
+                <a href="<?= htmlspecialchars($game['link']) ?><?= $game['id'] === 'code' ? '?from_game=1' : '' ?>" class="play-button" onclick="event.stopPropagation(); return true;">
                     開始遊戲 →
                 </a>
             </div>

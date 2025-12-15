@@ -479,7 +479,7 @@ body {
         </div>
     </div>
     <?php endif; ?>
-
+    <h3 style="text-align:center;margin-bottom:20px;font-size:24px;font-weight:bold;">🔍搜尋影片標題或描述</h3>
     <div class="search-bar">
         <form id="searchForm" method="get" style="display:flex;width:100%">
             <input type="hidden" name="category" value="<?php echo htmlspecialchars($category); ?>">

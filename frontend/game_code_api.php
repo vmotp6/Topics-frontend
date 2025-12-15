@@ -1,8 +1,9 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
+require_once 'session_config.php';
 require_once 'config.php';
 
-$action = $_GET['action'] ?? '';
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 try {
     $conn = getDatabaseConnection();
@@ -50,6 +51,37 @@ try {
             echo json_encode(['success' => false, 'message' => '地圖不存在']);
         }
         $stmt->close();
+    } elseif ($action === 'increment_level') {
+        // 增加關卡數（session 已經在 session_config.php 中啟動）
+        $difficulty = $_POST['difficulty'] ?? $_GET['difficulty'] ?? $_SESSION['game_difficulty'] ?? 'easy';
+        
+        // 確保困難度已設定
+        if (!isset($_SESSION['game_difficulty'])) {
+            $_SESSION['game_difficulty'] = $difficulty;
+        }
+        
+        // 初始化關卡數（如果不存在）
+        if (!isset($_SESSION['game_level'])) {
+            $_SESSION['game_level'] = 1;
+        }
+        
+        // 增加關卡數（無限增加）
+        $currentLevel = (int)$_SESSION['game_level'];
+        $newLevel = $currentLevel + 1;
+        $_SESSION['game_level'] = $newLevel;
+        $_SESSION['game_map'] = null; // 清除舊地圖，強制生成新地圖
+        
+        // 確保 session 寫入
+        if (function_exists('session_write_close')) {
+            // 不關閉 session，讓主頁面可以讀取
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'level' => $newLevel,
+            'difficulty' => $difficulty,
+            'previous_level' => $currentLevel
+        ]);
     } else {
         echo json_encode(['success' => false, 'message' => '無效的操作']);
     }

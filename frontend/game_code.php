@@ -118,11 +118,134 @@ function getDefaultMap() {
     ];
 }
 
-// 從 URL 參數獲取地圖ID，預設為1
-$currentMapId = isset($_GET['map_id']) ? (int)$_GET['map_id'] : 1;
-$map = getGameMap($currentMapId);
-$nextMapId = getNextMapId($currentMapId);
+// 處理困難度選擇和地圖生成
+$difficulty = $_GET['difficulty'] ?? $_SESSION['game_difficulty'] ?? null;
+$reset = isset($_GET['reset']) && $_GET['reset'] == '1';
+$fromGamePage = isset($_GET['from_game']) || (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'game.php') !== false);
+
+// 如果從 game.php 進入，強制重置困難度選擇
+if ($fromGamePage && !isset($_GET['difficulty'])) {
+    unset($_SESSION['game_difficulty']);
+    unset($_SESSION['game_level']);
+    unset($_SESSION['game_map']);
+}
+
+// 如果選擇了困難度或重置，初始化遊戲狀態
+// 只有在明確重置（reset=1）或第一次選擇困難度時才重置關卡數
+if ($difficulty) {
+    if ($reset) {
+        // 明確重置：重置關卡數到 1
+        $_SESSION['game_difficulty'] = $difficulty;
+        $_SESSION['game_level'] = 1;
+        $_SESSION['game_map'] = null;
+    } elseif (!isset($_SESSION['game_difficulty'])) {
+        // 第一次選擇困難度：初始化
+        $_SESSION['game_difficulty'] = $difficulty;
+        $_SESSION['game_level'] = 1;
+        $_SESSION['game_map'] = null;
+    } elseif ($_SESSION['game_difficulty'] !== $difficulty) {
+        // 困難度改變：重置關卡數
+        $_SESSION['game_difficulty'] = $difficulty;
+        $_SESSION['game_level'] = 1;
+        $_SESSION['game_map'] = null;
+    }
+    // 如果困難度相同且不是重置，保持現有的關卡數
+}
+
+// 如果沒有選擇困難度，顯示選擇介面
+if (!isset($_SESSION['game_difficulty'])) {
+    $showDifficultySelection = true;
+    $map = null;
+    $currentLevel = 0;
+    $currentMapId = 0;
+    $nextMapId = null;
+} else {
+    $showDifficultySelection = false;
+    // 確保關卡數是整數
+    $currentLevel = isset($_SESSION['game_level']) ? (int)$_SESSION['game_level'] : 1;
+    $currentMapId = $currentLevel; // 使用關卡數作為地圖ID
+    
+    // 如果有現存的地圖且關卡沒變，使用現存地圖
+    if (isset($_SESSION['game_map']) && isset($_SESSION['game_map']['level']) && $_SESSION['game_map']['level'] == $currentLevel) {
+        $map = $_SESSION['game_map']['data'];
+    } else {
+        // 生成新地圖（使用 Ollama）
+        $map = generateMapForLevel($_SESSION['game_difficulty'], $currentLevel);
+        $_SESSION['game_map'] = ['level' => $currentLevel, 'data' => $map];
+    }
+    
+    // 下一關永遠存在（無限關卡）
+    $nextMapId = $currentLevel + 1;
+}
+
 $characterImage = 'http://localhost/game/pixilart-drawing.png';
+
+// 生成地圖的函數
+function generateMapForLevel($difficulty, $level) {
+    $url = 'game_map_generator_api.php?action=generate_map&difficulty=' . urlencode($difficulty) . '&level=' . $level;
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200) {
+        $data = json_decode($response, true);
+        if ($data && isset($data['success']) && $data['success'] && isset($data['map'])) {
+            return $data['map'];
+        }
+    }
+    
+    // 如果 API 失敗，使用預設地圖生成
+    return generateDefaultMapForDifficulty($difficulty, $level);
+}
+
+// 根據困難度生成預設地圖
+function generateDefaultMapForDifficulty($difficulty, $level) {
+    $configs = [
+        'easy' => ['width' => 8, 'height' => 8, 'wall_ratio' => 0.15],
+        'medium' => ['width' => 12, 'height' => 12, 'wall_ratio' => 0.25],
+        'hard' => ['width' => 15, 'height' => 15, 'wall_ratio' => 0.35]
+    ];
+    
+    $config = $configs[$difficulty] ?? $configs['easy'];
+    $levelMultiplier = 1 + ($level - 1) * 0.1;
+    $width = (int)($config['width'] * $levelMultiplier);
+    $height = (int)($config['height'] * $levelMultiplier);
+    $wallRatio = min(0.5, $config['wall_ratio'] * $levelMultiplier);
+    
+    $mapData = [];
+    for ($y = 0; $y < $height; $y++) {
+        for ($x = 0; $x < $width; $x++) {
+            $mapData[$y][$x] = 'empty';
+        }
+    }
+    
+    // 簡單的牆壁生成
+    $wallCount = (int)(($width * $height) * $wallRatio);
+    for ($i = 0; $i < $wallCount; $i++) {
+        $x = rand(0, $width - 1);
+        $y = rand(0, $height - 1);
+        if (($x != 0 || $y != 0) && ($x != $width - 1 || $y != $height - 1)) {
+            $mapData[$y][$x] = 'wall';
+        }
+    }
+    
+    return [
+        'id' => 0,
+        'name' => "關卡 {$level}",
+        'width' => $width,
+        'height' => $height,
+        'start' => ['x' => 0, 'y' => 0],
+        'end' => ['x' => $width - 1, 'y' => $height - 1],
+        'map_data' => $mapData
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -130,6 +253,12 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>程式碼挑戰 - 康寧大學</title>
+    <!-- Blockly 庫 -->
+    <script src="https://unpkg.com/blockly@10.4.0/blockly_compressed.js"></script>
+    <script src="https://unpkg.com/blockly@10.4.0/blocks_compressed.js"></script>
+    <script src="https://unpkg.com/blockly@10.4.0/javascript_compressed.js"></script>
+    <script src="https://unpkg.com/blockly@10.4.0/msg/zh-hant.js"></script>
+    <link href="https://unpkg.com/blockly@10.4.0/blockly.min.css" rel="stylesheet" />
     <style>
         * {
             box-sizing: border-box;
@@ -150,7 +279,7 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         .game-main {
             flex: 1;
             width: 100%;
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
 			margin-top: 100px;
@@ -238,7 +367,7 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
 
         .game-container {
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: 1fr 600px;
             gap: 20px;
             margin-top: 20px;
         }
@@ -255,6 +384,7 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width:85%;
         }
 
         .map-header {
@@ -327,7 +457,6 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             display: flex;
             flex-direction: column;
-            max-height: calc(100vh - 200px);
         }
 
         .blocks-header {
@@ -370,118 +499,111 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         }
 
         .block-item {
-            padding: 12px 18px;
-            margin: 6px 0;
+            padding: 10px 16px;
+            margin: 8px 0;
             cursor: grab;
             user-select: none;
-            font-weight: bold;
+            font-weight: 500;
             transition: all 0.2s;
-            font-size: 15px;
+            font-size: 14px;
             position: relative;
-            min-height: 45px;
+            min-height: 32px;
             display: flex;
             align-items: center;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-left-width: 4px;
+            border: 2px solid rgba(0, 0, 0, 0.15);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            font-family: "Google Sans", "Segoe UI", Arial, sans-serif;
         }
 
-        /* 動作積木（紫色矩形，立體效果） */
+        /* Blockly 風格動作積木（Statement blocks） */
         .block-item.action {
-            background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%);
+            background: #a65ba6; /* Blockly 的動作積木顏色 */
             color: #ffffff;
-            border-left-color: #6c3483;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1);
+            border-color: rgba(0, 0, 0, 0.25);
             border-radius: 4px;
+            position: relative;
         }
 
+        /* Blockly 風格的連接點 - 頂部凹槽 */
         .block-item.action::before {
             content: '';
             position: absolute;
-            left: -6px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 6px solid #6c3483;
+            left: 8px;
+            top: -6px;
+            width: 20px;
+            height: 12px;
+            background: #a65ba6;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            z-index: 1;
         }
 
+        /* Blockly 風格的連接點 - 底部凸起 */
         .block-item.action::after {
             content: '';
             position: absolute;
-            right: -6px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-left: 6px solid #6c3483;
+            right: 8px;
+            bottom: -6px;
+            width: 20px;
+            height: 12px;
+            background: #a65ba6;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 1;
         }
 
         .block-item.action:hover {
-            background: linear-gradient(135deg, #7d3c98 0%, #6c3483 100%);
-            transform: translateY(-2px);
-            box-shadow: 
-                0 5px 10px rgba(142, 68, 173, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            background: #8e4a8e;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
-        /* 控制積木（橙色 C 形，立體效果） */
+        /* Blockly 風格控制積木（C 形，可以嵌套） */
         .block-item.control {
-            background: linear-gradient(135deg, #ff9500 0%, #e6850e 100%);
+            background: #ff9800; /* Blockly 的控制積木顏色 */
             color: #ffffff;
-            border-left-color: #d35400;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1);
+            border-color: rgba(0, 0, 0, 0.25);
+            padding: 10px 16px;
+            margin-bottom: 0;
             border-radius: 4px 4px 0 0;
-            padding-bottom: 25px;
-            clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+            position: relative;
         }
 
+        /* Blockly C 形積木的連接點 */
         .block-item.control::before {
             content: '';
             position: absolute;
-            left: -6px;
-            top: 8px;
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 6px solid #d35400;
+            left: 8px;
+            top: -6px;
+            width: 20px;
+            height: 12px;
+            background: #ff9800;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            z-index: 1;
         }
 
         .block-item.control::after {
             content: '';
             position: absolute;
-            bottom: -18px;
-            left: 0;
-            right: 0;
-            height: 18px;
-            background: linear-gradient(135deg, #ff9500 0%, #e6850e 100%);
-            border-left: 4px solid #d35400;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            clip-path: polygon(0% 0%, 8px 0%, 8px 100%, calc(100% - 8px) 100%, calc(100% - 8px) 0%, 100% 0%, 100% 100%, 0% 100%);
+            right: 8px;
+            bottom: -6px;
+            width: 20px;
+            height: 12px;
+            background: #ff9800;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 1;
         }
 
         .block-item.control:hover {
-            background: linear-gradient(135deg, #e6850e 0%, #d35400 100%);
-            transform: translateY(-2px);
-            box-shadow: 
-                0 5px 10px rgba(255, 149, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        }
-
-        .block-item.control:hover::after {
-            background: linear-gradient(135deg, #e6850e 0%, #d35400 100%);
+            background: #e68900;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         .block-item:active {
@@ -506,132 +628,112 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         }
 
         .block-placed {
-            padding: 12px 15px;
+            padding: 10px 16px;
             margin: 2px 0;
             cursor: move;
             position: relative;
             user-select: none;
-            min-height: 40px;
+            min-height: 32px;
             display: flex;
             align-items: center;
             gap: 10px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            border: 2px solid rgba(0, 0, 0, 0.15);
+            font-family: "Google Sans", "Segoe UI", Arial, sans-serif;
+            font-weight: 500;
+            font-size: 14px;
         }
 
-        /* 動作積木（紫色矩形，立體積木效果） */
+        /* Blockly 風格已放置的動作積木 */
         .block-placed.action {
-            background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%);
+            background: #a65ba6;
             color: #ffffff;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #6c3483;
-            border-radius: 4px;
+            border-color: rgba(0, 0, 0, 0.25);
             margin-left: 0;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            position: relative;
         }
 
+        /* Blockly 風格的連接點 - 頂部凹槽 */
         .block-placed.action::before {
             content: '';
             position: absolute;
-            left: -6px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 6px solid #6c3483;
+            left: 8px;
+            top: -6px;
+            width: 20px;
+            height: 12px;
+            background: #a65ba6;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            z-index: 1;
         }
 
+        /* Blockly 風格的連接點 - 底部凸起 */
         .block-placed.action::after {
             content: '';
             position: absolute;
-            right: -6px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-left: 6px solid #6c3483;
+            right: 8px;
+            bottom: -6px;
+            width: 20px;
+            height: 12px;
+            background: #a65ba6;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 1;
         }
 
         .block-placed.action:hover {
-            background: linear-gradient(135deg, #7d3c98 0%, #6c3483 100%);
-            box-shadow: 
-                0 5px 10px rgba(142, 68, 173, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            background: #8e4a8e;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
-        .block-placed.action:hover::before {
-            border-right-color: #6c3483;
-        }
-
-        .block-placed.action:hover::after {
-            border-left-color: #6c3483;
-        }
-
-        /* 控制積木（橙色 C 形，立體積木效果） */
+        /* Blockly 風格已放置的控制積木 */
         .block-placed.control {
-            background: linear-gradient(135deg, #ff9500 0%, #e6850e 100%);
+            background: #ff9800;
             color: #ffffff;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #d35400;
-            border-radius: 4px 4px 0 0;
-            padding: 15px;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            padding: 10px 16px;
             flex-direction: column;
             align-items: stretch;
             margin-left: 0;
-            padding-bottom: 25px;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                inset -1px 0 0 rgba(0, 0, 0, 0.1);
-            clip-path: polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px);
+            border-radius: 4px 4px 0 0;
+            position: relative;
         }
 
+        /* Blockly C 形積木的連接點 */
         .block-placed.control::before {
             content: '';
             position: absolute;
-            left: -6px;
-            top: 8px;
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 6px solid #d35400;
+            left: 8px;
+            top: -6px;
+            width: 20px;
+            height: 12px;
+            background: #ff9800;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            z-index: 1;
         }
 
         .block-placed.control::after {
             content: '';
             position: absolute;
-            bottom: -18px;
-            left: 0;
-            right: 0;
-            height: 18px;
-            background: linear-gradient(135deg, #ff9500 0%, #e6850e 100%);
-            border-left: 4px solid #d35400;
-            box-shadow: 
-                0 3px 6px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            clip-path: polygon(0% 0%, 8px 0%, 8px 100%, calc(100% - 8px) 100%, calc(100% - 8px) 0%, 100% 0%, 100% 100%, 0% 100%);
+            right: 8px;
+            bottom: -6px;
+            width: 20px;
+            height: 12px;
+            background: #ff9800;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 1;
         }
 
         .block-placed.control:hover {
-            background: linear-gradient(135deg, #e6850e 0%, #d35400 100%);
-            box-shadow: 
-                0 5px 10px rgba(255, 149, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        }
-
-        .block-placed.control:hover::before {
-            border-right-color: #d35400;
-        }
-
-        .block-placed.control:hover::after {
-            background: linear-gradient(135deg, #e6850e 0%, #d35400 100%);
+            background: #e68900;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         .block-number-input {
@@ -851,6 +953,119 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             transform: translateY(-2px);
         }
 
+        /* 返回按鈕樣式 */
+        .btn-back {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            width: 30%;
+        }
+
+        .btn-back:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 調整困難度按鈕 */
+        .btn-change-difficulty {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 20px;
+        }
+
+        .btn-change-difficulty:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* 困難度選擇按鈕樣式 */
+        .difficulty-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .difficulty-btn {
+            background: #ffffff;
+            border: 3px solid #dee2e6;
+            border-radius: 15px;
+            padding: 25px 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 180px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .difficulty-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .difficulty-btn.easy {
+            border-color: #4ade80;
+        }
+
+        .difficulty-btn.easy:hover {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+
+        .difficulty-btn.medium {
+            border-color: #fbbf24;
+        }
+
+        .difficulty-btn.medium:hover {
+            background: #fffbeb;
+            border-color: #f59e0b;
+        }
+
+        .difficulty-btn.hard {
+            border-color: #ef4444;
+        }
+
+        .difficulty-btn.hard:hover {
+            background: #fef2f2;
+            border-color: #dc2626;
+        }
+
+        .difficulty-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .difficulty-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .difficulty-desc {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding-top: 120px;
@@ -866,25 +1081,67 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         }
     </style>
 </head>
-<?php include("share/header.php"); ?>
+    <?php include("share/header.php"); ?>
 <body>
-    <div class="game-main">
+    <!-- 困難度選擇介面 -->
+    <?php if ($showDifficultySelection): ?>
+    <div class="modal show" id="difficultyModal">
+        <div class="modal-content">
+            <div class="modal-title">🎮 選擇困難度</div>
+            <div class="modal-message">請選擇遊戲困難度，系統將根據您選擇的困難度生成地圖</div>
+            <div class="difficulty-buttons">
+                <button class="difficulty-btn easy" onclick="selectDifficulty('easy')">
+                    <div class="difficulty-icon">😊</div>
+                    <div class="difficulty-name">簡單</div>
+                    <div class="difficulty-desc">8x8 地圖，15% 障礙物</div>
+                </button>
+                <button class="difficulty-btn medium" onclick="selectDifficulty('medium')">
+                    <div class="difficulty-icon">😐</div>
+                    <div class="difficulty-name">中等</div>
+                    <div class="difficulty-desc">12x12 地圖，25% 障礙物</div>
+                </button>
+                <button class="difficulty-btn hard" onclick="selectDifficulty('hard')">
+                    <div class="difficulty-icon">😤</div>
+                    <div class="difficulty-name">困難</div>
+                    <div class="difficulty-desc">15x15 地圖，35% 障礙物</div>
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <div class="game-main" <?= $showDifficultySelection ? 'style="display:none;"' : '' ?>>
         <!-- 遊戲標題區域 -->
         <div class="game-header">
-            <div class="game-title">程式碼挑戰</div>
+            <div style="display: flex; align-items: center; gap: 15px;width: 30%;">
+                <button class="btn-back" onclick="window.location.href='game.php'" title="返回遊戲列表">
+                    ← 返回
+                </button>
+                <div class="game-title">程式碼挑戰</div>
+            </div>
             <div class="game-stats">
                 <div class="stat-item">
                     <div class="stat-label">關卡</div>
-                    <div class="stat-value" id="levelDisplay"><?= $currentMapId ?></div>
+                    <div class="stat-value" id="levelDisplay"><?= $currentLevel ?></div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">步數</div>
                     <div class="stat-value" id="stepDisplay">0</div>
                 </div>
+                <div class="stat-item">
+                    <div class="stat-label">困難度</div>
+                    <div class="stat-value" id="difficultyDisplay"><?= isset($_SESSION['game_difficulty']) ? ucfirst($_SESSION['game_difficulty']) : '' ?></div>
+                </div>
+                <div class="stat-item">
+                    <button class="btn-change-difficulty" onclick="showChangeDifficultyModal()" title="更改困難度">
+                        ⚙️ 調整困難度
+                    </button>
+                </div>
             </div>
         </div>
         <div class="game-container">
             <!-- 地圖區域 -->
+            <?php if (!$showDifficultySelection && $map): ?>
             <div class="map-section">
                 <div class="map-header">
                     <div class="map-title"><?= htmlspecialchars($map['name']) ?></div>
@@ -895,28 +1152,33 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
                 </div>
                 <div class="map-grid" id="mapGrid" style="grid-template-columns: repeat(<?= $map['width'] ?>, 1fr); grid-template-rows: repeat(<?= $map['height'] ?>, 1fr);"></div>
             </div>
+            <?php endif; ?>
 
             <!-- 積木區域 -->
             <div class="blocks-section">
                 <div class="blocks-header">📦 積木工具箱</div>
                 
-                <div class="blocks-toolbox">
-                    <div class="toolbox-category">
-                        <div class="toolbox-category-title">🎮 動作</div>
-                        <div class="block-item action" draggable="true" data-block="move-up">⬆️ 向上移動</div>
-                        <div class="block-item action" draggable="true" data-block="move-down">⬇️ 向下移動</div>
-                        <div class="block-item action" draggable="true" data-block="move-left">⬅️ 向左移動</div>
-                        <div class="block-item action" draggable="true" data-block="move-right">➡️ 向右移動</div>
-                    </div>
-                    
-                    <div class="toolbox-category">
-                        <div class="toolbox-category-title">🔄 控制</div>
-                        <div class="block-item control" draggable="true" data-block="loop">重複執行</div>
-                    </div>
-                </div>
+                <!-- Blockly 工具箱 -->
+                <xml id="toolbox" style="display: none;">
+                    <category name="動作" colour="160">
+                        <block type="move_up"></block>
+                        <block type="move_down"></block>
+                        <block type="move_left"></block>
+                        <block type="move_right"></block>
+                    </category>
+                    <category name="控制" colour="120">
+                        <block type="controls_repeat_ext">
+                            <value name="TIMES">
+                                <shadow type="math_number">
+                                    <field name="NUM">2</field>
+                                </shadow>
+                            </value>
+                        </block>
+                    </category>
+                </xml>
 
                 <div class="blocks-header">🔧 程式區</div>
-                <div class="blocks-workspace" id="workspace"></div>
+                <div id="blocklyDiv" style="height: 500px; width: 100%;"></div>
 
                 <div class="control-buttons">
                     <button class="btn btn-run" id="btnRun">▶️ 執行程式</button>
@@ -946,11 +1208,37 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             <div class="modal-title success">🎉 成功</div>
             <div class="modal-message">恭喜！角色成功到達終點！<br>您完成了這個挑戰！</div>
             <div class="modal-buttons">
-                <?php if ($nextMapId): ?>
                 <button class="modal-btn modal-btn-next" onclick="nextLevel()">➡️ 下一關</button>
-                <?php endif; ?>
                 <button class="modal-btn modal-btn-restart" onclick="restartGame()">🔄 再來一局</button>
                 <button class="modal-btn modal-btn-leave" onclick="leaveGame()">🚪 離開</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 調整困難度彈跳視窗 -->
+    <div class="modal" id="changeDifficultyModal">
+        <div class="modal-content">
+            <div class="modal-title">⚙️ 調整困難度</div>
+            <div class="modal-message">選擇新的困難度，系統將重新生成地圖並重置到第一關</div>
+            <div class="difficulty-buttons">
+                <button class="difficulty-btn easy" onclick="changeDifficulty('easy')">
+                    <div class="difficulty-icon">😊</div>
+                    <div class="difficulty-name">簡單</div>
+                    <div class="difficulty-desc">8x8 地圖，15% 障礙物</div>
+                </button>
+                <button class="difficulty-btn medium" onclick="changeDifficulty('medium')">
+                    <div class="difficulty-icon">😐</div>
+                    <div class="difficulty-name">中等</div>
+                    <div class="difficulty-desc">12x12 地圖，25% 障礙物</div>
+                </button>
+                <button class="difficulty-btn hard" onclick="changeDifficulty('hard')">
+                    <div class="difficulty-icon">😤</div>
+                    <div class="difficulty-name">困難</div>
+                    <div class="difficulty-desc">15x15 地圖，35% 障礙物</div>
+                </button>
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button class="modal-btn modal-btn-leave" onclick="closeChangeDifficultyModal()">取消</button>
             </div>
         </div>
     </div>
@@ -961,18 +1249,247 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         // 地圖資料
         const mapData = <?= json_encode($map) ?>;
         const characterImage = '<?= htmlspecialchars($characterImage) ?>';
-        const currentMapId = <?= json_encode($currentMapId) ?>;
-        const nextMapId = <?= $nextMapId ? json_encode($nextMapId) : 'null' ?>;
+        const currentMapId = <?= json_encode($currentMapId ?? 0) ?>;
+        const currentLevel = <?= json_encode($currentLevel ?? 0) ?>;
+        const nextMapId = <?= isset($nextMapId) ? json_encode($nextMapId) : 'null' ?>;
+        const difficulty = <?= isset($_SESSION['game_difficulty']) ? json_encode($_SESSION['game_difficulty']) : 'null' ?>;
         
         // 遊戲狀態
-        let characterPos = { x: mapData.start.x, y: mapData.start.y };
-        let placedBlocks = [];
+        let characterPos = mapData ? { x: mapData.start.x, y: mapData.start.y } : { x: 0, y: 0 };
         let isRunning = false;
         let stepCount = 0;
+        let workspace = null;
+        
+        // 初始化 Blockly
+        function initBlockly() {
+            if (!mapData || !mapData.map_data) {
+                console.warn('地圖資料不存在，無法初始化 Blockly');
+                return;
+            }
+            
+            // 檢查 Blockly 是否已載入
+            if (typeof Blockly === 'undefined') {
+                console.error('Blockly 庫未載入，請檢查 CDN 連接');
+                setTimeout(initBlockly, 500); // 重試
+                return;
+            }
+            
+            // 檢查工具箱元素是否存在
+            const toolbox = document.getElementById('toolbox');
+            if (!toolbox) {
+                console.error('工具箱元素不存在');
+                return;
+            }
+            
+            try {
+                // 定義自定義積木（在創建工作區之前）
+                defineCustomBlocks();
+                
+                // 創建 Blockly 工作區
+                workspace = Blockly.inject('blocklyDiv', {
+                    toolbox: toolbox,
+                    grid: {
+                        spacing: 20,
+                        length: 3,
+                        colour: '#ccc',
+                        snap: true
+                    },
+                    zoom: {
+                        controls: true,
+                        wheel: true,
+                        startScale: 1.0,
+                        maxScale: 3,
+                        minScale: 0.3,
+                        scaleSpeed: 1.2
+                    },
+                    trashcan: true,
+                    media: 'https://unpkg.com/blockly@10.4.0/media/',
+                    theme: Blockly.Themes.Classic,
+                    collapse: false,
+                    comments: false,
+                    disable: false,
+                    maxBlocks: Infinity,
+                    readOnly: false,
+                    scrollbars: true,
+                    sounds: true,
+                    toolboxPosition: 'start'
+                });
+                
+                // 監聽工作區變化
+                workspace.addChangeListener(function(event) {
+                    if (event.type === Blockly.Events.BLOCK_CREATE ||
+                        event.type === Blockly.Events.BLOCK_DELETE ||
+                        event.type === Blockly.Events.BLOCK_CHANGE) {
+                        // 積木變化時的處理（可選）
+                    }
+                });
+                
+                console.log('Blockly 工作區初始化成功');
+            } catch (error) {
+                console.error('初始化 Blockly 時發生錯誤:', error);
+            }
+        }
+        
+        // 定義自定義積木
+        function defineCustomBlocks() {
+            // 向上移動積木
+            Blockly.Blocks['move_up'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField('向上移動')
+                        .appendField(new Blockly.FieldNumber(1, 1, 10), 'STEPS')
+                        .appendField('格');
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setColour(160);
+                    this.setTooltip('向上移動指定格數');
+                }
+            };
+            
+            // 向下移動積木
+            Blockly.Blocks['move_down'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField('向下移動')
+                        .appendField(new Blockly.FieldNumber(1, 1, 10), 'STEPS')
+                        .appendField('格');
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setColour(160);
+                    this.setTooltip('向下移動指定格數');
+                }
+            };
+            
+            // 向左移動積木
+            Blockly.Blocks['move_left'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField('向左移動')
+                        .appendField(new Blockly.FieldNumber(1, 1, 10), 'STEPS')
+                        .appendField('格');
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setColour(160);
+                    this.setTooltip('向左移動指定格數');
+                }
+            };
+            
+            // 向右移動積木
+            Blockly.Blocks['move_right'] = {
+                init: function() {
+                    this.appendDummyInput()
+                        .appendField('向右移動')
+                        .appendField(new Blockly.FieldNumber(1, 1, 10), 'STEPS')
+                        .appendField('格');
+                    this.setPreviousStatement(true, null);
+                    this.setNextStatement(true, null);
+                    this.setColour(160);
+                    this.setTooltip('向右移動指定格數');
+                }
+            };
+            
+            // 生成 JavaScript 代碼
+            Blockly.JavaScript['move_up'] = function(block) {
+                const steps = block.getFieldValue('STEPS') || 1;
+                return `await moveUp(${steps});\n`;
+            };
+            
+            Blockly.JavaScript['move_down'] = function(block) {
+                const steps = block.getFieldValue('STEPS') || 1;
+                return `await moveDown(${steps});\n`;
+            };
+            
+            Blockly.JavaScript['move_left'] = function(block) {
+                const steps = block.getFieldValue('STEPS') || 1;
+                return `await moveLeft(${steps});\n`;
+            };
+            
+            Blockly.JavaScript['move_right'] = function(block) {
+                const steps = block.getFieldValue('STEPS') || 1;
+                return `await moveRight(${steps});\n`;
+            };
+            
+            // 重複執行積木（使用 Blockly 內建的 controls_repeat_ext）
+            // 注意：我們需要覆蓋內建的生成器以支持異步
+            if (Blockly.JavaScript['controls_repeat_ext']) {
+                const originalRepeatExt = Blockly.JavaScript['controls_repeat_ext'];
+                Blockly.JavaScript['controls_repeat_ext'] = function(block) {
+                    const times = Blockly.JavaScript.valueToCode(block, 'TIMES', Blockly.JavaScript.ORDER_ASSIGNMENT) || '1';
+                    const branch = Blockly.JavaScript.statementToCode(block, 'DO');
+                    // 確保迴圈內的代碼是異步的
+                    return `for (let i = 0; i < ${times}; i++) {\n${branch}}\n`;
+                };
+            }
+        }
+        
+        // 移動函數
+        async function moveUp(steps) {
+            for (let i = 0; i < steps; i++) {
+                characterPos.y--;
+                stepCount++;
+                updateStepDisplay();
+                await checkAndUpdate();
+            }
+        }
+        
+        async function moveDown(steps) {
+            for (let i = 0; i < steps; i++) {
+                characterPos.y++;
+                stepCount++;
+                updateStepDisplay();
+                await checkAndUpdate();
+            }
+        }
+        
+        async function moveLeft(steps) {
+            for (let i = 0; i < steps; i++) {
+                characterPos.x--;
+                stepCount++;
+                updateStepDisplay();
+                await checkAndUpdate();
+            }
+        }
+        
+        async function moveRight(steps) {
+            for (let i = 0; i < steps; i++) {
+                characterPos.x++;
+                stepCount++;
+                updateStepDisplay();
+                await checkAndUpdate();
+            }
+        }
+        
+        // 檢查並更新地圖
+        async function checkAndUpdate() {
+            // 檢查是否撞牆或出界
+            if (characterPos.x < 0 || characterPos.x >= mapData.width || 
+                characterPos.y < 0 || characterPos.y >= mapData.height) {
+                showResult('角色超出地圖範圍！', 'error');
+                isRunning = false;
+                document.getElementById('btnRun').disabled = false;
+                throw new Error('角色超出地圖範圍');
+            }
+            
+            const cellType = mapData.map_data[characterPos.y][characterPos.x];
+            if (cellType === 'wall') {
+                showResult('角色撞到牆壁！', 'error');
+                isRunning = false;
+                document.getElementById('btnRun').disabled = false;
+                throw new Error('角色撞到牆壁');
+            }
+            
+            // 更新地圖顯示
+            initMap();
+            await sleep(300);
+        }
         
         // 更新關卡顯示
         function updateLevelDisplay() {
-            document.getElementById('levelDisplay').textContent = currentMapId;
+            const levelDisplay = document.getElementById('levelDisplay');
+            if (levelDisplay) {
+                // 使用 currentLevel（PHP 傳入的關卡數）或 currentMapId
+                levelDisplay.textContent = currentLevel || currentMapId || 1;
+            }
         }
         
         // 更新步數顯示
@@ -981,11 +1498,17 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         }
         
         // 初始化時更新關卡顯示
-        updateLevelDisplay();
+        if (mapData && mapData.map_data) {
+            updateLevelDisplay();
+        }
 
         // 初始化地圖
         function initMap() {
+            if (!mapData) return;
+            
             const mapGrid = document.getElementById('mapGrid');
+            if (!mapGrid) return;
+            
             mapGrid.innerHTML = '';
 
             for (let y = 0; y < mapData.height; y++) {
@@ -1028,241 +1551,47 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             }
         }
 
-        // 積木拖放功能
-        const toolbox = document.querySelector('.blocks-toolbox');
-        const workspace = document.getElementById('workspace');
-
-        // 工具箱積木拖動
-        toolbox.addEventListener('dragstart', (e) => {
-            if (e.target.classList.contains('block-item')) {
-                e.dataTransfer.setData('text/plain', e.target.dataset.block);
-            }
-        });
-
-        // 工作區放置
-        workspace.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            workspace.classList.add('drag-over');
-        });
-
-        workspace.addEventListener('dragleave', () => {
-            workspace.classList.remove('drag-over');
-        });
-
-        workspace.addEventListener('drop', (e) => {
-            e.preventDefault();
-            workspace.classList.remove('drag-over');
-            
-            const blockType = e.dataTransfer.getData('text/plain');
-            if (blockType) {
-                addBlockToWorkspace(blockType);
-            }
-        });
-
-        // 添加積木到工作區
-        function addBlockToWorkspace(blockType) {
-            const block = document.createElement('div');
-            block.className = 'block-placed';
-            block.dataset.block = blockType;
-            block.draggable = true;
-            
-            if (blockType === 'loop') {
-                block.classList.add('control');
-                
-                // 迴圈標題
-                const loopHeader = document.createElement('div');
-                loopHeader.className = 'block-loop-count';
-                loopHeader.style.display = 'flex';
-                loopHeader.style.alignItems = 'center';
-                loopHeader.style.gap = '8px';
-                loopHeader.style.marginBottom = '10px';
-                loopHeader.innerHTML = '重複 <input type="number" class="block-number-input" value="2" min="1" max="10" data-param="count" placeholder="次數" style="width: 50px;"> 次';
-                block.appendChild(loopHeader);
-                
-                // 迴圈內容區
-                const loopContent = document.createElement('div');
-                loopContent.className = 'block-loop-content';
-                loopContent.dataset.loopContent = 'true';
-                loopContent.style.marginLeft = '20px';
-                loopContent.style.padding = '10px';
-                loopContent.style.background = 'rgba(255, 255, 255, 0.1)';
-                loopContent.style.borderRadius = '5px';
-                loopContent.style.minHeight = '50px';
-                block.appendChild(loopContent);
-            } else {
-                // 動作積木（帶數字輸入）
-                block.classList.add('action');
-                
-                const blockNames = {
-                    'move-up': '⬆️ 向上移動',
-                    'move-down': '⬇️ 向下移動',
-                    'move-left': '⬅️ 向左移動',
-                    'move-right': '➡️ 向右移動'
-                };
-                
-                const text = document.createElement('span');
-                text.textContent = blockNames[blockType] + ' ';
-                block.appendChild(text);
-                
-                const numberInput = document.createElement('input');
-                numberInput.type = 'number';
-                numberInput.className = 'block-number-input';
-                numberInput.value = '1';
-                numberInput.min = '1';
-                numberInput.max = '10';
-                numberInput.dataset.param = 'steps';
-                numberInput.style.width = '50px';
-                numberInput.onchange = updatePlacedBlocks;
-                block.appendChild(numberInput);
-                
-                const unit = document.createElement('span');
-                unit.textContent = ' 格';
-                block.appendChild(unit);
+        // 初始化 Blockly（當頁面載入時）
+        function initializeBlocklyWhenReady() {
+            if (!mapData || !mapData.map_data) {
+                console.warn('地圖資料不存在，跳過 Blockly 初始化');
+                return;
             }
             
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'block-remove';
-            removeBtn.textContent = '×';
-            removeBtn.onclick = () => {
-                block.remove();
-                updatePlacedBlocks();
-            };
-            
-            block.appendChild(removeBtn);
-            
-            // 如果是迴圈，允許在迴圈內容區放置積木
-            if (blockType === 'loop') {
-                const loopContent = block.querySelector('.block-loop-content');
-                setupDropZone(loopContent);
+            // 檢查 Blockly 是否已載入
+            if (typeof Blockly === 'undefined') {
+                console.log('等待 Blockly 庫載入...');
+                setTimeout(initializeBlocklyWhenReady, 200);
+                return;
             }
             
-            workspace.appendChild(block);
-            updatePlacedBlocks();
-        }
-
-        // 設置拖放區域
-        function setupDropZone(container) {
-            container.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                container.style.border = '2px dashed #667eea';
-                container.style.background = '#f0f4ff';
-            });
-
-            container.addEventListener('dragleave', () => {
-                container.style.border = 'none';
-                container.style.background = 'rgba(255, 255, 255, 0.1)';
-            });
-
-            container.addEventListener('drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                container.style.border = 'none';
-                container.style.background = 'rgba(255, 255, 255, 0.1)';
-                
-                const blockType = e.dataTransfer.getData('text/plain');
-                if (blockType && blockType !== 'loop') {
-                    addBlockToLoop(container, blockType);
-                }
-            });
+            // 檢查 DOM 是否準備好
+            const blocklyDiv = document.getElementById('blocklyDiv');
+            if (!blocklyDiv) {
+                console.log('等待 blocklyDiv 元素...');
+                setTimeout(initializeBlocklyWhenReady, 200);
+                return;
+            }
+            
+            // 初始化 Blockly
+            initBlockly();
         }
         
-        // 在迴圈內添加積木
-        function addBlockToLoop(loopContent, blockType) {
-            const block = document.createElement('div');
-            block.className = 'block-placed action';
-            block.dataset.block = blockType;
-            block.draggable = true;
-            
-            const blockNames = {
-                'move-up': '⬆️ 向上移動',
-                'move-down': '⬇️ 向下移動',
-                'move-left': '⬅️ 向左移動',
-                'move-right': '➡️ 向右移動'
-            };
-            
-            const text = document.createElement('span');
-            text.textContent = blockNames[blockType] + ' ';
-            block.appendChild(text);
-            
-            const numberInput = document.createElement('input');
-            numberInput.type = 'number';
-            numberInput.className = 'block-number-input';
-            numberInput.value = '1';
-            numberInput.min = '1';
-            numberInput.max = '10';
-            numberInput.dataset.param = 'steps';
-            numberInput.style.width = '50px';
-            numberInput.onchange = updatePlacedBlocks;
-            block.appendChild(numberInput);
-            
-            const unit = document.createElement('span');
-            unit.textContent = ' 格';
-            block.appendChild(unit);
-            
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'block-remove';
-            removeBtn.textContent = '×';
-            removeBtn.onclick = () => {
-                block.remove();
-                updatePlacedBlocks();
-            };
-            block.appendChild(removeBtn);
-            
-            loopContent.appendChild(block);
-            updatePlacedBlocks();
+        // 當頁面載入完成後初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeBlocklyWhenReady);
+        } else {
+            // 使用 setTimeout 確保所有資源都已載入
+            setTimeout(initializeBlocklyWhenReady, 300);
         }
 
-        // 更新已放置的積木陣列（遞迴處理迴圈）
-        function updatePlacedBlocks() {
-            placedBlocks = [];
-            const topLevelBlocks = workspace.querySelectorAll('.block-placed:not(.block-loop-content .block-placed)');
-            
-            topLevelBlocks.forEach(block => {
-                const blockData = extractBlockData(block);
-                if (blockData) {
-                    placedBlocks.push(blockData);
-                }
-            });
-        }
-
-        // 提取積木資料（包含參數和迴圈內容）
-        function extractBlockData(blockElement) {
-            const blockType = blockElement.dataset.block;
-            const blockData = { type: blockType };
-            
-            if (blockType === 'loop') {
-                // 獲取迴圈次數
-                const countInput = blockElement.querySelector('[data-param="count"]');
-                blockData.count = parseInt(countInput?.value || 2);
-                
-                // 獲取迴圈內的積木
-                const loopContent = blockElement.querySelector('.block-loop-content');
-                blockData.blocks = [];
-                if (loopContent) {
-                    const innerBlocks = loopContent.querySelectorAll('.block-placed');
-                    innerBlocks.forEach(innerBlock => {
-                        const innerData = extractBlockData(innerBlock);
-                        if (innerData) {
-                            blockData.blocks.push(innerData);
-                        }
-                    });
-                }
-            } else {
-                // 獲取移動步數
-                const stepsInput = blockElement.querySelector('[data-param="steps"]');
-                blockData.steps = parseInt(stepsInput?.value || 1);
-            }
-            
-            return blockData;
-        }
-
-        // 執行程式
+        // 執行程式（使用 Blockly）
         document.getElementById('btnRun').addEventListener('click', async () => {
-            if (isRunning) return;
+            if (isRunning || !workspace) return;
             
-            updatePlacedBlocks();
-            if (placedBlocks.length === 0) {
+            // 檢查是否有積木
+            const topBlocks = workspace.getTopBlocks(true);
+            if (topBlocks.length === 0) {
                 showResult('請先添加積木！', 'error');
                 return;
             }
@@ -1271,111 +1600,99 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             document.getElementById('btnRun').disabled = true;
             document.getElementById('resultMessage').className = 'result-message';
             
-            // 重置角色位置
+            // 重置角色位置和步數
             characterPos = { x: mapData.start.x, y: mapData.start.y };
-            initMap();
-            
-            // 執行每個積木
-            await executeBlocks(placedBlocks);
-            
-            // 檢查是否到達終點
-            if (characterPos.x === mapData.end.x && characterPos.y === mapData.end.y) {
-                // 顯示成功視窗
-                document.getElementById('successModal').classList.add('show');
-            } else {
-                // 顯示失敗視窗
-                document.getElementById('failureModal').classList.add('show');
-            }
-            
-            isRunning = false;
-            document.getElementById('btnRun').disabled = false;
-        });
-
-        // 執行積木陣列
-        async function executeBlocks(blocks) {
-            for (let i = 0; i < blocks.length; i++) {
-                const block = blocks[i];
-                
-                if (block.type === 'loop') {
-                    // 執行迴圈
-                    const loopCount = block.count || 2;
-                    for (let j = 0; j < loopCount; j++) {
-                        if (block.blocks && block.blocks.length > 0) {
-                            await executeBlocks(block.blocks);
-                        }
-                    }
-                } else {
-                    // 執行移動積木
-                    const steps = block.steps || 1;
-                    for (let step = 0; step < steps; step++) {
-                        await executeBlock(block.type);
-                        stepCount++;
-                        updateStepDisplay();
-                        
-                        // 檢查是否撞牆或出界
-                        if (characterPos.x < 0 || characterPos.x >= mapData.width || 
-                            characterPos.y < 0 || characterPos.y >= mapData.height) {
-                            showResult('角色超出地圖範圍！', 'error');
-                            isRunning = false;
-                            document.getElementById('btnRun').disabled = false;
-                            return;
-                        }
-                        
-                        const cellType = mapData.map_data[characterPos.y][characterPos.x];
-                        if (cellType === 'wall') {
-                            showResult('角色撞到牆壁！', 'error');
-                            isRunning = false;
-                            document.getElementById('btnRun').disabled = false;
-                            return;
-                        }
-                        
-                        // 更新地圖顯示
-                        initMap();
-                        await sleep(300);
-                    }
-                }
-            }
-        }
-
-        // 執行單個積木
-        function executeBlock(blockType) {
-            return new Promise((resolve) => {
-                switch(blockType) {
-                    case 'move-up':
-                        characterPos.y--;
-                        break;
-                    case 'move-down':
-                        characterPos.y++;
-                        break;
-                    case 'move-left':
-                        characterPos.x--;
-                        break;
-                    case 'move-right':
-                        characterPos.x++;
-                        break;
-                }
-                resolve();
-            });
-        }
-
-        // 重置
-        document.getElementById('btnReset').addEventListener('click', () => {
-            restartGame();
-        });
-
-        // 重新開始遊戲
-        function restartGame() {
-            characterPos = { x: mapData.start.x, y: mapData.start.y };
-            workspace.innerHTML = '';
-            placedBlocks = [];
             stepCount = 0;
             updateStepDisplay();
-            document.getElementById('resultMessage').className = 'result-message';
-            document.getElementById('failureModal').classList.remove('show');
-            document.getElementById('successModal').classList.remove('show');
-            isRunning = false;
-            document.getElementById('btnRun').disabled = false;
             initMap();
+            
+            try {
+                // 生成 JavaScript 代碼
+                const code = Blockly.JavaScript.workspaceToCode(workspace);
+                console.log('生成的代碼:', code);
+                
+                if (!code || code.trim() === '') {
+                    showResult('請先添加積木！', 'error');
+                    return;
+                }
+                
+                // 執行代碼（在異步函數中）
+                // 將生成的代碼包裝在異步函數中執行
+                const asyncFunction = new Function(
+                    'moveUp', 
+                    'moveDown', 
+                    'moveLeft', 
+                    'moveRight', 
+                    'sleep',
+                    `return (async function() { 
+                        try {
+                            ${code}
+                        } catch (e) {
+                            throw e;
+                        }
+                    })();`
+                );
+                
+                await asyncFunction(moveUp, moveDown, moveLeft, moveRight, sleep);
+                
+                // 檢查是否到達終點
+                if (characterPos.x === mapData.end.x && characterPos.y === mapData.end.y) {
+                    // 顯示成功視窗
+                    document.getElementById('successModal').classList.add('show');
+                } else {
+                    // 顯示失敗視窗
+                    document.getElementById('failureModal').classList.add('show');
+                }
+            } catch (error) {
+                console.error('執行錯誤:', error);
+                if (!error.message.includes('超出') && !error.message.includes('撞到')) {
+                    showResult('執行程式時發生錯誤！', 'error');
+                }
+            } finally {
+                isRunning = false;
+                document.getElementById('btnRun').disabled = false;
+            }
+        });
+
+        // 重置（清除 Blockly 工作區）
+        document.getElementById('btnReset').addEventListener('click', () => {
+            if (workspace) {
+                workspace.clear();
+            }
+            characterPos = mapData ? { x: mapData.start.x, y: mapData.start.y } : { x: 0, y: 0 };
+            stepCount = 0;
+            updateStepDisplay();
+            initMap();
+        });
+
+        // 選擇困難度
+        function selectDifficulty(selectedDifficulty) {
+            window.location.href = 'game_code.php?difficulty=' + encodeURIComponent(selectedDifficulty) + '&reset=1';
+        }
+
+        // 顯示調整困難度視窗
+        function showChangeDifficultyModal() {
+            document.getElementById('changeDifficultyModal').classList.add('show');
+        }
+
+        // 關閉調整困難度視窗
+        function closeChangeDifficultyModal() {
+            document.getElementById('changeDifficultyModal').classList.remove('show');
+        }
+
+        // 更改困難度
+        function changeDifficulty(newDifficulty) {
+            window.location.href = 'game_code.php?difficulty=' + encodeURIComponent(newDifficulty) + '&reset=1';
+        }
+        
+        // 重新開始遊戲 - 失敗時重置到第一關
+        function restartGame() {
+            // 重置到第一關
+            if (difficulty) {
+                window.location.href = 'game_code.php?difficulty=' + encodeURIComponent(difficulty) + '&reset=1';
+            } else {
+                window.location.href = 'game_code.php?reset=1';
+            }
         }
 
         // 離開遊戲
@@ -1383,14 +1700,49 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
             window.location.href = 'game.php';
         }
 
-        // 下一關
+        // 下一關 - 自動生成新地圖（使用 Ollama）
         function nextLevel() {
-            if (nextMapId) {
-                window.location.href = 'game_code.php?map_id=' + nextMapId;
-            } else {
-                alert('恭喜！您已經完成所有關卡！');
-                leaveGame();
+            if (!difficulty) {
+                console.error('困難度未設定');
+                return;
             }
+            
+            // 關閉成功視窗
+            document.getElementById('successModal').classList.remove('show');
+            
+            // 增加關卡數並重新載入頁面生成新地圖
+            fetch('game_code_api.php?action=increment_level', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'difficulty=' + encodeURIComponent(difficulty),
+                credentials: 'same-origin' // 確保發送 session cookie
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP error! status: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('關卡增加回應:', data);
+                if (data.success) {
+                    console.log('關卡已增加到:', data.level);
+                    // 重新載入頁面，移除 reset 參數避免重置關卡數
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.delete('reset');
+                    currentUrl.searchParams.delete('difficulty'); // 也移除 difficulty，使用 session 中的值
+                    window.location.href = currentUrl.toString();
+                } else {
+                    console.error('增加關卡失敗:', data.message);
+                    alert('增加關卡失敗: ' + (data.message || '未知錯誤'));
+                }
+            })
+            .catch(error => {
+                console.error('請求失敗:', error);
+                alert('無法連接到伺服器，請稍後再試');
+            });
         }
 
         // 顯示結果
@@ -1406,7 +1758,15 @@ $characterImage = 'http://localhost/game/pixilart-drawing.png';
         }
 
         // 初始化
-        initMap();
+        if (mapData && mapData.map_data) {
+            initMap();
+        }
+        
+        // 關閉困難度選擇視窗（如果已選擇）
+        const difficultyModal = document.getElementById('difficultyModal');
+        if (difficultyModal && !<?= $showDifficultySelection ? 'true' : 'false' ?>) {
+            difficultyModal.classList.remove('show');
+        }
     </script>
 </body>
 </html>

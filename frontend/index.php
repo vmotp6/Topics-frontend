@@ -845,6 +845,12 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
           <a href="QA.php" class="feature-link">招生QA問答</a>
         </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎥</div>
+          <h3 class="feature-title">招生影片列表</h3>
+          <p class="feature-description">查看招生影片列表，了解招生影片情況和進度。</p>
+          <a href="radio.php" class="feature-link">招生影片列表</a>
+        </div>
 
         <div class="feature-card">
           <div class="feature-icon">🗺️</div>
@@ -896,6 +902,21 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
           <a href="QA.php" class="feature-link">招生QA問答</a>
         </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎥</div>
+          <h3 class="feature-title">招生影片列表</h3>
+          <p class="feature-description">查看招生影片列表，了解招生影片情況和進度。</p>
+          <a href="radio.php" class="feature-link">招生影片列表</a>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3 class="feature-title">遊戲中心</h3>
+          <p class="feature-description">查看遊戲中心，了解遊戲情況和進度。</p>
+          <a href="game.php" class="feature-link">遊戲中心</a>
+        </div>
+        
         
         <div class="feature-card">
           <div class="feature-icon">🗺️</div>
