@@ -33,6 +33,17 @@ $games = [
         'difficulty' => '困難',
         'players' => '單人',
         'duration' => '10-20 分鐘'
+    ],
+    [
+        'id' => 'nu',
+        'title' => '護理科互動遊戲',
+        'description' => '與奶油一起學習護理知識！透過問答遊戲提升護理技能，適合護理科的同學。',
+        'icon' => 'http://localhost/game/NU02.gif',
+        'link' => 'game_NU.php',
+        'color' => '#4facfe',
+        'difficulty' => '中等',
+        'players' => '單人',
+        'duration' => '5-15 分鐘'
     ]
 ];
 ?>
@@ -304,6 +315,11 @@ $games = [
         .game-card[data-game="code"] {
             --card-color: #f093fb;
             --card-color-hover: #4facfe;
+        }
+
+        .game-card[data-game="nu"] {
+            --card-color: #4facfe;
+            --card-color-hover: #00f2fe;
         }
 
         /* 特色標籤 */
