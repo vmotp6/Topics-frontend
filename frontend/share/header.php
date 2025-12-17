@@ -2115,40 +2115,222 @@ function checkTeacherProfile() {
     font-size: 16px;
   }
 
-  .universal-chat-container {
-    max-height: 400px;
-    overflow-y: auto;
-    margin-bottom: 20px;
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 10px;
-  }
-
-  .universal-chat-message {
-    margin-bottom: 15px;
-    padding: 12px 15px;
-    border-radius: 10px;
-    max-width: 80%;
-  }
-
-  .universal-chat-message.user {
-    background: #667eea;
-    color: white;
-    margin-left: auto;
-    text-align: right;
-  }
-
-  .universal-chat-message.assistant {
+  /* 聊天對話框容器 - 顯示在小助手按鈕左邊 */
+  .assistant-chat-window {
+    position: fixed;
+    bottom: 30px;
+    right: 190px; /* 在小助手按鈕左邊，按鈕寬度150px + 間距40px */
+    width: 800px;
+    height: 750px;
+    max-height: calc(100vh - 80px);
     background: white;
-    color: #333;
-    border: 1px solid #e0e0e0;
+    border: 3px solid #667eea;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 1001;
+    display: none;
+    flex-direction: column;
+    font-family: 'Microsoft JhengHei', sans-serif;
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+    transition: all 0.3s ease;
   }
 
-  /* 對話氣泡動畫效果 */
-  .universal-chat-message.intro-message {
+  .assistant-chat-window.active {
+    display: flex;
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+
+  /* 聊天窗口標題 */
+  .chat-window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-top-left-radius: 17px;
+    border-top-right-radius: 17px;
+  }
+
+  .chat-window-title {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* 小助手頭像 GIF */
+  .chat-window-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid white;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .chat-window-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .chat-window-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
+  }
+
+  /* 聊天容器 */
+  .assistant-chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+    background: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);
+    position: relative;
+    min-height: 300px;
+  }
+
+  /* 聊天容器滾動條樣式 */
+  .assistant-chat-container::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .assistant-chat-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  .assistant-chat-container::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 10px;
+  }
+
+  .assistant-chat-container::-webkit-scrollbar-thumb:hover {
+    background: #5568d3;
+  }
+
+  /* 對話氣泡容器 - 包含頭像和訊息 */
+  .assistant-chat-message-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 20px;
     opacity: 0;
     transform: translateY(10px);
     animation: fadeInUp 0.4s ease-out forwards;
+  }
+
+  /* 對話氣泡樣式 - 聊天窗口中使用 */
+  .assistant-chat-message {
+    margin-bottom: 0;
+    padding: 18px 22px;
+    border-radius: 20px;
+    max-width: 80%;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    word-wrap: break-word;
+    font-size: 16px;
+  }
+
+  /* 用戶訊息容器 - 右側對齊 */
+  .assistant-chat-message-wrapper.user-wrapper {
+    justify-content: flex-end;
+  }
+
+  /* 用戶訊息氣泡 - 右側，藍紫色 */
+  .assistant-chat-message.user {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    margin-left: 0;
+    margin-right: 0;
+    text-align: left;
+    border-bottom-right-radius: 5px;
+  }
+
+  /* 用戶訊息氣泡的三角形 */
+  .assistant-chat-message.user::after {
+    content: '';
+    position: absolute;
+    right: -10px;
+    bottom: 15px;
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 12px solid #764ba2;
+  }
+
+  /* 助手訊息頭像 - 在對話框外部左側 */
+  .assistant-message-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 2px solid #667eea;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    background: white;
+  }
+
+  /* 助手訊息氣泡 - 左側，白色帶邊框 */
+  .assistant-chat-message.assistant {
+    background: white;
+    color: #333;
+    border: 3px solid #667eea;
+    margin-right: auto;
+    border-bottom-left-radius: 5px;
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 助手訊息內容區域 */
+  .assistant-message-content {
+    width: 100%;
+  }
+
+  /* 助手訊息氣泡的三角形 - 指向左側頭像 */
+  .assistant-chat-message.assistant::after {
+    content: '';
+    position: absolute;
+    left: -12px;
+    bottom: 15px;
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-right: 12px solid #667eea;
+  }
+
+  /* 助手訊息氣泡的內層三角形（白色） */
+  .assistant-chat-message.assistant::before {
+    content: '';
+    position: absolute;
+    left: -9px;
+    bottom: 16px;
+    width: 0;
+    height: 0;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-right: 10px solid white;
+    z-index: 1;
+  }
+
+  /* 打字動畫效果 */
+  .assistant-chat-message.typing {
+    animation: typingEffect 0.3s steps(20, end);
   }
 
   @keyframes fadeInUp {
@@ -2158,39 +2340,94 @@ function checkTeacherProfile() {
     }
   }
 
-  .universal-chat-input-container {
-    display: flex;
-    gap: 10px;
+  @keyframes typingEffect {
+    from {
+      width: 0;
+    }
+    to {
+      width: 100%;
+    }
   }
 
-  .universal-chat-input {
+  /* 訊息中的文字樣式 */
+  .assistant-chat-message strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    opacity: 0.9;
+    font-weight: 600;
+  }
+
+  .assistant-message-content strong {
+    color: #667eea;
+    margin-bottom: 6px;
+  }
+
+  .assistant-chat-message.user strong {
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  /* 打字文字樣式 */
+  .assistant-chat-message .typing-text {
+    display: inline-block;
+    line-height: 1.6;
+  }
+
+  /* 訊息文字內容 */
+  .assistant-chat-message {
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  /* 聊天輸入容器 */
+  .assistant-chat-input-container {
+    display: flex;
+    gap: 12px;
+    padding: 18px 20px;
+    background: white;
+    border-top: 2px solid #e9ecef;
+    border-bottom-left-radius: 17px;
+    border-bottom-right-radius: 17px;
+  }
+
+  .assistant-chat-input {
     flex: 1;
-    padding: 12px 15px;
+    padding: 14px 18px;
     border: 2px solid #e0e0e0;
     border-radius: 25px;
-    font-size: 14px;
+    font-size: 15px;
     outline: none;
     transition: border-color 0.2s;
+    font-family: 'Microsoft JhengHei', sans-serif;
   }
 
-  .universal-chat-input:focus {
+  .assistant-chat-input:focus {
     border-color: #667eea;
   }
 
-  .universal-chat-send {
+  .assistant-chat-send {
     padding: 12px 25px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background:  #764ba2 100%;
     color: white;
     border: none;
     border-radius: 25px;
     cursor: pointer;
     font-weight: bold;
     transition: all 0.2s;
+    font-family: 'Microsoft JhengHei', sans-serif;
+    white-space: nowrap;
+    width:20%;
   }
 
-  .universal-chat-send:hover {
+  .assistant-chat-send:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+  }
+
+  .assistant-chat-send:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
   }
 
   @media (max-width: 768px) {
@@ -2244,6 +2481,50 @@ function checkTeacherProfile() {
     .speech-bubble-content {
       font-size: 14px;
     }
+
+    /* 手機版聊天對話框樣式 */
+    .assistant-chat-window {
+      bottom: 100px;
+      right: 10px;
+      left: 10px;
+      width: auto;
+      height: 500px;
+      max-height: calc(100vh - 120px);
+    }
+
+    .assistant-chat-message {
+      max-width: 85%;
+      padding: 14px 18px;
+      font-size: 14px;
+    }
+
+    .assistant-message-avatar {
+      width: 40px;
+      height: 40px;
+    }
+
+    .assistant-chat-message-wrapper {
+      gap: 8px;
+    }
+
+    .assistant-chat-container {
+      padding: 18px;
+      min-height: 250px;
+    }
+
+    .assistant-chat-input-container {
+      padding: 12px 15px;
+    }
+
+    .chat-window-avatar {
+      width: 32px;
+      height: 32px;
+    }
+
+    .chat-window-title {
+      font-size: 16px;
+      gap: 10px;
+    }
   }
 </style>
 
@@ -2296,24 +2577,21 @@ function checkTeacherProfile() {
   </div>
 </div>
 
-<!-- 聊天 Modal -->
-<div class="universal-assistant-modal" id="chatModal">
-  <div class="universal-modal-content">
-    <div class="universal-modal-header">
-      <h2><i class="fas fa-comments"></i> 聊天助手</h2>
-      <button class="universal-modal-close" onclick="closeChatModal()">&times;</button>
+<!-- 聊天對話框 - 直接顯示在頁面上，在小助手按鈕左邊 -->
+<div class="assistant-chat-window" id="assistantChatWindow">
+  <div class="chat-window-header">
+    <div class="chat-window-title">
+      <img src="http://localhost/game/AIblink.gif" alt="小助手" class="chat-window-avatar" id="chatWindowAvatar" onerror="this.style.display='none';">
+      <span>與小助手聊天</span>
     </div>
-    <div class="universal-modal-body">
-      <div class="universal-chat-container" id="chatContainer">
-        <div class="universal-chat-message assistant">
-          <strong>助手：</strong> 你好！我是你的聊天助手，有什麼可以幫助你的嗎？😊
-        </div>
-      </div>
-      <div class="universal-chat-input-container">
-        <input type="text" class="universal-chat-input" id="chatInput" placeholder="輸入你的問題..." onkeypress="handleChatKeyPress(event)">
-        <button class="universal-chat-send" onclick="sendChatMessage()">發送</button>
-      </div>
-    </div>
+    <button class="chat-window-close" onclick="closeChatWindow()">&times;</button>
+  </div>
+  <div class="assistant-chat-container" id="chatContainer">
+    <!-- 初始歡迎訊息將通過 JavaScript 動態添加 -->
+  </div>
+  <div class="assistant-chat-input-container">
+    <input type="text" class="assistant-chat-input" id="chatInput" placeholder="輸入你的問題..." onkeypress="handleChatKeyPress(event)">
+    <button class="assistant-chat-send" onclick="sendChatMessage()">發送</button>
   </div>
 </div>
 
@@ -2322,7 +2600,6 @@ function checkTeacherProfile() {
   const universalAssistantBtn = document.getElementById('universalAssistantBtn');
   const universalAssistantMenu = document.getElementById('universalAssistantMenu');
   const introModal = document.getElementById('introModal');
-  const chatModal = document.getElementById('chatModal');
   
   // 圖片路徑
   const initialImage = 'http://localhost/game/AI01.png';
@@ -2581,23 +2858,85 @@ function checkTeacherProfile() {
     }
   }
 
-  // 聊天功能
+  // 聊天功能 - 切換聊天對話框顯示/隱藏
   function openUniversalChat() {
     if (universalAssistantMenu) {
       universalAssistantMenu.classList.remove('active');
     }
-    if (chatModal) {
-      chatModal.classList.add('active');
-    }
-    const chatInput = document.getElementById('chatInput');
-    if (chatInput) {
-      chatInput.focus();
+    
+    const chatWindow = document.getElementById('assistantChatWindow');
+    if (chatWindow) {
+      // 切換顯示/隱藏
+      const isActive = chatWindow.classList.contains('active');
+      
+      if (isActive) {
+        // 如果已經顯示，則隱藏
+        closeChatWindow();
+      } else {
+        // 如果未顯示，則顯示
+        chatWindow.classList.add('active');
+        
+        // 更新頭像為說話的 GIF（如果有的話，之後可以根據聊天狀態切換）
+        const chatAvatar = document.getElementById('chatWindowAvatar');
+        if (chatAvatar && assistantImage) {
+          // 可以根據需要切換到說話的 GIF
+          // chatAvatar.src = 'http://localhost/game/AIspeak.gif'; // 說話的 GIF
+          chatAvatar.src = blinkImage; // 暫時使用 blink 圖片
+        }
+        
+        // 檢查是否已經有歡迎訊息
+        const chatContainer = document.getElementById('chatContainer');
+        if (chatContainer && chatContainer.children.length === 0) {
+          // 添加歡迎訊息（帶打字效果和頭像）
+          const messageWrapper = document.createElement('div');
+          messageWrapper.className = 'assistant-chat-message-wrapper';
+          messageWrapper.innerHTML = `
+            <img src="http://localhost/game/AIblink.gif" alt="小助手" class="assistant-message-avatar" onerror="this.style.display='none';">
+            <div class="assistant-chat-message assistant">
+              <div class="assistant-message-content">
+                <strong>助手：</strong>
+                <span class="typing-text"></span>
+              </div>
+            </div>
+          `;
+          chatContainer.appendChild(messageWrapper);
+          
+          const welcomeMessage = messageWrapper.querySelector('.assistant-chat-message');
+          const welcomeText = '你好！我是你的聊天助手，有什麼可以幫助你的嗎？😊';
+          const typingText = messageWrapper.querySelector('.typing-text');
+          let index = 0;
+          
+          const welcomeTypingInterval = setInterval(() => {
+            if (index < welcomeText.length) {
+              typingText.textContent += welcomeText[index];
+              index++;
+              // 自動滾動到底部
+              chatContainer.scrollTop = chatContainer.scrollHeight;
+            } else {
+              clearInterval(welcomeTypingInterval);
+              // 打字完成後聚焦輸入框
+              const chatInput = document.getElementById('chatInput');
+              if (chatInput) {
+                chatInput.focus();
+              }
+            }
+          }, 30);
+        } else {
+          // 如果已有訊息，直接聚焦輸入框
+          const chatInput = document.getElementById('chatInput');
+          if (chatInput) {
+            chatInput.focus();
+          }
+        }
+      }
     }
   }
 
-  function closeChatModal() {
-    if (chatModal) {
-      chatModal.classList.remove('active');
+  // 關閉聊天對話框
+  function closeChatWindow() {
+    const chatWindow = document.getElementById('assistantChatWindow');
+    if (chatWindow) {
+      chatWindow.classList.remove('active');
     }
   }
 
@@ -2607,6 +2946,9 @@ function checkTeacherProfile() {
     }
   }
 
+  // 聊天打字效果
+  let chatTypingInterval = null;
+  
   function sendChatMessage() {
     const chatInput = document.getElementById('chatInput');
     const message = chatInput ? chatInput.value.trim() : '';
@@ -2616,39 +2958,128 @@ function checkTeacherProfile() {
     const chatContainer = document.getElementById('chatContainer');
     if (!chatContainer) return;
     
-    // 顯示用戶訊息
-    const userMessage = document.createElement('div');
-    userMessage.className = 'universal-chat-message user';
-    userMessage.innerHTML = `<strong>你：</strong> ${message}`;
-    chatContainer.appendChild(userMessage);
+    // 顯示用戶訊息（立即顯示，不需要打字效果）
+    const userWrapper = document.createElement('div');
+    userWrapper.className = 'assistant-chat-message-wrapper user-wrapper';
+    userWrapper.innerHTML = `
+      <div class="assistant-chat-message user">
+        <strong>你：</strong> ${message}
+      </div>
+    `;
+    chatContainer.appendChild(userWrapper);
     
     if (chatInput) {
       chatInput.value = '';
+      chatInput.disabled = true; // 發送時禁用輸入
     }
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-
-    // 模擬 AI 回應
+    
+    // 滾動到底部
     setTimeout(() => {
-      const assistantMessage = document.createElement('div');
-      assistantMessage.className = 'universal-chat-message assistant';
-      
-      let response = '感謝你的問題！我是一個簡單的聊天助手。';
-      
-      // 簡單的關鍵字回應
-      if (message.includes('你好') || message.includes('hello')) {
-        response = '你好！很高興為你服務！😊';
-      } else if (message.includes('幫助') || message.includes('help')) {
-        response = '我可以幫助你了解網頁功能、回答簡單問題。你可以點選「介紹此網頁」了解更多資訊！';
-      } else if (message.includes('功能') || message.includes('可以做什麼')) {
-        response = '我可以：1. 介紹當前網頁的功能 2. 與你聊天 3. 提供休息模式。試試看其他功能吧！';
-      } else if (message.includes('謝謝') || message.includes('thank')) {
-        response = '不客氣！隨時歡迎你的提問！😊';
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }, 100);
+
+    // 創建助手訊息容器（顯示「思考中」）
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = 'assistant-chat-message-wrapper';
+    messageWrapper.innerHTML = `
+      <img src="http://localhost/game/AIblink.gif" alt="小助手" class="assistant-message-avatar" onerror="this.style.display='none';">
+      <div class="assistant-chat-message assistant">
+        <div class="assistant-message-content">
+          <strong>助手：</strong>
+          <span class="typing-text">思考中...</span>
+        </div>
+      </div>
+    `;
+    chatContainer.appendChild(messageWrapper);
+    
+    // 切換頭像為說話的 GIF（如果有的話）
+    const chatAvatar = document.getElementById('chatWindowAvatar');
+    const messageAvatar = messageWrapper.querySelector('.assistant-message-avatar');
+    if (chatAvatar) {
+      // chatAvatar.src = 'http://localhost/game/AIspeak.gif'; // 說話的 GIF
+    }
+    if (messageAvatar) {
+      // messageAvatar.src = 'http://localhost/game/AIspeak.gif'; // 說話的 GIF
+    }
+    
+    const typingText = messageWrapper.querySelector('.typing-text');
+    
+    // 調用 RAG API - 使用相對於根目錄的路徑
+    const ragApiUrl = '/Topics-frontend/backend/api/chat/rag_chat_api.php';
+    fetch(ragApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: message
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success && data.answer) {
+        // 清空「思考中...」，準備顯示回答
+        typingText.textContent = '';
+        
+        // 打字效果顯示回應
+        const response = data.answer;
+        let index = 0;
+        
+        if (chatTypingInterval) {
+          clearInterval(chatTypingInterval);
+        }
+        
+        chatTypingInterval = setInterval(() => {
+          if (index < response.length) {
+            typingText.textContent += response[index];
+            index++;
+            // 自動滾動到底部
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+          } else {
+            clearInterval(chatTypingInterval);
+            chatTypingInterval = null;
+            
+            // 回應完成後，切換頭像回 blink（如果需要的話）
+            if (messageAvatar) {
+              // messageAvatar.src = blinkImage; // 切換回 blink
+            }
+            if (chatAvatar) {
+              // chatAvatar.src = blinkImage; // 切換回 blink
+            }
+            
+            // 啟用輸入框
+            if (chatInput) {
+              chatInput.disabled = false;
+              chatInput.focus();
+            }
+          }
+        }, 30); // 每個字符間隔30毫秒
+      } else {
+        // 錯誤處理
+        typingText.textContent = data.error || '抱歉，處理您的問題時發生錯誤，請稍後再試。';
+        
+        // 啟用輸入框
+        if (chatInput) {
+          chatInput.disabled = false;
+          chatInput.focus();
+        }
       }
       
-      assistantMessage.innerHTML = `<strong>助手：</strong> ${response}`;
-      chatContainer.appendChild(assistantMessage);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }, 500);
+      // 滾動到底部
+      setTimeout(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }, 100);
+    })
+    .catch(error => {
+      console.error('RAG API 錯誤:', error);
+      typingText.textContent = '抱歉，無法連接到服務器，請檢查網路連接後再試。';
+      
+      // 啟用輸入框
+      if (chatInput) {
+        chatInput.disabled = false;
+        chatInput.focus();
+      }
+    });
   }
 
   // 休息模式
@@ -2709,13 +3140,17 @@ function checkTeacherProfile() {
     });
   }
   
-  if (chatModal) {
-    chatModal.addEventListener('click', function(e) {
-      if (e.target === chatModal) {
-        chatModal.classList.remove('active');
-      }
-    });
-  }
+  // 點擊聊天窗口外部關閉（可選，如果需要的話可以取消註解）
+  // document.addEventListener('click', function(e) {
+  //   const chatWindow = document.getElementById('assistantChatWindow');
+  //   const chatBtn = document.getElementById('universalAssistantBtn');
+  //   if (chatWindow && chatWindow.classList.contains('active')) {
+  //     if (!chatWindow.contains(e.target) && !chatBtn.contains(e.target) && 
+  //         !universalAssistantMenu.contains(e.target)) {
+  //       closeChatWindow();
+  //     }
+  //   }
+  // });
 
   // 頁面載入時顯示歡迎消息 - 只有在 blink 狀態才顯示
   document.addEventListener('DOMContentLoaded', function() {
