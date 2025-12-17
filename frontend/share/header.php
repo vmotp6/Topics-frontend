@@ -1085,7 +1085,6 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php else: ?>
       <!-- 僅登入用戶可見的連結 -->
-      <a href="<?php echo getCorrectPath('chat_settings.php'); ?>" class="<?php echo getActiveClass('chat_settings.php'); ?>">🤖 助手設置</a>
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
     
@@ -1851,4 +1850,888 @@ function checkTeacherProfile() {
 // 頁面載入時檢查（暫時禁用）
 // window.addEventListener('load', checkTeacherProfile);
 
+</script>
+
+<!-- 通用助手功能 -->
+<style>
+  .universal-assistant {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 1000;
+    font-family: 'Microsoft JhengHei', sans-serif;
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+  }
+
+  /* 對話氣泡樣式 */
+  .assistant-speech-bubble {
+    background: #fff;
+    border: 3px solid #667eea;
+    border-radius: 20px;
+    padding: 20px 25px;
+    max-width: 350px;
+    min-width: 250px;
+    min-height: 80px;
+    position: relative;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(20px);
+    transition: all 0.4s ease;
+  }
+
+  .assistant-speech-bubble.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  /* 對話氣泡三角形指向按鈕 */
+  .assistant-speech-bubble::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    bottom: 30px;
+    width: 0;
+    height: 0;
+    border-top: 15px solid transparent;
+    border-bottom: 15px solid transparent;
+    border-left: 20px solid #667eea;
+  }
+
+  .assistant-speech-bubble::before {
+    content: '';
+    position: absolute;
+    right: -17px;
+    bottom: 32px;
+    width: 0;
+    height: 0;
+    border-top: 13px solid transparent;
+    border-bottom: 13px solid transparent;
+    border-left: 17px solid #fff;
+    z-index: 1;
+  }
+
+  .speech-bubble-content {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #333;
+    text-align: left;
+    position: relative;
+    z-index: 2;
+  }
+
+  .speech-bubble-content.typing {
+    animation: typing 0.5s steps(20, end);
+  }
+
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  /* 對話氣泡關閉按鈕 */
+  .speech-bubble-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #999;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+    z-index: 3;
+  }
+
+  .speech-bubble-close:hover {
+    background: #f0f0f0;
+    color: #667eea;
+  }
+
+  .universal-assistant-btn {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    background-color: white;
+  }
+
+  .universal-assistant-btn:hover {
+    transform: scale(1.1);
+    background-color: white;
+    box-shadow: 0 0 0 0;
+  }
+
+  .universal-assistant-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+  }
+
+  .universal-assistant-menu {
+    position: absolute;
+    bottom: 90px;
+    right: 0;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    min-width: 200px;
+    padding: 15px 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+  }
+
+  .universal-assistant-menu.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .universal-menu-item {
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #2c3e50;
+    font-size: 16px;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+
+  .universal-menu-item:hover {
+    background: #f0f4ff;
+    color: #667eea;
+  }
+
+  .universal-menu-item:first-child {
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+  }
+
+  .universal-menu-item:last-child {
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
+  }
+
+  .universal-menu-item i {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+  }
+
+  .universal-assistant-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .universal-assistant-modal.active {
+    display: flex;
+  }
+
+  .universal-modal-content {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+  }
+
+  .universal-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+  }
+
+  .universal-modal-header h2 {
+    margin: 0;
+    color: #667eea;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .universal-modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #999;
+    transition: color 0.2s;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .universal-modal-close:hover {
+    color: #667eea;
+    background: #f0f4ff;
+  }
+
+  .universal-modal-body {
+    color: #333;
+    line-height: 1.8;
+    font-size: 16px;
+  }
+
+  .universal-chat-container {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+  }
+
+  .universal-chat-message {
+    margin-bottom: 15px;
+    padding: 12px 15px;
+    border-radius: 10px;
+    max-width: 80%;
+  }
+
+  .universal-chat-message.user {
+    background: #667eea;
+    color: white;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .universal-chat-message.assistant {
+    background: white;
+    color: #333;
+    border: 1px solid #e0e0e0;
+  }
+
+  /* 對話氣泡動畫效果 */
+  .universal-chat-message.intro-message {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInUp 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeInUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .universal-chat-input-container {
+    display: flex;
+    gap: 10px;
+  }
+
+  .universal-chat-input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 25px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .universal-chat-input:focus {
+    border-color: #667eea;
+  }
+
+  .universal-chat-send {
+    padding: 12px 25px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+  }
+
+  .universal-chat-send:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    .universal-assistant {
+      bottom: 20px;
+      right: 20px;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .universal-assistant-btn {
+      width: 60px;
+      height: 60px;
+    }
+
+    .universal-assistant-menu {
+      bottom: 80px;
+      min-width: 180px;
+    }
+
+    .universal-modal-content {
+      padding: 20px;
+      width: 95%;
+    }
+
+    .assistant-speech-bubble {
+      max-width: 280px;
+      min-width: 200px;
+      padding: 15px 20px;
+      margin-bottom: 10px;
+    }
+
+    .assistant-speech-bubble::after {
+      right: 30px;
+      bottom: -20px;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 20px solid #667eea;
+      border-bottom: none;
+    }
+
+    .assistant-speech-bubble::before {
+      right: 32px;
+      bottom: -17px;
+      border-left: 13px solid transparent;
+      border-right: 13px solid transparent;
+      border-top: 17px solid #fff;
+      border-bottom: none;
+    }
+
+    .speech-bubble-content {
+      font-size: 14px;
+    }
+  }
+</style>
+
+<div class="universal-assistant">
+  <!-- 對話氣泡 -->
+  <div class="assistant-speech-bubble" id="assistantSpeechBubble">
+    <button class="speech-bubble-close" onclick="closeSpeechBubble()">&times;</button>
+    <div class="speech-bubble-content" id="speechBubbleContent">
+      你好！我是小助手，點擊我可以了解更多功能！👋
+    </div>
+  </div>
+  
+  <!-- 助手按鈕 -->
+  <button class="universal-assistant-btn" id="universalAssistantBtn" title="奶油">
+    <img src="http://localhost/game/AI01.png" alt="奶油" onerror="this.innerHTML='🤖'; this.style.fontSize='30px';">
+  </button>
+  
+  <!-- 選單 -->
+  <div class="universal-assistant-menu" id="universalAssistantMenu">
+    <button class="universal-menu-item" onclick="showPageIntroduction()">
+      <i class="fas fa-info-circle"></i>
+      <span>介紹此網頁</span>
+    </button>
+    <button class="universal-menu-item" onclick="openUniversalChat()">
+      <i class="fas fa-comments"></i>
+      <span>聊天</span>
+    </button>
+    <button class="universal-menu-item" onclick="universalRestMode()">
+      <i class="fas fa-moon"></i>
+      <span>休息</span>
+    </button>
+  </div>
+</div>
+
+<!-- 介紹網頁 Modal -->
+<div class="universal-assistant-modal" id="introModal">
+  <div class="universal-modal-content">
+    <div class="universal-modal-header">
+      <h2><i class="fas fa-info-circle"></i> 網頁介紹</h2>
+      <button class="universal-modal-close" onclick="closeIntroModal()">&times;</button>
+    </div>
+    <div class="universal-modal-body">
+      <div class="universal-chat-container" id="introContent">
+        <!-- 對話內容將在這裡動態添加 -->
+      </div>
+      <div style="text-align: center; margin-top: 20px;">
+        <button class="universal-chat-send" onclick="closeIntroModal()" style="width: 120px;">我知道了</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 聊天 Modal -->
+<div class="universal-assistant-modal" id="chatModal">
+  <div class="universal-modal-content">
+    <div class="universal-modal-header">
+      <h2><i class="fas fa-comments"></i> 聊天助手</h2>
+      <button class="universal-modal-close" onclick="closeChatModal()">&times;</button>
+    </div>
+    <div class="universal-modal-body">
+      <div class="universal-chat-container" id="chatContainer">
+        <div class="universal-chat-message assistant">
+          <strong>助手：</strong> 你好！我是你的聊天助手，有什麼可以幫助你的嗎？😊
+        </div>
+      </div>
+      <div class="universal-chat-input-container">
+        <input type="text" class="universal-chat-input" id="chatInput" placeholder="輸入你的問題..." onkeypress="handleChatKeyPress(event)">
+        <button class="universal-chat-send" onclick="sendChatMessage()">發送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 通用助手功能
+  const universalAssistantBtn = document.getElementById('universalAssistantBtn');
+  const universalAssistantMenu = document.getElementById('universalAssistantMenu');
+  const introModal = document.getElementById('introModal');
+  const chatModal = document.getElementById('chatModal');
+  
+  // 圖片路徑
+  const initialImage = 'http://localhost/game/AI01.png';
+  const clickImage = 'http://localhost/game/AI02.gif';
+  const blinkImage = 'http://localhost/game/AIblink.gif';
+  
+  // 獲取圖片元素
+  let assistantImage = null;
+  if (universalAssistantBtn) {
+    assistantImage = universalAssistantBtn.querySelector('img');
+  }
+  
+  // 標記是否已經點擊過
+  let hasBeenClicked = false;
+  let isShowingBlink = false;
+
+  // 切換到 blink 圖片
+  function switchToBlink() {
+    if (!assistantImage || isShowingBlink) return;
+    isShowingBlink = true;
+    
+    // 切換到 blink 圖片
+    assistantImage.src = blinkImage;
+    
+    // 當 blink 圖片載入完成後，允許顯示選單
+    assistantImage.onload = function() {
+      // 現在可以顯示選單了
+      if (universalAssistantMenu) {
+        universalAssistantMenu.style.pointerEvents = 'auto';
+      }
+      assistantImage.onload = null; // 移除事件監聽
+    };
+  }
+
+  // 切換選單顯示
+  if (universalAssistantBtn) {
+    universalAssistantBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      
+      // 如果還沒點擊過，執行圖片切換
+      if (!hasBeenClicked && assistantImage) {
+        hasBeenClicked = true;
+        
+        // 先隱藏選單，不允許點擊
+        if (universalAssistantMenu) {
+          universalAssistantMenu.style.pointerEvents = 'none';
+          universalAssistantMenu.classList.remove('active');
+        }
+        
+        // 先顯示 AI02.gif
+        // 使用時間戳來強制重新載入，確保 GIF 從頭開始播放
+        assistantImage.src = clickImage + '?t=' + Date.now();
+        
+        // 1.2 秒後切換到 AIblink.gif
+        setTimeout(function() {
+          switchToBlink();
+        }, 1700); // 1.2 秒後切換
+      } else if (isShowingBlink) {
+        // 已經顯示 blink，可以切換選單
+        universalAssistantMenu.classList.toggle('active');
+      }
+    });
+  }
+
+  // 點擊外部關閉選單
+  document.addEventListener('click', function(e) {
+    if (universalAssistantBtn && universalAssistantMenu) {
+      if (!universalAssistantBtn.contains(e.target) && !universalAssistantMenu.contains(e.target)) {
+        universalAssistantMenu.classList.remove('active');
+      }
+    }
+  });
+
+  // 對話氣泡相關元素
+  const speechBubble = document.getElementById('assistantSpeechBubble');
+  const speechBubbleContent = document.getElementById('speechBubbleContent');
+  
+  // 打字效果定時器
+  let typingInterval = null;
+  let dialogueSequenceTimeouts = [];
+  let autoCloseTimeout = null; // 自動關閉定時器
+  
+  // 關閉對話氣泡
+  function closeSpeechBubble() {
+    if (speechBubble) {
+      speechBubble.classList.remove('active');
+    }
+    // 清除所有定時器
+    if (typingInterval) {
+      clearInterval(typingInterval);
+      typingInterval = null;
+    }
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+    dialogueSequenceTimeouts.forEach(timeout => clearTimeout(timeout));
+    dialogueSequenceTimeouts = [];
+  }
+  
+  // 顯示對話（打字效果）- 只有在顯示 AIblink.gif 時才能顯示
+  function showDialogue(text, shouldAutoClose = true) {
+    if (!speechBubble || !speechBubbleContent || !assistantImage) return;
+    
+    // 檢查當前圖片是否是 AIblink.gif，只有是 blink 狀態才顯示對話
+    const currentSrc = assistantImage.src;
+    if (!currentSrc.includes('AIblink.gif') && !isShowingBlink) {
+      return; // 只有在 blink 狀態才能顯示對話
+    }
+    
+    // 清除之前的定時器
+    if (typingInterval) {
+      clearInterval(typingInterval);
+    }
+    
+    // 確保圖片保持為 AIblink.gif
+    if (!currentSrc.includes('AIblink.gif')) {
+      assistantImage.src = blinkImage;
+      isShowingBlink = true;
+    }
+    
+    // 顯示對話氣泡
+    speechBubble.classList.add('active');
+    
+    // 清空內容
+    speechBubbleContent.textContent = '';
+    speechBubbleContent.classList.add('typing');
+    
+    // 清除之前的自動關閉定時器
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+    
+    // 打字效果
+    let index = 0;
+    typingInterval = setInterval(() => {
+      if (index < text.length) {
+        speechBubbleContent.textContent += text[index];
+        index++;
+      } else {
+        clearInterval(typingInterval);
+        typingInterval = null;
+        speechBubbleContent.classList.remove('typing');
+        // 對話顯示時，保持為 AIblink.gif，不切換回其他圖片
+        // 如果 shouldAutoClose 為 true，對話完成後3秒自動關閉
+        if (shouldAutoClose) {
+          autoCloseTimeout = setTimeout(() => {
+            closeSpeechBubble();
+          }, 3000);
+        }
+      }
+    }, 50);
+  }
+  
+  // 逐條顯示對話
+  function showDialogueSequence(messages) {
+    // 清除之前的序列定時器
+    dialogueSequenceTimeouts.forEach(timeout => clearTimeout(timeout));
+    dialogueSequenceTimeouts = [];
+    // 清除自動關閉定時器（因為是序列，會在最後一條完成後才關閉）
+    if (autoCloseTimeout) {
+      clearTimeout(autoCloseTimeout);
+      autoCloseTimeout = null;
+    }
+    
+    messages.forEach((message, index) => {
+      const isLastMessage = index === messages.length - 1;
+      const timeout = setTimeout(() => {
+        // 只有最後一條消息才設置自動關閉
+        showDialogue(message, isLastMessage);
+      }, index * 3500); // 每條消息間隔3.5秒（包含打字時間）
+      dialogueSequenceTimeouts.push(timeout);
+    });
+  }
+
+  // 介紹此網頁 - 對話式介紹（在對話氣泡中顯示）
+  function showPageIntroduction() {
+    // 檢查是否在 blink 狀態，只有是才顯示對話
+    if (!isShowingBlink || !assistantImage || !assistantImage.src.includes('AIblink.gif')) {
+      // 如果不是 blink 狀態，先切換到 blink
+      if (assistantImage) {
+        assistantImage.src = blinkImage;
+        isShowingBlink = true;
+        // 等待圖片載入後再顯示對話
+        assistantImage.onload = function() {
+          assistantImage.onload = null;
+          showPageIntroductionContent();
+        };
+        // 如果圖片已經載入，直接調用
+        if (assistantImage.complete) {
+          showPageIntroductionContent();
+        }
+      }
+      return;
+    }
+    
+    showPageIntroductionContent();
+  }
+  
+  function showPageIntroductionContent() {
+    if (universalAssistantMenu) {
+      universalAssistantMenu.classList.remove('active');
+    }
+    
+    const currentPage = window.location.pathname.split('/').pop() || 'index.php';
+    const pageName = currentPage.replace('.php', '').replace('.html', '');
+
+    // 根據當前頁面準備對話內容
+    const pageTitle = document.title || '康寧大學';
+    let messages = [];
+    
+    switch(pageName) {
+      case 'index':
+        messages = [
+          '你好！歡迎來到' + pageTitle + '！👋',
+          '這是康寧大學的主頁面，這裡提供各種豐富的學習資源和功能。',
+          '你可以在這裡瀏覽課程內容、查看最新公告、參與互動遊戲等。',
+          '讓我們一起探索這個平台，開始你的學習之旅吧！✨'
+        ];
+        break;
+      case 'game_NU':
+        messages = [
+          '歡迎來到護理科互動遊戲！🎮',
+          '這是一個專為護理科學生設計的互動學習遊戲。',
+          '你可以與可愛的角色「奶油」進行互動，回答護理相關的問題。',
+          '透過遊戲的方式，讓學習護理知識變得更有趣！加油！💪'
+        ];
+        break;
+      case 'game':
+        messages = [
+          '歡迎來到遊戲中心！🎯',
+          '這裡提供了各種有趣的互動遊戲供你選擇。',
+          '選擇你喜歡的遊戲開始挑戰吧！',
+          '在遊戲中學習，在學習中成長！🚀'
+        ];
+        break;
+      default:
+        messages = [
+          '歡迎來到' + pageTitle + '！👋',
+          '這是 ' + pageTitle + ' 的頁面。',
+          '歡迎使用本系統！如有任何問題，隨時都可以詢問我。',
+          '祝你在這裡有愉快的使用體驗！😊'
+        ];
+    }
+    
+    // 逐條顯示對話（確保在 blink 狀態）
+    if (isShowingBlink && assistantImage && assistantImage.src.includes('AIblink.gif')) {
+      showDialogueSequence(messages);
+    }
+  }
+
+  function closeIntroModal() {
+    if (introModal) {
+      introModal.classList.remove('active');
+    }
+  }
+
+  // 聊天功能
+  function openUniversalChat() {
+    if (universalAssistantMenu) {
+      universalAssistantMenu.classList.remove('active');
+    }
+    if (chatModal) {
+      chatModal.classList.add('active');
+    }
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+      chatInput.focus();
+    }
+  }
+
+  function closeChatModal() {
+    if (chatModal) {
+      chatModal.classList.remove('active');
+    }
+  }
+
+  function handleChatKeyPress(event) {
+    if (event.key === 'Enter') {
+      sendChatMessage();
+    }
+  }
+
+  function sendChatMessage() {
+    const chatInput = document.getElementById('chatInput');
+    const message = chatInput ? chatInput.value.trim() : '';
+    
+    if (!message) return;
+
+    const chatContainer = document.getElementById('chatContainer');
+    if (!chatContainer) return;
+    
+    // 顯示用戶訊息
+    const userMessage = document.createElement('div');
+    userMessage.className = 'universal-chat-message user';
+    userMessage.innerHTML = `<strong>你：</strong> ${message}`;
+    chatContainer.appendChild(userMessage);
+    
+    if (chatInput) {
+      chatInput.value = '';
+    }
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // 模擬 AI 回應
+    setTimeout(() => {
+      const assistantMessage = document.createElement('div');
+      assistantMessage.className = 'universal-chat-message assistant';
+      
+      let response = '感謝你的問題！我是一個簡單的聊天助手。';
+      
+      // 簡單的關鍵字回應
+      if (message.includes('你好') || message.includes('hello')) {
+        response = '你好！很高興為你服務！😊';
+      } else if (message.includes('幫助') || message.includes('help')) {
+        response = '我可以幫助你了解網頁功能、回答簡單問題。你可以點選「介紹此網頁」了解更多資訊！';
+      } else if (message.includes('功能') || message.includes('可以做什麼')) {
+        response = '我可以：1. 介紹當前網頁的功能 2. 與你聊天 3. 提供休息模式。試試看其他功能吧！';
+      } else if (message.includes('謝謝') || message.includes('thank')) {
+        response = '不客氣！隨時歡迎你的提問！😊';
+      }
+      
+      assistantMessage.innerHTML = `<strong>助手：</strong> ${response}`;
+      chatContainer.appendChild(assistantMessage);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }, 500);
+  }
+
+  // 休息模式
+  function universalRestMode() {
+    if (universalAssistantMenu) {
+      universalAssistantMenu.classList.remove('active');
+    }
+    
+    // 創建休息模式覆蓋層
+    const restOverlay = document.createElement('div');
+    restOverlay.id = 'restOverlay';
+    restOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: white;
+      font-size: 24px;
+      font-family: 'Microsoft JhengHei', sans-serif;
+    `;
+    
+    restOverlay.innerHTML = `
+      <div style="text-align: center;">
+        <i class="fas fa-moon" style="font-size: 60px; margin-bottom: 20px; display: block;"></i>
+        <h2 style="margin-bottom: 20px;">休息模式</h2>
+        <p style="font-size: 18px; margin-bottom: 30px; opacity: 0.9;">放鬆一下，隨時點擊任意位置返回</p>
+        <button onclick="document.getElementById('restOverlay').remove()" 
+                style="padding: 12px 30px; background: #667eea; color: white; border: none; 
+                       border-radius: 25px; cursor: pointer; font-size: 16px; font-weight: bold;">
+          返回
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(restOverlay);
+    
+    // 點擊任意位置關閉
+    restOverlay.addEventListener('click', function(e) {
+      if (e.target === restOverlay || e.target.closest('button')) {
+        restOverlay.remove();
+      }
+    });
+  }
+
+  // 點擊 Modal 外部關閉
+  if (introModal) {
+    introModal.addEventListener('click', function(e) {
+      if (e.target === introModal) {
+        introModal.classList.remove('active');
+      }
+    });
+  }
+  
+  if (chatModal) {
+    chatModal.addEventListener('click', function(e) {
+      if (e.target === chatModal) {
+        chatModal.classList.remove('active');
+      }
+    });
+  }
+
+  // 頁面載入時顯示歡迎消息 - 只有在 blink 狀態才顯示
+  document.addEventListener('DOMContentLoaded', function() {
+    // 等待 blink 狀態後再顯示歡迎消息
+    function checkAndShowWelcome() {
+      if (isShowingBlink && assistantImage && assistantImage.src.includes('AIblink.gif')) {
+        if (speechBubbleContent) {
+          showDialogue('你好！我是小助手，點擊我可以了解更多功能！👋');
+        }
+      } else {
+        // 如果還沒到 blink 狀態，再等待
+        setTimeout(checkAndShowWelcome, 200);
+      }
+    }
+    
+    // 延遲2秒後開始檢查（等待圖片切換完成）
+    setTimeout(checkAndShowWelcome, 2000);
+  });
 </script>

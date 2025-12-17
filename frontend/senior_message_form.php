@@ -1214,6 +1214,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $permission_result['has_permission'
     
     <?php include("share/footer.php"); ?>
     <?php include("share/chat_widget.php"); ?>
-    <?php include("share/ai_widget.php"); ?>
 </body>
 </html>

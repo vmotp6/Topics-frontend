@@ -1819,7 +1819,6 @@ async function viewContactLogs(studentId, studentName) {
   <?php endif; ?>
 </main>
 <?php include("share/footer.php"); ?>
-<?php include("share/ai_widget.php"); ?>
 
 </body>
 </html>

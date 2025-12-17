@@ -1016,7 +1016,6 @@ $(document).ready(function() {
 	</script>
 
 	<?php include("share/footer.php"); ?>
-	<?php include("share/ai_widget.php"); ?>
 </body>
 
 </html>

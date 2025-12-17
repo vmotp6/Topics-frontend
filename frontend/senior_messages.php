@@ -2279,6 +2279,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     <?php include("share/footer.php"); ?>
     <?php include("share/chat_widget.php"); ?>
-    <?php include("share/ai_widget.php"); ?>
 </body>
 </html>

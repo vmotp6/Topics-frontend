@@ -80,6 +80,5 @@ require_once 'session_config.php';
 	<?php include("share/chat_widget.php"); ?>
 
 	<?php include("share/footer.php"); ?>
-	<?php include("share/ai_widget.php"); ?>
 </body>
 </html>

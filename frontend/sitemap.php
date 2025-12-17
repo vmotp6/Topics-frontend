@@ -571,6 +571,5 @@ require_once 'session_config.php';
 
 <!-- 浮動助手組件 -->
 <?php include("share/chat_widget.php"); ?>
-<?php include("share/ai_widget.php"); ?>
 </body>
 </html>
