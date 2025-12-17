@@ -1254,8 +1254,36 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
         const nextMapId = <?= isset($nextMapId) ? json_encode($nextMapId) : 'null' ?>;
         const difficulty = <?= isset($_SESSION['game_difficulty']) ? json_encode($_SESSION['game_difficulty']) : 'null' ?>;
         
+        // 角色圖片對應表（根據方向）
+        // 圖片路徑對應關係：
+        // 1. pixilart-drawing.png - 預設
+        // 2. 右轉.gif - 向右轉
+        // 3. 右轉回來.gif - 從右邊轉回來
+        // 4. 左轉.gif - 向左轉
+        // 5. 左轉回來.gif - 從左邊轉回來
+        // 6. 走路.gif - 正常走路
+        // 7. 往右走.gif - 往右走
+        // 8. 往左走.gif - 往左走
+        // 9. 背面走路.gif - 往上走
+        // 10. 轉到背面 - 轉到背面
+        const characterImages = {
+            'default': 'assets/images/character/pixilart-drawing.png',  // 預設/站立
+            'right': 'assets/images/character/往右走.gif',              // 往右走
+            'left': 'assets/images/character/往左走.gif',               // 往左走
+            'up': 'assets/images/character/背面走路.gif',              // 往上走（背面）
+            'down': 'assets/images/character/走路.gif'                  // 往下走（正常走路）
+        };
+        
+        // 獲取角色圖片路徑（如果圖片不存在則使用預設）
+        function getCharacterImagePath(direction) {
+            const path = characterImages[direction] || characterImages['default'];
+            // 路徑相對於 frontend 目錄
+            return path;
+        }
+        
         // 遊戲狀態
         let characterPos = mapData ? { x: mapData.start.x, y: mapData.start.y } : { x: 0, y: 0 };
+        let currentDirection = 'default'; // 當前角色方向
         let isRunning = false;
         let stepCount = 0;
         let workspace = null;
@@ -1422,8 +1450,20 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
             }
         }
         
+        // 更新角色方向圖片
+        function updateCharacterDirection(direction) {
+            currentDirection = direction;
+            // 更新地圖顯示中的角色圖片
+            const characterImg = document.querySelector('.character-img');
+            if (characterImg) {
+                const imgPath = getCharacterImagePath(direction);
+                characterImg.src = imgPath;
+            }
+        }
+        
         // 移動函數
         async function moveUp(steps) {
+            updateCharacterDirection('up');
             for (let i = 0; i < steps; i++) {
                 characterPos.y--;
                 stepCount++;
@@ -1433,6 +1473,7 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
         }
         
         async function moveDown(steps) {
+            updateCharacterDirection('down');
             for (let i = 0; i < steps; i++) {
                 characterPos.y++;
                 stepCount++;
@@ -1442,6 +1483,7 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
         }
         
         async function moveLeft(steps) {
+            updateCharacterDirection('left');
             for (let i = 0; i < steps; i++) {
                 characterPos.x--;
                 stepCount++;
@@ -1451,6 +1493,7 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
         }
         
         async function moveRight(steps) {
+            updateCharacterDirection('right');
             for (let i = 0; i < steps; i++) {
                 characterPos.x++;
                 stepCount++;
@@ -1540,9 +1583,16 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
                     if (x === characterPos.x && y === characterPos.y) {
                         cell.classList.add('character');
                         const img = document.createElement('img');
-                        img.src = characterImage;
+                        // 使用當前方向的圖片，如果沒有則使用預設圖片
+                        const imgPath = getCharacterImagePath(currentDirection);
+                        img.src = imgPath;
                         img.className = 'character-img';
                         img.alt = '角色';
+                        img.onerror = function() {
+                            // 如果圖片載入失敗，使用原始圖片
+                            console.warn('角色圖片載入失敗，使用預設圖片:', imgPath);
+                            this.src = characterImage;
+                        };
                         cell.appendChild(img);
                     }
 
@@ -1602,6 +1652,7 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
             
             // 重置角色位置和步數
             characterPos = { x: mapData.start.x, y: mapData.start.y };
+            currentDirection = 'default'; // 重置方向為預設
             stepCount = 0;
             updateStepDisplay();
             initMap();
@@ -1660,6 +1711,7 @@ function generateDefaultMapForDifficulty($difficulty, $level) {
                 workspace.clear();
             }
             characterPos = mapData ? { x: mapData.start.x, y: mapData.start.y } : { x: 0, y: 0 };
+            currentDirection = 'default'; // 重置方向為預設
             stepCount = 0;
             updateStepDisplay();
             initMap();
