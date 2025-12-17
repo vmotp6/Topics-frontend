@@ -63,13 +63,20 @@ try {
     $teacher_id = $teacher['id'];
     
     // 獲取分配給此老師的就讀意願學生列表
-    // 注意：intention 和 system 欄位不存在於 enrollment_intention 表，需從 enrollment_choices 表獲取
+    // 修改說明：
+    // 1. 加入 LEFT JOIN school_data 取得學校中文名稱
+    // 2. 加入 LEFT JOIN identity_options 取得年級中文名稱
+    // 3. 使用 CASE WHEN 將性別代碼轉為中文
     $students_stmt = $conn->prepare("
         SELECT 
             ei.id,
             ei.name,
             ei.identity,
-            ei.gender,
+            CASE 
+                WHEN ei.gender = 1 THEN '男'
+                WHEN ei.gender = 2 THEN '女'
+                ELSE '未填寫'
+            END as gender,
             ei.phone1,
             ei.phone2,
             ei.email,
@@ -79,17 +86,19 @@ try {
             NULL as system1,
             NULL as system2,
             NULL as system3,
-            ei.junior_high,
-            ei.current_grade,
+            COALESCE(sd.name, ei.junior_high) as junior_high,
+            COALESCE(io.name, ei.current_grade) as current_grade,
             ei.line_id,
             ei.facebook,
             ei.remarks,
             ei.assigned_teacher_id,
             ei.created_at,
-            ei.updated_at as assigned_at,
+            NULL as assigned_at,
             NULL as assigned_by,
             'enrollment_intention' as source_type
         FROM enrollment_intention ei
+        LEFT JOIN school_data sd ON ei.junior_high = sd.school_code
+        LEFT JOIN identity_options io ON ei.current_grade = io.code
         WHERE ei.assigned_teacher_id = ?
         ORDER BY ei.created_at DESC
     ");
@@ -153,8 +162,6 @@ try {
                 $recommendations_stmt->bind_param("i", $teacher_id);
             }
         } else {
-            // 如果沒有 recommended 表，嘗試從 admission_recommendations 表直接獲取（如果欄位存在）
-            // 但根據 SQL 檔案，admission_recommendations 表沒有這些欄位，所以返回空陣列
             $recommendation_students = [];
         }
         

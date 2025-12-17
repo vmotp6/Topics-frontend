@@ -1040,7 +1040,7 @@ try {
             'remarks' => $remarks
         ];
         // ==========================================
-        // 新增功能：自動分配給第一志願科系主任
+        // 新增功能：自動分配給第一志願科系
         // ==========================================
         
         // 1. 取得第一志願的科系代碼
@@ -1051,35 +1051,23 @@ try {
 
         if ($first_dept_code) {
             try {
-                // 2. 查詢該科系的主任 (從 director 表)
-                // 注意：假設 director 表的 department 欄位存的是科系代碼 (如 'IM', 'NU')
-                $director_stmt = $pdo->prepare("SELECT user_id FROM director WHERE department = ? LIMIT 1");
-                $director_stmt->execute([$first_dept_code]);
-                $director = $director_stmt->fetch(PDO::FETCH_ASSOC);
+                // 修改說明：
+                // 1. 不需要查詢 director 表，因為這階段不需要寫入 assigned_teacher_id
+                // 2. 只更新 assigned_department，讓該科系的主任能在後台看到
+                // 3. 移除了 assigned_teacher_id, assigned_at, current_choice_order 的寫入
 
-                if ($director) {
-                    $director_id = $director['user_id'];
+                $update_assign_sql = "UPDATE enrollment_intention 
+                                      SET assigned_department = :dept_code
+                                      WHERE id = :id";
+                
+                $update_stmt = $pdo->prepare($update_assign_sql);
+                $update_stmt->execute([
+                    ':dept_code' => $first_dept_code,
+                    ':id' => $enrollment_id
+                ]);
 
-                    // 3. 更新 enrollment_intention 表，進行分配
-                    // 設定 assigned_department, assigned_teacher_id, assigned_at (現在時間), current_choice_order (1)
-                    $update_assign_sql = "UPDATE enrollment_intention 
-                                          SET assigned_department = :dept_code, 
-                                              assigned_teacher_id = :teacher_id, 
-                                              assigned_at = NOW(), 
-                                              current_choice_order = 1 
-                                          WHERE id = :id";
-                    
-                    $update_stmt = $pdo->prepare($update_assign_sql);
-                    $update_stmt->execute([
-                        ':dept_code' => $first_dept_code,
-                        ':teacher_id' => $director_id,
-                        ':id' => $enrollment_id
-                    ]);
+                error_log("自動分配成功: Enrollment ID $enrollment_id 已分配給科系 $first_dept_code");
 
-                    error_log("自動分配成功: Enrollment ID $enrollment_id 分配給科系 $first_dept_code (主任ID: $director_id)");
-                } else {
-                    error_log("自動分配警告: 找不到科系 $first_dept_code 的主任資料，無法分配");
-                }
             } catch (Exception $e) {
                 error_log("自動分配發生錯誤: " . $e->getMessage());
                 // 這裡捕獲錯誤但不中斷流程，避免影響報名結果回傳
