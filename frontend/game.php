@@ -44,6 +44,17 @@ $games = [
         'difficulty' => '中等',
         'players' => '單人',
         'duration' => '5-15 分鐘'
+    ],
+    [
+        'id' => 'im',
+        'title' => '方塊射擊遊戲',
+        'description' => '透過 Blockly 積木程式設計控制角色射擊敵人！訓練邏輯思維與程式能力，適合所有想學習程式設計的同學。',
+        'icon' => 'http://localhost/game/pixilart-drawing.png',
+        'link' => 'game_IM.php',
+        'color' => '#764ba2',
+        'difficulty' => '中等',
+        'players' => '單人',
+        'duration' => '10-30 分鐘'
     ]
 ];
 ?>
@@ -322,6 +333,11 @@ $games = [
             --card-color-hover: #00f2fe;
         }
 
+        .game-card[data-game="im"] {
+            --card-color: #764ba2;
+            --card-color-hover: #667eea;
+        }
+
         /* 特色標籤 */
         .game-badge {
             position: absolute;
@@ -501,6 +517,10 @@ $games = [
 
         .game-card:nth-child(3) {
             animation-delay: 0.6s;
+        }
+
+        .game-card:nth-child(4) {
+            animation-delay: 0.8s;
         }
 
         .game-card.visible {
