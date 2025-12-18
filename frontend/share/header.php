@@ -914,6 +914,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('game.php'); ?>" class="<?php echo getActiveClass('game.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">遊戲中心</a>
     <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
+    <a href="<?php echo getCorrectPath('bulletin_board.php'); ?>" class="<?php echo getActiveClass('bulletin_board.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">招生公告欄</a>
     <?php if (($isLoggedIn && $is_header_teacher)): ?>
       <a href="<?php echo getCorrectPath('radio.php'); ?>" class="<?php echo getActiveClass('radio.php'); ?>">招生影片列表</a>
     <?php endif; ?>
@@ -1074,6 +1075,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
     <?php endif; ?>
     <a href="<?php echo getCorrectPath('campus_map.php'); ?>" class="<?php echo getActiveClass('campus_map.php'); ?>">校園地圖</a>
+    <a href="<?php echo getCorrectPath('bulletin_board.php'); ?>" class="<?php echo getActiveClass('bulletin_board.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">招生公告欄</a>
     
     <?php if (!$isLoggedIn): ?>
       <!-- 僅訪客可見的連結 -->
