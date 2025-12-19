@@ -7,17 +7,11 @@ function getGameQuestions($limit = 10) {
         $conn = getDatabaseConnection();
         
         $sql = "
-            SELECT
-                question,
-                option_a,
-                option_b,
-                option_c,
-                option_d,
-                correct_option
-            FROM game_questions
-            WHERE is_active = 1
-            ORDER BY RAND()
-            LIMIT ?
+        SELECT question, option_a, option_b, option_c, option_d, correct_option
+        FROM game_questions
+        WHERE is_active = 1 AND category = 'fight'
+        ORDER BY RAND()
+        LIMIT ?
         ";
 
         $stmt = $conn->prepare($sql);

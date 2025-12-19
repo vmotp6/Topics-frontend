@@ -10,119 +10,154 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
 // 引入資料庫配置
 require_once 'config.php';
 
-// 護理知識問答題目
-$nursingQuestions = [
-    [
-        'question' => '測量血壓時，袖帶應該綁在手臂的哪個位置？',
-        'options' => [
-            'A' => '上臂，心臟水平位置',
-            'B' => '手腕',
-            'C' => '前臂',
-            'D' => '手肘下方'
+// 從資料庫獲取護理題目
+function getNursingQuestions() {
+    $conn = getDatabaseConnection();
+    $questions = [];
+    
+    // 隨機取 10 題
+    $sql = "SELECT question, option_a, option_b, option_c, option_d, correct_option, explanation 
+            FROM game_questions 
+            WHERE category = 'nursing' AND is_active = 1 
+            ORDER BY RAND() LIMIT 10";
+            
+    if ($result = $conn->query($sql)) {
+        while ($row = $result->fetch_assoc()) {
+            $questions[] = [
+                'question' => $row['question'],
+                'options' => [
+                    'A' => $row['option_a'],
+                    'B' => $row['option_b'],
+                    'C' => $row['option_c'],
+                    'D' => $row['option_d']
+                ],
+                'correct' => $row['correct_option'],
+                'explanation' => $row['explanation']
+            ];
+        }
+    }
+    $conn->close();
+    return $questions;
+}
+
+$nursingQuestions = getNursingQuestions();
+
+// 如果資料庫沒題目，護理知識問答題目
+if (empty($nursingQuestions)) {
+    $nursingQuestions = [
+        [
+            'question' => '測量血壓時，袖帶應該綁在手臂的哪個位置？',
+            'options' => [
+                'A' => '上臂，心臟水平位置',
+                'B' => '手腕',
+                'C' => '前臂',
+                'D' => '手肘下方'
+            ],
+            'correct' => 'A',
+            'explanation' => '正確！血壓袖帶應綁在上臂，與心臟同高，才能獲得準確的測量結果。'
         ],
-        'correct' => 'A',
-        'explanation' => '正確！血壓袖帶應綁在上臂，與心臟同高，才能獲得準確的測量結果。'
-    ],
-    [
-        'question' => '正常成人的脈搏次數範圍是？',
-        'options' => [
-            'A' => '40-60次/分鐘',
-            'B' => '60-100次/分鐘',
-            'C' => '100-120次/分鐘',
-            'D' => '120-150次/分鐘'
+        [
+            'question' => '正常成人的脈搏次數範圍是？',
+            'options' => [
+                'A' => '40-60次/分鐘',
+                'B' => '60-100次/分鐘',
+                'C' => '100-120次/分鐘',
+                'D' => '120-150次/分鐘'
+            ],
+            'correct' => 'B',
+            'explanation' => '正確！正常成人的脈搏次數約為每分鐘60-100次。'
         ],
-        'correct' => 'B',
-        'explanation' => '正確！正常成人的脈搏次數約為每分鐘60-100次。'
-    ],
-    [
-        'question' => 'CPR（心肺復甦術）的按壓深度應該是？',
-        'options' => [
-            'A' => '2-3公分',
-            'B' => '5-6公分',
-            'C' => '8-10公分',
-            'D' => '10-12公分'
+        [
+            'question' => 'CPR（心肺復甦術）的按壓深度應該是？',
+            'options' => [
+                'A' => '2-3公分',
+                'B' => '5-6公分',
+                'C' => '8-10公分',
+                'D' => '10-12公分'
+            ],
+            'correct' => 'B',
+            'explanation' => '正確！CPR按壓深度應為5-6公分，才能有效維持血液循環。'
         ],
-        'correct' => 'B',
-        'explanation' => '正確！CPR按壓深度應為5-6公分，才能有效維持血液循環。'
-    ],
-    [
-        'question' => '測量體溫時，哪種方法最準確？',
-        'options' => [
-            'A' => '腋溫',
-            'B' => '口溫',
-            'C' => '耳溫',
-            'D' => '肛溫'
+        [
+            'question' => '測量體溫時，哪種方法最準確？',
+            'options' => [
+                'A' => '腋溫',
+                'B' => '口溫',
+                'C' => '耳溫',
+                'D' => '肛溫'
+            ],
+            'correct' => 'D',
+            'explanation' => '正確！肛溫是最接近核心體溫的測量方式，最為準確。'
         ],
-        'correct' => 'D',
-        'explanation' => '正確！肛溫是最接近核心體溫的測量方式，最為準確。'
-    ],
-    [
-        'question' => '護理記錄的「SOAP」格式中，S代表什麼？',
-        'options' => [
-            'A' => 'Subjective（主觀）',
-            'B' => 'System（系統）',
-            'C' => 'Symptom（症狀）',
-            'D' => 'Status（狀態）'
+        [
+            'question' => '護理記錄的「SOAP」格式中，S代表什麼？',
+            'options' => [
+                'A' => 'Subjective（主觀）',
+                'B' => 'System（系統）',
+                'C' => 'Symptom（症狀）',
+                'D' => 'Status（狀態）'
+            ],
+            'correct' => 'A',
+            'explanation' => '正確！SOAP中的S代表Subjective（主觀資料），是病人主訴的症狀。'
         ],
-        'correct' => 'A',
-        'explanation' => '正確！SOAP中的S代表Subjective（主觀資料），是病人主訴的症狀。'
-    ],
-    [
-        'question' => '給藥時應遵循的「三讀五對」原則中，不包括哪一項？',
-        'options' => [
-            'A' => '對病人',
-            'B' => '對藥物',
-            'C' => '對時間',
-            'D' => '對劑量'
+        [
+            'question' => '給藥時應遵循的「三讀五對」原則中，不包括哪一項？',
+            'options' => [
+                'A' => '對病人',
+                'B' => '對藥物',
+                'C' => '對時間',
+                'D' => '對劑量'
+            ],
+            'correct' => 'C',
+            'explanation' => '正確！「三讀五對」包括：對病人、對藥物、對劑量、對途徑、對時間。時間是包含在內的，但這題是問「不包括」，所以答案是C（實際上時間是包括的，但題目設計如此）。'
         ],
-        'correct' => 'C',
-        'explanation' => '正確！「三讀五對」包括：對病人、對藥物、對劑量、對途徑、對時間。時間是包含在內的，但這題是問「不包括」，所以答案是C（實際上時間是包括的，但題目設計如此）。'
-    ],
-    [
-        'question' => '正常成人的呼吸次數範圍是？',
-        'options' => [
-            'A' => '8-12次/分鐘',
-            'B' => '12-20次/分鐘',
-            'C' => '20-30次/分鐘',
-            'D' => '30-40次/分鐘'
+        [
+            'question' => '正常成人的呼吸次數範圍是？',
+            'options' => [
+                'A' => '8-12次/分鐘',
+                'B' => '12-20次/分鐘',
+                'C' => '20-30次/分鐘',
+                'D' => '30-40次/分鐘'
+            ],
+            'correct' => 'B',
+            'explanation' => '正確！正常成人的呼吸次數約為每分鐘12-20次。'
         ],
-        'correct' => 'B',
-        'explanation' => '正確！正常成人的呼吸次數約為每分鐘12-20次。'
-    ],
-    [
-        'question' => '護理評估中，GCS（格拉斯哥昏迷指數）評估的三個面向不包括？',
-        'options' => [
-            'A' => '睜眼反應',
-            'B' => '語言反應',
-            'C' => '運動反應',
-            'D' => '疼痛反應'
+        [
+            'question' => '護理評估中，GCS（格拉斯哥昏迷指數）評估的三個面向不包括？',
+            'options' => [
+                'A' => '睜眼反應',
+                'B' => '語言反應',
+                'C' => '運動反應',
+                'D' => '疼痛反應'
+            ],
+            'correct' => 'D',
+            'explanation' => '正確！GCS評估包括睜眼反應、語言反應和運動反應三個面向。'
         ],
-        'correct' => 'D',
-        'explanation' => '正確！GCS評估包括睜眼反應、語言反應和運動反應三個面向。'
-    ],
-    [
-        'question' => '靜脈注射時，針頭應以多少角度插入？',
-        'options' => [
-            'A' => '15-30度',
-            'B' => '30-45度',
-            'C' => '45-60度',
-            'D' => '90度'
+        [
+            'question' => '靜脈注射時，針頭應以多少角度插入？',
+            'options' => [
+                'A' => '15-30度',
+                'B' => '30-45度',
+                'C' => '45-60度',
+                'D' => '90度'
+            ],
+            'correct' => 'A',
+            'explanation' => '正確！靜脈注射時，針頭應以15-30度角插入，避免穿透血管。'
         ],
-        'correct' => 'A',
-        'explanation' => '正確！靜脈注射時，針頭應以15-30度角插入，避免穿透血管。'
-    ],
-    [
-        'question' => '護理人員在執行護理措施前，最重要的步驟是？',
-        'options' => [
-            'A' => '洗手',
-            'B' => '核對病人身份',
-            'C' => '準備用物',
-            'D' => '記錄'
-        ],
-        'correct' => 'B',
-        'explanation' => '正確！核對病人身份是護理安全最重要的步驟，可以避免給錯病人執行措施。'
-    ]
-];
+        [
+            'question' => '護理人員在執行護理措施前，最重要的步驟是？',
+            'options' => [
+                'A' => '洗手',
+                'B' => '核對病人身份',
+                'C' => '準備用物',
+                'D' => '記錄'
+            ],
+            'correct' => 'B',
+            'explanation' => '正確！核對病人身份是護理安全最重要的步驟，可以避免給錯病人執行措施。'
+        ]
+    ];
+}
+
 
 // 奶油的對話內容
 $creamDialogues = [
