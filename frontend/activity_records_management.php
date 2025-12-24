@@ -8,8 +8,8 @@ require_once 'config.php';
 // 檢查登入狀態
 $debug_mode = true; // 設為 false 可關閉調試模式
 
-// 支援角色代碼和中文名稱
-$allowed_roles = ['老師', 'TEA', '學校行政人員', 'STA', 'DI', '管理員', 'ADM'];
+// 支援角色代碼和中文名稱（AA權限與TEA一致）
+$allowed_roles = ['老師', 'TEA', 'STA', '學校行政人員', 'STA', 'DI', '管理員', 'ADM'];
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 
 // 檢查登入狀態和角色

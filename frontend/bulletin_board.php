@@ -600,7 +600,7 @@ function formatDateRange($start_date, $end_date) {
       $can_publish = false;
       if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['role'])) {
         $role = $_SESSION['role'];
-        $can_publish = ($role === '老師' || $role === 'TEA' || $role === 'DI' || $role === 'STA' || $role === '學校行政人員');
+        $can_publish = ($role === '老師' || $role === 'TEA' || $role === 'DI' || $role === 'STA' || $role === '學校行政人員' || $role === 'STA');
       }
       if ($can_publish):
       ?>

@@ -17,7 +17,7 @@ if (!$isLoggedIn) {
 
 // 檢查角色：只有 TEA、DI、STA 可以發布公告
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA');
 $is_director = ($user_role === 'DI');
 $is_staff = ($user_role === 'STA' || $user_role === '學校行政人員');
 $allowed = $is_teacher || $is_director || $is_staff;

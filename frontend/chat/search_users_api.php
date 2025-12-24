@@ -50,7 +50,7 @@ try {
                 u.role,
                 CASE 
                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'STA' THEN '老師'
                     WHEN u.role = 'STA' OR u.role = '學校行政人員' OR u.role = '行政人員' THEN '行政人員'
                     ELSE '其他'
                 END as contact_type,

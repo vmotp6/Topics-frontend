@@ -61,7 +61,7 @@ try {
 
         // 取得老師 user.id
         $username = $_SESSION['username'];
-        $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA')");
+        $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'STA')");
         $tstmt->bind_param('s', $username);
         $tstmt->execute();
         $tres = $tstmt->get_result();
@@ -140,7 +140,7 @@ try {
                      isset($_SESSION['username']) && !empty($_SESSION['username']) &&
                      isset($_SESSION['role']) && !empty($_SESSION['role']);
         $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'AA');
         $isDirector = ($user_role === 'DI');
         $isAdmissionCenter = in_array($user_role, ['ADM', 'STA']);
         
@@ -162,7 +162,7 @@ try {
         // 如果是老師（非管理端），則檢查是否為分配給自己的學生
         if (!$isAdmin) {
             $username = $_SESSION['username'];
-            $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA')");
+            $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'AA')");
             $tstmt->bind_param('s', $username);
             $tstmt->execute();
             $tres = $tstmt->get_result();

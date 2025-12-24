@@ -9,7 +9,7 @@ require_once 'config/email_notification_config.php';
 
 // 判斷角色
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STU');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STU' || $user_role === 'STA');
 $is_director = ($user_role === 'DI');
 $allowed = $is_teacher || $is_director;
 $debug_mode = false;

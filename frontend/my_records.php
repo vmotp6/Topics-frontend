@@ -5,8 +5,10 @@ require_once 'session_config.php';
 // 引入配置檔案
 require_once 'config.php';
 
-// 檢查登入狀態
-if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !== '老師') {
+// 檢查登入狀態（AA權限與TEA一致）
+$user_role = $_SESSION['role'] ?? '';
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA');
+if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || !$is_teacher) {
     header("Location: login.php");
     exit();
 }

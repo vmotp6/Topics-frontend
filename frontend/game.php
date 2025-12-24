@@ -55,6 +55,17 @@ $games = [
         'difficulty' => '中等',
         'players' => '單人',
         'duration' => '10-30 分鐘'
+    ],
+    [
+        'id' => 'undertale',
+        'title' => 'Undertale 風格戰鬥',
+        'description' => '經典回合制戰鬥遊戲！選擇戰鬥、行動、物品或寬恕，控制紅色靈魂躲避攻擊。展現你的選擇與策略！',
+        'icon' => 'http://localhost/game/走路.gif',
+        'link' => 'game_undertale.php',
+        'color' => '#ff0000',
+        'difficulty' => '中等',
+        'players' => '單人',
+        'duration' => '5-15 分鐘'
     ]
 ];
 ?>
@@ -338,6 +349,11 @@ $games = [
             --card-color-hover: #667eea;
         }
 
+        .game-card[data-game="undertale"] {
+            --card-color: #ff0000;
+            --card-color-hover: #cc0000;
+        }
+
         /* 特色標籤 */
         .game-badge {
             position: absolute;
@@ -521,6 +537,10 @@ $games = [
 
         .game-card:nth-child(4) {
             animation-delay: 0.8s;
+        }
+
+        .game-card:nth-child(5) {
+            animation-delay: 1.0s;
         }
 
         .game-card.visible {
