@@ -18,8 +18,8 @@ $debug_info = [
     'is_logged_in' => $isLoggedIn
 ];
 
-// 檢查角色：接受 '老師'、'TEA'、'STA' 或 '學校行政人員'
-$isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA' || $_SESSION['role'] === 'STA' || $_SESSION['role'] === '學校行政人員');
+// 檢查角色：接受 '老師'、'TEA'、'STA'、'學校行政人員' 或 'AA'（AA權限與TEA一致）
+$isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA' || $_SESSION['role'] === 'STA' || $_SESSION['role'] === '學校行政人員' || $_SESSION['role'] === 'STA');
 
 if (!$isLoggedIn || !$isTeacher) {
     http_response_code(403);
@@ -48,7 +48,7 @@ try {
         SELECT u.id, u.username, u.name, t.department 
         FROM user u 
         LEFT JOIN teacher t ON u.id = t.user_id 
-        WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA')
+        WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'AA')
     ");
     $teacher_stmt->bind_param("s", $username);
     $teacher_stmt->execute();

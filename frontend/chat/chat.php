@@ -41,7 +41,7 @@ try {
     
     // 檢查角色（支援代碼和中文名稱）
     $isStudent = ($role === 'STU' || $role === '學生' || $role === 'student');
-    $isTeacher = ($role === 'TEA' || $role === '老師' || $role === 'teacher');
+    $isTeacher = ($role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA');
     $isStaff = ($role === 'STA' || $role === '學校行政人員' || $role === '行政人員');
     $isDirector = ($role === 'DI');
     // 調試：記錄角色信息
@@ -60,8 +60,8 @@ try {
             if ($isTeacher) {
                 error_log("TEA 角色登入，開始自動同步其他 TEA 用戶到 user_contacts 表");
                 
-                // 查詢所有其他 TEA 用戶
-                $stmt = $pdo->prepare("SELECT id FROM user WHERE (role = 'TEA' OR role = '老師' OR role='DI')");
+                // 查詢所有其他 TEA 用戶（包含 AA）
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE (role = 'TEA' OR role = '老師' OR role='DI' OR role='AA')");
                 $stmt->execute([$currentUserId]);
                 $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 
@@ -105,8 +105,8 @@ try {
             if ($isDirector) {
               error_log("DI 角色登入，開始自動同步其他 TEA 用戶到 user_contacts 表");
               
-              // 查詢所有其他 TEA 用戶
-              $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師'");
+              // 查詢所有其他 TEA 用戶（包含 AA）
+              $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師' OR role = 'AA'");
               $stmt->execute();  // 不要傳任何參數
               $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);             
               error_log("查詢到的其他 TEA 用戶 ID 列表: " . json_encode($teaUsers));
@@ -153,8 +153,8 @@ try {
             if ($isStaff) {
                 error_log("STA 角色登入，開始自動同步所有 TEA 用戶到 user_contacts 表");
                 
-                // 查詢所有 TEA 用戶
-                $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師'");
+                // 查詢所有 TEA 用戶（包含 AA）
+                $stmt = $pdo->prepare("SELECT id FROM user WHERE role = 'TEA' OR role = '老師' OR role = 'AA'");
                 $stmt->execute();
                 $teaUsers = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 
@@ -243,7 +243,7 @@ try {
                                 u.profile_picture,
                                 CASE 
                                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 t.phone,
@@ -265,7 +265,7 @@ try {
                                 u.profile_picture,
                                 CASE 
                                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 t.phone,
@@ -376,7 +376,7 @@ try {
                             u.profile_picture,
                             CASE 
                                 WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                 ELSE '其他'
                             END as contact_type,
                             COALESCE(s.grade, '未設定') as grade,
@@ -388,7 +388,7 @@ try {
                                      LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
                                      WHERE uc.user_id = ?
                      ORDER BY 
-                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN 0 ELSE 1 END,
                                          COALESCE(u.name, u.username, '未知用戶')");
             $stmt->execute([$currentUserId]);
             $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -479,7 +479,7 @@ try {
                                 u.profile_picture,
                             CASE 
                                 WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                 ELSE '其他'
                             END as contact_type,
                             COALESCE(s.grade, '未設定') as grade,
@@ -491,7 +491,7 @@ try {
                      LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
                      WHERE uc.user_id = ?
                      ORDER BY 
-                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN 0 ELSE 1 END,
                          COALESCE(u.name, u.username, '未知用戶')");
                 $stmt->execute([$currentUserId]);
                 $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -619,7 +619,7 @@ try {
                             u.profile_picture,
                             CASE 
                                 WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                 ELSE '其他'
                             END as contact_type,
                             COALESCE(s.grade, '未設定') as grade,
@@ -631,7 +631,7 @@ try {
                      LEFT JOIN departments d ON (s.department = d.code OR t.department = d.code)
                      WHERE uc.user_id = ?  -- 當前用戶的 ID
                      ORDER BY 
-                         CASE WHEN u.role = 'TEA' OR u.role = '老師' THEN 0 ELSE 1 END,
+                         CASE WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN 0 ELSE 1 END,
                          COALESCE(u.name, u.username, '未知用戶'), 
                          COALESCE(u.username, 'unknown_' . uc.contact_user_id)");
                 $stmt->execute([$currentUserId]);
@@ -914,7 +914,7 @@ try {
                                 u.profile_picture,
                                 CASE 
                                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 COALESCE(s.grade, '未設定') as grade,
@@ -939,7 +939,7 @@ try {
                                 u.profile_picture,
                                 CASE 
                                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 COALESCE(s.grade, '未設定') as grade,
@@ -972,7 +972,7 @@ try {
                                 u.profile_picture,
                                 CASE 
                                     WHEN u.role = 'STU' OR u.role = '學生' THEN '學生'
-                                    WHEN u.role = 'TEA' OR u.role = '老師' THEN '老師'
+                                    WHEN u.role = 'TEA' OR u.role = '老師' OR u.role = 'AA' THEN '老師'
                                     ELSE '其他'
                                 END as contact_type,
                                 COALESCE(s.grade, '未設定') as grade,
@@ -1646,7 +1646,7 @@ try {
       </div>
     <?php endif; ?> <!-- 閉合 $showContactList 的 if -->
     
-  <?php elseif ($role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'): ?>
+  <?php elseif ($role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員' || $role === 'AA'): ?>
     <!-- 老師和行政人員聊天介面 -->
     <div class="chat-container">
       <!-- 左側聯絡人列表 -->
@@ -2065,7 +2065,7 @@ try {
         console.log('清除所有聊天記錄快取');
     }
     
-    <?php if ($role === 'STU' || $role === '學生' || $role === 'student' || $role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'|| $role === 'DI'): ?>
+    <?php if ($role === 'STU' || $role === '學生' || $role === 'student' || $role === 'TEA' || $role === '老師' || $role === 'teacher' || $role === 'STA' || $role === '學校行政人員' || $role === '行政人員'|| $role === 'DI' || $role === 'AA'): ?>
     // 載入群組列表
     async function loadGroups() {
       try {
@@ -5772,7 +5772,7 @@ try {
       }
       
       // 如果角色是老師或行政人員，載入群組列表（STU 角色不載入群組）
-      if ((role === 'TEA' || role === '老師' || role === 'teacher' || role === 'STA' || role === '學校行政人員' || role === '行政人員') && document.getElementById('groupsContainer')) {
+      if ((role === 'TEA' || role === '老師' || role === 'teacher' || role === 'STA' || role === '學校行政人員' || role === '行政人員' || role === 'AA') && document.getElementById('groupsContainer')) {
         loadGroups();
       }
     }, 100);

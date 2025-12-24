@@ -18,7 +18,7 @@ use PHPMailer\PHPMailer\Exception;
 // 檢查登入狀態和角色（支援角色代碼和中文名稱，包含STA行政人員）
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] && isset($_SESSION['username']);
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'STA');
 $is_director = ($user_role === 'DI');
 
 // ★ 正確的登入檢查：要是老師 OR 要是主任才能進入

@@ -11,7 +11,7 @@ $debug_mode = true; // 設為 false 關閉調試模式
 
 // 判斷角色
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA');
 $is_director = ($user_role === 'DI');
 $allowed = $is_teacher || $is_director;
 
@@ -37,7 +37,7 @@ if ($debug_mode) {
             echo "<li>❌ 缺少 role (role)</li>";
         } else {
             echo "<li>✅ role 存在: " . $_SESSION['role'];
-            if (!$allowed) echo " (但不是 '老師' / 'TEA' 或 'DI')";
+            if (!$allowed) echo " (但不是 '老師' / 'TEA' / 'AA' 或 'DI')";
             echo "</li>";
         }
 

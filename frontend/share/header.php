@@ -900,7 +900,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $header_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-    $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA' || $header_role === 'STA' || $header_role === '學校行政人員' || $header_role === 'DI');
+    $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA' || $header_role === 'STA' || $header_role === '學校行政人員' || $header_role === 'DI' || $header_role === 'STA');
     $is_header_student = ($header_role === '學生' || $header_role === 'STU');
     ?>
     <!-- 共同可見的連結 -->
@@ -1033,13 +1033,23 @@ function getActiveClass($targetFile) {
             <?php 
             $user_role = $_SESSION['role'];
             // 支援角色代碼和中文名稱
-            if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI'): ?>
+            if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI' || $user_role === 'STA'): ?>
                 <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php elseif ($user_role === '學生' || $user_role === 'STU'): ?>
                 <a href="<?php echo getCorrectPath('student_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php else: ?>
                 <a href="#" class="btn-logout">個人資料</a>
             <?php endif; ?>
+
+                        <?php 
+                        // 非學生身分顯示「前往後台」
+                        $is_student_role = ($user_role === '學生' || $user_role === 'STU');
+                        if (!$is_student_role) {
+                          // 與前台相同網域下的 Topics-backend 入口
+                          $backend_url = $base_url . '/Topics-backend/frontend/index.php';
+                        ?>
+                          <a href="<?php echo htmlspecialchars($backend_url); ?>" class="btn-logout">前往後台</a>
+                        <?php } ?>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>
          <?php endif; ?>
@@ -1069,7 +1079,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $mobile_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-    $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA' || $mobile_role === 'STA' || $mobile_role === '學校行政人員');
+    $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA' || $mobile_role === 'STA' || $mobile_role === '學校行政人員' || $mobile_role === 'AA');
     $is_mobile_student = ($mobile_role === '學生' || $mobile_role === 'STU');
     if (!($isLoggedIn && $is_mobile_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
@@ -1818,7 +1828,7 @@ function checkTeacherProfile() {
   // 等後端服務器修復後再啟用
   return;
   
-  if (username && (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI') && notificationDot) {
+  if (username && (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === 'STA') && notificationDot) {
     // 使用 AbortController 來設置超時
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超時
@@ -2530,6 +2540,12 @@ function checkTeacherProfile() {
   }
 </style>
 
+<?php 
+  // 檢查當前頁面，如果是 game_undertale.php 則不顯示小助手
+  $currentPageForAssistant = basename($_SERVER['PHP_SELF']);
+  $hideAssistant = ($currentPageForAssistant === 'game_undertale.php');
+?>
+<?php if (!$hideAssistant): ?>
 <div class="universal-assistant">
   <!-- 對話氣泡 -->
   <div class="assistant-speech-bubble" id="assistantSpeechBubble">
@@ -2560,7 +2576,9 @@ function checkTeacherProfile() {
     </button>
   </div>
 </div>
+<?php endif; ?>
 
+<?php if (!$hideAssistant): ?>
 <!-- 介紹網頁 Modal -->
 <div class="universal-assistant-modal" id="introModal">
   <div class="universal-modal-content">
@@ -2596,7 +2614,9 @@ function checkTeacherProfile() {
     <button class="assistant-chat-send" onclick="sendChatMessage()">發送</button>
   </div>
 </div>
+<?php endif; ?>
 
+<?php if (!$hideAssistant): ?>
 <script>
   // 通用助手功能
   const universalAssistantBtn = document.getElementById('universalAssistantBtn');
@@ -3172,3 +3192,4 @@ function checkTeacherProfile() {
     setTimeout(checkAndShowWelcome, 2000);
   });
 </script>
+<?php endif; ?>

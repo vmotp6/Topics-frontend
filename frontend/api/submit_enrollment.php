@@ -788,30 +788,30 @@ try {
     if (!empty($recommended_teacher)) {
         // 先檢查是否已經是數字 ID
         if (is_numeric($recommended_teacher)) {
-            // 驗證 ID 是否存在於 user 表中，且角色為老師（TEA）
+            // 驗證 ID 是否存在於 user 表中，且角色為老師（TEA 或 AA）
             $verify_teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
                                                   JOIN teacher t ON u.id = t.user_id 
-                                                  WHERE u.id = ? AND u.role = 'TEA' LIMIT 1");
+                                                  WHERE u.id = ? AND (u.role = 'TEA' OR u.role = 'STA') LIMIT 1");
             $verify_teacher_stmt->execute([$recommended_teacher]);
             $verify_teacher_result = $verify_teacher_stmt->fetch(PDO::FETCH_ASSOC);
             if ($verify_teacher_result) {
                 $recommended_teacher_id = (int)$verify_teacher_result['id'];
                 error_log("推薦老師驗證成功: ID=" . $recommended_teacher_id);
             } else {
-                error_log("推薦老師驗證失敗: ID=" . $recommended_teacher . " 不存在或角色不是 TEA");
+                error_log("推薦老師驗證失敗: ID=" . $recommended_teacher . " 不存在或角色不是 TEA/AA");
             }
         } else {
             // 從 user 表查詢，通過 name 找到對應的 id（因為 teacher 表沒有 name 欄位）
             $teacher_stmt = $pdo->prepare("SELECT u.id FROM user u 
                                           JOIN teacher t ON u.id = t.user_id 
-                                          WHERE u.name = ? AND u.role = 'TEA' LIMIT 1");
+                                          WHERE u.name = ? AND (u.role = 'TEA' OR u.role = 'AA') LIMIT 1");
             $teacher_stmt->execute([$recommended_teacher]);
             $teacher_result = $teacher_stmt->fetch(PDO::FETCH_ASSOC);
             if ($teacher_result) {
                 $recommended_teacher_id = (int)$teacher_result['id'];
                 error_log("推薦老師驗證成功: 名稱=" . $recommended_teacher . ", ID=" . $recommended_teacher_id);
             } else {
-                error_log("推薦老師驗證失敗: 名稱=" . $recommended_teacher . " 不存在或角色不是 TEA");
+                error_log("推薦老師驗證失敗: 名稱=" . $recommended_teacher . " 不存在或角色不是 TEA/AA");
             }
         }
     }

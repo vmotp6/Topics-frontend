@@ -600,12 +600,16 @@ function formatDateRange($start_date, $end_date) {
       $can_publish = false;
       if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['role'])) {
         $role = $_SESSION['role'];
+<<<<<<< HEAD
         // 主任：DI
         // 科助：AS 或 科助
         // 行政人員：STA 或 學校行政人員
         $can_publish = ($role === 'DI' || 
                        $role === 'AS' || $role === '科助' || 
                        $role === 'STA' || $role === '學校行政人員');
+=======
+        $can_publish = ($role === '老師' || $role === 'TEA' || $role === 'DI' || $role === 'STA' || $role === '學校行政人員' || $role === 'STA');
+>>>>>>> 966a2e458fd14f51d5ff730ae7795eddf669dd1d
       }
       if ($can_publish):
       ?>
