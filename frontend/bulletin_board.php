@@ -596,11 +596,16 @@ function formatDateRange($start_date, $end_date) {
         </div>
       </div>
       <?php
-      // 檢查是否有發布公告的權限
+      // 檢查是否有發布公告的權限（只有主任、科助、行政人員可以發布）
       $can_publish = false;
       if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['role'])) {
         $role = $_SESSION['role'];
-        $can_publish = ($role === '老師' || $role === 'TEA' || $role === 'DI' || $role === 'STA' || $role === '學校行政人員');
+        // 主任：DI
+        // 科助：AS 或 科助
+        // 行政人員：STA 或 學校行政人員
+        $can_publish = ($role === 'DI' || 
+                       $role === 'AS' || $role === '科助' || 
+                       $role === 'STA' || $role === '學校行政人員');
       }
       if ($can_publish):
       ?>
