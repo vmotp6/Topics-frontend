@@ -1042,11 +1042,13 @@ function getActiveClass($targetFile) {
             <?php endif; ?>
 
                         <?php 
-                        // 非學生身分顯示「前往後台」
-                        $is_student_role = ($user_role === '學生' || $user_role === 'STU');
-                        if (!$is_student_role) {
-                          // 與前台相同網域下的 Topics-backend 入口
-                          $backend_url = $base_url . '/Topics-backend/frontend/index.php';
+                        // 檢查是否為允許進入後台的角色（管理員、行政人員、主任）
+                        $allowed_backend_roles = ['ADM', 'STA', 'DI', '管理員', '行政人員', '主任'];
+                        $can_access_backend = in_array($user_role, $allowed_backend_roles);
+                        if ($can_access_backend) {
+                          // 與前台相同網域下的 Topics-backend 入口，攜帶目前 session id 供後台可選擇採用
+                          $sid = session_id();
+                          $backend_url = $base_url . '/Topics-backend/frontend/index.php' . (empty($sid) ? '' : ('?sid=' . urlencode($sid)));
                         ?>
                           <a href="<?php echo htmlspecialchars($backend_url); ?>" class="btn-logout">前往後台</a>
                         <?php } ?>
