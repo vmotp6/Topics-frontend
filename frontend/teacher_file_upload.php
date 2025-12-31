@@ -207,7 +207,12 @@ if (!$isLoggedIn || !$is_teacher) {
       font-weight: 500;
       transition: all 0.3s;
       text-decoration: none;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 92px;
+      height: 36px;
     }
     
     .btn-download {
@@ -434,7 +439,7 @@ if (!$isLoggedIn || !$is_teacher) {
     <div class="page-controls">
       <div style="display: flex; align-items: center; gap: 12px;">
         <span style="color: var(--text-secondary-color); font-size: 14px;">我的檔案</span>
-        <button class="upload-btn" onclick="loadFiles()" style="padding: 6px 12px; font-size: 12px;">
+        <button class="upload-btn" onclick="loadFiles(true)" style="padding: 6px 12px; font-size: 12px;">
           <i class="fas fa-sync-alt"></i> 重新整理
         </button>
       </div>
@@ -598,7 +603,14 @@ if (!$isLoggedIn || !$is_teacher) {
   }
   
   // 載入檔案列表
-  async function loadFiles() {
+  async function loadFiles(resetSearch = false) {
+    // 如為重新整理動作，清空搜尋關鍵字
+    if (resetSearch) {
+      currentSearch = '';
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) searchInput.value = '';
+    }
+
     const container = document.getElementById('filesContainer');
     container.innerHTML = '<div class="loading">載入中...</div>';
     
@@ -722,7 +734,7 @@ if (!$isLoggedIn || !$is_teacher) {
           <div class="empty-icon">
             <i class="fas fa-folder-open"></i>
           </div>
-          <p>目前沒有上傳的檔案</p>
+          <p>${filesData.length > 0 ? '沒有符合搜尋的檔案' : '目前沒有上傳的檔案'}</p>
         </div>
       `;
       const pager = document.getElementById('paginationContainer');
