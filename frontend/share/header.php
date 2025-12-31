@@ -946,6 +946,10 @@ function getActiveClass($targetFile) {
     <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_header_teacher): ?>
+      <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
+    <?php endif; ?>
+    
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
     <?php endif; ?>
     
@@ -1110,6 +1114,10 @@ function getActiveClass($targetFile) {
     
     <?php if ($isLoggedIn && $is_mobile_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
+    <?php endif; ?>
+    
+    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
+      <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
     <?php endif; ?>
     
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
