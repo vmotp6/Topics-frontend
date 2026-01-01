@@ -1,17 +1,16 @@
 <?php
-// 載入 session 配置
+// 檔案上傳管理（教師）
 require_once 'session_config.php';
 require_once 'config.php';
 
-// 檢查登入狀態
-$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-$user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'AA');
+$role = $_SESSION['role'] ?? '';
+$allowedRoles = ['老師', 'TEA', 'STA', '學校行政人員', 'AA', 'DI', 'IM'];
 
-if (!$isLoggedIn || !$is_teacher) {
+if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     header("Location: index.php");
     exit();
 }
@@ -31,13 +30,7 @@ if (!$isLoggedIn || !$is_teacher) {
       --background-color: #f0f2f5;
       --card-background-color: #fff;
     }
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       padding-top: 100px;
       background: var(--background-color);
@@ -45,43 +38,13 @@ if (!$isLoggedIn || !$is_teacher) {
       color: var(--text-color);
       overflow-x: hidden;
     }
-    
-    .container {
-      max-width: 1400px;
-      margin: 24px auto;
-      padding: 24px;
-    }
+    .container { max-width: 1400px; margin: 24px auto; padding: 24px; }
+    .main-wrapper { max-width: 1100px; margin: 0 auto; width: 100%; }
+    .page-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 16px; }
+    .page-header { margin-bottom: 24px; }
+    .page-title { color: var(--text-color); font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    .page-subtitle { color: var(--text-secondary-color); font-size: 14px; }
 
-    .main-wrapper {
-      max-width: 1100px;
-      margin: 0 auto;
-      width: 100%;
-    }
-    
-    .page-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-      gap: 16px;
-    }
-    
-    .page-header {
-      margin-bottom: 24px;
-    }
-    
-    .page-title {
-      color: var(--text-color);
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    
-    .page-subtitle {
-      color: var(--text-secondary-color);
-      font-size: 14px;
-    }
-    
     .upload-section {
       background: var(--card-background-color);
       border-radius: 8px;
@@ -93,54 +56,17 @@ if (!$isLoggedIn || !$is_teacher) {
       box-shadow: 0 1px 2px rgba(0,0,0,0.03);
       border: 1px solid var(--border-color);
     }
-    
-    .upload-section.dragover {
-      border-color: var(--primary-color);
-      background: #e6f7ff;
-    }
-    
-    .upload-icon {
-      font-size: 48px;
-      color: var(--primary-color);
-      margin-bottom: 16px;
-    }
-    
-    .upload-text {
-      font-size: 16px;
-      color: var(--text-color);
-      margin-bottom: 16px;
-    }
-    
-    .file-input-wrapper {
-      position: relative;
-      display: inline-block;
-    }
-    
-    .file-input {
-      position: absolute;
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-    }
-    
+    .upload-section.dragover { border-color: var(--primary-color); background: #e6f7ff; }
+    .upload-icon { font-size: 48px; color: var(--primary-color); margin-bottom: 16px; }
+    .upload-text { font-size: 16px; color: var(--text-color); margin-bottom: 16px; }
+    .file-input-wrapper { position: relative; display: inline-block; }
+    .file-input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
     .upload-btn {
-      background: var(--primary-color);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 4px;
-      border: none;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s;
+      background: var(--primary-color); color: white; padding: 8px 16px; border-radius: 4px;
+      border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s;
     }
-    
-    .upload-btn:hover {
-      background: #40a9ff;
-      transform: translateY(-1px);
-    }
-    
+    .upload-btn:hover { background: #40a9ff; transform: translateY(-1px); }
+
     .table-wrapper {
       background: var(--card-background-color);
       border-radius: 8px;
@@ -150,258 +76,55 @@ if (!$isLoggedIn || !$is_teacher) {
       display: flex;
       flex-direction: column;
     }
-    
-    .table-container {
-      overflow-x: auto;
-      flex: 1;
-    }
-    
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    
-    .table th, .table td {
-      padding: 16px 24px;
-      text-align: left;
-      border-bottom: 1px solid var(--border-color);
-      font-size: 14px;
-    }
-    
-    .table th:first-child, .table td:first-child {
-      padding-left: 24px;
-    }
-    
-    .table th {
-      background: #fafafa;
-      font-weight: 600;
-      color: var(--text-color);
-    }
-    
-    .table td {
-      color: #595959;
-    }
-    
-    .table tr:hover {
-      background: #fafafa;
-    }
-    
-    .file-name-cell {
-      font-weight: 500;
-      color: var(--text-color);
-      word-break: break-all;
-    }
-    
-    .file-actions {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-    
+    .table-container { overflow-x: auto; flex: 1; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 16px 24px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+    .table th:first-child, .table td:first-child { padding-left: 24px; }
+    .table th { background: #fafafa; font-weight: 600; color: var(--text-color); }
+    .table td { color: #595959; }
+    .table tr:hover { background: #fafafa; }
+    .file-name-cell { font-weight: 500; color: var(--text-color); word-break: break-all; }
+    .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
     .action-btn {
-      padding: 4px 12px;
-      border: 1px solid;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.3s;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      min-width: 92px;
-      height: 36px;
+      padding: 4px 12px; border: 1px solid; border-radius: 4px; cursor: pointer; font-size: 14px;
+      font-weight: 500; transition: all 0.3s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 92px; height: 36px;
     }
-    
-    .btn-download {
-      background: #fff;
-      color: #52c41a;
-      border-color: #52c41a;
-    }
-    
-    .btn-download:hover {
-      background: #52c41a;
-      color: white;
-    }
-    
-    .btn-delete {
-      background: #fff;
-      color: #ff4d4f;
-      border-color: #ff4d4f;
-    }
-    
-    .btn-delete:hover {
-      background: #ff4d4f;
-      color: white;
-    }
-    
-    .search-input {
-      padding: 8px 12px;
-      border: 1px solid #d9d9d9;
-      border-radius: 6px;
-      font-size: 14px;
-      width: 250px;
-      transition: all 0.3s;
-    }
-    
-    .search-input:focus {
-      outline: none;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
-    }
-    
-    .empty-state {
-      text-align: center;
-      padding: 40px;
-      color: var(--text-secondary-color);
-    }
-    
-    .empty-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-    
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: var(--text-secondary-color);
-    }
-    
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: #f0f0f0;
-      border-radius: 2px;
-      overflow: hidden;
-      margin-top: 16px;
-      display: none;
-    }
-    
-    .progress-fill {
-      height: 100%;
-      background: var(--primary-color);
-      width: 0%;
-      transition: width 0.3s;
-    }
-    
-    .alert {
-      padding: 12px 16px;
-      border-radius: 4px;
-      margin-bottom: 16px;
-      display: none;
-      font-size: 14px;
-    }
-    
-    .alert-success {
-      background: #f6ffed;
-      color: #52c41a;
-      border: 1px solid #b7eb8f;
-    }
-    
-    .alert-error {
-      background: #fff2f0;
-      color: #ff4d4f;
-      border: 1px solid #ffccc7;
-    }
-    
-    /* 分頁樣式 */
-    .pagination {
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 1px solid var(--border-color);
-      background: #fafafa;
-    }
-    
-    .pagination-info {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      color: var(--text-secondary-color);
-      font-size: 14px;
-    }
-    
-    .pagination-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .pagination select {
-      padding: 6px 12px;
-      border: 1px solid #d9d9d9;
-      border-radius: 6px;
-      font-size: 14px;
-      background: #fff;
-      cursor: pointer;
-    }
-    
-    .pagination select:focus {
-      outline: none;
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
-    }
-    
-    .pagination button {
-      padding: 6px 12px;
-      border: 1px solid #d9d9d9;
-      background: #fff;
-      color: #595959;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-    
-    .pagination button:hover:not(:disabled) {
-      border-color: var(--primary-color);
-      color: var(--primary-color);
-    }
-    
-    .pagination button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    .pagination button.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
-    }
-    
+    .btn-download { background: #fff; color: #52c41a; border-color: #52c41a; }
+    .btn-download:hover { background: #52c41a; color: white; }
+    .btn-delete { background: #fff; color: #ff4d4f; border-color: #ff4d4f; }
+    .btn-delete:hover { background: #ff4d4f; color: white; }
+
+    .search-input { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; width: 250px; transition: all 0.3s; }
+    .search-input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+
+    .empty-state { text-align: center; padding: 40px; color: var(--text-secondary-color); }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .loading { text-align: center; padding: 40px; color: var(--text-secondary-color); }
+
+    .progress-bar { width: 100%; height: 4px; background: #f0f0f0; border-radius: 2px; overflow: hidden; margin-top: 16px; display: none; }
+    .progress-fill { height: 100%; background: var(--primary-color); width: 0%; transition: width 0.3s; }
+
+    .alert { padding: 12px 16px; border-radius: 4px; margin-bottom: 16px; display: none; font-size: 14px; }
+    .alert-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    .alert-error { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+
+    .pagination { padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); background: #fafafa; }
+    .pagination-info { display: flex; align-items: center; gap: 16px; color: var(--text-secondary-color); font-size: 14px; }
+    .pagination-controls { display: flex; align-items: center; gap: 8px; }
+    .pagination select { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer; }
+    .pagination select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+    .pagination button { padding: 6px 12px; border: 1px solid #d9d9d9; background: #fff; color: #595959; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+    .pagination button:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); }
+    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pagination button.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
     @media (max-width: 768px) {
-      .container {
-        padding: 16px;
-      }
-      
-      .page-controls {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      
-      .search-input {
-        width: 100%;
-      }
-      
-      .table th, .table td {
-        padding: 12px 16px;
-        font-size: 12px;
-      }
-      
-      .file-actions {
-        flex-direction: column;
-        gap: 4px;
-      }
-      
-      .action-btn {
-        width: 100%;
-        padding: 6px 12px;
-        font-size: 12px;
-      }
+      .container { padding: 16px; }
+      .page-controls { flex-direction: column; align-items: stretch; }
+      .search-input { width: 100%; }
+      .table th, .table td { padding: 12px 16px; font-size: 12px; }
+      .file-actions { flex-direction: column; gap: 4px; }
+      .action-btn { width: 100%; padding: 6px 12px; font-size: 12px; }
     }
   </style>
 </head>
@@ -454,7 +177,6 @@ if (!$isLoggedIn || !$is_teacher) {
           <div class="loading">載入中...</div>
         </div>
       </div>
-      <!-- 分頁控制 -->
       <div class="pagination" id="paginationContainer" style="display: none;">
         <div class="pagination-info">
           <span>每頁顯示：</span>
@@ -487,10 +209,9 @@ if (!$isLoggedIn || !$is_teacher) {
   let currentPage = 1;
   let itemsPerPage = 10;
   let sortKey = 'upload_time';
-  let sortDirection = 'desc'; // 'asc' | 'desc'
+  let sortDirection = 'desc';
   let currentSearch = '';
   
-  // 頁面載入時載入檔案列表
   document.addEventListener('DOMContentLoaded', function() {
     loadFiles();
     setupDragAndDrop();
@@ -498,7 +219,6 @@ if (!$isLoggedIn || !$is_teacher) {
     setupSearch();
   });
   
-  // 設置拖放功能
   function setupDragAndDrop() {
     const uploadSection = document.getElementById('uploadSection');
     
@@ -523,7 +243,6 @@ if (!$isLoggedIn || !$is_teacher) {
     });
   }
   
-  // 設置檔案選擇
   function setupFileInput() {
     const fileInput = document.getElementById('fileInput');
     fileInput.addEventListener('change', function(e) {
@@ -533,15 +252,12 @@ if (!$isLoggedIn || !$is_teacher) {
     });
   }
   
-  // 上傳檔案
   async function uploadFiles(files) {
     const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      
-      // 檢查檔案大小（單個檔案限制 50GB）
       const maxSize = 50 * 1024 * 1024 * 1024;
       if (file.size > maxSize) {
         showAlert('錯誤', `檔案 ${file.name} 超過 50GB 限制`, 'error');
@@ -574,7 +290,8 @@ if (!$isLoggedIn || !$is_teacher) {
               showAlert('錯誤', response.message || '上傳失敗', 'error');
             }
           } else {
-            const response = JSON.parse(xhr.responseText);
+            let response = {};
+            try { response = JSON.parse(xhr.responseText); } catch {}
             showAlert('錯誤', response.message || '上傳失敗', 'error');
           }
           progressBar.style.display = 'none';
@@ -597,14 +314,10 @@ if (!$isLoggedIn || !$is_teacher) {
         progressFill.style.width = '0%';
       }
     }
-    
-    // 清空檔案選擇
     document.getElementById('fileInput').value = '';
   }
   
-  // 載入檔案列表
   async function loadFiles(resetSearch = false) {
-    // 如為重新整理動作，清空搜尋關鍵字
     if (resetSearch) {
       currentSearch = '';
       const searchInput = document.getElementById('searchInput');
@@ -619,8 +332,7 @@ if (!$isLoggedIn || !$is_teacher) {
       const data = await response.json();
       
       if (data.success) {
-        filesData = data.files;
-        
+        filesData = data.files || [];
         renderTable();
       } else {
         container.innerHTML = `
@@ -639,7 +351,6 @@ if (!$isLoggedIn || !$is_teacher) {
     }
   }
   
-  // 刪除檔案
   async function deleteFile(fileId, filename) {
     if (!confirm(`確定要刪除檔案「${filename}」嗎？此操作無法復原。`)) {
       return;
@@ -648,9 +359,7 @@ if (!$isLoggedIn || !$is_teacher) {
     try {
       const response = await fetch('api/teacher_files_api.php', {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_id: fileId })
       });
       
@@ -668,8 +377,7 @@ if (!$isLoggedIn || !$is_teacher) {
     }
   }
   
-  // 顯示提示訊息
-  function showAlert(type, message, alertType) {
+  function showAlert(title, message, alertType) {
     const container = document.getElementById('alertContainer');
     const alertClass = alertType === 'success' ? 'alert-success' : 'alert-error';
     const icon = alertType === 'success' ? 'check-circle' : 'exclamation-circle';
@@ -688,7 +396,6 @@ if (!$isLoggedIn || !$is_teacher) {
     }, 5000);
   }
   
-  // 格式化日期時間
   function formatDateTime(dateTimeString) {
     const date = new Date(dateTimeString);
     const year = date.getFullYear();
@@ -699,26 +406,22 @@ if (!$isLoggedIn || !$is_teacher) {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   }
   
-  // HTML 轉義
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   }
 
-  // 渲染表格（含排序、搜尋、分頁初始化）
   function renderTable() {
     const container = document.getElementById('filesContainer');
     if (!container) return;
 
-    // 篩選
     const filteredData = filesData.filter(file => {
       if (!currentSearch) return true;
       const t = currentSearch.toLowerCase();
       return (file.original_filename || '').toLowerCase().includes(t);
     });
 
-    // 排序
     const toDate = v => new Date(v);
     filteredData.sort((a, b) => {
       let result = 0;
@@ -780,7 +483,6 @@ if (!$isLoggedIn || !$is_teacher) {
       </table>
     `;
 
-    // 初始化行数组和分页
     setTimeout(() => {
       initTableRows();
       updatePagination();
@@ -789,7 +491,6 @@ if (!$isLoggedIn || !$is_teacher) {
     }, 50);
   }
 
-  // 切換排序
   function toggleSort(key) {
     if (sortKey === key) {
       sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -801,23 +502,18 @@ if (!$isLoggedIn || !$is_teacher) {
     renderTable();
   }
   
-  // 初始化表格行
   function initTableRows() {
     const table = document.getElementById('filesTable');
     if (!table) return;
-    
     const tbody = table.getElementsByTagName('tbody')[0];
     if (!tbody) return;
-    
     allRows = Array.from(tbody.getElementsByTagName('tr'));
     filteredRows = allRows;
   }
   
-  // 設置搜索功能
   function setupSearch() {
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
-    
     searchInput.addEventListener('keyup', function() {
       currentSearch = searchInput.value.trim();
       currentPage = 1;
@@ -825,7 +521,6 @@ if (!$isLoggedIn || !$is_teacher) {
     });
   }
   
-  // 改變每頁顯示數量
   function changeItemsPerPage() {
     const selectValue = document.getElementById('itemsPerPage').value;
     itemsPerPage = selectValue === 'all' ? 'all' : parseInt(selectValue);
@@ -833,7 +528,6 @@ if (!$isLoggedIn || !$is_teacher) {
     updatePagination();
   }
   
-  // 改變頁面
   function changePage(direction) {
     const totalItems = filteredRows.length;
     let pageSize;
@@ -845,23 +539,18 @@ if (!$isLoggedIn || !$is_teacher) {
     const totalPages = pageSize >= totalItems ? 1 : Math.ceil(totalItems / pageSize);
     
     currentPage += direction;
-    
     if (currentPage < 1) currentPage = 1;
     if (currentPage > totalPages) currentPage = totalPages;
-    
     updatePagination();
   }
   
-  // 跳轉到指定頁
   function goToPage(page) {
     currentPage = page;
     updatePagination();
   }
   
-  // 更新分頁
   function updatePagination() {
     const totalItems = filteredRows.length;
-    
     let pageSize;
     if (itemsPerPage === 'all') {
       pageSize = totalItems;
@@ -872,57 +561,33 @@ if (!$isLoggedIn || !$is_teacher) {
         itemsPerPage = 10;
       }
     }
-    
     const totalPages = pageSize >= totalItems ? 1 : Math.ceil(totalItems / pageSize);
-    
-    // 隱藏所有行
     allRows.forEach(row => row.style.display = 'none');
-    
     if (itemsPerPage === 'all' || pageSize >= totalItems) {
-      // 顯示所有過濾後的行
       filteredRows.forEach(row => row.style.display = '');
-      
-      document.getElementById('currentRange').textContent = 
-        totalItems > 0 ? `1-${totalItems}` : '0-0';
+      document.getElementById('currentRange').textContent = totalItems > 0 ? `1-${totalItems}` : '0-0';
     } else {
-      // 計算當前頁的範圍
       const start = (currentPage - 1) * pageSize;
       const end = Math.min(start + pageSize, totalItems);
-      
-      // 顯示當前頁的行
       for (let i = start; i < end; i++) {
-        if (filteredRows[i]) {
-          filteredRows[i].style.display = '';
-        }
+        if (filteredRows[i]) filteredRows[i].style.display = '';
       }
-      
-      document.getElementById('currentRange').textContent = 
-        totalItems > 0 ? `${start + 1}-${end}` : '0-0';
+      document.getElementById('currentRange').textContent = totalItems > 0 ? `${start + 1}-${end}` : '0-0';
     }
-    
-    // 更新總數
     document.getElementById('totalItems').textContent = totalItems;
-    
-    // 更新上一頁/下一頁按鈕
     const prevBtn = document.getElementById('prevPage');
     const nextBtn = document.getElementById('nextPage');
     if (prevBtn) prevBtn.disabled = currentPage === 1;
     if (nextBtn) nextBtn.disabled = currentPage >= totalPages || totalPages <= 1;
-    
-    // 更新頁碼按鈕
     updatePageNumbers(totalPages);
   }
   
-  // 更新頁碼按鈕
   function updatePageNumbers(totalPages) {
     const pageNumbers = document.getElementById('pageNumbers');
     if (!pageNumbers) return;
-    
     pageNumbers.innerHTML = '';
-    
     if (totalPages >= 1) {
       const pagesToShow = totalPages === 1 ? [1] : Array.from({length: totalPages}, (_, i) => i + 1);
-      
       for (let i of pagesToShow) {
         const btn = document.createElement('button');
         btn.textContent = i;
