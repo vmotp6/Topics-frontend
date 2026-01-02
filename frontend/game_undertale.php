@@ -104,7 +104,6 @@ if (empty($programmingQuestions)) {
 	<title>Undertale 風格戰鬥遊戲 - 康寧大學</title>
 	<style>
 		* {
-			margin: 0;
 			padding: 0;
 			box-sizing: border-box;
 		}
@@ -393,7 +392,6 @@ if (empty($programmingQuestions)) {
 				transform: translateY(-50%) translateX(20px);
 			}
 			to {
-				opacity: 1;
 				transform: translateY(-50%) translateX(0);
 			}
 		}
@@ -619,9 +617,9 @@ if (empty($programmingQuestions)) {
 		}
 
 		.question-option.correct {
-			background: #4caf50;
+			background: #82e730ff;
 			color: #ffffff;
-			border-color: #2e7d32;
+			border-color: #82e730ff;
 		}
 
 		.question-option.wrong {
@@ -629,6 +627,21 @@ if (empty($programmingQuestions)) {
 			color: #ffffff;
 			border-color: #c62828;
 		}
+
+		.tutorial-x {
+	position: absolute;
+	font-size: 24px;
+	color: #000000ff;
+	animation: floatX 1.5s infinite ease-in-out;
+	pointer-events: none;
+}
+
+@keyframes floatX {
+	0% { transform: translateY(0); }
+	50% { transform: translateY(-8px); }
+	100% { transform: translateY(0); }
+}
+
 
 		.question-option.disabled {
 			cursor: not-allowed;
@@ -736,20 +749,51 @@ if (empty($programmingQuestions)) {
 
 	<script>
 		// ==================== 遊戲狀態 ====================
-		let gameState = 'menu'; // menu, playerTurn, enemyTurn, actMenu, dialog, ended
-		let playerHP = 20;
-		let playerMaxHP = 20;
-		let playerLV = 1;
-		let enemyHP = 20;
-		let enemyMaxHP = 30;
-		let enemyName = '奶油';
-		let currentActOption = 0;
-		let bullets = [];
-		let bulletAttackActive = false;
-		let soulPosition = { x: 142, y: 132 };
-		let turnCount = 0; // 回合計數
-		let furiousMode = false; // 狂暴模式（敵人HP=1時觸發）
-		let furiousRounds = 0; // 狂暴回合計數（最多3回合）
+let gameState = 'menu'; 
+// menu, tutorial, playerTurn, enemyTurn, actMenu, dialog, ended
+
+let playerHP = 20;
+let playerMaxHP = 20;
+let playerLV = 1;
+
+let enemyHP = 20;
+let enemyMaxHP = 30;
+let enemyName = '奶油';
+
+let bullets = [];
+let bulletAttackActive = false;
+
+// 全域儲存由 createBeamAttack 建立的 setInterval id，方便在結束攻擊時清理
+let beamFireIntervals = [];
+// 儲存狂暴等複合攻擊所建立的 timeout ids，方便結束時清理
+let activeAttackTimeouts = [];
+
+function scheduleAttack(fn, ms) {
+	const id = setTimeout(fn, ms);
+	activeAttackTimeouts.push(id);
+	return id;
+}
+
+let soulPosition = { x: 142, y: 132 };
+
+let turnCount = 0;
+let furiousMode = false;
+let furiousRounds = 0;
+
+// 🔹 新手教學
+let tutorialFinished = false;
+let tutorialTrapTriggered = false;
+let tutorialTrapActive = false;
+let tutorialTimer = null;
+
+// 🔹 控制與對話
+let inputLocked = false;
+let isDialogActive = false;
+
+// 🔹 無敵幀
+let invulnerable = false;
+let invulnerableTime = 0;
+
 
 		// 敵人類型
 		const enemies = [
@@ -838,12 +882,16 @@ if (empty($programmingQuestions)) {
 			let dialogIndex = 0;
 			
 			const showNextGreeting = () => {
-				if (dialogIndex >= greetingDialogs.length) {
-					hideDialog();
-					// 敵人先攻擊
+			if (dialogIndex >= greetingDialogs.length) {
+				hideDialog();
+
+				if (!tutorialFinished) {
+					startTutorial();   // ← 教學入口
+				} else {
 					enemyTurn();
-					return;
 				}
+				return;
+			};
 				
 				showDialogWithCharacter(greetingDialogs[dialogIndex], 'cream', () => {
 					dialogIndex++;
@@ -852,14 +900,160 @@ if (empty($programmingQuestions)) {
 						setTimeout(showNextGreeting, 500);
 					} else {
 						hideDialog();
-						// 敵人先攻擊
-						enemyTurn();
+						// 若尚未完成教學，進入教學；否則敵人先攻擊
+						if (!tutorialFinished) {
+							startTutorial();
+						} else {
+							enemyTurn();
+						}
 					}
 				});
 			};
 			
 			showNextGreeting();
 		}
+		function startTutorial() {
+	gameState = 'tutorial';
+
+	const dialogs = [
+		'* 等一下。',
+		'* 在戰鬥前，我得先教你一件事。',
+		'* 用 W A S D 移動你的靈魂。',
+		'* 在框裡走走看吧。'
+	];
+
+	let i = 0;
+
+	const next = () => {
+		if (i >= dialogs.length) {
+			hideDialog();
+			startTutorialTrap();
+			return;
+		}
+
+		// capture current index to avoid closure issues
+		const idx = i;
+		showDialogWithCharacter(dialogs[idx], 'cream', () => {
+			// 當文字提到「在框裡」時，立即顯示 X（trap）並停留在該對話
+			if (dialogs[idx].indexOf('在框裡') !== -1 || dialogs[idx].indexOf('走走') !== -1) {
+				startTutorialTrap();
+				// do not advance to next dialog here; trap flow continues
+			} else {
+				i = idx + 1;
+				setTimeout(next, 400);
+			}
+		});
+	};
+
+	next();
+}
+
+function startTutorialTrap() {
+	if (tutorialTrapActive) return;
+
+	tutorialTrapActive = true;
+	tutorialTrapTriggered = false;
+
+	const soulBox = document.getElementById('soulBox');
+	const trap = document.createElement('div');
+	trap.id = 'tutorialX';
+	trap.className = 'tutorial-x';
+	trap.textContent = 'X';
+
+	trap.style.left = '140px';
+	trap.style.top = '100px';
+
+	soulBox.appendChild(trap);
+
+	// 觸發誘導對話（奶油引導玩家吃下 X）
+	showDialogWithCharacter('* 看到這個 X 了嗎？吃掉它就能升級喔。', 'cream');
+
+	// 5 秒後沒碰 → 成功（玩家沒上當）
+	tutorialTimer = setTimeout(() => {
+		if (!tutorialTrapTriggered) {
+			trap.remove();
+			tutorialSuccess();
+		}
+	}, 5000);
+
+	// 碰撞檢查（靈魂與 trap 相撞）
+	const check = setInterval(() => {
+		if (checkSoulCollision(trap)) {
+			tutorialTrapTriggered = true;
+			clearTimeout(tutorialTimer);
+			clearInterval(check);
+			trap.remove();
+			tutorialFail();
+		}
+	}, 50);
+}
+
+// 檢查靈魂與元素（如 tutorial X）是否碰撞（在 soulBox 同一坐標系）
+function checkSoulCollision(el) {
+	try {
+		if (!el) return false;
+		const soulW = 16, soulH = 16;
+		// el 使用相對定位於 soulBox，使用 offsetLeft/Top
+		const elLeft = el.offsetLeft || 0;
+		const elTop = el.offsetTop || 0;
+		const elW = el.offsetWidth || 20;
+		const elH = el.offsetHeight || 20;
+
+		const soulLeft = soulPosition.x;
+		const soulTop = soulPosition.y;
+
+		// 矩形相交檢查
+		if (soulLeft < elLeft + elW && soulLeft + soulW > elLeft &&
+			soulTop < elTop + elH && soulTop + soulH > elTop) {
+			return true;
+		}
+		return false;
+	} catch (e) {
+		return false;
+	}
+}
+
+function tutorialFail() {
+	tutorialFinished = true;
+	tutorialTrapActive = false;
+
+	playerHP = Math.max(1, playerHP - 3);
+	updateUI();
+
+	// 嘲諷玩家並開始第一回合
+	showDialogWithCharacter(
+		'* 哈。學個程式之前，先學會不要亂吃東西好嗎？',
+		'cream',
+		() => {
+			showDialogWithCharacter(
+				'* 這就是你的判斷力嗎？',
+				'cream',
+				() => {
+					showDialogWithCharacter(
+						'* 誰跟你說 X 是好東西的？',
+						'cream',
+						() => {
+							hideDialog();
+							enemyTurn();
+					}
+				);
+			}
+		);
+	}
+)
+}
+
+function tutorialSuccess() {
+	tutorialFinished = true;
+	tutorialTrapActive = false;
+
+	// 玩家沒碰到 X：表達可惜，然後開始第一回合
+	showDialogWithCharacter('* 真可惜，沒有騙到你。', 'cream', () => {
+		hideDialog();
+		enemyTurn();
+	});
+}
+
 
 		// ==================== UI 更新 ====================
 		function updateUI() {
@@ -885,7 +1079,33 @@ if (empty($programmingQuestions)) {
 		let currentDialogCallback = null;
 		let fullDialogText = '';
 
+		// 暫停攻擊（清理 interval、移除子彈），在顯示對話時呼叫
+		function pauseAttacks() {
+			// 清除 beam intervals
+			if (beamFireIntervals && beamFireIntervals.length > 0) {
+				beamFireIntervals.forEach(id => clearInterval(id));
+				beamFireIntervals = [];
+			}
+
+			// 移除所有子彈 DOM 與清空陣列
+			const soulBox = document.getElementById('soulBox');
+			if (soulBox) {
+				const existing = soulBox.querySelectorAll('.bullet, .code-attack, .explosion');
+				existing.forEach(e => e.remove());
+			}
+			bullets = [];
+			bulletAttackActive = false;
+
+			// 清除所有複合攻擊的 timeouts
+			if (activeAttackTimeouts && activeAttackTimeouts.length > 0) {
+				activeAttackTimeouts.forEach(tid => clearTimeout(tid));
+				activeAttackTimeouts = [];
+			}
+		}
+
 		function showDialog(text, callback) {
+            // 顯示對話前暫停任何正在進行的攻擊
+            pauseAttacks();
 			const dialogBox = document.getElementById('dialogBox');
 			const dialogText = document.getElementById('dialogText');
 			dialogText.innerHTML = '';
@@ -917,6 +1137,8 @@ if (empty($programmingQuestions)) {
 		}
 
 		function showDialogWithCharacter(text, character, callback) {
+            // 顯示有角色的對話前暫停任何正在進行的攻擊
+            pauseAttacks();
 			const dialogBox = document.getElementById('dialogBox');
 			const dialogText = document.getElementById('dialogText');
 			
@@ -1091,7 +1313,7 @@ if (empty($programmingQuestions)) {
 					// 答錯：攻擊 miss
 					attackEnemy(false);
 				}
-			}, 1500);
+			}, 2000);
 		}
 
 		// ==================== 按鈕事件 ====================
@@ -1289,31 +1511,17 @@ if (empty($programmingQuestions)) {
 			// 狂暴模式處理
 			if (furiousMode) {
 				furiousRounds++;
-				
-				// 顯示狂暴攻擊對話
-				const furiousDialogs = [
-					'* 奶油：你以為這樣就贏了嗎？！',
-					'* 奶油：最後的攻擊！',
-					'* 奶油：我不會輕易認輸的！'
-				];
-				const dialogText = furiousDialogs[(furiousRounds - 1) % furiousDialogs.length] || '* ' + enemyName + ' 狂暴攻擊！';
-				showDialogWithCharacter(dialogText, 'cream');
-				
-				setTimeout(() => {
-					hideDialog();
-					// 根據回合數執行不同的複雜攻擊
-					if (furiousRounds === 1) {
-						// 第1回合：8個System.out.print + 終極攻擊混合
-						createFuriousAttack1();
-					} else if (furiousRounds === 2) {
-						// 第2回合：多種攻擊混合 + 追蹤子彈
-						createFuriousAttack2();
-					} else if (furiousRounds === 3) {
-						// 第3回合：終極混合攻擊（10個System.out.print + 所有攻擊）
-						createFuriousAttack3();
-					}
-				}, 2000);
-				
+
+				// 立即啟動對應的狂暴攻擊（不要先顯示對話），
+				// 對話與回合控制會在 endBulletAttack() 中處理，確保所有子攻擊完成後再對話
+				if (furiousRounds === 1) {
+					createFuriousAttack1();
+				} else if (furiousRounds === 2) {
+					createFuriousAttack2();
+				} else if (furiousRounds === 3) {
+					createFuriousAttack3();
+				}
+
 				return; // 狂暴模式下直接返回，不進入玩家回合
 			}
 			
@@ -1624,6 +1832,25 @@ if (empty($programmingQuestions)) {
 
 		function endBulletAttack() {
 			bulletAttackActive = false;
+
+			// 清除所有 createBeamAttack 建立的 interval（避免在攻擊結束後仍繼續產生子彈）
+			if (beamFireIntervals && beamFireIntervals.length > 0) {
+				beamFireIntervals.forEach(id => clearInterval(id));
+				beamFireIntervals = [];
+			}
+
+			// 移除尚未被清理的指令文字
+			const soulBoxArea = document.querySelector('.soul-box-area');
+			if (soulBoxArea) {
+				const cmds = soulBoxArea.querySelectorAll('.beam-command');
+				cmds.forEach(c => c.remove());
+			}
+
+			// 清除所有複合攻擊排程的 timeouts
+			if (activeAttackTimeouts && activeAttackTimeouts.length > 0) {
+				activeAttackTimeouts.forEach(tid => clearTimeout(tid));
+				activeAttackTimeouts = [];
+			}
 			
 			// 恢復靈魂框大小（如果被縮窄或變矮了）
 			if (window.tempSoulBoxNarrow) {
@@ -2128,9 +2355,9 @@ if (empty($programmingQuestions)) {
 			}, 5500);
 		}
 
-		function createBeamAttack(commandCount = null) {
-			// 回合 7：System.out.print 攻擊（從指令文字的 > 位置發射子彈）
-			// commandCount: 指定指令數量（null時隨機1-2個，強烈攻擊模式下為5）
+		function createBeamAttack(commandCount = null, suppressEnd = false) {
+		// 回合 7：System.out.print 攻擊（從指令文字的 > 位置發射子彈）
+		// commandCount: 指定指令數量（null時隨機2-3個，狂暴模式下至少6個）
 			const soulBox = document.getElementById('soulBox');
 			const soulBoxArea = document.querySelector('.soul-box-area');
 			const boxWidth = 300;
@@ -2147,9 +2374,13 @@ if (empty($programmingQuestions)) {
 			const boxOffsetX = boxRect.left - areaRect.left;
 			const boxOffsetY = boxRect.top - areaRect.top;
 			
-			// 決定指令數量
+			// 決定指令數量（預設改為2-3個；狂暴模式下更大量）
 			if (commandCount === null) {
-				commandCount = Math.floor(Math.random() * 2) + 1; // 默認：1或2個
+				commandCount = Math.floor(Math.random() * 2) + 2; // 默認：2或3個
+			}
+			if (furiousMode) {
+				// 狂暴模式提升指令數量（至少6個）
+				commandCount = Math.max(commandCount, 6);
 			}
 			const commands = [];
 			
@@ -2246,6 +2477,7 @@ if (empty($programmingQuestions)) {
 				commandElement.style.zIndex = '15';
 				commandElement.style.pointerEvents = 'none';
 				commandElement.style.backgroundColor = 'transparent';
+				commandElement.className = 'beam-command';
 				
 				// 添加到 soulBoxArea 而不是 soulBox
 				soulBoxArea.style.position = 'relative'; // 確保可以定位子元素
@@ -2307,56 +2539,74 @@ if (empty($programmingQuestions)) {
 				});
 			}
 			
-			// 從每個指令的 > 位置同時發射多發子彈
-			// 狂暴模式下發射更多子彈（每個指令6發，正常模式3-4發）
-			const bulletsPerCommand = furiousMode ? 6 : (3 + Math.floor(turnCount / 4));
+			// 機關槍式連發：每個指令會在短間隔內連續發射多發子彈
+			// 增加每個指令的子彈數量以強化攻擊
+			const bulletsPerCommand = furiousMode ? 12 : (5 + Math.floor(turnCount / 3));
 			let totalBulletsShot = 0;
-			const totalBullets = commandCount * bulletsPerCommand;
-			
+			let remainingShots = commandCount * bulletsPerCommand;
+
 			// 確保子彈更新循環正在運行
 			if (!bulletAttackActive) {
 				bulletAttackActive = true;
 			}
-			
-			// 所有指令同時發射子彈（不延遲）
-			commands.forEach((cmd, cmdIndex) => {
-				for (let i = 0; i < bulletsPerCommand; i++) {
-					// 檢查命令是否仍然有效
-					if (!cmd || cmd.arrowX === undefined || cmd.arrowY === undefined) {
-						continue;
+
+			// 發射參數：狂暴模式更快、更猛烈
+			const intervalMs = furiousMode ? 80 : 140;
+
+			// 對每個指令啟動一個快速連發計時器
+			commands.forEach((cmd) => {
+				if (!cmd || cmd.arrowX === undefined || cmd.arrowY === undefined) return;
+				let fired = 0;
+				const id = setInterval(() => {
+					// 若命令元素被移除或達到發射數量，停止此間隔
+					if (fired >= bulletsPerCommand) {
+						clearInterval(id);
+						return;
 					}
-					
-					// 創建子彈從 > 位置發射（所有子彈同時創建）
-					const bullet = createBullet(cmd.arrowX, cmd.arrowY, cmd.vx, cmd.vy);
+
+					// 隨機化速度微調，讓子彈不會全部重疊
+					const jitterX = (Math.random() - 0.5) * 0.3;
+					const jitterY = (Math.random() - 0.5) * 0.3;
+					const bullet = createBullet(cmd.arrowX, cmd.arrowY, cmd.vx + jitterX, cmd.vy + jitterY);
 					if (bullet) {
 						bullets.push(bullet);
 						totalBulletsShot++;
+						remainingShots--;
 					}
-				}
+
+					fired++;
+
+					// 當所有子彈發射完畢，清理指令文字（若非 suppressEnd，則結束攻擊）
+					if (remainingShots <= 0) {
+						// 等待短暫時間讓子彈進入畫面，再清理
+						setTimeout(() => {
+							commands.forEach(cmd2 => {
+								if (cmd2.element && cmd2.element.parentNode) {
+									cmd2.element.remove();
+								}
+							});
+							if (!suppressEnd) {
+								endBulletAttack();
+							}
+						}, furiousMode ? 1800 : 2600);
+					}
+				}, intervalMs);
+				// 儲存在全域陣列以便外部也能清除（例如 endBulletAttack）
+				beamFireIntervals.push(id);
 			});
-			
-			// 所有子彈發射完成後，等待子彈移動和文字消失
-			// 增加等待時間，讓玩家有更多時間反應
-			setTimeout(() => {
-				// 移除指令文字（從 soulBoxArea 移除）
-				commands.forEach(cmd => {
-					if (cmd.element && cmd.element.parentNode) {
-						cmd.element.remove();
-					}
-				});
-				endBulletAttack();
-			}, 6000); // 從4秒增加到6秒
-			
-			// 如果沒有子彈（理論上不會發生），也要確保結束
-			if (totalBullets === 0) {
+
+			// 如果沒有子彈（理論上不會發生），也要確保結束（除非被 suppress）
+			if (remainingShots <= 0) {
 				setTimeout(() => {
 					commands.forEach(cmd => {
 						if (cmd.element && cmd.element.parentNode) {
 							cmd.element.remove();
 						}
 					});
-					endBulletAttack();
-				}, 3000);
+					if (!suppressEnd) {
+						endBulletAttack();
+					}
+				}, 2000);
 			}
 		}
 
@@ -2518,17 +2768,17 @@ if (empty($programmingQuestions)) {
 			bulletAttackActive = true;
 			bullets = [];
 			
-			// 1. 創建8個System.out.print指令（每個發射更多子彈）
-			createBeamAttack(8);
+			// 1. 創建8個System.out.print指令（每個發射更多子彈），但不要在這裡自動結束攻擊
+			createBeamAttack(8, true);
 			
 			// 2. 延遲後添加終極程式碼攻擊（延長間隔）
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const texts = ['HELLO', 'WORLD', 'X', 'Y', 'CODE', '{', '}', '[', ']'];
 				const speed = 3.5; // 更高的速度
 				const count = 15; // 更多子彈
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const text = texts[Math.floor(Math.random() * texts.length)];
 						const size = text.length > 1 ? 18 : 24;
 						const side = Math.floor(Math.random() * 4);
@@ -2560,18 +2810,18 @@ if (empty($programmingQuestions)) {
 						const willExplode = Math.random() > 0.5;
 						const codeAttack = createCodeAttack(text, x, y, vx, vy, size, willExplode);
 						bullets.push(codeAttack);
-					}, i * 200); // 從120ms增加到200ms
+					}, i * 300); // 從120ms增加到300ms
 				}
-			}, 3000); // 從2000ms增加到3000ms
+			}, 6000); // 從2000ms增加到6000ms
 			
 			// 3. 再添加追蹤子彈（延長間隔）
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const centerX = 142;
 				const centerY = 132;
 				const count = 8;
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const angle = (i / count) * Math.PI * 2;
 						const radius = 200;
 						const x = centerX + Math.cos(angle) * radius;
@@ -2587,13 +2837,13 @@ if (empty($programmingQuestions)) {
 						bullet.chase = true;
 						bullet.speed = speed;
 						bullets.push(bullet);
-					}, i * 300); // 從200ms增加到300ms
+					}, i * 200); // 從200ms增加到400ms
 				}
-			}, 6000); // 從3500ms增加到6000ms
+			}, 3000); // 從3500ms增加到6000ms
 			
-			setTimeout(() => {
+			scheduleAttack(() => {
 				endBulletAttack();
-			}, 17000); // 從12000ms增加到17000ms（增加5秒）
+			}, 20000); // 從12000ms增加到30000ms（增加5秒）
 		}
 
 		function createFuriousAttack2() {
@@ -2607,22 +2857,22 @@ if (empty($programmingQuestions)) {
 			const count1 = 12;
 			
 			for (let i = 0; i < count1; i++) {
-				setTimeout(() => {
+				scheduleAttack(() => {
 					const text = texts1[Math.floor(Math.random() * texts1.length)];
 					const x = Math.random() * 260 + 20;
 					const codeAttack = createCodeAttack(text, x, -40, 0, speed1, 26, false);
 					bullets.push(codeAttack);
-				}, i * 180); // 從100ms增加到180ms
+				}, i * 480); // 從100ms增加到480ms
 			}
 			
 			// 2. 從左右兩側發射（延長間隔）
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const texts2 = ['HELLO', 'WORLD', 'CODE'];
 				const speed2 = 2.8;
 				const count2 = 8;
 				
 				for (let i = 0; i < count2; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const text = texts2[Math.floor(Math.random() * texts2.length)];
 						const y = Math.random() * 260 + 20;
 						const fromLeft = Math.random() > 0.5;
@@ -2631,18 +2881,18 @@ if (empty($programmingQuestions)) {
 						const vy = (Math.random() - 0.5) * speed2 * 0.6;
 						const codeAttack = createCodeAttack(text, x, y, vx, vy, 20, true); // 會爆炸
 						bullets.push(codeAttack);
-					}, i * 250); // 從150ms增加到250ms
+					}, i * 550); // 從150ms增加到250ms
 				}
-			}, 2500); // 從1500ms增加到2500ms
+			}, 5500); // 從1500ms增加到2500ms
 			
 			// 3. 追蹤子彈（更密集，延長間隔）
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const centerX = 142;
 				const centerY = 132;
 				const count = 12;
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const angle = (i / count) * Math.PI * 2;
 						const radius = 180;
 						const x = centerX + Math.cos(angle) * radius;
@@ -2658,32 +2908,13 @@ if (empty($programmingQuestions)) {
 						bullet.chase = true;
 						bullet.speed = speed;
 						bullets.push(bullet);
-					}, i * 250); // 從150ms增加到250ms
+					}, i * 550); // 從150ms增加到550ms
 				}
-			}, 5000); // 從3000ms增加到5000ms
+			}, 8000); // 從3000ms增加到5000ms
 			
-			// 4. HELLO WORLD 波浪攻擊（延長間隔）
-			setTimeout(() => {
-				const fullText = ['H', 'E', 'L', 'L', 'O', ' ', ' ', ' ', 'W', 'O', 'R', 'L', 'D', '!'];
-				const letterSpacing = 18;
-				const topBaseY = 15;
-				const bottomBaseY = 265;
-				const speed = 2.5;
-				
-				for (let i = 0; i < fullText.length; i++) {
-					if (fullText[i] === ' ') continue;
-					
-					const letterX = -50 + i * letterSpacing;
-					// 上方字母
-					const topCodeAttack = createCodeAttack(fullText[i], letterX, topBaseY, speed, 0, 20, false);
-					bullets.push(topCodeAttack);
-					// 下方字母
-					const bottomCodeAttack = createCodeAttack(fullText[i], letterX, bottomBaseY, speed, 0, 20, false);
-					bullets.push(bottomCodeAttack);
-				}
-			}, 7000); // 從4500ms增加到7000ms
+
 			
-			setTimeout(() => {
+			scheduleAttack(() => {
 				endBulletAttack();
 			}, 18000); // 從13000ms增加到18000ms（增加5秒）
 		}
@@ -2693,17 +2924,17 @@ if (empty($programmingQuestions)) {
 			bulletAttackActive = true;
 			bullets = [];
 			
-			// 1. 創建10個System.out.print指令（最多數量）
-			createBeamAttack(10);
+			// 1. 創建10個System.out.print指令（最多數量），但不要在這裡自動結束攻擊
+			createBeamAttack(10, true);
 			
 			// 2. 立即添加多方向程式碼攻擊
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const texts = ['HELLO', 'WORLD', 'X', 'Y', 'CODE', 'PHP', 'JS', '{', '}', '[', ']', '=', '+', '-', '*', '/'];
 				const speed = 3.8; // 最高速度
-				const count = 20; // 大量子彈
+				const count = 24; // 增加子彈數量
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const text = texts[Math.floor(Math.random() * texts.length)];
 						const size = text.length > 1 ? 16 : 22;
 						const side = Math.floor(Math.random() * 4);
@@ -2712,41 +2943,40 @@ if (empty($programmingQuestions)) {
 						if (side === 0) { // 上
 							x = Math.random() * 260 + 20;
 							y = -40;
-							vx = (Math.random() - 0.5) * speed * 0.9;
+							vx = (Math.random() - 0.5) * speed * 0.95;
 							vy = speed;
 						} else if (side === 1) { // 下
 							x = Math.random() * 260 + 20;
 							y = 320;
-							vx = (Math.random() - 0.5) * speed * 0.9;
+							vx = (Math.random() - 0.5) * speed * 0.95;
 							vy = -speed;
 						} else if (side === 2) { // 左
 							x = -40;
 							y = Math.random() * 260 + 20;
 							vx = speed;
-							vy = (Math.random() - 0.5) * speed * 0.9;
+							vy = (Math.random() - 0.5) * speed * 0.95;
 						} else { // 右
 							x = 340;
 							y = Math.random() * 260 + 20;
 							vx = -speed;
-							vy = (Math.random() - 0.5) * speed * 0.9;
+							vy = (Math.random() - 0.5) * speed * 0.95;
 						}
 						
-						// 70%機率爆炸（更高爆炸率）
-						const willExplode = Math.random() > 0.3;
+						const willExplode = Math.random() > 0.25; // 提高爆炸率
 						const codeAttack = createCodeAttack(text, x, y, vx, vy, size, willExplode);
 						bullets.push(codeAttack);
-					}, i * 100);
+					}, i * 160);
 				}
 			}, 1500);
 			
 			// 3. 密集追蹤子彈
-			setTimeout(() => {
+			scheduleAttack(() => {
 				const centerX = 142;
 				const centerY = 132;
 				const count = 16; // 更多追蹤子彈
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const angle = (i / count) * Math.PI * 2;
 						const radius = 160;
 						const x = centerX + Math.cos(angle) * radius;
@@ -2767,14 +2997,33 @@ if (empty($programmingQuestions)) {
 			}, 3000);
 			
 			// 4. 螺旋攻擊
-			setTimeout(() => {
+			// 3b. 額外的終極混合（中期爆發）
+			scheduleAttack(() => {
+				const textsMid = ['ULTIMATE', 'CODE', 'HELLO', 'WORLD', 'PHP', 'JS'];
+				const speedMid = 3.6;
+				const countMid = 14;
+				for (let i = 0; i < countMid; i++) {
+					scheduleAttack(() => {
+						const text = textsMid[Math.floor(Math.random() * textsMid.length)];
+						const size = text.length > 1 ? 16 : 22;
+						const side = Math.floor(Math.random() * 4);
+						let x, y, vx, vy;
+						if (side === 0) { x = Math.random() * 260 + 20; y = -40; vx = (Math.random() - 0.5) * speedMid; vy = speedMid; }
+						else if (side === 1) { x = Math.random() * 260 + 20; y = 320; vx = (Math.random() - 0.5) * speedMid; vy = -speedMid; }
+						else if (side === 2) { x = -40; y = Math.random() * 260 + 20; vx = speedMid; vy = (Math.random() - 0.5) * speedMid; }
+						else { x = 340; y = Math.random() * 260 + 20; vx = -speedMid; vy = (Math.random() - 0.5) * speedMid; }
+						bullets.push(createCodeAttack(text, x, y, vx, vy, size, Math.random() > 0.3));
+					}, i * 140);
+				}
+			}, 9000);
+			scheduleAttack(() => {
 				const centerX = 142;
 				const centerY = 132;
-				const count = 24;
+				const count = 36; // 增加螺旋數量
 				const speed = 3.0;
 				
 				for (let i = 0; i < count; i++) {
-					setTimeout(() => {
+					scheduleAttack(() => {
 						const angle = (i / count) * Math.PI * 2;
 						const bullet = createBullet(
 							centerX,
@@ -2783,48 +3032,28 @@ if (empty($programmingQuestions)) {
 							Math.sin(angle) * speed
 						);
 						bullets.push(bullet);
-					}, i * 120); // 從80ms增加到120ms
+					}, i * 140); // 延長內圈發射間隔
 				}
-			}, 9000); // 從4500ms增加到9000ms
+			},16000); // 延後螺旋第一波
+
+			// 4b. 第二波螺旋（較晚出現，變速與偏移角度）
+			scheduleAttack(() => {
+				const centerX = 142;
+				const centerY = 132;
+				const count2 = 36;
+				const speed2 = 3.2;
+				for (let i = 0; i < count2; i++) {
+					scheduleAttack(() => {
+						const angle = (i / count2) * Math.PI * 2 + Math.PI / count2; // 小偏移
+						const bullet = createBullet(centerX, centerY, Math.cos(angle) * speed2, Math.sin(angle) * speed2);
+						bullets.push(bullet);
+					}, i * 140);
+				}
+			}, 24000);
 			
-			// 5. HELLO WORLD 變框攻擊（縮窄框）
-			setTimeout(() => {
-				const soulBox = document.getElementById('soulBox');
-				const narrowHeight = 120;
-				window.tempSoulBoxNarrow = true;
-				window.tempSoulBoxHeight = narrowHeight;
-				window.tempSoulBoxOriginalHeight = parseFloat(soulBox.style.height) || 280;
-				
-				soulBox.style.transition = 'height 0.5s, margin-top 0.5s';
-				soulBox.style.height = narrowHeight + 'px';
-				soulBox.style.marginTop = ((280 - narrowHeight) / 2) + 'px';
-				
-				const fullText = ['H', 'E', 'L', 'L', 'O', ' ', ' ', ' ', 'W', 'O', 'R', 'L', 'D', '!'];
-				const letterSpacing = 18;
-				const topBaseY = 15;
-				const bottomBaseY = narrowHeight - 35;
-				const scrollSpeed = 2.0;
-				
-				let waveTime = 0;
-				const animateWave = () => {
-					waveTime += 0.08;
-					
-					for (let i = 0; i < fullText.length; i++) {
-						if (fullText[i] === ' ') continue;
-						// 這裡可以添加波浪動畫的字母
-					}
-					
-					if (bulletAttackActive) {
-						requestAnimationFrame(animateWave);
-					}
-				};
-				
-				animateWave();
-			}, 11000); // 從5500ms增加到11000ms
-			
-			setTimeout(() => {
+			scheduleAttack(() => {
 				endBulletAttack();
-			}, 21000); // 從16000ms增加到21000ms（增加5秒）
+			}, 30000); // 縮短為 30000ms
 		}
 
 		// ==================== 靈魂移動 ====================
@@ -2832,13 +3061,13 @@ if (empty($programmingQuestions)) {
 		const soulSpeed = 3;
 
 		document.addEventListener('keydown', (e) => {
-			keys[e.key] = true;
-			
-			// Enter鍵或空格鍵加速對話（已在上面處理，這裡不再重複）
+			const k = (e.key || '').length === 1 ? (e.key || '').toLowerCase() : e.key;
+			keys[k] = true;
 		});
 
 		document.addEventListener('keyup', (e) => {
-			keys[e.key] = false;
+			const k = (e.key || '').length === 1 ? (e.key || '').toLowerCase() : e.key;
+			keys[k] = false;
 		});
 
 		function updateSoul() {
@@ -2848,8 +3077,8 @@ if (empty($programmingQuestions)) {
 			updateBullets();
 			checkCollisions();
 			
-			// 在子彈攻擊時可以移動靈魂
-			if (bulletAttackActive || gameState === 'enemyTurn') {
+			// 在子彈攻擊、敵人回合或教學期間可以移動靈魂
+			if (bulletAttackActive || gameState === 'enemyTurn' || gameState === 'tutorial' || tutorialTrapActive) {
 				// 移動靈魂 - 使用方向鍵
 				// 確保靈魂不超出外框（考慮靈魂大小16px，邊框3px）
 				// 如果框被縮窄或變矮，使用調整後的尺寸
@@ -2892,7 +3121,9 @@ if (empty($programmingQuestions)) {
 		}
 
 		function updateBullets() {
-			if (!bulletAttackActive) return;
+			// 若沒有任何子彈也沒在攻擊，跳過更新；
+			// 若還有子彈存在（即使 bulletAttackActive 為 false），仍需繼續更新以避免子彈停住
+			if (!bulletAttackActive && bullets.length === 0) return;
 			
 			bullets.forEach((bullet, index) => {
 				if (!bullet.parentNode) return;
@@ -2933,7 +3164,8 @@ if (empty($programmingQuestions)) {
 		}
 
 		function checkCollisions() {
-			if (!bulletAttackActive) return;
+			// 同 updateBullets：若還有子彈存在，即使 bulletAttackActive 為 false 也要檢查碰撞
+			if (!bulletAttackActive && bullets.length === 0) return;
 			
 			const soulRect = {
 				x: soulPosition.x,

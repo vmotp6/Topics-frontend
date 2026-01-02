@@ -309,7 +309,7 @@ function getActiveClass($targetFile) {
     color: #2c3e50;
     text-decoration: none;
     font-weight: 600;
-    font-size: 1.0rem;
+    font-size: 0.9rem;
     padding: 8px 12px;
     border-radius: 8px;
     transition: all 0.3s ease;
