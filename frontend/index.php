@@ -976,6 +976,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
           <a href="records.php" class="feature-link">活動紀錄填寫</a>
         </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">📁</div>
+          <h3 class="feature-title">檔案上傳</h3>
+          <p class="feature-description">上傳和管理您的檔案（PPT、Word、圖片等），容量限制50GB。</p>
+          <a href="teacher_file_upload.php" class="feature-link">檔案上傳</a>
+        </div>
         <?php endif; ?>
         
         <div class="feature-card">

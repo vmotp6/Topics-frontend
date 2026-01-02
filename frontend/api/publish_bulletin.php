@@ -20,12 +20,13 @@ if (!$isLoggedIn) {
     exit;
 }
 
-// 檢查角色：只有 TEA、DI、STA 可以發布公告
+// 檢查角色：只有主任、科助、行政人員可以發布公告
 $user_role = $_SESSION['role'] ?? '';
 $is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA');
 $is_director = ($user_role === 'DI');
+$is_assistant = ($user_role === 'AS' || $user_role === '科助');
 $is_staff = ($user_role === 'STA' || $user_role === '學校行政人員');
-$allowed = $is_teacher || $is_director || $is_staff;
+$allowed = $is_director || $is_assistant || $is_staff;
 
 if (!$allowed) {
     http_response_code(403);

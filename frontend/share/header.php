@@ -946,6 +946,10 @@ function getActiveClass($targetFile) {
     <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_header_teacher): ?>
+      <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
+    <?php endif; ?>
+    
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
     <?php endif; ?>
     
@@ -1040,6 +1044,18 @@ function getActiveClass($targetFile) {
             <?php else: ?>
                 <a href="#" class="btn-logout">個人資料</a>
             <?php endif; ?>
+
+                        <?php 
+                        // 檢查是否為允許進入後台的角色（管理員、行政人員、主任）
+                        $allowed_backend_roles = ['ADM', 'STA', 'DI', '管理員', '行政人員', '主任'];
+                        $can_access_backend = in_array($user_role, $allowed_backend_roles);
+                        if ($can_access_backend) {
+                          // 與前台相同網域下的 Topics-backend 入口，攜帶目前 session id 供後台可選擇採用
+                          $sid = session_id();
+                          $backend_url = $base_url . '/Topics-backend/frontend/index.php' . (empty($sid) ? '' : ('?sid=' . urlencode($sid)));
+                        ?>
+                          <a href="<?php echo htmlspecialchars($backend_url); ?>" class="btn-logout">前往後台</a>
+                        <?php } ?>
          <?php else: ?>
            <a href="#" class="btn-logout">個人資料</a>
          <?php endif; ?>
@@ -1100,6 +1116,10 @@ function getActiveClass($targetFile) {
     
     <?php if ($isLoggedIn && $is_mobile_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
+    <?php endif; ?>
+    
+    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
+      <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
     <?php endif; ?>
     
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
