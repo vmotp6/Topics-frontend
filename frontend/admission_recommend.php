@@ -1625,6 +1625,29 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
     <!-- 查詢結果（多筆記錄時顯示） -->
     <?php if (!empty($search_results) && !$single_detail): ?>
+    <?php
+    // 計算所有記錄的年份
+    $years_in_results = [];
+    $current_year = (int)date('Y');
+    foreach ($search_results as $result) {
+        if (!empty($result['created_at'])) {
+            $year = (int)date('Y', strtotime($result['created_at']));
+            if (!in_array($year, $years_in_results)) {
+                $years_in_results[] = $year;
+            }
+        }
+    }
+    
+    // 確保當前年份在列表中（即使沒有記錄）
+    if (!in_array($current_year, $years_in_results)) {
+        $years_in_results[] = $current_year;
+    }
+    
+    rsort($years_in_results); // 降冪排序，最新的年份在前
+    
+    // 決定預設選中的年份：如果當前年份有記錄就選它，否則選最新的有記錄的年份
+    $default_year = $current_year;
+    ?>
     <div class="search-results">
       <h4>查詢結果</h4>
       
@@ -1636,6 +1659,17 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
         <div class="filter-inputs">
           <div class="filter-group">
+            <label for="filter_year">年份</label>
+            <select id="filter_year">
+              <option value="all">全部年份</option>
+              <?php foreach ($years_in_results as $year): ?>
+              <option value="<?php echo $year; ?>" <?php echo ($year == $default_year) ? 'selected' : ''; ?>>
+                <?php echo $year; ?>年
+              </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="filter-group">
             <label for="filter_student_name">被推薦學生姓名</label>
             <input type="text" id="filter_student_name" placeholder="輸入學生姓名進行篩選">
           </div>
@@ -1646,7 +1680,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           
         </div>
         <div class="filter-note">
-          <i class="fas fa-info-circle"></i> 輸入姓名或學校名稱可即時篩選結果
+          <i class="fas fa-info-circle"></i> 預設顯示<?php echo $default_year; ?>年的記錄，可選擇其他年份查看
         </div>
       </div>
       
@@ -1666,9 +1700,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
           </thead>
           <tbody>
             <?php foreach ($search_results as $result): ?>
+            <?php
+            $record_year = !empty($result['created_at']) ? date('Y', strtotime($result['created_at'])) : '';
+            ?>
             <tr class="result-row" 
                 data-student-name="<?php echo htmlspecialchars($result['student_name'] ?? ''); ?>"
-                data-school="<?php echo htmlspecialchars($result['student_school_name'] ?? $result['student_school'] ?? ''); ?>">
+                data-school="<?php echo htmlspecialchars($result['student_school_name'] ?? $result['student_school'] ?? ''); ?>"
+                data-year="<?php echo $record_year; ?>">
               <td><?php echo $result['id']; ?></td>
               <td>
                 <?php echo htmlspecialchars($result['recommender_name']); ?><br>
@@ -2709,6 +2747,27 @@ document.addEventListener('DOMContentLoaded', function() {
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
 
+.filter-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-group select:hover {
+  border-color: #999;
+}
+
 .filter-btn, .clear-filter-btn {
   padding: 8px 16px;
   border: none;
@@ -2834,14 +2893,21 @@ function showNotification(message, type = 'success') {
 function applyFilter() {
   const studentNameFilter = document.getElementById('filter_student_name').value.toLowerCase().trim();
   const schoolFilter = document.getElementById('filter_school').value.toLowerCase().trim();
+  const yearFilter = document.getElementById('filter_year').value;
   const rows = document.querySelectorAll('.result-row');
   let visibleCount = 0;
   
   rows.forEach(row => {
     const studentName = row.getAttribute('data-student-name').toLowerCase();
     const school = row.getAttribute('data-school').toLowerCase();
+    const year = row.getAttribute('data-year');
     
     let showRow = true;
+    
+    // 檢查年份篩選
+    if (yearFilter && yearFilter !== 'all' && year !== yearFilter) {
+      showRow = false;
+    }
     
     // 檢查學生姓名篩選
     if (studentNameFilter && !studentName.includes(studentNameFilter)) {
@@ -2871,6 +2937,7 @@ function applyFilter() {
 function clearFilter() {
   document.getElementById('filter_student_name').value = '';
   document.getElementById('filter_school').value = '';
+  document.getElementById('filter_year').value = 'all';
   
   const rows = document.querySelectorAll('.result-row');
   rows.forEach(row => {
@@ -2894,6 +2961,7 @@ function updateResultCount(count) {
 function setupRealTimeFilter() {
   const studentNameInput = document.getElementById('filter_student_name');
   const schoolInput = document.getElementById('filter_school');
+  const yearSelect = document.getElementById('filter_year');
   
   if (studentNameInput) {
     studentNameInput.addEventListener('input', applyFilter);
@@ -2901,6 +2969,10 @@ function setupRealTimeFilter() {
   
   if (schoolInput) {
     schoolInput.addEventListener('input', applyFilter);
+  }
+  
+  if (yearSelect) {
+    yearSelect.addEventListener('change', applyFilter);
   }
 }
 
@@ -2916,6 +2988,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // 設置即時篩選
   setupRealTimeFilter();
+  
+  // 頁面載入時立即應用當前年份篩選
+  setTimeout(function() {
+    const yearSelect = document.getElementById('filter_year');
+    if (yearSelect) {
+      // 確保篩選被執行，即使預設就是當年
+      applyFilter();
+    }
+  }, 100);
 });
 </script>
 
