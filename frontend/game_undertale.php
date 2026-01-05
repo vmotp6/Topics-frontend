@@ -434,6 +434,115 @@ if (empty($programmingQuestions)) {
 			display: block;
 		}
 
+			/* Help 按鈕（左上角） */
+		.help-button {
+			position: fixed;
+			top: 130px;
+			left: 12px;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			border: 3px solid #000;
+			font-weight: bold;
+			font-size: 18px;          /* ★ 控制 ? 大小 */
+			cursor: pointer;
+			z-index: 200;
+			box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+			display: flex;            /* ★ 關鍵 */
+			align-items: center;      /* 垂直置中 */
+			justify-content: center;  /* 水平置中 */
+		}
+
+
+			.help-button:focus { 
+				outline: none; 
+			}
+
+			/* Help modal */
+/* Help modal */
+			.help-modal {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 420px;
+				max-width: calc(100% - 32px);
+				background: #ffffff;
+				border: 3px solid #000;
+				border-radius: 12px;          /* ★ 補圓角，解決裁切感 */
+				padding: 20px 22px;           /* ★ 增加內距，避免貼邊 */
+				z-index: 120;
+				display: none;
+				box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+				box-sizing: border-box;
+				max-height: 75vh;
+				overflow-y: auto;
+			}
+
+			/* 顯示 */
+			.help-modal.show {
+				display: block;
+			}
+
+			.help-modal.show {
+				display: block;
+			}
+
+			.help-modal h3 {
+				margin: 0 0 12px 0;
+				font-size: 18px;
+				font-weight: bold;
+				border-bottom: 2px solid #000;
+				padding-bottom: 6px;
+			}
+
+			.help-modal p { 
+				margin: 6px 0; font-size: 14px; 
+			}
+
+
+			.help-modal .close-btn {
+				position: absolute;   /* ★ 關鍵 */
+				top: 8px;
+				right: 8px;
+				width: 32px;
+				height: 32px;
+				padding: 0;
+				border: 2px solid #000;
+				border-radius: 6px;
+				font-size: 16px;
+				font-weight: bold;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+
+			/* 玩家回合時 Fight 按鈕樣式 */
+			.action-button.player-turn {
+				background: #ff8800;
+				color: #ffffff;
+				border-color: #ff8800;
+				box-shadow: 0 6px 18px rgba(255,136,0,0.35);
+				transform: translateY(-2px);
+				animation: fightBlink 1s infinite;
+			}
+
+			@keyframes fightBlink {
+				0% {
+					box-shadow: 0 6px 18px rgba(255,136,0,0.25);
+					transform: translateY(0);
+				}
+				50% {
+					box-shadow: 0 10px 30px rgba(255,170,0,0.6);
+					transform: translateY(-3px);
+				}
+				100% {
+					box-shadow: 0 6px 18px rgba(255,136,0,0.25);
+					transform: translateY(0);
+				}
+			}
+
 		.act-option {
 			padding: 10px;
 			cursor: pointer;
@@ -719,6 +828,19 @@ if (empty($programmingQuestions)) {
 					<span id="playerMaxHP">20</span>
 				</div>
 			</div>
+
+			<!-- Help 按鈕 -->
+			<button id="btnHelp" class="help-button" title="操作說明">?</button>
+
+			<!-- Help Modal -->
+			<div class="help-modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+				<h3 id="helpTitle">操作說明</h3>
+				<p>移動：使用 <strong>W A S D</strong> 或 <strong>方向鍵</strong> 移動靈魂。</p>
+				<p>攻擊：按下 <strong>FIGHT</strong>（畫面下方）會出題，答對即可攻擊敵人。</p>
+				<p>寬恕：按下 <strong>MERCY</strong> 嘗試寬恕敵人（需先 ACT）。</p>
+				<p>當畫面上方的 <strong>FIGHT</strong> 按鈕為橘色時，代表現在是你的回合。</p>
+				<button class="close-btn" id="helpClose">X</button>
+			</div>
 			<div class="buttons-row">
 				<button class="action-button" id="btnFight">FIGHT</button>
 				<button class="action-button" id="btnMercy">MERCY</button>
@@ -757,7 +879,7 @@ let playerMaxHP = 20;
 let playerLV = 1;
 
 let enemyHP = 20;
-let enemyMaxHP = 30;
+let enemyMaxHP = 12;
 let enemyName = '奶油';
 
 let bullets = [];
@@ -799,7 +921,7 @@ let invulnerableTime = 0;
 		const enemies = [
 			{
 				name: '奶油',
-				maxHP: 2,
+				maxHP: 12,
 				attacks: [
 					'codeAttackX',        // 回合 1：X 攻擊
 					'codeAttackY',        // 回合 2：Y 攻擊
@@ -2540,8 +2662,9 @@ function tutorialSuccess() {
 			}
 			
 			// 機關槍式連發：每個指令會在短間隔內連續發射多發子彈
-			// 增加每個指令的子彈數量以強化攻擊
-			const bulletsPerCommand = furiousMode ? 12 : (5 + Math.floor(turnCount / 3));
+			// 再減少每個指令的子彈數量（減少5顆），但至少保留 1 顆
+			const basePerCommand = furiousMode ? 8 : Math.max(2, 3 + Math.floor(turnCount / 4));
+			const bulletsPerCommand = Math.max(1, basePerCommand - 3);
 			let totalBulletsShot = 0;
 			let remainingShots = commandCount * bulletsPerCommand;
 
@@ -2550,8 +2673,9 @@ function tutorialSuccess() {
 				bulletAttackActive = true;
 			}
 
-			// 發射參數：狂暴模式更快、更猛烈
-			const intervalMs = furiousMode ? 80 : 140;
+			// 發射參數：狂暴模式更快、更猛烈，但保留較低頻率減少負載
+			const intervalMs = furiousMode ? 100 : 220;
+			const homingSpeed = furiousMode ? 3.2 : 2.2;
 
 			// 對每個指令啟動一個快速連發計時器
 			commands.forEach((cmd) => {
@@ -2567,8 +2691,14 @@ function tutorialSuccess() {
 					// 隨機化速度微調，讓子彈不會全部重疊
 					const jitterX = (Math.random() - 0.5) * 0.3;
 					const jitterY = (Math.random() - 0.5) * 0.3;
-					const bullet = createBullet(cmd.arrowX, cmd.arrowY, cmd.vx + jitterX, cmd.vy + jitterY);
+					// 建立子彈，設定為追蹤型（homing），初始速度較小以便後續校正方向
+					const bullet = createBullet(cmd.arrowX, cmd.arrowY, (cmd.vx + jitterX) * 0.4, (cmd.vy + jitterY) * 0.4);
 					if (bullet) {
+						bullet.chase = true;
+						bullet.speed = homingSpeed;
+						// 保留較小初始速度矢量，讓 homing 能逐步調整方向
+						bullet.vx = (cmd.vx + jitterX) * 0.4;
+						bullet.vy = (cmd.vy + jitterY) * 0.4;
 						bullets.push(bullet);
 						totalBulletsShot++;
 						remainingShots--;
@@ -2843,11 +2973,11 @@ function tutorialSuccess() {
 			
 			scheduleAttack(() => {
 				endBulletAttack();
-			}, 20000); // 從12000ms增加到30000ms（增加5秒）
+			}, 2000); // 從12000ms增加到30000ms（增加5秒）
 		}
 
 		function createFuriousAttack2() {
-			// 第2回合：多種攻擊混合 + 追蹤子彈 + HELLO WORLD波浪
+			// 第2回合：多種攻擊混合 + 追蹤子彈 
 			bulletAttackActive = true;
 			bullets = [];
 			
@@ -2883,7 +3013,7 @@ function tutorialSuccess() {
 						bullets.push(codeAttack);
 					}, i * 550); // 從150ms增加到250ms
 				}
-			}, 5500); // 從1500ms增加到2500ms
+			}, 4500); // 從1500ms增加到2500ms
 			
 			// 3. 追蹤子彈（更密集，延長間隔）
 			scheduleAttack(() => {
@@ -2916,7 +3046,7 @@ function tutorialSuccess() {
 			
 			scheduleAttack(() => {
 				endBulletAttack();
-			}, 18000); // 從13000ms增加到18000ms（增加5秒）
+			}, 8000); // 從13000ms增加到18000ms（增加5秒）
 		}
 
 		function createFuriousAttack3() {
@@ -3142,17 +3272,39 @@ function tutorialSuccess() {
 				}
 				
 				// 更新子彈位置
+				// 支援追蹤子彈：若標記為 chase，逐步調整速度向靈魂靠攏
+				if (bullet.chase) {
+					// 設定目標為靈魂中心
+					const targetX = soulPosition.x + 8; // 靈魂中心偏移
+					const targetY = soulPosition.y + 8;
+					const dxTo = targetX - left;
+					const dyTo = targetY - top;
+					const distTo = Math.sqrt(dxTo * dxTo + dyTo * dyTo) || 1;
+					const desiredVx = (dxTo / distTo) * (bullet.speed || 2.2);
+					const desiredVy = (dyTo / distTo) * (bullet.speed || 2.2);
+					// 緩慢靠攏（避免瞬間轉向造成不自然運動）
+					const homingStrength = 0.12; // 值越大追蹤越靈敏
+					bullet.vx = (bullet.vx || 0) * (1 - homingStrength) + desiredVx * homingStrength;
+					bullet.vy = (bullet.vy || 0) * (1 - homingStrength) + desiredVy * homingStrength;
+				}
 				if (bullet.vx !== undefined && bullet.vy !== undefined) {
 					left += bullet.vx;
 					top += bullet.vy;
-					
 					bullet.style.left = left + 'px';
 					bullet.style.top = top + 'px';
 				}
 				
-				// 移除超出邊界的子彈（程式碼文字需要更大範圍）
-				const maxDistance = bullet.textContent ? 250 : 210;
-				if (left < -50 || left > maxDistance || top < -50 || top > maxDistance) {
+				// 使用 soulBox 的實際寬高作為邊界判斷，並提供適度的外擴 margin
+				const soulBox = document.getElementById('soulBox');
+				const boxWidth = soulBox ? soulBox.clientWidth : 300;
+				const boxHeight = soulBox ? soulBox.clientHeight : 280;
+				const margin = 60; // 允許子彈飛出框外一段距離再移除，避免被過早刪除
+				// 程式碼文字可能比圓形子彈需要更大的容差
+				const outLeft = -margin;
+				const outRight = boxWidth + margin;
+				const outTop = -margin;
+				const outBottom = boxHeight + margin;
+				if (left < outLeft || left > outRight || top < outTop || top > outBottom) {
 					// 如果是會爆炸的文字且後期關卡，在邊界處也爆炸
 					if (bullet.willExplode && turnCount >= 6 && bullet.textContent) {
 						createExplosion(left, top, bullet);
@@ -3356,8 +3508,56 @@ function tutorialSuccess() {
 		}
 
 		// ==================== 遊戲循環 ====================
+		// 更新回合 UI：Fight 按鈕在玩家回合時套用樣式
+		function updateTurnUI() {
+			const btnFightEl = document.getElementById('btnFight');
+			if (!btnFightEl) return;
+			if (gameState === 'playerTurn') {
+				btnFightEl.classList.add('player-turn');
+			} else {
+				btnFightEl.classList.remove('player-turn');
+			}
+		}
+
+		// Help modal 顯示與關閉
+		function showHelp() {
+			const modal = document.getElementById('helpModal');
+			if (modal) modal.classList.add('show');
+			// 防止 body 捲軸顯示/隱藏導致 layout 跳動
+			document.body.style.overflow = 'hidden';
+		}
+		function hideHelp() {
+			const modal = document.getElementById('helpModal');
+			if (modal) modal.classList.remove('show');
+			// 恢復 body 捲軸
+			document.body.style.overflow = '';
+		}
+
+		// 綁定 Help 按鈕與關閉按鈕事件
+		document.addEventListener('DOMContentLoaded', () => {
+			const btnHelp = document.getElementById('btnHelp');
+			const helpClose = document.getElementById('helpClose');
+			if (btnHelp) btnHelp.addEventListener('click', (e) => { e.stopPropagation(); showHelp(); });
+			if (helpClose) helpClose.addEventListener('click', (e) => { e.stopPropagation(); hideHelp(); });
+			// 點擊 modal 以外區域也關閉
+			document.addEventListener('click', (e) => {
+				const modal = document.getElementById('helpModal');
+				if (!modal) return;
+				if (!modal.classList.contains('show')) return;
+				if (!modal.contains(e.target) && e.target.id !== 'btnHelp') {
+					hideHelp();
+				}
+			});
+			// Esc 關閉
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape') hideHelp();
+			});
+		});
+
 		function gameLoop() {
 			updateSoul();
+			// 更新回合提示 UI
+			updateTurnUI();
 			
 			// 更新無敵時間
 			if (invulnerable) {
