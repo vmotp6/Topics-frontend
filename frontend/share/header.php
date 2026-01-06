@@ -944,6 +944,11 @@ function getActiveClass($targetFile) {
     <?php if ($isLoggedIn &&  $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
+
+    <?php if ($isLoggedIn && $is_header_teacher): ?>
+      <a href="<?php echo getCorrectPath('student_management.php'); ?>" class="<?php echo getActiveClass('student_management.php'); ?>">學生管理</a>
+      <a href="<?php echo getCorrectPath('student_contact_management.php'); ?>" class="<?php echo getActiveClass('student_contact_management.php'); ?>">學生聯絡管理</a>
+    <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
@@ -1116,6 +1121,11 @@ function getActiveClass($targetFile) {
     
     <?php if ($isLoggedIn && $is_mobile_teacher): ?>
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
+    <?php endif; ?>
+
+    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
+      <a href="<?php echo getCorrectPath('student_management.php'); ?>" class="<?php echo getActiveClass('student_management.php'); ?>">學生管理</a>
+      <a href="<?php echo getCorrectPath('student_contact_management.php'); ?>" class="<?php echo getActiveClass('student_contact_management.php'); ?>">學生聯絡管理</a>
     <?php endif; ?>
     
     <?php if ($isLoggedIn && $is_mobile_teacher): ?>

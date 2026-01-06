@@ -27,6 +27,7 @@ function ensureStudentContactTable($conn) {
         status VARCHAR(100) DEFAULT NULL,
         contact_method VARCHAR(50) DEFAULT NULL,
         contact_method_value VARCHAR(255) DEFAULT NULL,
+        contact_content TEXT DEFAULT NULL,
         contact_note VARCHAR(255) DEFAULT NULL,
         contact_date DATE DEFAULT NULL,
         created_by INT DEFAULT NULL,
@@ -58,6 +59,7 @@ try {
     $status = trim($input['status'] ?? '');
     $contact_method = trim($input['contact_method'] ?? '');
     $contact_method_value = trim($input['contact_method_value'] ?? '');
+    $contact_content = trim($input['contact_content'] ?? '');
     $contact_note = trim($input['contact_note'] ?? '');
     $contact_date = trim($input['contact_date'] ?? '');
 
@@ -72,6 +74,7 @@ try {
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS current_grade VARCHAR(50) DEFAULT NULL");
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS contact_method VARCHAR(50) DEFAULT NULL");
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS contact_method_value VARCHAR(255) DEFAULT NULL");
+    $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS contact_content TEXT DEFAULT NULL");
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS contact_note VARCHAR(255) DEFAULT NULL");
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS contact_date DATE DEFAULT NULL");
     $conn->query("ALTER TABLE student_contacts ADD COLUMN IF NOT EXISTS created_by INT DEFAULT NULL");
@@ -93,8 +96,8 @@ try {
         }
     }
 
-    $stmt = $conn->prepare("INSERT INTO student_contacts (name, junior_high, current_grade, interest_department, activity_source, contact_teacher, status, contact_method, contact_method_value, contact_note, contact_date, created_by, created_by_username) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssssssssis", $name, $junior_high, $current_grade, $interest_department, $activity_source, $contact_teacher, $status, $contact_method, $contact_method_value, $contact_note, $contact_date, $created_by, $created_by_username);
+    $stmt = $conn->prepare("INSERT INTO student_contacts (name, junior_high, current_grade, interest_department, activity_source, contact_teacher, status, contact_method, contact_method_value, contact_content, contact_note, contact_date, created_by, created_by_username) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssssssis", $name, $junior_high, $current_grade, $interest_department, $activity_source, $contact_teacher, $status, $contact_method, $contact_method_value, $contact_content, $contact_note, $contact_date, $created_by, $created_by_username);
     if (!$stmt->execute()) {
         throw new Exception('寫入資料庫失敗，請稍後再試');
     }

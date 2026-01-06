@@ -992,6 +992,13 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <a href="student_management.php" class="feature-link">學生管理</a>
         </div>
 
+        <div class="feature-card">
+          <div class="feature-icon">📇</div>
+          <h3 class="feature-title">學生聯絡管理</h3>
+          <p class="feature-description">新增與查詢學生聯絡名單，管理狀態、聯絡方式與備註。</p>
+          <a href="student_contact_management.php" class="feature-link">學生聯絡管理</a>
+        </div>
+
         
         <div class="feature-card">
           <div class="feature-icon">📢</div>
