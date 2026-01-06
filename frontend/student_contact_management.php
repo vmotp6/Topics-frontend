@@ -42,10 +42,16 @@ try {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>學生聯絡管理 - 康寧大學招生平台</title>
   <style>
+    /* 這頁的 navbar 連結較多，會換行變成雙排；用 !important 當作 fallback，
+       真正的值會由 JS 依 navbar 實際高度動態設定，避免橫幅被遮住。 */
+    body.custom-spacing { padding-top: 140px !important; }
+    @media (max-width: 768px) { body.custom-spacing { padding-top: 160px !important; } }
+    @media (max-width: 480px) { body.custom-spacing { padding-top: 175px !important; } }
+
     /* 最上方留白區塊（依需求：橫幅前先留出一段空白） */
     .scm-top-spacer {
       /* 顯眼的白色間隔（在 header 下方、橫幅之前） */
-      height: 60px;
+      height: 12px;
       width: 100%;
       background: #ffffff;
     }
@@ -56,47 +62,21 @@ try {
       background: #b3caebff;
       border-radius: 18px;
       /* 最適大小：縮小高度 + 仍保留底部留白帶 */
-      padding: 38px 18px 58px;
+      /* 讓橫幅上方留一段空白（參考 records.php 橫幅，上面會先留白再放標題） */
+      padding: 34px 18px 28px; /* 增加上方內距避免文字被裁切，縮小底部高度 */
       margin: 0 0 14px 0;
       color: #ffffff;
       box-shadow: 0 10px 24px rgba(100, 120, 224, 0.14);
       position: relative;
-      overflow: hidden;
+      overflow: visible; /* 避免標題文字被裁切 */
     }
 
-    /* 底部留白帶（像範例圖那樣，下方有一段空白區） */
-    .scm-hero::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 26px;
-      background: rgba(255, 255, 255, 0.28);
-    }
+    /* 依需求：移除橫幅下方更淺色區塊（原本的 ::after 留白帶） */
 
     .scm-hero-inner {
       max-width: 980px;
       margin: 0 auto;
       text-align: center;
-    }
-
-    .scm-hero-icon {
-      width: 48px;
-      height: 48px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 2px solid rgba(255,255,255,0.55);
-      background: rgba(255,255,255,0.18);
-      border-radius: 14px;
-      margin-bottom: 10px;
-      box-sizing: border-box;
-    }
-
-    .scm-hero-icon i {
-      font-size: 22px;
-      color: #ffffff;
     }
 
     .scm-hero-title {
@@ -115,14 +95,14 @@ try {
     }
 
     @media (max-width: 768px) {
-      .scm-top-spacer { height: 40px; }
-      .scm-hero { padding: 32px 14px 52px; }
+      .scm-top-spacer { height: 10px; }
+      .scm-hero { padding: 28px 14px 24px; }
       .scm-hero-title { font-size: 28px; }
     }
 
     @media (max-width: 480px) {
-      .scm-top-spacer { height: 28px; }
-      .scm-hero { padding: 28px 12px 46px; }
+      .scm-top-spacer { height: 8px; }
+      .scm-hero { padding: 24px 12px 20px; }
       .scm-hero-title { font-size: 28px; }
       .scm-hero-desc { font-size: 13px; }
     }
@@ -237,14 +217,13 @@ try {
     .scm-empty { text-align:center; padding: 18px; color: #666; font-weight: 800; }
   </style>
 </head>
-<body>
+<body class="custom-spacing">
 <?php include("share/header.php"); ?>
 <main>
   <div class="scm-page">
     <div class="scm-top-spacer"></div>
     <section class="scm-hero">
       <div class="scm-hero-inner">
-        <div class="scm-hero-icon"><i class="fas fa-clipboard-list"></i></div>
         <h2 class="scm-hero-title">學生聯絡管理</h2>
         <p class="scm-hero-desc">請詳細填寫學生聯絡相關資訊；姓名為必填。可透過下方篩選快速查詢名單。</p>
       </div>
@@ -572,6 +551,27 @@ try {
     </div>
   </div>
 </main>
+<script>
+  // 動態調整本頁 padding-top，避免固定導覽列（可能兩排）遮住橫幅標題
+  (function() {
+    function applyNavbarOffset() {
+      const navbar = document.querySelector('.navbar');
+      if (!navbar) return;
+      const extraGap = 8; // 額外留白（縮小空白但仍避免貼到導覽列）
+      const h = navbar.offsetHeight || 0;
+      if (h > 0) {
+        document.body.style.paddingTop = (h + extraGap) + 'px';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', applyNavbarOffset);
+    window.addEventListener('load', applyNavbarOffset);
+    window.addEventListener('resize', function() {
+      // resize 時導覽列可能換行高度改變，重新計算
+      applyNavbarOffset();
+    });
+  })();
+</script>
 <?php include("share/footer.php"); ?>
 </body>
 </html>
