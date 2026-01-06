@@ -371,7 +371,7 @@ try {
                 <th style="min-width:90px;">聯絡教師</th>
                 <th style="min-width:80px;">狀態</th>
                 <th style="min-width:105px;">聯絡日期</th>
-                <th style="min-width:160px;">聯絡方式/值</th>
+                <th style="min-width:160px;">聯絡方式</th>
                 <th style="min-width:180px;">聯絡內容</th>
                 <th style="min-width:200px;">備註</th>
                 <th style="min-width:135px;">建立時間</th>
