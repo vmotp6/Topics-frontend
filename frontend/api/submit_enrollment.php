@@ -288,6 +288,7 @@ try {
             email VARCHAR(100) DEFAULT NULL COMMENT '電子郵件',
             junior_high VARCHAR(20) DEFAULT NULL COMMENT '就讀或畢業國中，關聯school_data.school_code',
             current_grade VARCHAR(20) DEFAULT NULL COMMENT '目前年級，關聯identity_options.code',
+            graduation_year INT(4) DEFAULT NULL COMMENT '預計國中畢業年份',
             line_id VARCHAR(100) DEFAULT NULL COMMENT 'LineID',
             facebook VARCHAR(200) DEFAULT NULL COMMENT 'Facebook',
             recommended_teacher INT(11) DEFAULT NULL COMMENT '推薦老師關聯user.id',
@@ -299,7 +300,8 @@ try {
             INDEX idx_recommended_teacher (recommended_teacher),
             INDEX idx_assigned_teacher_id (assigned_teacher_id),
             INDEX idx_junior_high (junior_high),
-            INDEX idx_current_grade (current_grade)
+            INDEX idx_current_grade (current_grade),
+            INDEX idx_graduation_year (graduation_year)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='就讀意願登錄表'";
         
         $pdo->exec($createTableSQL);
@@ -872,7 +874,7 @@ try {
     }
     
     // 如果 current_grade 有值但无法获取有效的 code，设为 NULL（允许为空）
-    // 但不抛出错误，因为这是可选字段
+    // 但不抛出错误，因為這是可選字段
     
     // 轉換科系名稱為 departments.code
     $getDepartmentCode = function($department_name) use ($pdo) {
@@ -896,16 +898,46 @@ try {
         return $result ? $result['code'] : null;
     };
     
+    // ==========================================
+    // [新增] 計算預計畢業年份 (graduation_year)
+    // ==========================================
+    // 注意：此段邏輯必須放在 SQL 定義之前
+    $graduation_year = null;
+    if ($current_grade_code) {
+        $current_month = (int)date('m');
+        $current_year = (int)date('Y');
+        
+        // 判定基準：如果是 9月以後(新學年)，國三生的畢業年是明年；如果是 1-8月，國三生畢業年是今年
+        // 例如：2025年 10月填表 (9月後)，J3 學生將在 2026 畢業
+        // 例如：2026年 3月填表 (9月前)，J3 學生將在 2026 畢業
+        $base_grad_year = ($current_month >= 9) ? $current_year + 1 : $current_year;
+        
+        switch ($current_grade_code) {
+            case 'J3': // 國三
+                $graduation_year = $base_grad_year;
+                break;
+            case 'J2': // 國二 (晚一年畢業)
+                $graduation_year = $base_grad_year + 1;
+                break;
+            case 'J1': // 國一 (晚兩年畢業)
+                $graduation_year = $base_grad_year + 2;
+                break;
+            default:
+                $graduation_year = null; // 非國中生或無法判斷
+        }
+    }
+
     // 插入資料到 enrollment_intention 表
     // junior_high 直接存储 school_code，current_grade 直接存储 code
+    // 加入 graduation_year 欄位
     $sql = "INSERT INTO enrollment_intention (
         name, identity, gender, phone1, phone2, email,
-        junior_high, current_grade,
+        junior_high, current_grade, graduation_year,
         line_id, facebook, recommended_teacher, remarks,
         created_at
     ) VALUES (
         :name, :identity, :gender, :phone1, :phone2, :email,
-        :junior_high, :current_grade,
+        :junior_high, :current_grade, :graduation_year,
         :line_id, :facebook, :recommended_teacher, :remarks,
         NOW()
     )";
@@ -915,6 +947,7 @@ try {
     error_log("SQL語句: " . $sql);
     error_log("基本參數: name=$name, identity=$identity_num, gender=" . ($gender_num ?? 'NULL') . ", phone1=$phone1, email=$email");
     error_log("關聯字段: junior_high(school_code)=" . ($junior_high_code ?? 'NULL') . ", current_grade(code)=" . ($current_grade_code ?? 'NULL'));
+    error_log("畢業年份: graduation_year=" . ($graduation_year ?? 'NULL'));
     error_log("推薦老師處理: 原始值=" . ($recommended_teacher ?? 'NULL') . ", 轉換後ID=" . ($recommended_teacher_id ?? 'NULL'));
     
     $stmt = $pdo->prepare($sql);
@@ -952,6 +985,11 @@ try {
     $stmt->bindValue(':junior_high', $junior_high_code ? $junior_high_code : null, $junior_high_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
     // current_grade 直接存储 code
     $stmt->bindValue(':current_grade', $current_grade_code ? $current_grade_code : null, $current_grade_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    
+    // [新增] 綁定畢業年份參數
+    // 這裡因為前面已經算好了 $graduation_year，所以可以直接綁定
+    $stmt->bindValue(':graduation_year', $graduation_year, $graduation_year ? PDO::PARAM_INT : PDO::PARAM_NULL);
+    
     $stmt->bindValue(':line_id', $line_id ? $line_id : null, $line_id ? PDO::PARAM_STR : PDO::PARAM_NULL);
     $stmt->bindValue(':facebook', $facebook ? $facebook : null, $facebook ? PDO::PARAM_STR : PDO::PARAM_NULL);
     

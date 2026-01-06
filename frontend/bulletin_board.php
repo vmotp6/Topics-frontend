@@ -26,6 +26,19 @@ if ($stmt) {
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
+        // 查詢此公告的附件數量
+        $file_count_sql = "SELECT COUNT(*) as file_count FROM bulletin_files WHERE bulletin_id = ?";
+        $file_count_stmt = $conn->prepare($file_count_sql);
+        if ($file_count_stmt) {
+            $file_count_stmt->bind_param("i", $row['id']);
+            $file_count_stmt->execute();
+            $file_count_result = $file_count_stmt->get_result();
+            $file_count_row = $file_count_result->fetch_assoc();
+            $row['file_count'] = $file_count_row['file_count'] ?? 0;
+            $file_count_stmt->close();
+        } else {
+            $row['file_count'] = 0;
+        }
         $bulletin_list[] = $row;
     }
     $stmt->close();
@@ -90,7 +103,7 @@ function formatDateRange($start_date, $end_date) {
 
     /* 頁面主容器 */
     .page-container {
-      max-width: 1400px;
+      max-width: 1800px;
       margin: 0 auto;
       padding: 40px 20px;
     }
@@ -298,15 +311,15 @@ function formatDateRange($start_date, $end_date) {
     }
 
     .card-image {
-      width: 300px;
-      min-width: 300px;
+      width: 380px;
+      min-width: 340px;
       height: 100%;
-      min-height: 200px;
+      min-height: 220px;
       flex-shrink: 0;
       overflow: hidden;
       display: flex;
       align-items: stretch;
-      margin-right: 24px;
+      margin-right: 32px;
     }
 
     .card-image img {
@@ -594,20 +607,128 @@ function formatDateRange($start_date, $end_date) {
           <i class="fas fa-search"></i>
           <input class="search" id="search" type="search" placeholder="搜尋公告標題或內容…" />
         </div>
-            </div>
-        </a>
+      </div>
+      <div class="controls-right" style="color: var(--muted); font-weight: 600;">
+        目前公告：<?php echo count($bulletin_list); ?> 則
+        <?php if (count($bulletin_list) === 0): ?>
+        <div style="font-size: 12px; color: #f59e0b; margin-top: 4px;">
+          <!-- 除錯：檢查查詢結果 -->
+          （今日：<?php echo date('Y-m-d'); ?>）
+        </div>
+        <?php endif; ?>
+      </div>
+    </section>
 
-        <a class="bb-card" href="#">
-            <div class="bb-card-image" style="background-image:url('https://picsum.photos/401');"></div>
-            <div class="bb-card-body">
-                <h2>公告標題 2</h2>
-                <p class="bb-card-date">2025-01-02</p>
-                <p class="bb-card-text">你可以放任何公告內容，之後會改成從資料庫讀取。</p>
+    <!-- 公告列表 -->
+    <div id="bulletin-grid" class="grid">
+      <?php if (empty($bulletin_list)): ?>
+        <div class="empty-state">
+          <i class="far fa-bell-slash"></i>
+          <p>目前沒有公開的公告</p>
+        </div>
+      <?php else: ?>
+        <?php foreach ($bulletin_list as $bulletin): 
+          $type = $bulletin['type_code'] ?? 'general';
+          $typeName = $bulletin['type_name'] ?? '一般公告';
+          $icon = $type_icons[$type] ?? 'fa-bullhorn';
+          $dateRange = formatDateRange($bulletin['start_date'], $bulletin['end_date']);
+          $createdAt = !empty($bulletin['created_at']) ? date('Y-m-d', strtotime($bulletin['created_at'])) : '';
+          $viewCount = isset($bulletin['view_count']) ? (int)$bulletin['view_count'] : 0;
+          $source = $bulletin['source'] ?? '';
+          $title = $bulletin['title'] ?? '';
+          $contentPlain = strip_tags($bulletin['content'] ?? '');
+          if (function_exists('mb_strimwidth')) {
+              $excerpt = mb_strimwidth($contentPlain, 0, 160, '...', 'UTF-8');
+          } else {
+              $excerpt = substr($contentPlain, 0, 160) . (strlen($contentPlain) > 160 ? '...' : '');
+          }
+        ?>
+        <a class="card" href="bulletin_board_detail.php?id=<?php echo (int)$bulletin['id']; ?>"
+           data-type="<?php echo htmlspecialchars($type); ?>"
+           data-title="<?php echo htmlspecialchars($title); ?>"
+           data-content="<?php echo htmlspecialchars($contentPlain); ?>">
+          <div class="card-image">
+            <?php if (!empty($bulletin['image_url'])): ?>
+              <img src="<?php echo htmlspecialchars($bulletin['image_url']); ?>" alt="公告圖片" loading="lazy">
+            <?php else: ?>
+              <div class="card-image-placeholder">
+                <i class="fas <?php echo $icon; ?>"></i>
+              </div>
+            <?php endif; ?>
+          </div>
+          <div class="card-body">
+            <div class="card-header" style="border: none; padding: 0;">
+              <span class="card-type-badge" data-type="<?php echo htmlspecialchars($type); ?>">
+                <i class="fas <?php echo $icon; ?>"></i>
+                <?php echo htmlspecialchars($typeName); ?>
+              </span>
+              <?php if (!empty($bulletin['is_pinned'])): ?>
+              <span class="card-type-badge" data-type="general" style="background: #f59e0b;">置頂</span>
+              <?php endif; ?>
             </div>
+            <h2 class="card-title"><?php echo htmlspecialchars($title); ?></h2>
+            <p class="card-desc"><?php echo htmlspecialchars($excerpt); ?></p>
+            <div class="card-meta">
+              <div class="card-meta-item">
+                <i class="far fa-calendar-alt"></i>
+                <span><?php echo $dateRange ? $dateRange : $createdAt; ?></span>
+              </div>
+              <?php if ($source): ?>
+              <div class="card-meta-item">
+                <i class="far fa-building"></i>
+                <span><?php echo htmlspecialchars($source); ?></span>
+              </div>
+              <?php endif; ?>
+              <div class="card-meta-item">
+                <i class="far fa-eye"></i>
+                <span><?php echo $viewCount; ?> 人瀏覽</span>
+              </div>
+              <?php if (!empty($bulletin['file_count'])): ?>
+              <div class="card-meta-item">
+                <i class="fas fa-file-download"></i>
+                <span><?php echo (int)$bulletin['file_count']; ?> 個附件</span>
+              </div>
+              <?php endif; ?>
+            </div>
+            <div class="card-footer">
+              <span class="btn" aria-hidden="true">查看公告</span>
+            </div>
+          </div>
         </a>
-
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
+  </div>
 
-</div>
+  <script>
+    (function() {
+      const filter = document.getElementById('filter-type');
+      const searchInput = document.getElementById('search');
+      const cards = Array.from(document.querySelectorAll('.card'));
 
-<?php include 'footer.php'; ?>
+      function normalize(text) {
+        return (text || '').toLowerCase();
+      }
+
+      function applyFilters() {
+        const type = filter ? filter.value : 'all';
+        const keyword = normalize(searchInput ? searchInput.value : '');
+        cards.forEach(card => {
+          const cardType = card.dataset.type;
+          const title = normalize(card.dataset.title);
+          const content = normalize(card.dataset.content);
+          const matchType = type === 'all' || cardType === type;
+          const matchKeyword = !keyword || title.includes(keyword) || content.includes(keyword);
+          card.style.display = matchType && matchKeyword ? 'flex' : 'none';
+        });
+      }
+
+      if (filter) filter.addEventListener('change', applyFilters);
+      if (searchInput) searchInput.addEventListener('input', applyFilters);
+      applyFilters();
+    })();
+  </script>
+
+  <?php include 'share/footer.php'; ?>
+</body>
+</html>
