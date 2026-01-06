@@ -989,8 +989,9 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <div class="feature-icon">👨‍🎓</div>
           <h3 class="feature-title">學生管理</h3>
           <p class="feature-description">查看和管理分配給您的所有學生（包含就讀意願和推薦報名），進行聯絡和追蹤。</p>
-          <button onclick="openStudentManagement()" class="feature-link" style="border: none; cursor: pointer; width: 35%;">學生管理</button>
+          <a href="student_management.php" class="feature-link">學生管理</a>
         </div>
+
         
         <div class="feature-card">
           <div class="feature-icon">📢</div>
@@ -1312,24 +1313,69 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
         <span class="close" onclick="closeStudentManagement()">&times;</span>
       </div>
       <div class="modal-body">
-        <div class="student-stats">
-          <div class="stat-card">
-            <div class="stat-number" id="totalStudents">0</div>
-            <div class="stat-label">總學生數</div>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="student-stats">
+            <div class="stat-card">
+              <div class="stat-number" id="totalStudents">0</div>
+              <div class="stat-label">總學生數</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number" id="recentAssignments">0</div>
+              <div class="stat-label">近7天分配</div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-number" id="recentAssignments">0</div>
-            <div class="stat-label">近7天分配</div>
+
+          <!-- 新增學生聯絡資訊 -->
+          <div style="background:#f8f9fa; border:1px solid #e0e0e0; border-radius:10px; padding:16px;">
+            <h4 style="margin:0 0 12px 0; color:#003366;">新增學生聯絡資訊</h4>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">
+              <div>
+                <label style="font-size:12px; color:#666;">姓名 *</label>
+                <input id="newContactName" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;" placeholder="必填">
+              </div>
+              <div>
+                <label style="font-size:12px; color:#666;">國中</label>
+                <input id="newContactJuniorHigh" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;" placeholder="例：永吉國中">
+              </div>
+              <div>
+                <label style="font-size:12px; color:#666;">興趣科系</label>
+                <input id="newContactInterest" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;" placeholder="例：資管科">
+              </div>
+              <div>
+                <label style="font-size:12px; color:#666;">活動來源</label>
+                <input id="newContactSource" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;" placeholder="例：說明會/參訪/展覽">
+              </div>
+              <div>
+                <label style="font-size:12px; color:#666;">聯絡教師</label>
+                <input id="newContactTeacher" type="text" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;" placeholder="例：王小明">
+              </div>
+              <div>
+                <label style="font-size:12px; color:#666;">狀態</label>
+                <select id="newContactStatus" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px;">
+                  <option value="">請選擇</option>
+                  <option value="新建立">新建立</option>
+                  <option value="已聯絡">已聯絡</option>
+                  <option value="有興趣">有興趣</option>
+                  <option value="不感興趣">不感興趣</option>
+                  <option value="已報名">已報名</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+              <button class="btn-confirm" onclick="submitNewStudentContact()" style="background:#1890ff; color:white; border:none; padding:8px 14px; border-radius:6px;">儲存</button>
+              <button class="btn-cancel" onclick="resetNewStudentContactForm()" style="background:#f5f5f5; border:none; padding:8px 14px; border-radius:6px;">清除</button>
+            </div>
           </div>
-        </div>
-        
-        <div class="student-list-container">
-          <div class="search-container">
-            <input type="text" id="studentSearch" placeholder="搜尋學生姓名或電話..." class="search-input">
-          </div>
-          
-          <div class="student-list" id="studentList">
-            <div class="loading">載入中...</div>
+
+          <div class="student-list-container">
+            <div class="search-container">
+              <input type="text" id="studentSearch" placeholder="搜尋學生姓名或電話..." class="search-input">
+            </div>
+            
+            <div class="student-list" id="studentList">
+              <div class="loading">載入中...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -1416,6 +1462,53 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
     let studentsData = [];
     let filteredStudents = [];
     let currentContactStudentId = null;
+    // 新增學生聯絡資訊
+    async function submitNewStudentContact() {
+      const name = document.getElementById('newContactName')?.value.trim() || '';
+      const juniorHigh = document.getElementById('newContactJuniorHigh')?.value.trim() || '';
+      const interest = document.getElementById('newContactInterest')?.value.trim() || '';
+      const source = document.getElementById('newContactSource')?.value.trim() || '';
+      const teacher = document.getElementById('newContactTeacher')?.value.trim() || '';
+      const status = document.getElementById('newContactStatus')?.value.trim() || '';
+
+      if (!name) {
+        alert('請填寫姓名');
+        return;
+      }
+      try {
+        const res = await fetch('api/add_student_contact_api.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            junior_high: juniorHigh,
+            interest_department: interest,
+            activity_source: source,
+            contact_teacher: teacher,
+            status
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('新增成功');
+          resetNewStudentContactForm();
+        } else {
+          alert(data.message || '新增失敗');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('新增失敗，請稍後再試');
+      }
+    }
+    function resetNewStudentContactForm() {
+      const ids = ['newContactName','newContactJuniorHigh','newContactInterest','newContactSource','newContactTeacher'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      const status = document.getElementById('newContactStatus');
+      if (status) status.value = '';
+    }
 
     // 開啟學生管理模態視窗
     function openStudentManagement() {
