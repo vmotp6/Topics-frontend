@@ -39,10 +39,7 @@ if ($res = $conn->query($catSql)) {
     }
 }
 
-// $categories 現在是 array(id => name)，可以用來顯示下拉選單或列表
-foreach ($categories as $id => $name) {
-    echo "<option value='{$id}'>" . htmlspecialchars($name) . "</option>";
-}
+
 
 // 建立查詢條件
 $where = "WHERE published = 1";
