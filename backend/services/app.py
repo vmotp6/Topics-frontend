@@ -622,9 +622,9 @@ def login():
                         "email": email
                     }), 403
                 
-                # 檢查 role，允許 STU、TEA 和 STA 登入
+                # 檢查 role，允許前台角色登入（包含 ADM, AS 等後台角色）
                 user_role = user[1]  # role 欄位
-                allowed_roles = ['STU', 'TEA', 'STA','DI', 'STA', 'STUDENT', 'TEACHER', '學校行政人員']  # 支援多種格式，AA權限與TEA一致
+                allowed_roles = ['STU', 'TEA', 'STA', 'DI', 'ADM', 'AS', 'STAM', 'IM', 'STUDENT', 'TEACHER', '學校行政人員', '管理員', '科助', '行政人員', '主任']
                 
                 # 檢查 role 是否在允許列表中
                 if user_role not in allowed_roles:
