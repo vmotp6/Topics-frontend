@@ -305,7 +305,12 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
           </div>
           <div>
             <label>在學身分</label>
-            <input name="enrollment_identity" value="<?php echo htmlspecialchars(safePost('enrollment_identity')); ?>" placeholder="例：一般生/特殊身分...">
+            <?php $enroll_identity = safePost('enrollment_identity'); ?>
+            <select name="enrollment_identity">
+              <option value="" <?php echo $enroll_identity===''?'selected':''; ?>>請選擇</option>
+              <option value="一般生" <?php echo $enroll_identity==='一般生'?'selected':''; ?>>一般生</option>
+              <option value="特殊生" <?php echo $enroll_identity==='特殊生'?'selected':''; ?>>特殊生</option>
+            </select>
           </div>
           <div>
             <label>生日</label>
