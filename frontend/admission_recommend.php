@@ -207,6 +207,59 @@ try {
     }
   }
 
+  /**
+   * 入學狀態會根據 admission_recommendations.status 的狀態改變（依需求）
+   * 規則（依目前系統用到的 code/舊值做映射）：
+   * - 通過(AP/APPROVED/ENROLLED/registered) => 已入學
+   * - 不通過(RE/REJECTED/rejected)         => 未入學
+   * - 需人工確認(MC/MANUAL/contacted)      => 未入學
+   * - 其他/未填                             => 未入學（保守）
+   */
+  function derive_enrollment_status_by_status($status_code, $status_name = '') {
+    $code = trim((string)$status_code);
+    $name = trim((string)$status_name);
+
+    // 依需求：當 status 為「需人工確認」時，入學狀態也要等於 status（顯示值）
+    if ($name === '需人工確認' || $code === '需人工確認' || $code === '人工確認') return '需人工確認';
+
+    if ($code === '') return '未入學';
+
+    if (in_array($code, ['AP', 'APPROVED', 'ENROLLED', 'registered'], true)) return '已入學';
+    if (in_array($code, ['RE', 'REJECTED', 'rejected'], true)) return '未入學';
+    // 兼容：若 status 用 MC/MANUAL 代表需人工確認，也視為需人工確認
+    if (in_array($code, ['MC', 'MANUAL'], true)) return '需人工確認';
+    if (in_array($code, ['contacted'], true)) return '未入學';
+    if (in_array($code, ['pending'], true)) return '未入學';
+    return '未入學';
+  }
+
+  function sync_enrollment_status_by_status($conn, $rows) {
+    if (!$conn || empty($rows) || !is_array($rows)) return;
+
+    // 確認 enrollment_status 欄位存在
+    try {
+      $c = $conn->query("SHOW COLUMNS FROM admission_recommendations LIKE 'enrollment_status'");
+      if (!$c || $c->num_rows === 0) return;
+    } catch (Exception $e) {
+      return;
+    }
+
+    $upd = $conn->prepare("UPDATE admission_recommendations SET enrollment_status = ? WHERE id = ?");
+    if (!$upd) return;
+
+    foreach ($rows as $r) {
+      $id = isset($r['id']) ? (int)$r['id'] : 0;
+      if ($id <= 0) continue;
+      $desired = derive_enrollment_status_by_status($r['status'] ?? '', $r['status_name'] ?? '');
+      $current = trim((string)($r['enrollment_status'] ?? ''));
+      if ($current !== $desired) {
+        $upd->bind_param('si', $desired, $id);
+        @$upd->execute();
+      }
+    }
+    $upd->close();
+  }
+
 // 處理通過 ID 查詢（用於後台管理系統）
 $single_detail = null; // 用於儲存單筆詳細記錄
 if (isset($_GET['id']) && !empty($_GET['id'])) {
@@ -314,6 +367,14 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
             resolve_recommendation_conflicts($conn, [$search_id]);
           } catch (Exception $e) {
             error_log('resolve_recommendation_conflicts error: ' . $e->getMessage());
+          }
+          // 依 status 同步更新 enrollment_status
+          try {
+            sync_enrollment_status_by_status($conn, [$single_detail]);
+            // 同步顯示用資料
+            $single_detail['enrollment_status'] = derive_enrollment_status_by_status($single_detail['status'] ?? '', $single_detail['status_name'] ?? '');
+          } catch (Exception $e) {
+            // ignore
           }
         } else {
             $message = "未找到 ID 為 " . htmlspecialchars($search_id) . " 的推薦記錄";
@@ -437,6 +498,17 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                 }
               } catch (Exception $e) {
                 error_log('resolve_recommendation_conflicts error: ' . $e->getMessage());
+              }
+              // 依 status 同步更新 enrollment_status（資料表欄位也會跟著改）
+              try {
+                sync_enrollment_status_by_status($conn, $search_results);
+                // 同步顯示用資料
+                foreach ($search_results as &$rr) {
+                  $rr['enrollment_status'] = derive_enrollment_status_by_status($rr['status'] ?? '', $rr['status_name'] ?? '');
+                }
+                unset($rr);
+              } catch (Exception $e) {
+                // ignore
               }
             } else {
                 $message = "未找到學號或教師編號 " . htmlspecialchars($search_student_id) . " 的推薦記錄";
@@ -2835,7 +2907,8 @@ document.addEventListener('DOMContentLoaded', function() {
   padding: 4px 12px;
   border-radius: 4px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 900; /* 字體加粗 */
+  color: #fff;      /* 白色字 */
 }
 
 .file-link {
@@ -2857,42 +2930,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* 狀態標籤樣式 */
 .status-pending {
-  background: #fff7e6;
-  color: #d46b08;
-  border: 1px solid #ffd591;
+  background: #d46b08; /* 加深 */
+  color: #fff;
+  border: 1px solid #d46b08;
 }
 
 .status-contacted {
-  background: #e6f7ff;
-  color: #0958d9;
-  border: 1px solid #91d5ff;
+  background: #0958d9; /* 加深 */
+  color: #fff;
+  border: 1px solid #0958d9;
 }
 
 .status-registered {
-  background: #f6ffed;
-  color: #52c41a;
-  border: 1px solid #b7eb8f;
+  background: #2f9e44; /* 加深綠 */
+  color: #fff;
+  border: 1px solid #2f9e44;
 }
 
 .status-rejected {
-  background: #fff2f0;
-  color: #cf1322;
-  border: 1px solid #ffa39e;
+  background: #cf1322; /* 加深 */
+  color: #fff;
+  border: 1px solid #cf1322;
 }
 
 .enrollment-未入學 {
-  background: #f5f5f5;
-  color: #8c8c8c;
+  background: #595959; /* 加深灰 */
+  color: #fff;
 }
 
 .enrollment-已入學 {
-  background: #f6ffed;
-  color: #52c41a;
+  background: #2f9e44; /* 加深綠 */
+  color: #fff;
 }
 
 .enrollment-放棄入學 {
-  background: #fff7e6;
-  color: #fa8c16;
+  background: #fa8c16; /* 加深橘 */
+  color: #fff;
+}
+
+.enrollment-需人工確認 {
+  background: #1677ff; /* 藍色 */
+  color: #fff;
 }
 
 /* 結果篩選樣式 */
