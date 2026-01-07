@@ -996,7 +996,6 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <a href="admission_recommend.php" class="feature-link">推薦報名</a>
         </div>
 
-        <?php if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'DI' || $user_role === 'AA'): ?>
         <div class="feature-card">
           <div class="feature-icon">✉️</div>
           <h3 class="feature-title">活動紀錄填寫</h3>
@@ -1024,8 +1023,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">上傳和管理您的檔案（PPT、Word、圖片等），容量限制50GB。</p>
           <a href="teacher_file_upload.php" class="feature-link">檔案上傳</a>
         </div>
-        <?php endif; ?>
-        
+
         <div class="feature-card">
           <div class="feature-icon">📢</div>
           <h3 class="feature-title">學校活動通知系統</h3>
@@ -1049,6 +1047,8 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">管理招生相關事務。</p>
           <a href="admin_admission.php" class="feature-link">招生管理</a>
         </div>
+
+        
         
       <?php else: ?>
         <!-- 其他角色：顯示基本功能 -->
