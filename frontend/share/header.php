@@ -2180,7 +2180,7 @@ function checkTeacherProfile() {
     align-items: center;
     justify-content: space-between;
     padding: 15px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea 0%);
     color: white;
     border-top-left-radius: 17px;
     border-top-right-radius: 17px;
@@ -2283,7 +2283,7 @@ function checkTeacherProfile() {
 
   /* 用戶訊息氣泡 - 右側，藍紫色 */
   .assistant-chat-message.user {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(#764ba2 100%);
     color: white;
     margin-left: 0;
     margin-right: 0;

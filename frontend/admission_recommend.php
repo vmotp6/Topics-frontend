@@ -1736,9 +1736,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <div class="detail-label">建立時間</div>
               <div class="detail-value">
                 <?php 
-                $date = new DateTime($single_detail['created_at'], new DateTimeZone('UTC'));
-                $date->setTimezone(new DateTimeZone('Asia/Taipei'));
-                echo $date->format('Y-m-d H:i:s');
+                // 直接顯示資料表 admission_recommendations.created_at 的原始值（避免與資料表值不一致）
+                echo !empty($single_detail['created_at']) ? htmlspecialchars($single_detail['created_at']) : '';
                 ?>
               </div>
             </div>
@@ -1747,9 +1746,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <div class="detail-label">更新時間</div>
               <div class="detail-value">
                 <?php 
-                $date = new DateTime($single_detail['updated_at'], new DateTimeZone('UTC'));
-                $date->setTimezone(new DateTimeZone('Asia/Taipei'));
-                echo $date->format('Y-m-d H:i:s');
+                // 直接顯示資料表 admission_recommendations.updated_at 的原始值（避免與資料表值不一致）
+                echo !empty($single_detail['updated_at']) ? htmlspecialchars($single_detail['updated_at']) : '';
                 ?>
               </div>
             </div>
@@ -1907,11 +1905,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                   ?>
                 </span>
               </td>
-              <td><?php 
-                  // 確保使用台灣時區顯示時間
-                  $date = new DateTime($result['created_at'], new DateTimeZone('UTC'));
-                  $date->setTimezone(new DateTimeZone('Asia/Taipei'));
-                  echo $date->format('Y-m-d H:i');
+              <td><?php
+                  // 直接顯示資料表 admission_recommendations.created_at 的原始值（含秒），確保與資料表一致
+                  echo !empty($result['created_at']) ? htmlspecialchars($result['created_at']) : '';
               ?></td>
             </tr>
             <?php endforeach; ?>
