@@ -106,6 +106,107 @@ try {
     error_log("無法從資料庫撈取年級資料: " . $e->getMessage());
 }
 
+  /**
+   * 檢查推薦衝突並根據 admission_recommendations.created_at 決定哪一筆為最先完成入學
+   * 然後將其餘相同被推薦學生的 recommendation 設為 "學生已由其他推薦人優先完成入學手續"
+   * 參數：$conn 為已開啟的資料庫連線，$recommendation_ids 為欲檢查的 admission_recommendations.id 陣列
+   */
+  function resolve_recommendation_conflicts($conn, $recommendation_ids = []) {
+    if (!$conn) return;
+
+    // 如果 recommended 表不存在，直接跳過
+    $table_check = $conn->query("SHOW TABLES LIKE 'recommended'");
+    if (!$table_check || $table_check->num_rows == 0) {
+      return;
+    }
+
+      // 建立限制：若有提供 recommendation_ids，僅處理與這些 admission_recommendations 相關的紀錄
+      $in_clause = '';
+      if (!empty($recommendation_ids)) {
+        // treat as admission_recommendations.id values
+        $ids = array_map('intval', $recommendation_ids);
+        if (!empty($ids)) {
+          // 找出這些 id 對應的 student_id（只取有值的 student_id）
+          $id_list = implode(',', $ids);
+          $sid_sql = "SELECT DISTINCT student_id FROM admission_recommendations WHERE id IN ($id_list) AND student_id IS NOT NULL AND student_id != ''";
+          $sid_res = $conn->query($sid_sql);
+          $student_ids = [];
+          if ($sid_res) {
+            while ($sr = $sid_res->fetch_assoc()) {
+              $student_ids[] = $sr['student_id'];
+            }
+          }
+          if (!empty($student_ids)) {
+            // 將 student_id 當作篩選條件，以便找出與之相同 student_id 的其它記錄
+            $escaped = array_map(function($v) use ($conn) { return "'" . $conn->real_escape_string($v) . "'"; }, $student_ids);
+            $in_clause = ' AND ar.student_id IN (' . implode(',', $escaped) . ')';
+          } else {
+            // 若沒有可用的 student_id，直接不處理
+            return;
+          }
+        }
+      }
+
+    // 以 admission_recommendations.student_id 為分組鍵：只處理 student_id 非 NULL 或非空的群組
+    $group_sql = "SELECT ar.student_id AS student_id, COUNT(*) AS cnt FROM admission_recommendations ar WHERE ar.student_id IS NOT NULL AND ar.student_id != '' " . $in_clause . " GROUP BY ar.student_id HAVING cnt > 1";
+    $group_res = $conn->query($group_sql);
+    if (!$group_res) return;
+
+    while ($group_row = $group_res->fetch_assoc()) {
+      $student_id_val = $group_row['student_id'];
+      if ($student_id_val === null || $student_id_val === '') continue;
+
+      // 取得所有具有相同 student_id 的 admission_recommendations，依 created_at 排序（由早到晚）
+      $sql = "SELECT ar.id, ar.created_at FROM admission_recommendations ar WHERE ar.student_id = ? " . $in_clause . " ORDER BY ar.created_at ASC";
+      $stmt = $conn->prepare($sql);
+      if (!$stmt) continue;
+      $stmt->bind_param('s', $student_id_val);
+      $stmt->execute();
+      $res = $stmt->get_result();
+
+      $rows = [];
+      while ($r = $res->fetch_assoc()) {
+        $rows[] = ['id' => intval($r['id']), 'created_at' => $r['created_at']];
+      }
+      $stmt->close();
+
+      if (count($rows) <= 1) {
+        // 沒有衝突，確保該筆的 enrollment_status01 为空
+        if (count($rows) === 1) {
+          $clear = $conn->prepare("UPDATE admission_recommendations SET enrollment_status01 = '' WHERE id = ? AND (enrollment_status01 IS NOT NULL AND enrollment_status01 != '')");
+          if ($clear) {
+            $clear->bind_param('i', $rows[0]['id']);
+            $clear->execute();
+            $clear->close();
+          }
+        }
+        continue;
+      }
+
+      // 第一筆為最早，不更新其 enrollment_status01（保留為空）
+      $first = array_shift($rows);
+      $status_text = '學生已由其他推薦人優先完成入學手續';
+
+      // 確保最早一筆的 enrollment_status01 為空
+      $clear_first = $conn->prepare("UPDATE admission_recommendations SET enrollment_status01 = '' WHERE id = ? AND (enrollment_status01 IS NOT NULL AND enrollment_status01 != '')");
+      if ($clear_first) {
+        $clear_first->bind_param('i', $first['id']);
+        $clear_first->execute();
+        $clear_first->close();
+      }
+
+      // 其餘（較晚）筆，設定 enrollment_status01 為指定文字
+      foreach ($rows as $later) {
+        $u = $conn->prepare("UPDATE admission_recommendations SET enrollment_status01 = ? WHERE id = ?");
+        if ($u) {
+          $u->bind_param('si', $status_text, $later['id']);
+          $u->execute();
+          $u->close();
+        }
+      }
+    }
+  }
+
 // 處理通過 ID 查詢（用於後台管理系統）
 $single_detail = null; // 用於儲存單筆詳細記錄
 if (isset($_GET['id']) && !empty($_GET['id'])) {
@@ -183,6 +284,12 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
             $search_results[] = $single_detail; // 同時加入搜尋結果陣列
             $message = "找到推薦記錄";
             $messageType = "success";
+          // 檢查並自動更新相同被推薦學生之推薦衝突狀態
+          try {
+            resolve_recommendation_conflicts($conn, [$search_id]);
+          } catch (Exception $e) {
+            error_log('resolve_recommendation_conflicts error: ' . $e->getMessage());
+          }
         } else {
             $message = "未找到 ID 為 " . htmlspecialchars($search_id) . " 的推薦記錄";
             $messageType = "error";
@@ -273,6 +380,15 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                 }
                 $message = "找到 " . count($search_results) . " 筆推薦記錄";
                 $messageType = "success";
+              // 檢查並自動更新查詢結果中每筆推薦的衝突狀態
+              try {
+                $ids_to_check = array_map(function($r){ return intval($r['id']); }, $search_results);
+                if (!empty($ids_to_check)) {
+                  resolve_recommendation_conflicts($conn, $ids_to_check);
+                }
+              } catch (Exception $e) {
+                error_log('resolve_recommendation_conflicts error: ' . $e->getMessage());
+              }
             } else {
                 $message = "未找到學號或教師編號 " . htmlspecialchars($search_student_id) . " 的推薦記錄";
                 $messageType = "error";
@@ -1148,7 +1264,15 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 error_log("錯誤堆疊: " . $e->getTraceAsString());
                 // 不中斷主流程，只記錄錯誤
             }
-            
+            // 在所有相關資料（admission_recommendations/recommender/recommended）插入完成後，檢查並自動更新同一 student_id 的衝突狀態
+            try {
+              if (function_exists('resolve_recommendation_conflicts')) {
+                resolve_recommendation_conflicts($conn, [$recommendation_id]);
+              }
+            } catch (Exception $e) {
+              error_log('resolve_recommendation_conflicts error after insert: ' . $e->getMessage());
+            }
+
             // 準備郵件資料
             // 確保使用台灣時區顯示時間
             // 將科系代碼轉換為名稱
@@ -1583,14 +1707,23 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <div class="detail-item">
               <div class="detail-label">入學狀態</div>
               <div class="detail-value">
-                <span class="enrollment-status enrollment-<?php echo $single_detail['enrollment_status'] ?? '未入學'; ?>">
-                  <?php 
-                  $enrollment_text = [
-                    '未入學' => '未入學',
-                    '已入學' => '已入學',
-                    '放棄入學' => '放棄入學'
-                  ];
-                  echo $enrollment_text[$single_detail['enrollment_status'] ?? '未入學'] ?? '未入學';
+                <?php
+                  // 僅顯示 enrollment_status01；若無值則顯示空白
+                  $display_enrollment = (isset($single_detail['enrollment_status01']) && $single_detail['enrollment_status01'] !== '') ? $single_detail['enrollment_status01'] : '';
+                ?>
+                <span class="enrollment-status enrollment-<?php echo htmlspecialchars($display_enrollment); ?>">
+                  <?php
+                    if ($display_enrollment === '') {
+                      echo '';
+                    } else {
+                      $enrollment_text = [
+                        '未入學' => '未入學',
+                        '已入學' => '已入學',
+                        '放棄入學' => '放棄入學',
+                        '學生已由其他推薦人優先完成入學手續' => '學生已由其他推薦人優先完成入學手續'
+                      ];
+                      echo $enrollment_text[$display_enrollment] ?? htmlspecialchars($display_enrollment);
+                    }
                   ?>
                 </span>
               </div>
@@ -1734,27 +1867,39 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 ?>
               </td>
               <td>
-                <span class="status status-<?php echo $result['status']; ?>">
-                  <?php 
-                  $status_text = [
-                    'pending' => '待處理',
-                    'contacted' => '已聯繫',
-                    'registered' => '已報名',
-                    'rejected' => '已拒絕'
-                  ];
-                  echo $status_text[$result['status']] ?? $result['status'];
+                <?php
+                  // 列表中的「狀態」欄位改為顯示 admission_recommendations.enrollment_status
+                  $row_enrollment_status = !empty($result['enrollment_status']) ? $result['enrollment_status'] : '未入學';
+                ?>
+                <span class="status status-<?php echo htmlspecialchars($row_enrollment_status); ?>">
+                  <?php
+                    $enroll_text = [
+                      '未入學' => '未入學',
+                      '已入學' => '已入學',
+                      '放棄入學' => '放棄入學'
+                    ];
+                    echo $enroll_text[$row_enrollment_status] ?? htmlspecialchars($row_enrollment_status);
                   ?>
                 </span>
               </td>
               <td>
-                <span class="enrollment-status enrollment-<?php echo $result['enrollment_status'] ?? '未入學'; ?>">
+                <?php
+                  // 入學狀態欄位：僅顯示 enrollment_status01；若無則顯示空白
+                  $row_display_enrollment = (isset($result['enrollment_status01']) && $result['enrollment_status01'] !== '') ? $result['enrollment_status01'] : '';
+                ?>
+                <span class="enrollment-status enrollment-<?php echo htmlspecialchars($row_display_enrollment); ?>">
                   <?php 
-                  $enrollment_text = [
-                    '未入學' => '未入學',
-                    '已入學' => '已入學',
-                    '放棄入學' => '放棄入學'
-                  ];
-                  echo $enrollment_text[$result['enrollment_status'] ?? '未入學'] ?? '未入學';
+                  if ($row_display_enrollment === '') {
+                    echo '';
+                  } else {
+                    $enrollment_text = [
+                      '未入學' => '未入學',
+                      '已入學' => '已入學',
+                      '放棄入學' => '放棄入學',
+                      '學生已由其他推薦人優先完成入學手續' => '學生已由其他推薦人優先完成入學手續'
+                    ];
+                    echo $enrollment_text[$row_display_enrollment] ?? htmlspecialchars($row_display_enrollment);
+                  }
                   ?>
                 </span>
               </td>
