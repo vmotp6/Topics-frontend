@@ -604,18 +604,20 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     const sortIcon = sortDirection === 'asc' ? '▲' : '▼';
 
     const canManage = currentView === 'mine';
+    const isSharedView = currentView === 'shared';
 
     container.innerHTML = `
       <table class="table" id="filesTable">
         <thead>
           <tr>
             <th style="width: 5%;"><i class="fas fa-file"></i></th>
-            <th style="width: 34%;">檔案名稱</th>
+            <th style="width: ${isSharedView ? '30%' : '34%'};">檔案名稱</th>
             <th style="width: 15%;">檔案大小</th>
             <th style="width: 20%; cursor: pointer;" onclick="toggleSort('upload_time')">
               上傳時間 <span id="sortIcon" style="font-size:12px; color: var(--text-secondary-color);">${sortIcon}</span>
             </th>
-            <th style="width: 26%; text-align: center;">操作</th>
+            ${isSharedView ? `<th style="width: 14%;">共享教師</th>` : ``}
+            <th style="width: ${isSharedView ? '16%' : '26%'}; text-align: center;">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -625,6 +627,11 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
               <td class="file-name-cell">${escapeHtml(file.original_filename)}</td>
               <td>${file.file_size_formatted}</td>
               <td>${formatDateTime(file.upload_time)}</td>
+              ${isSharedView ? `
+                <td style="color: var(--text-color); font-weight: 600;">
+                  ${escapeHtml((file.shared_by_name || file.shared_by_username || '').trim() || '未提供')}
+                </td>
+              ` : ``}
               <td>
                 <div class="file-actions">
                   <a href="preview_teacher_file.php?id=${file.id}" class="action-btn btn-preview" target="_blank" rel="noopener">
