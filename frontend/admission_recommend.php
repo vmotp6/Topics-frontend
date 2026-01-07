@@ -228,6 +228,17 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
         
         if ($has_recommender_table && $has_recommended_table) {
             // 使用新的表結構：recommender 和 recommended 表
+            // application_statuses：狀態顯示用（admission_recommendations.status 外鍵到 application_statuses）
+            $has_application_statuses = false;
+            try {
+                $t_status = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+                $has_application_statuses = ($t_status && $t_status->num_rows > 0);
+            } catch (Exception $e) {
+                $has_application_statuses = false;
+            }
+            $status_select = $has_application_statuses ? ", aps.name AS status_name" : "";
+            $status_join = $has_application_statuses ? " LEFT JOIN application_statuses aps ON aps.code = ar.status " : "";
+
             $sql = "SELECT 
                 ar.*,
                 rec.name as recommender_name,
@@ -247,6 +258,7 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
                 sg.name as student_grade_name,
                 sd.name as student_school_name,
                 si.name as student_interest_name
+                $status_select
             FROM admission_recommendations ar
             LEFT JOIN recommender rec ON ar.id = rec.recommendations_id
             LEFT JOIN recommended red ON ar.id = red.recommendations_id
@@ -255,9 +267,20 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
             LEFT JOIN identity_options sg ON red.grade = sg.code
             LEFT JOIN school_data sd ON red.school = sd.school_code
             LEFT JOIN departments si ON ar.student_interest = si.code
+            $status_join
             WHERE ar.id = ?";
         } else {
             // 使用舊的表結構：所有資料都在 admission_recommendations 表中
+            $has_application_statuses = false;
+            try {
+                $t_status = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+                $has_application_statuses = ($t_status && $t_status->num_rows > 0);
+            } catch (Exception $e) {
+                $has_application_statuses = false;
+            }
+            $status_select = $has_application_statuses ? ", aps.name AS status_name" : "";
+            $status_join = $has_application_statuses ? " LEFT JOIN application_statuses aps ON aps.code = ar.status " : "";
+
             $sql = "SELECT 
                 ar.*,
                 rg.name as recommender_grade_name,
@@ -265,12 +288,14 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
                 sg.name as student_grade_name,
                 si.name as student_interest_name,
                 sd.name as student_school_name
+                $status_select
             FROM admission_recommendations ar
             LEFT JOIN identity_options rg ON ar.recommender_grade_code = rg.code
             LEFT JOIN departments rd ON ar.recommender_department_code = rd.code
             LEFT JOIN identity_options sg ON ar.student_grade_code = sg.code
             LEFT JOIN departments si ON ar.student_interest_code = si.code
             LEFT JOIN school_data sd ON ar.student_school_code = sd.school_code
+            $status_join
             WHERE ar.id = ?";
         }
         
@@ -323,6 +348,16 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
             
             if ($has_recommender_table && $has_recommended_table) {
                 // 使用新的表結構：從 recommender 表查詢推薦人學號
+                $has_application_statuses = false;
+                try {
+                    $t_status = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+                    $has_application_statuses = ($t_status && $t_status->num_rows > 0);
+                } catch (Exception $e) {
+                    $has_application_statuses = false;
+                }
+                $status_select = $has_application_statuses ? ", aps.name AS status_name" : "";
+                $status_join = $has_application_statuses ? " LEFT JOIN application_statuses aps ON aps.code = ar.status " : "";
+
                 $sql = "SELECT 
                     ar.*,
                     rec.name as recommender_name,
@@ -342,6 +377,7 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                     sg.name as student_grade_name,
                     sd.name as student_school_name,
                     si.name as student_interest_name
+                    $status_select
                 FROM admission_recommendations ar
                 LEFT JOIN recommender rec ON ar.id = rec.recommendations_id
                 LEFT JOIN recommended red ON ar.id = red.recommendations_id
@@ -350,9 +386,20 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                 LEFT JOIN identity_options sg ON red.grade = sg.code
                 LEFT JOIN school_data sd ON red.school = sd.school_code
                 LEFT JOIN departments si ON ar.student_interest = si.code
+                $status_join
                 WHERE rec.id = ? ORDER BY ar.created_at DESC";
             } else {
                 // 使用舊的表結構：從 admission_recommendations 表查詢
+                $has_application_statuses = false;
+                try {
+                    $t_status = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+                    $has_application_statuses = ($t_status && $t_status->num_rows > 0);
+                } catch (Exception $e) {
+                    $has_application_statuses = false;
+                }
+                $status_select = $has_application_statuses ? ", aps.name AS status_name" : "";
+                $status_join = $has_application_statuses ? " LEFT JOIN application_statuses aps ON aps.code = ar.status " : "";
+
                 $sql = "SELECT 
                     ar.*,
                     rg.name as recommender_grade_name,
@@ -360,12 +407,14 @@ if ($_POST && isset($_POST['search_action']) && $_POST['search_action'] === 'sea
                     sg.name as student_grade_name,
                     si.name as student_interest_name,
                     sd.name as student_school_name
+                    $status_select
                 FROM admission_recommendations ar
                 LEFT JOIN identity_options rg ON ar.recommender_grade_code = rg.code
                 LEFT JOIN departments rd ON ar.recommender_department_code = rd.code
                 LEFT JOIN identity_options sg ON ar.student_grade_code = sg.code
                 LEFT JOIN departments si ON ar.student_interest_code = si.code
                 LEFT JOIN school_data sd ON ar.student_school_code = sd.school_code
+                $status_join
                 WHERE ar.recommender_student_id = ? ORDER BY ar.created_at DESC";
             }
             
@@ -1695,16 +1744,25 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             <div class="detail-item">
               <div class="detail-label">處理狀態</div>
               <div class="detail-value">
-                <span class="status status-<?php echo $single_detail['status'] ?? 'pending'; ?>">
-                  <?php 
-                  $status_text = [
+                <?php
+                  $status_code = trim((string)($single_detail['status'] ?? ''));
+                  $status_name = trim((string)($single_detail['status_name'] ?? ''));
+                  $legacy_status_text = [
                     'pending' => '待處理',
                     'contacted' => '已聯繫',
                     'registered' => '已報名',
                     'rejected' => '已拒絕'
                   ];
-                  echo $status_text[$single_detail['status'] ?? 'pending'] ?? '待處理';
-                  ?>
+                  $display_status = $status_name !== '' ? $status_name : ($legacy_status_text[$status_code] ?? ($status_code !== '' ? $status_code : '待處理'));
+
+                  // 套用既有樣式（pending/contacted/registered/rejected），同時支援 code(AP/RE/MC/PE...)
+                  $status_class = 'pending';
+                  if (in_array($status_code, ['AP', 'APPROVED', 'ENROLLED', 'registered'], true)) $status_class = 'registered';
+                  elseif (in_array($status_code, ['RE', 'REJECTED', 'rejected'], true)) $status_class = 'rejected';
+                  elseif (in_array($status_code, ['MC', 'MANUAL', 'contacted'], true)) $status_class = 'contacted';
+                ?>
+                <span class="status status-<?php echo htmlspecialchars($status_class); ?>">
+                  <?php echo htmlspecialchars($display_status); ?>
                 </span>
               </div>
             </div>
@@ -1712,24 +1770,26 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               <div class="detail-label">入學狀態</div>
               <div class="detail-value">
                 <?php
-                  // 僅顯示 enrollment_status01；若無值則顯示空白
-                  $display_enrollment = (isset($single_detail['enrollment_status01']) && $single_detail['enrollment_status01'] !== '') ? $single_detail['enrollment_status01'] : '';
+                  // 入學狀態：顯示 admission_recommendations.enrollment_status
+                  $display_enrollment = (isset($single_detail['enrollment_status']) && $single_detail['enrollment_status'] !== '') ? $single_detail['enrollment_status'] : '未入學';
+                  // 衝突/備註：仍保留 enrollment_status01（不再當作入學狀態本身）
+                  $enrollment_note = (isset($single_detail['enrollment_status01']) && $single_detail['enrollment_status01'] !== '') ? $single_detail['enrollment_status01'] : '';
                 ?>
                 <span class="enrollment-status enrollment-<?php echo htmlspecialchars($display_enrollment); ?>">
                   <?php
-                    if ($display_enrollment === '') {
-                      echo '';
-                    } else {
-                      $enrollment_text = [
-                        '未入學' => '未入學',
-                        '已入學' => '已入學',
-                        '放棄入學' => '放棄入學',
-                        '學生已由其他推薦人優先完成入學手續' => '學生已由其他推薦人優先完成入學手續'
-                      ];
-                      echo $enrollment_text[$display_enrollment] ?? htmlspecialchars($display_enrollment);
-                    }
+                    $enrollment_text = [
+                      '未入學' => '未入學',
+                      '已入學' => '已入學',
+                      '放棄入學' => '放棄入學'
+                    ];
+                    echo $enrollment_text[$display_enrollment] ?? htmlspecialchars($display_enrollment);
                   ?>
                 </span>
+                <?php if ($enrollment_note !== ''): ?>
+                  <div style="margin-top:6px; color:#cf1322; font-size:12px; font-weight:700;">
+                    <?php echo htmlspecialchars($enrollment_note); ?>
+                  </div>
+                <?php endif; ?>
               </div>
             </div>
             <div class="detail-item">
@@ -1870,40 +1930,48 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
               </td>
               <td>
                 <?php
-                  // 列表中的「狀態」欄位改為顯示 admission_recommendations.enrollment_status
-                  $row_enrollment_status = !empty($result['enrollment_status']) ? $result['enrollment_status'] : '未入學';
+                  // 狀態：顯示 application_statuses.name（fallback：舊字串）
+                  $status_code = trim((string)($result['status'] ?? ''));
+                  $status_name = trim((string)($result['status_name'] ?? ''));
+                  $legacy_status_text = [
+                    'pending' => '待處理',
+                    'contacted' => '已聯繫',
+                    'registered' => '已報名',
+                    'rejected' => '已拒絕'
+                  ];
+                  $display_status = $status_name !== '' ? $status_name : ($legacy_status_text[$status_code] ?? ($status_code !== '' ? $status_code : '待處理'));
+
+                  $status_class = 'pending';
+                  if (in_array($status_code, ['AP', 'APPROVED', 'ENROLLED', 'registered'], true)) $status_class = 'registered';
+                  elseif (in_array($status_code, ['RE', 'REJECTED', 'rejected'], true)) $status_class = 'rejected';
+                  elseif (in_array($status_code, ['MC', 'MANUAL', 'contacted'], true)) $status_class = 'contacted';
                 ?>
-                <span class="status status-<?php echo htmlspecialchars($row_enrollment_status); ?>">
-                  <?php
-                    $enroll_text = [
-                      '未入學' => '未入學',
-                      '已入學' => '已入學',
-                      '放棄入學' => '放棄入學'
-                    ];
-                    echo $enroll_text[$row_enrollment_status] ?? htmlspecialchars($row_enrollment_status);
-                  ?>
+                <span class="status status-<?php echo htmlspecialchars($status_class); ?>">
+                  <?php echo htmlspecialchars($display_status); ?>
                 </span>
               </td>
               <td>
                 <?php
-                  // 入學狀態欄位：僅顯示 enrollment_status01；若無則顯示空白
-                  $row_display_enrollment = (isset($result['enrollment_status01']) && $result['enrollment_status01'] !== '') ? $result['enrollment_status01'] : '';
+                  // 入學狀態：顯示 admission_recommendations.enrollment_status
+                  $row_display_enrollment = !empty($result['enrollment_status']) ? $result['enrollment_status'] : '未入學';
+                  // 衝突/備註：仍保留 enrollment_status01（不再當作入學狀態本身）
+                  $row_enrollment_note = (isset($result['enrollment_status01']) && $result['enrollment_status01'] !== '') ? $result['enrollment_status01'] : '';
                 ?>
                 <span class="enrollment-status enrollment-<?php echo htmlspecialchars($row_display_enrollment); ?>">
                   <?php 
-                  if ($row_display_enrollment === '') {
-                    echo '';
-                  } else {
-                    $enrollment_text = [
-                      '未入學' => '未入學',
-                      '已入學' => '已入學',
-                      '放棄入學' => '放棄入學',
-                      '學生已由其他推薦人優先完成入學手續' => '學生已由其他推薦人優先完成入學手續'
-                    ];
-                    echo $enrollment_text[$row_display_enrollment] ?? htmlspecialchars($row_display_enrollment);
-                  }
+                  $enrollment_text = [
+                    '未入學' => '未入學',
+                    '已入學' => '已入學',
+                    '放棄入學' => '放棄入學'
+                  ];
+                  echo $enrollment_text[$row_display_enrollment] ?? htmlspecialchars($row_display_enrollment);
                   ?>
                 </span>
+                <?php if ($row_enrollment_note !== ''): ?>
+                  <div style="margin-top:6px; color:#cf1322; font-size:12px; font-weight:700;">
+                    <?php echo htmlspecialchars($row_enrollment_note); ?>
+                  </div>
+                <?php endif; ?>
               </td>
               <td><?php
                   // 直接顯示資料表 admission_recommendations.created_at 的原始值（含秒），確保與資料表一致

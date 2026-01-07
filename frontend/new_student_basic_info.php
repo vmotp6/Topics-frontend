@@ -56,6 +56,9 @@ function safePost($key) {
 $message = '';
 $messageType = '';
 
+// 前一學校顯示文字（回填用）
+$previous_school_display_value = safePost('previous_school_display');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   try {
     $student_no = safePost('student_no');
@@ -67,7 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_number = safePost('id_number');
     $mobile = safePost('mobile');
     $address = safePost('address');
-    $previous_school = safePost('previous_school');
+    // previous_school 需存 school_data.school_code（因資料庫外鍵約束）
+    $previous_school = safePost('previous_school'); // school_code
+    $previous_school_display = safePost('previous_school_display'); // 顯示文字（學校名稱）
 
     $parent_title = safePost('parent_title');
     $parent_name = safePost('parent_name');
@@ -138,6 +143,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$conn) throw new Exception('資料庫連接失敗');
     ensureNewStudentBasicInfoTable($conn);
 
+    // 驗證 previous_school（school_code）是否存在於 school_data，避免外鍵失敗
+    $verify_code = $previous_school;
+    if ($verify_code !== '') {
+      $chk = $conn->prepare("SELECT school_code, name, city, district FROM school_data WHERE school_code = ? LIMIT 1");
+      if ($chk) {
+        $chk->bind_param("s", $verify_code);
+        $chk->execute();
+        $r = $chk->get_result();
+        $row = $r ? $r->fetch_assoc() : null;
+        $chk->close();
+        if (!$row) {
+          // 若 hidden code 不存在，嘗試用顯示文字找 name 對應 code（向後相容）
+          if ($previous_school_display !== '') {
+            $name_only = $previous_school_display;
+            // 若格式是 "學校 (縣市區)"，取出學校名稱部分
+            if (preg_match('/^(.+?)\s*\(.+\)$/u', $previous_school_display, $m)) {
+              $name_only = trim($m[1]);
+            }
+            $chk2 = $conn->prepare("SELECT school_code, name, city, district FROM school_data WHERE name = ? LIMIT 1");
+            if ($chk2) {
+              $chk2->bind_param("s", $name_only);
+              $chk2->execute();
+              $r2 = $chk2->get_result();
+              $row2 = $r2 ? $r2->fetch_assoc() : null;
+              $chk2->close();
+              if ($row2 && !empty($row2['school_code'])) {
+                $previous_school = (string)$row2['school_code'];
+              } else {
+                throw new Exception('前一學校請從下拉選單選擇正確的學校（學校代碼無效）');
+              }
+            } else {
+              throw new Exception('前一學校驗證失敗，請稍後再試');
+            }
+          } else {
+            throw new Exception('前一學校請從下拉選單選擇正確的學校（學校代碼無效）');
+          }
+        } else {
+          // 回填顯示文字（避免送出失敗時顯示空白）
+          if ($previous_school_display_value === '') {
+            $city = $row['city'] ?? '';
+            $district = $row['district'] ?? '';
+            $name = $row['name'] ?? '';
+            $suffix = trim($city . $district);
+            $previous_school_display_value = $suffix !== '' ? ($name . ' (' . $suffix . ')') : $name;
+          }
+        }
+      } else {
+        throw new Exception('前一學校驗證失敗，請稍後再試');
+      }
+    }
+
     $sql = "INSERT INTO new_student_basic_info (
         student_no, student_name, class_name, enrollment_identity, birthday, gender, id_number, mobile, address, previous_school, photo_path,
         parent_title, parent_name, parent_birth_year, parent_occupation, parent_phone, parent_education,
@@ -179,6 +235,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['success']) && $_GET['success'] === '1') {
   $message = '資料已送出成功！';
   $messageType = 'success';
+}
+
+// GET / 或送出失敗時：如果只有 school_code，補回顯示文字
+try {
+  if ($previous_school_display_value === '') {
+    $code = safePost('previous_school');
+    if ($code !== '') {
+      $conn_tmp = getDatabaseConnection();
+      if ($conn_tmp) {
+        $stmt = $conn_tmp->prepare("SELECT name, city, district FROM school_data WHERE school_code = ? LIMIT 1");
+        if ($stmt) {
+          $stmt->bind_param("s", $code);
+          $stmt->execute();
+          $res = $stmt->get_result();
+          $row = $res ? $res->fetch_assoc() : null;
+          $stmt->close();
+          if ($row) {
+            $suffix = trim(($row['city'] ?? '') . ($row['district'] ?? ''));
+            $previous_school_display_value = $suffix !== '' ? (($row['name'] ?? '') . ' (' . $suffix . ')') : ($row['name'] ?? '');
+          }
+        }
+        $conn_tmp->close();
+      }
+    }
+  }
+} catch (Exception $e) {
+  // ignore
 }
 ?>
 <!DOCTYPE html>
@@ -224,6 +307,31 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     }
     .msg.success { background: #f6ffed; border: 1px solid #b7eb8f; color: #237804; }
     .msg.error { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
+
+    /* 前一學校搜尋下拉 */
+    .school-search-wrap { position: relative; }
+    .school-results {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 20;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+      max-height: 260px;
+      overflow: auto;
+      display: none;
+    }
+    .school-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .school-item:hover { background: #f5faff; }
+    .school-item small { color: #8c8c8c; }
 
     .section-title {
       margin: 16px 0 10px 0;
@@ -340,7 +448,11 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
           </div>
           <div>
             <label>前一學校 <span class="req-star">*</span></label>
-            <input name="previous_school" value="<?php echo htmlspecialchars(safePost('previous_school')); ?>" required>
+            <div class="school-search-wrap">
+              <input id="previous_school_display" name="previous_school_display" value="<?php echo htmlspecialchars($previous_school_display_value); ?>" placeholder="請輸入學校名稱並從下拉選擇" required autocomplete="off">
+              <input type="hidden" id="previous_school" name="previous_school" value="<?php echo htmlspecialchars(safePost('previous_school')); ?>">
+              <div id="previousSchoolResults" class="school-results" aria-label="school search results"></div>
+            </div>
           </div>
           <div>
             <label>2 吋照片（JPG/PNG）</label>
@@ -451,6 +563,88 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     document.addEventListener('DOMContentLoaded', applyNavbarOffset);
     window.addEventListener('load', applyNavbarOffset);
     window.addEventListener('resize', applyNavbarOffset);
+  })();
+
+  // 前一學校：使用 school_data_api.php 搜尋並選擇 school_code（避免資料表外鍵錯誤）
+  (function() {
+    const input = document.getElementById('previous_school_display');
+    const hidden = document.getElementById('previous_school');
+    const results = document.getElementById('previousSchoolResults');
+    if (!input || !hidden || !results) return;
+
+    let lastKeyword = '';
+    let inflight = null;
+
+    function hideResults() {
+      results.style.display = 'none';
+      results.innerHTML = '';
+    }
+
+    function showResults(items) {
+      if (!items || items.length === 0) {
+        hideResults();
+        return;
+      }
+      results.innerHTML = items.map(s => {
+        const code = (s.school_code || '').replace(/"/g, '&quot;');
+        const name = (s.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const city = (s.city || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const district = (s.district || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const suffix = (city + district).trim();
+        const display = suffix ? `${name} (${suffix})` : name;
+        return `<div class="school-item" data-code="${code}" data-display="${display.replace(/"/g, '&quot;')}">
+          <div>${display}</div>
+          <small>代碼：${code}</small>
+        </div>`;
+      }).join('');
+      results.style.display = 'block';
+    }
+
+    async function searchSchools(keyword) {
+      if (keyword.length < 2) {
+        hideResults();
+        return;
+      }
+      // 只要使用者修改文字，就先清掉 hidden code（避免舊 code 被誤送出）
+      hidden.value = '';
+
+      lastKeyword = keyword;
+      try {
+        if (inflight) inflight.abort();
+        inflight = new AbortController();
+        const url = `api/school_data_api.php?action=search&keyword=${encodeURIComponent(keyword)}`;
+        const resp = await fetch(url, { signal: inflight.signal });
+        const data = await resp.json();
+        // keyword 變了就忽略舊結果
+        if (keyword !== lastKeyword) return;
+        showResults((data && data.schools) ? data.schools.slice(0, 20) : []);
+      } catch (e) {
+        // ignore
+        hideResults();
+      }
+    }
+
+    let t = null;
+    input.addEventListener('input', function() {
+      const kw = (input.value || '').trim();
+      clearTimeout(t);
+      t = setTimeout(() => searchSchools(kw), 200);
+    });
+
+    results.addEventListener('click', function(e) {
+      const item = e.target.closest('.school-item');
+      if (!item) return;
+      const code = item.getAttribute('data-code') || '';
+      const display = item.getAttribute('data-display') || '';
+      hidden.value = code;
+      input.value = display;
+      hideResults();
+    });
+
+    document.addEventListener('click', function(e) {
+      if (e.target === input || results.contains(e.target)) return;
+      hideResults();
+    });
   })();
 </script>
 <?php include("share/footer.php"); ?>
