@@ -39,8 +39,9 @@ function checkAdminPermission() {
             $stmt->close();
             $conn->close();
             
-            // 檢查是否為管理員
-            return $role === 'admin';
+            // 檢查是否為管理員、行政人員、主任或科助
+            $allowed_roles = ['admin', 'ADM', 'STA', 'DI', 'AS', '管理員', '行政人員', '主任', '科助'];
+            return in_array($role, $allowed_roles);
         }
         
         $stmt->close();
