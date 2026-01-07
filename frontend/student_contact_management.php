@@ -163,6 +163,9 @@ try {
       font-weight: 800;
     }
 
+    /* 必填 * 紅色 */
+    .req-star { color: #cf1322; font-weight: 900; }
+
     .scm-form-grid input, .scm-form-grid select, .scm-form-grid textarea {
       width: 100%;
       padding: 10px 12px;
@@ -170,6 +173,11 @@ try {
       border-radius: 0;
       box-sizing: border-box;
       background: #fff;
+    }
+
+    /* 聯絡教師（唯讀）字體灰色 */
+    #newContactTeacher[readonly] {
+      color: #8c8c8c;
     }
 
     .scm-form-actions {
@@ -212,7 +220,10 @@ try {
     /* 表格欄位間距：調整為更緊湊的最適大小 */
     table.scm-table th, table.scm-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; text-align: left; font-size: 13px; vertical-align: top; }
     table.scm-table th { background: #fff; color: #003366; font-weight: 900; position: sticky; top: 0; z-index: 1; }
-    .scm-pill { display:inline-block; padding: 2px 10px; border-radius: 999px; background: #e3f2fd; color: #1976d2; font-weight: 900; font-size: 12px; }
+    .scm-pill { display:inline-block; padding: 2px 10px; border-radius: 0; font-weight: 900; font-size: 12px; }
+    /* 狀態顏色：已聯絡=綠色、未聯絡=紅色 */
+    .scm-pill.scm-pill-contacted { background: #52c41a; color: #fff; }
+    .scm-pill.scm-pill-not-contacted { background: #cf1322; color: #fff; }
     .scm-loading { text-align:center; padding: 18px; color: #666; font-weight: 800; }
     .scm-empty { text-align:center; padding: 18px; color: #666; font-weight: 800; }
   </style>
@@ -252,11 +263,11 @@ try {
 
         <div class="scm-form-grid">
           <div>
-            <label>姓名 *</label>
+            <label>姓名 <span class="req-star">*</span></label>
             <input id="newContactName" type="text" placeholder="必填">
           </div>
           <div>
-            <label>國中</label>
+            <label>國中 <span class="req-star">*</span></label>
             <input id="newContactJuniorHigh" type="text" placeholder="例：永吉國中">
           </div>
           <div>
@@ -294,19 +305,7 @@ try {
           </div>
           <div>
             <label>聯絡教師</label>
-            <input id="newContactTeacher" type="text" value="<?php echo htmlspecialchars($default_teacher_name, ENT_QUOTES, 'UTF-8'); ?>">
-          </div>
-          <div>
-            <label>狀態</label>
-            <select id="newContactStatus">
-              <option value="">請選擇</option>
-              <option value="新建立">新建立</option>
-              <option value="已聯絡">已聯絡</option>
-              <option value="有興趣">有興趣</option>
-              <option value="不感興趣">不感興趣</option>
-              <option value="已報名">已報名</option>
-              <option value="其他">其他</option>
-            </select>
+            <input id="newContactTeacher" type="text" readonly value="<?php echo htmlspecialchars($default_teacher_name, ENT_QUOTES, 'UTF-8'); ?>">
           </div>
           <div>
             <label>聯絡日期</label>
@@ -354,6 +353,11 @@ try {
             <option value="來校體驗">來校體驗</option>
             <option value="其他">其他</option>
           </select>
+          <select id="filterStatus" class="scm-mini" style="flex:1; min-width: 220px;">
+            <option value="">狀態（全部）</option>
+            <option value="已聯絡">已聯絡</option>
+            <option value="未聯絡">未聯絡</option>
+          </select>
           <div class="scm-btn-group">
             <button class="scm-btn scm-btn-secondary" onclick="onQueryContacts()"><i class="fas fa-search"></i> 查詢</button>
             <button class="scm-btn scm-btn-secondary" onclick="onClearContactsFilters()"><i class="fas fa-eraser"></i> 清除</button>
@@ -400,10 +404,8 @@ try {
             const el = document.getElementById(id);
             if (el) el.value = '';
           });
-          const status = document.getElementById('newContactStatus');
           const method = document.getElementById('newContactMethod');
           const date = document.getElementById('newContactDate');
-          if (status) status.value = '';
           if (method) method.value = '';
           if (date) date.value = '';
         }
@@ -415,7 +417,6 @@ try {
           const interest_department = document.getElementById('newContactInterest')?.value.trim() || '';
           const activity_source = document.getElementById('newContactSource')?.value.trim() || '';
           const contact_teacher = document.getElementById('newContactTeacher')?.value.trim() || '';
-          const status = document.getElementById('newContactStatus')?.value.trim() || '';
           const contact_method = document.getElementById('newContactMethod')?.value.trim() || '';
           const contact_method_value = document.getElementById('newContactMethodValue')?.value.trim() || '';
           const contact_content = document.getElementById('newContactContent')?.value.trim() || '';
@@ -424,6 +425,10 @@ try {
 
           if (!name) {
             alert('請填寫姓名');
+            return;
+          }
+          if (!junior_high) {
+            alert('請填寫國中');
             return;
           }
 
@@ -438,7 +443,6 @@ try {
                 interest_department,
                 activity_source,
                 contact_teacher,
-                status,
                 contact_method,
                 contact_method_value,
                 contact_content,
@@ -477,7 +481,14 @@ try {
               <td>${escapeHtml(c.interest_department || '')}</td>
               <td>${escapeHtml(c.activity_source || '')}</td>
               <td>${escapeHtml(c.contact_teacher || '')}</td>
-              <td>${c.status ? `<span class="scm-pill">${escapeHtml(c.status)}</span>` : ''}</td>
+              <td>
+                ${(() => {
+                  const contacted = ((c.contact_content || '').trim() !== '');
+                  const text = contacted ? '已聯絡' : '未聯絡';
+                  const cls = contacted ? 'scm-pill-contacted' : 'scm-pill-not-contacted';
+                  return `<span class="scm-pill ${cls}">${text}</span>`;
+                })()}
+              </td>
               <td>${escapeHtml(c.contact_date || '')}</td>
               <td>${escapeHtml(c.contact_method || '')}${c.contact_method_value ? ` / ${escapeHtml(c.contact_method_value)}` : ''}</td>
               <td style="white-space: pre-wrap;">${escapeHtml(c.contact_content || '')}</td>
@@ -499,10 +510,12 @@ try {
 
           const name = document.getElementById('filterName')?.value.trim() || '';
           const activity_source = document.getElementById('filterActivitySource')?.value.trim() || '';
+          const status = document.getElementById('filterStatus')?.value.trim() || '';
 
           const params = new URLSearchParams();
           if (name) params.set('name', name);
           if (activity_source) params.set('activity_source', activity_source);
+          if (status) params.set('status', status);
           params.set('limit', String(CONTACTS_LIMIT));
           params.set('offset', '0');
 
@@ -517,7 +530,7 @@ try {
             if (data.success) {
               renderContactsRows(data.contacts || []);
             } else {
-              if (tbody) tbody.innerHTML = `<tr><td colspan="11" class="scm-empty">載入失敗：${escapeHtml(data.message || '未知錯誤')}</td></tr>`;
+              if (tbody) tbody.innerHTML = `<tr><td colspan="12" class="scm-empty">載入失敗：${escapeHtml(data.message || '未知錯誤')}</td></tr>`;
             }
           } catch (e) {
             if (tbody) tbody.innerHTML = `<tr><td colspan="12" class="scm-empty">載入失敗，請稍後再試</td></tr>`;
@@ -531,6 +544,7 @@ try {
             if (e.key === 'Enter') onQueryContacts();
           });
           document.getElementById('filterActivitySource')?.addEventListener('change', () => onQueryContacts());
+          document.getElementById('filterStatus')?.addEventListener('change', () => onQueryContacts());
           loadStudentContacts(true);
         });
 
@@ -541,8 +555,10 @@ try {
         function onClearContactsFilters() {
           const name = document.getElementById('filterName');
           const src = document.getElementById('filterActivitySource');
+          const st = document.getElementById('filterStatus');
           if (name) name.value = '';
           if (src) src.value = '';
+          if (st) st.value = '';
           loadStudentContacts(true);
         }
       </script>

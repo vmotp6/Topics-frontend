@@ -144,9 +144,19 @@ try {
   }
 
   if ($status !== '') {
-    $where[] = "status = ?";
-    $types .= 's';
-    $params[] = $status;
+    // 新規則：狀態由「聯絡內容」是否有填寫判定
+    // - 已聯絡：contact_content 非空
+    // - 未聯絡：contact_content 為空（NULL 或空字串）
+    if ($status === '已聯絡') {
+      $where[] = "(contact_content IS NOT NULL AND TRIM(contact_content) <> '')";
+    } elseif ($status === '未聯絡') {
+      $where[] = "(contact_content IS NULL OR TRIM(contact_content) = '')";
+    } else {
+      // 向後兼容：若有人仍用舊 status 欄位
+      $where[] = "status = ?";
+      $types .= 's';
+      $params[] = $status;
+    }
   }
 
   $whereSql = '';
