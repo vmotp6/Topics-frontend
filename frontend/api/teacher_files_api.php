@@ -53,11 +53,29 @@ CREATE TABLE IF NOT EXISTS teacher_files (
     file_path VARCHAR(500) NOT NULL,
     file_size BIGINT NOT NULL,
     file_type VARCHAR(100),
+    is_shared TINYINT(1) NOT NULL DEFAULT 0,
+    shared_at TIMESTAMP NULL DEFAULT NULL,
     upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_teacher_id (teacher_id),
+    INDEX idx_is_shared (is_shared),
     INDEX idx_upload_time (upload_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ");
+
+// 向後相容：若舊表沒有 is_shared/shared_at，動態補欄位
+try {
+    $col = $conn->query("SHOW COLUMNS FROM teacher_files LIKE 'is_shared'");
+    if (!$col || $col->num_rows === 0) {
+        @$conn->query("ALTER TABLE teacher_files ADD COLUMN is_shared TINYINT(1) NOT NULL DEFAULT 0");
+        @$conn->query("ALTER TABLE teacher_files ADD INDEX idx_is_shared (is_shared)");
+    }
+    $col2 = $conn->query("SHOW COLUMNS FROM teacher_files LIKE 'shared_at'");
+    if (!$col2 || $col2->num_rows === 0) {
+        @$conn->query("ALTER TABLE teacher_files ADD COLUMN shared_at TIMESTAMP NULL DEFAULT NULL");
+    }
+} catch (Exception $e) {
+    // ignore
+}
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -128,6 +146,45 @@ if ($method === 'POST') {
     exit;
 }
 
+// 共享/取消共享
+if ($method === 'PUT') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $file_id = isset($input['file_id']) ? (int)$input['file_id'] : 0;
+    $shared = isset($input['shared']) ? (int)(!!$input['shared']) : 0;
+    if ($file_id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => '缺少檔案ID']);
+        exit;
+    }
+
+    // 只能操作自己的檔案
+    $check = $conn->prepare("SELECT id, original_filename, is_shared FROM teacher_files WHERE id = ? AND teacher_id = ? LIMIT 1");
+    $check->bind_param("ii", $file_id, $teacher_id);
+    $check->execute();
+    $res = $check->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $check->close();
+
+    if (!$row) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => '找不到檔案或無權限']);
+        exit;
+    }
+
+    $upd = $conn->prepare("UPDATE teacher_files SET is_shared = ?, shared_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ? AND teacher_id = ?");
+    $upd->bind_param("iiii", $shared, $shared, $file_id, $teacher_id);
+    $ok = $upd->execute();
+    $upd->close();
+
+    echo json_encode([
+        'success' => (bool)$ok,
+        'message' => $ok ? ($shared ? '已共享' : '已取消共享') : '更新失敗',
+        'file_id' => $file_id,
+        'shared' => $shared
+    ]);
+    exit;
+}
+
 // 刪除
 if ($method === 'DELETE') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -167,8 +224,23 @@ if ($method === 'DELETE') {
 
 // 列表
 if ($method === 'GET') {
-    $files_stmt = $conn->prepare("SELECT id, original_filename, file_size, file_type, upload_time FROM teacher_files WHERE teacher_id = ? ORDER BY upload_time DESC, id DESC");
-    $files_stmt->bind_param("i", $teacher_id);
+    $scope = isset($_GET['scope']) ? trim((string)$_GET['scope']) : 'mine';
+
+    if ($scope === 'shared') {
+        // 共享檔案：所有老師可見
+        $files_stmt = $conn->prepare("
+            SELECT tf.id, tf.original_filename, tf.file_size, tf.file_type, tf.upload_time, tf.is_shared, tf.shared_at,
+                   u.username AS shared_by_username, u.name AS shared_by_name
+            FROM teacher_files tf
+            LEFT JOIN user u ON tf.teacher_id = u.id
+            WHERE tf.is_shared = 1
+            ORDER BY tf.shared_at DESC, tf.upload_time DESC, tf.id DESC
+        ");
+    } else {
+        // 我的檔案
+        $files_stmt = $conn->prepare("SELECT id, original_filename, file_size, file_type, upload_time, is_shared, shared_at FROM teacher_files WHERE teacher_id = ? ORDER BY upload_time DESC, id DESC");
+        $files_stmt->bind_param("i", $teacher_id);
+    }
     $files_stmt->execute();
     $res = $files_stmt->get_result();
     $files = [];

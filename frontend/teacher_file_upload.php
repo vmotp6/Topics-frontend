@@ -84,15 +84,18 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     .table td { color: #595959; }
     .table tr:hover { background: #fafafa; }
     .file-name-cell { font-weight: 500; color: var(--text-color); word-break: break-all; }
-    .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .file-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: nowrap; }
     .action-btn {
       padding: 4px 12px; border: 1px solid; border-radius: 4px; cursor: pointer; font-size: 14px;
       font-weight: 500; transition: all 0.3s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 92px; height: 36px;
+      white-space: nowrap;
     }
     .btn-download { background: #fff; color: #52c41a; border-color: #52c41a; }
     .btn-download:hover { background: #52c41a; color: white; }
     .btn-delete { background: #fff; color: #ff4d4f; border-color: #ff4d4f; }
     .btn-delete:hover { background: #ff4d4f; color: white; }
+    .btn-preview { background: #fff; color: #fa8c16; border-color: #fa8c16; }
+    .btn-preview:hover { background: #fa8c16; color: #fff; }
 
     .search-input { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; width: 250px; transition: all 0.3s; }
     .search-input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
@@ -117,6 +120,68 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     .pagination button:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
     .pagination button.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+    /* 共享確認彈窗（固定在頁面最上方，避免被擋） */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 20000;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 18px;
+    }
+    .confirm-modal {
+      width: min(720px, calc(100vw - 24px));
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      overflow: hidden;
+    }
+    .confirm-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+      font-weight: 700;
+    }
+    .confirm-close {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: #666;
+      font-size: 18px;
+      line-height: 1;
+      padding: 6px 8px;
+    }
+    .confirm-body { padding: 14px 16px; color: #333; font-size: 14px; line-height: 1.6; }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 12px 16px 16px;
+      border-top: 1px solid #f0f0f0;
+      background: #fff;
+    }
+    .confirm-actions .btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      border: 1px solid #d9d9d9;
+      background: #fff;
+      color: #333;
+      white-space: nowrap;
+    }
+    .confirm-actions .btn.primary {
+      border-color: var(--primary-color);
+      background: var(--primary-color);
+      color: #fff;
+    }
 
     @media (max-width: 768px) {
       .container { padding: 16px; }
@@ -161,9 +226,12 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     
     <div class="page-controls">
       <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="color: var(--text-secondary-color); font-size: 14px;">我的檔案</span>
+        <span id="viewLabel" style="color: var(--text-secondary-color); font-size: 14px;">我的檔案</span>
         <button class="upload-btn" onclick="loadFiles(true)" style="padding: 6px 12px; font-size: 12px;">
           <i class="fas fa-sync-alt"></i> 重新整理
+        </button>
+        <button id="sharedViewBtn" class="upload-btn" onclick="toggleSharedView()" style="padding: 6px 12px; font-size: 12px; background:#fff; color: var(--primary-color); border:1px solid var(--primary-color);">
+          <i class="fas fa-share-alt"></i> 共享檔案
         </button>
       </div>
       <div class="table-search">
@@ -200,6 +268,21 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
   </div>
 </main>
 
+<!-- 共享/取消共享確認彈窗 -->
+<div id="confirmOverlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="confirm-modal">
+    <div class="confirm-header">
+      <span id="confirmTitle">確認</span>
+      <button class="confirm-close" type="button" onclick="hideConfirmModal()" aria-label="close">&times;</button>
+    </div>
+    <div class="confirm-body" id="confirmMessage"></div>
+    <div class="confirm-actions">
+      <button class="btn" type="button" onclick="hideConfirmModal(false)">否</button>
+      <button class="btn primary" type="button" onclick="hideConfirmModal(true)">是</button>
+    </div>
+  </div>
+</div>
+
 <?php include("share/footer.php"); ?>
 
 <script>
@@ -211,6 +294,8 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
   let sortKey = 'upload_time';
   let sortDirection = 'desc';
   let currentSearch = '';
+  let currentView = 'mine'; // mine | shared
+  let _confirmResolver = null;
   
   document.addEventListener('DOMContentLoaded', function() {
     loadFiles();
@@ -328,7 +413,10 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     container.innerHTML = '<div class="loading">載入中...</div>';
     
     try {
-      const response = await fetch('api/teacher_files_api.php');
+      const url = currentView === 'shared'
+        ? 'api/teacher_files_api.php?scope=shared'
+        : 'api/teacher_files_api.php';
+      const response = await fetch(url);
       const data = await response.json();
       
       if (data.success) {
@@ -412,6 +500,74 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
     return div.innerHTML;
   }
 
+  function toggleSharedView() {
+    currentView = (currentView === 'shared') ? 'mine' : 'shared';
+    const label = document.getElementById('viewLabel');
+    const btn = document.getElementById('sharedViewBtn');
+    if (label) label.textContent = currentView === 'shared' ? '共享檔案' : '我的檔案';
+    if (btn) {
+      btn.innerHTML = currentView === 'shared'
+        ? '<i class="fas fa-user"></i> 我的檔案'
+        : '<i class="fas fa-share-alt"></i> 共享檔案';
+    }
+    currentPage = 1;
+    loadFiles(true);
+  }
+
+  function showConfirmModal(message, title = '確認') {
+    const overlay = document.getElementById('confirmOverlay');
+    const msgEl = document.getElementById('confirmMessage');
+    const titleEl = document.getElementById('confirmTitle');
+    if (!overlay || !msgEl || !titleEl) return Promise.resolve(false);
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+
+    // 讓彈窗顯示在網頁最上方，並避免被 navbar 擋住
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+    return new Promise(resolve => { _confirmResolver = resolve; });
+  }
+
+  function hideConfirmModal(result) {
+    const overlay = document.getElementById('confirmOverlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    if (typeof _confirmResolver === 'function') {
+      const r = _confirmResolver;
+      _confirmResolver = null;
+      r(!!result);
+    }
+  }
+
+  async function toggleShare(fileId, filename, nextShared) {
+    const actionText = nextShared ? '共享' : '取消共享';
+    const ok = await showConfirmModal(`是否要${actionText}這個檔案(${filename})`, `${actionText}確認`);
+    if (!ok) return;
+
+    try {
+      const response = await fetch('api/teacher_files_api.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: fileId, shared: !!nextShared })
+      });
+      const data = await response.json();
+      if (data.success) {
+        showAlert('成功', data.message || (nextShared ? '已共享' : '已取消共享'), 'success');
+        loadFiles();
+      } else {
+        showAlert('錯誤', data.message || '更新失敗', 'error');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      showAlert('錯誤', '更新失敗，請稍後再試', 'error');
+    }
+  }
+
   function renderTable() {
     const container = document.getElementById('filesContainer');
     if (!container) return;
@@ -447,17 +603,19 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
 
     const sortIcon = sortDirection === 'asc' ? '▲' : '▼';
 
+    const canManage = currentView === 'mine';
+
     container.innerHTML = `
       <table class="table" id="filesTable">
         <thead>
           <tr>
             <th style="width: 5%;"><i class="fas fa-file"></i></th>
-            <th style="width: 40%;">檔案名稱</th>
+            <th style="width: 34%;">檔案名稱</th>
             <th style="width: 15%;">檔案大小</th>
             <th style="width: 20%; cursor: pointer;" onclick="toggleSort('upload_time')">
               上傳時間 <span id="sortIcon" style="font-size:12px; color: var(--text-secondary-color);">${sortIcon}</span>
             </th>
-            <th style="width: 20%; text-align: center;">操作</th>
+            <th style="width: 26%; text-align: center;">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -469,12 +627,22 @@ if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
               <td>${formatDateTime(file.upload_time)}</td>
               <td>
                 <div class="file-actions">
+                  <a href="preview_teacher_file.php?id=${file.id}" class="action-btn btn-preview" target="_blank" rel="noopener">
+                    <i class="fas fa-eye"></i> 預覽
+                  </a>
+                  ${canManage ? `
+                    <button class="action-btn btn-download" style="border-color:#1890ff; color:#1890ff;" onclick="toggleShare(${file.id}, '${escapeHtml(file.original_filename)}', ${file.is_shared ? 'false' : 'true'})">
+                      <i class="fas fa-share-alt"></i> ${file.is_shared ? '取消共享' : '共享'}
+                    </button>
+                  ` : ''}
                   <a href="download_teacher_file.php?id=${file.id}" class="action-btn btn-download" download>
                     <i class="fas fa-download"></i> 下載
                   </a>
-                  <button class="action-btn btn-delete" onclick="deleteFile(${file.id}, '${escapeHtml(file.original_filename)}')">
-                    <i class="fas fa-trash"></i> 刪除
-                  </button>
+                  ${canManage ? `
+                    <button class="action-btn btn-delete" onclick="deleteFile(${file.id}, '${escapeHtml(file.original_filename)}')">
+                      <i class="fas fa-trash"></i> 刪除
+                    </button>
+                  ` : ''}
                 </div>
               </td>
             </tr>
