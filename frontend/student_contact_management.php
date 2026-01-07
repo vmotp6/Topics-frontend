@@ -59,7 +59,7 @@ try {
     /* 頁首介紹橫幅（參考使用者提供圖片的風格） */
     .scm-hero {
       /* 淡藍色背景 */
-      background: #b3caebff;
+      background: #667eea !important;
       border-radius: 18px;
       /* 最適大小：縮小高度 + 仍保留底部留白帶 */
       /* 讓橫幅上方留一段空白（參考 records.php 橫幅，上面會先留白再放標題） */

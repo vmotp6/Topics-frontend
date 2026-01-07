@@ -294,7 +294,7 @@ function getActiveClass($targetFile) {
   }
 
   .logo-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.55rem;
     color: #7f8c8d;
     margin: 0;
     font-weight: 500;
@@ -906,6 +906,9 @@ function getActiveClass($targetFile) {
     <!-- 共同可見的連結 -->
     <?php if (!($isLoggedIn && $is_header_teacher)): ?>
       <a href="<?php echo getCorrectPath('QA.php'); ?>" class="<?php echo getActiveClass('QA.php'); ?>">招生QA問答</a>
+    <?php endif; ?>
+        <?php if (!$isLoggedIn): ?>
+      <a href="<?php echo getCorrectPath('new_student_basic_info.php'); ?>" class="<?php echo getActiveClass('new_student_basic_info.php'); ?>">新生入學基本資料登錄</a>
     <?php endif; ?>
     <?php if (!($isLoggedIn && $is_header_teacher)): ?>
       <a href="<?php echo getCorrectPath('radio.php'); ?>" class="<?php echo getActiveClass('radio.php'); ?>">招生影片列表</a>
