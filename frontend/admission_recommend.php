@@ -1120,93 +1120,97 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                         }
                     }
                     
-                    // 構建插入 recommended 表的 SQL
+                    // 構建插入 recommended 表的 SQL（容錯：自動對應常見欄位別名）
                     $recommended_fields = [];
                     $recommended_values = [];
                     $recommended_bind_types = '';
-                    
-                    if (in_array('recommendations_id', $recommended_columns)) {
-                        $recommended_fields[] = 'recommendations_id';
-                        $recommended_values[] = $recommendation_id;
-                        $recommended_bind_types .= 'i';
+
+                    $rc = array_flip($recommended_columns);
+                    $id_col = isset($rc['recommendations_id']) ? 'recommendations_id' : (isset($rc['recommendation_id']) ? 'recommendation_id' : null);
+                    $name_col = isset($rc['name']) ? 'name' : (isset($rc['student_name']) ? 'student_name' : null);
+                    $school_col = isset($rc['school']) ? 'school' : (isset($rc['student_school']) ? 'student_school' : null);
+                    $grade_col = isset($rc['grade']) ? 'grade' : (isset($rc['student_grade']) ? 'student_grade' : null);
+                    $phone_col = isset($rc['phone']) ? 'phone' : (isset($rc['student_phone']) ? 'student_phone' : null);
+                    $email_col = isset($rc['email']) ? 'email' : (isset($rc['student_email']) ? 'student_email' : null);
+                    $line_col = isset($rc['line_id']) ? 'line_id' : (isset($rc['line']) ? 'line' : null);
+
+                    // 必填：推薦主表 ID
+                    if ($id_col) {
+                      $recommended_fields[] = $id_col;
+                      $recommended_values[] = $recommendation_id;
+                      $recommended_bind_types .= is_numeric($recommendation_id) ? 'i' : 's';
                     }
-                    if (in_array('name', $recommended_columns)) {
-                        $recommended_fields[] = 'name';
-                        $recommended_values[] = !empty($_POST['student_name']) ? $_POST['student_name'] : '';
-                        $recommended_bind_types .= 's';
+                    // 必填：學生姓名
+                    if ($name_col) {
+                      $recommended_fields[] = $name_col;
+                      $recommended_values[] = !empty($_POST['student_name']) ? $_POST['student_name'] : '';
+                      $recommended_bind_types .= 's';
                     }
-                    if (in_array('school', $recommended_columns)) {
-                        // 驗證 school_code 是否在 school_data 表中存在
-                        if ($student_school_code !== null && $student_school_code !== '') {
-                            $school_verify = $conn->prepare("SELECT school_code FROM school_data WHERE school_code = ? LIMIT 1");
-                            $school_verify->bind_param("s", $student_school_code);
-                            $school_verify->execute();
-                            $school_verify_result = $school_verify->get_result();
-                            if ($school_verify_result->num_rows > 0) {
-                                // school_code 存在，可以插入
-                                $recommended_fields[] = 'school';
-                                $recommended_values[] = $student_school_code; // 關聯 school_data.school_code
-                                $recommended_bind_types .= 's';
-                            } else {
-                                // school_code 不存在，如果欄位允許 NULL，插入 NULL
-                                error_log("警告：school_code '$student_school_code' 不在 school_data 表中，嘗試插入 NULL");
-                                $recommended_fields[] = 'school';
-                                $recommended_values[] = null;
-                                $recommended_bind_types .= 's';
-                            }
-                            $school_verify->close();
+                    if ($school_col) {
+                      // 驗證 school_code 是否在 school_data 表中存在
+                      if ($student_school_code !== null && $student_school_code !== '') {
+                        $school_verify = $conn->prepare("SELECT school_code FROM school_data WHERE school_code = ? LIMIT 1");
+                        $school_verify->bind_param("s", $student_school_code);
+                        $school_verify->execute();
+                        $school_verify_result = $school_verify->get_result();
+                        if ($school_verify_result->num_rows > 0) {
+                          $recommended_fields[] = $school_col;
+                          $recommended_values[] = $student_school_code; // 關聯 school_data.school_code
+                          $recommended_bind_types .= 's';
                         } else {
-                            // school_code 為空，插入 NULL
-                            $recommended_fields[] = 'school';
-                            $recommended_values[] = null;
-                            $recommended_bind_types .= 's';
+                          error_log("警告：school_code '$student_school_code' 不在 school_data 表中，嘗試插入 NULL");
+                          $recommended_fields[] = $school_col;
+                          $recommended_values[] = null;
+                          $recommended_bind_types .= 's';
                         }
+                        $school_verify->close();
+                      } else {
+                        $recommended_fields[] = $school_col;
+                        $recommended_values[] = null;
+                        $recommended_bind_types .= 's';
+                      }
                     }
-                    if (in_array('grade', $recommended_columns)) {
-                        // 驗證 grade_code 是否在 identity_options 表中存在（如果不是 GRADUATED）
-                        if ($student_grade_code !== null && $student_grade_code !== '' && $student_grade_code !== 'GRADUATED') {
-                            $grade_verify = $conn->prepare("SELECT code FROM identity_options WHERE code = ? LIMIT 1");
-                            $grade_verify->bind_param("s", $student_grade_code);
-                            $grade_verify->execute();
-                            $grade_verify_result = $grade_verify->get_result();
-                            if ($grade_verify_result->num_rows > 0) {
-                                // grade_code 存在，可以插入
-                                $recommended_fields[] = 'grade';
-                                $recommended_values[] = $student_grade_code; // 關聯 identity_options.code
-                                $recommended_bind_types .= 's';
-                            } else {
-                                // grade_code 不存在，插入 NULL
-                                error_log("警告：grade_code '$student_grade_code' 不在 identity_options 表中，插入 NULL");
-                                $recommended_fields[] = 'grade';
-                                $recommended_values[] = null;
-                                $recommended_bind_types .= 's';
-                            }
-                            $grade_verify->close();
+                    if ($grade_col) {
+                      if ($student_grade_code !== null && $student_grade_code !== '' && $student_grade_code !== 'GRADUATED') {
+                        $grade_verify = $conn->prepare("SELECT code FROM identity_options WHERE code = ? LIMIT 1");
+                        $grade_verify->bind_param("s", $student_grade_code);
+                        $grade_verify->execute();
+                        $grade_verify_result = $grade_verify->get_result();
+                        if ($grade_verify_result->num_rows > 0) {
+                          $recommended_fields[] = $grade_col;
+                          $recommended_values[] = $student_grade_code; // 關聯 identity_options.code
+                          $recommended_bind_types .= 's';
                         } else {
-                            // GRADUATED 或為空，插入 NULL
-                            $recommended_fields[] = 'grade';
-                            $recommended_values[] = null;
-                            $recommended_bind_types .= 's';
+                          error_log("警告：grade_code '$student_grade_code' 不在 identity_options 表中，插入 NULL");
+                          $recommended_fields[] = $grade_col;
+                          $recommended_values[] = null;
+                          $recommended_bind_types .= 's';
                         }
-                    }
-                    if (in_array('phone', $recommended_columns)) {
-                        $recommended_fields[] = 'phone';
-                        $recommended_values[] = $_POST['student_phone'];
+                        $grade_verify->close();
+                      } else {
+                        $recommended_fields[] = $grade_col;
+                        $recommended_values[] = null;
                         $recommended_bind_types .= 's';
+                      }
                     }
-                    if (in_array('email', $recommended_columns)) {
-                        $recommended_fields[] = 'email';
-                        $recommended_values[] = $student_email;
-                        $recommended_bind_types .= 's';
+                    if ($phone_col) {
+                      $recommended_fields[] = $phone_col;
+                      $recommended_values[] = $_POST['student_phone'];
+                      $recommended_bind_types .= 's';
                     }
-                    if (in_array('line_id', $recommended_columns)) {
-                        $recommended_fields[] = 'line_id';
-                        $recommended_values[] = $student_line_id;
-                        $recommended_bind_types .= 's';
+                    if ($email_col) {
+                      $recommended_fields[] = $email_col;
+                      $recommended_values[] = $student_email;
+                      $recommended_bind_types .= 's';
+                    }
+                    if ($line_col) {
+                      $recommended_fields[] = $line_col;
+                      $recommended_values[] = $student_line_id;
+                      $recommended_bind_types .= 's';
                     }
                     
-                    // 確保至少有 recommendations_id 和 name 才能插入
-                    if (!empty($recommended_fields) && in_array('recommendations_id', $recommended_fields) && in_array('name', $recommended_fields)) {
+                    // 確保至少有 recommendations_id/recommendation_id 與 name/student_name 才能插入
+                    if (!empty($recommended_fields) && $id_col && $name_col) {
                         $recommended_fields_str = implode(', ', $recommended_fields);
                         $recommended_placeholders = implode(', ', array_fill(0, count($recommended_fields), '?'));
                         $recommended_sql = "INSERT INTO recommended ($recommended_fields_str) VALUES ($recommended_placeholders)";

@@ -15,28 +15,13 @@ $offset = ($page - 1) * $perPage;
 // 取得分類清單
 $categories = [];
 
-// 1. 先抓所有不同的 category_id（只抓已發布影片）
-$catSql = "SELECT DISTINCT category_id FROM videos WHERE published = 1 ORDER BY category_id";
+// 直接從 video_categories 表取得所有分類（而不依賴影片中是否有該分類）
+$catSql = "SELECT id, name FROM video_categories ORDER BY name";
 if ($res = $conn->query($catSql)) {
-    $categoryIds = [];
     while ($row = $res->fetch_assoc()) {
-        if (!empty($row['category_id'])) {
-            $categoryIds[] = intval($row['category_id']); // 轉成整數避免 SQL 注入
-        }
+        $categories[$row['id']] = $row['name']; // key = id, value = name
     }
     $res->free();
-
-    // 2. 再用 video_categories 對應 category_id => name
-    if (!empty($categoryIds)) {
-        $idsStr = implode(',', $categoryIds);
-        $catNameSql = "SELECT id, name FROM video_categories WHERE id IN ($idsStr) ORDER BY name";
-        if ($res2 = $conn->query($catNameSql)) {
-            while ($row2 = $res2->fetch_assoc()) {
-                $categories[$row2['id']] = $row2['name']; // key = id, value = name
-            }
-            $res2->free();
-        }
-    }
 }
 
 
