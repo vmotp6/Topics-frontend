@@ -1082,9 +1082,40 @@ try {
         // ==========================================
         
         // 1. 取得第一志願的科系代碼
+        // 優先從 enrollment_choices 表獲取（因為已經成功插入）
         $first_dept_code = null;
-        if (!empty($intention1) && $intention1 !== '無特定') {
+        try {
+            $choice_check_stmt = $pdo->prepare("SELECT department_code FROM enrollment_choices WHERE enrollment_id = ? AND choice_order = 1 LIMIT 1");
+            $choice_check_stmt->execute([$enrollment_id]);
+            $choice_result = $choice_check_stmt->fetch(PDO::FETCH_ASSOC);
+            if ($choice_result && !empty($choice_result['department_code'])) {
+                $first_dept_code = $choice_result['department_code'];
+                error_log("自動分配: 從 enrollment_choices 表獲取第一志願科系代碼: $first_dept_code (enrollment_id: $enrollment_id)");
+            }
+        } catch (Exception $e) {
+            error_log("無法從 enrollment_choices 獲取科系代碼: " . $e->getMessage());
+        }
+        
+        // 備用方案：如果從 enrollment_choices 找不到，嘗試通過科系名稱查找
+        if (!$first_dept_code && !empty($intention1) && $intention1 !== '無特定') {
             $first_dept_code = $getDepartmentCode($intention1);
+            error_log("自動分配備用方案: 通過科系名稱 '$intention1' 查詢到的科系代碼=" . ($first_dept_code ?? 'NULL'));
+        }
+        
+        // 如果還是找不到科系代碼，記錄詳細資訊以便調試
+        if (!$first_dept_code) {
+            if (!empty($intention1) && $intention1 !== '無特定') {
+                error_log("警告: 無法找到科系 '$intention1' 對應的代碼，請檢查 departments 表中是否有該科系名稱");
+                // 嘗試查詢所有科系名稱以便調試
+                try {
+                    $all_depts = $pdo->query("SELECT code, name FROM departments")->fetchAll(PDO::FETCH_ASSOC);
+                    error_log("departments 表中的所有科系: " . json_encode($all_depts, JSON_UNESCAPED_UNICODE));
+                } catch (Exception $e) {
+                    error_log("無法查詢 departments 表: " . $e->getMessage());
+                }
+            } else {
+                error_log("自動分配跳過: intention1 為空或為'無特定' (enrollment_id: $enrollment_id)");
+            }
         }
 
         if ($first_dept_code) {
@@ -1094,22 +1125,86 @@ try {
                 // 2. 只更新 assigned_department，讓該科系的主任能在後台看到
                 // 3. 移除了 assigned_teacher_id, assigned_at, current_choice_order 的寫入
 
-                $update_assign_sql = "UPDATE enrollment_intention 
-                                      SET assigned_department = :dept_code
-                                      WHERE id = :id";
+                // 確保科系代碼去除前後空格，並驗證該科系是否存在
+                $first_dept_code = trim($first_dept_code);
                 
-                $update_stmt = $pdo->prepare($update_assign_sql);
-                $update_stmt->execute([
-                    ':dept_code' => $first_dept_code,
-                    ':id' => $enrollment_id
-                ]);
+                // 驗證科系代碼是否存在於 departments 表
+                $verify_dept_stmt = $pdo->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
+                $verify_dept_stmt->execute([$first_dept_code]);
+                $verify_dept_result = $verify_dept_stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$verify_dept_result) {
+                    error_log("錯誤: 科系代碼 '$first_dept_code' 不存在於 departments 表中，跳過自動分配");
+                } else {
+                    $update_assign_sql = "UPDATE enrollment_intention 
+                                          SET assigned_department = :dept_code
+                                          WHERE id = :id";
+                    
+                    $update_stmt = $pdo->prepare($update_assign_sql);
+                    $update_result = $update_stmt->execute([
+                        ':dept_code' => $first_dept_code,
+                        ':id' => $enrollment_id
+                    ]);
 
-                error_log("自動分配成功: Enrollment ID $enrollment_id 已分配給科系 $first_dept_code");
+                    if ($update_result) {
+                        $affected_rows = $update_stmt->rowCount();
+                        error_log("自動分配成功: Enrollment ID $enrollment_id 已分配給科系 $first_dept_code (影響行數: $affected_rows)");
+                        
+                        // 驗證更新是否真的成功
+                        $verify_stmt = $pdo->prepare("SELECT assigned_department FROM enrollment_intention WHERE id = ?");
+                        $verify_stmt->execute([$enrollment_id]);
+                        $verify_result = $verify_stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($verify_result) {
+                            $actual_assigned = trim($verify_result['assigned_department'] ?? '');
+                            $expected_assigned = trim($first_dept_code);
+                            if ($actual_assigned === $expected_assigned) {
+                                error_log("自動分配驗證成功: assigned_department 已正確設置為 '$first_dept_code'");
+                                
+                                // 檢查該科系是否有主任
+                                $director_check_stmt = $pdo->prepare("
+                                    SELECT COUNT(*) as director_count 
+                                    FROM director d
+                                    WHERE d.department = ?
+                                ");
+                                $director_check_stmt->execute([$first_dept_code]);
+                                $director_check_result = $director_check_stmt->fetch(PDO::FETCH_ASSOC);
+                                $director_count = $director_check_result['director_count'] ?? 0;
+                                
+                                if ($director_count > 0) {
+                                    error_log("該科系 '$first_dept_code' 有 $director_count 位主任，主任應該能看到此學生");
+                                    
+                                    // 發送郵件通知給主任
+                                    try {
+                                        $notification_path = __DIR__ . '/../includes/enrollment_notification_functions.php';
+                                        if (file_exists($notification_path)) {
+                                            require_once $notification_path;
+                                            sendDirectorAssignmentNotification($pdo, $first_dept_code, $emailData);
+                                        } else {
+                                            error_log("找不到郵件通知函數文件: $notification_path");
+                                        }
+                                    } catch (Exception $e) {
+                                        error_log("發送主任通知郵件時發生錯誤: " . $e->getMessage());
+                                        // 不影響主流程，繼續執行
+                                    }
+                                } else {
+                                    error_log("警告: 該科系 '$first_dept_code' 沒有主任，請檢查 director 表");
+                                }
+                            } else {
+                                error_log("自動分配驗證失敗: assigned_department 實際值為 '" . ($actual_assigned ?: 'NULL') . "', 期望值為 '$first_dept_code'");
+                            }
+                        }
+                    } else {
+                        error_log("自動分配失敗: UPDATE 語句執行返回 false");
+                    }
+                }
 
             } catch (Exception $e) {
                 error_log("自動分配發生錯誤: " . $e->getMessage());
+                error_log("錯誤堆疊: " . $e->getTraceAsString());
                 // 這裡捕獲錯誤但不中斷流程，避免影響報名結果回傳
             }
+        } else {
+            error_log("自動分配跳過: 無法取得第一志願的科系代碼 (enrollment_id: $enrollment_id)");
         }
         // ==========================================
         // 結束自動分配
