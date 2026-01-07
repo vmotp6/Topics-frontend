@@ -879,7 +879,7 @@ let playerMaxHP = 20;
 let playerLV = 1;
 
 let enemyHP = 20;
-let enemyMaxHP = 12;
+let enemyMaxHP = 10;
 let enemyName = '奶油';
 
 let bullets = [];
@@ -921,7 +921,7 @@ let invulnerableTime = 0;
 		const enemies = [
 			{
 				name: '奶油',
-				maxHP: 12,
+				maxHP: 10,
 				attacks: [
 					'codeAttackX',        // 回合 1：X 攻擊
 					'codeAttackY',        // 回合 2：Y 攻擊

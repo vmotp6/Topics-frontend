@@ -199,7 +199,7 @@ if (isset($_GET['success']) && $_GET['success'] === '1') {
     }
     .top-spacer { height: 10px; }
     .hero {
-      background: #b3caebff;
+      background: #667eea !important;
       border-radius: 18px;
       padding: 28px 18px;
       box-shadow: 0 10px 24px rgba(100, 120, 224, 0.14);

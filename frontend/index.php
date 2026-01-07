@@ -960,6 +960,27 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">查看校園地圖，了解校園設施和位置。</p>
           <a href="campus_map.php" class="feature-link">校園地圖</a>
         </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📢</div>
+          <h3 class="feature-title">招生公告欄</h3>
+          <p class="feature-description">查看招生公告欄，了解招生相關資訊。</p>
+          <a href="bulletin_board.php" class="feature-link">招生公告欄</a>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎥</div>
+          <h3 class="feature-title">招生影片列表</h3>
+          <p class="feature-description">查看招生影片列表，了解招生影片情況和進度。</p>
+          <a href="radio.php" class="feature-link">招生影片列表</a>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3 class="feature-title">遊戲中心</h3>
+          <p class="feature-description">查看遊戲中心，了解遊戲情況和進度。</p>
+          <a href="game.php" class="feature-link">遊戲中心</a>
+        </div>
         
         <div class="feature-card">
           <div class="feature-icon">📚</div>
@@ -982,15 +1003,7 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">填寫活動紀錄，查看填寫狀態並進行聯絡。</p>
           <a href="records.php" class="feature-link">活動紀錄填寫</a>
         </div>
-        
-        <div class="feature-card">
-          <div class="feature-icon">📁</div>
-          <h3 class="feature-title">檔案上傳</h3>
-          <p class="feature-description">上傳和管理您的檔案（PPT、Word、圖片等），容量限制50GB。</p>
-          <a href="teacher_file_upload.php" class="feature-link">檔案上傳</a>
-        </div>
-        <?php endif; ?>
-        
+
         <div class="feature-card">
           <div class="feature-icon">👨‍🎓</div>
           <h3 class="feature-title">學生管理</h3>
@@ -1004,7 +1017,14 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <p class="feature-description">新增與查詢學生聯絡名單，管理狀態、聯絡方式與備註。</p>
           <a href="student_contact_management.php" class="feature-link">學生聯絡管理</a>
         </div>
-
+        
+        <div class="feature-card">
+          <div class="feature-icon">📁</div>
+          <h3 class="feature-title">檔案上傳</h3>
+          <p class="feature-description">上傳和管理您的檔案（PPT、Word、圖片等），容量限制50GB。</p>
+          <a href="teacher_file_upload.php" class="feature-link">檔案上傳</a>
+        </div>
+        <?php endif; ?>
         
         <div class="feature-card">
           <div class="feature-icon">📢</div>
