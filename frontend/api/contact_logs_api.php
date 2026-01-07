@@ -1,20 +1,33 @@
 <?php
 // 載入 session 與資料庫設定
-// 先嘗試讀取後台的 session（如果存在）
-// 後台使用預設的 session name，前台使用 'KANGNING_SESSION'
-$backend_session_name = 'PHPSESSID'; // 後台通常使用預設的 PHPSESSID
-$has_backend_cookie = isset($_COOKIE[$backend_session_name]) && !isset($_COOKIE['KANGNING_SESSION']);
+// 後台使用 'KANGNING_SESSION'（與 session_config.php 一致）
+session_name('KANGNING_SESSION');
 
-if ($has_backend_cookie && session_status() === PHP_SESSION_NONE) {
-    // 如果有後台的 session cookie，使用預設 session name 啟動 session
-    session_name($backend_session_name);
+// 如果 session 尚未啟動，則啟動
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
-    // 載入資料庫設定（不載入 session_config.php，因為它會設定不同的 session name）
-    require_once '../config.php';
-} else {
-    // 否則使用前台的 session config
-    require_once '../session_config.php';
-    require_once '../config.php';
+}
+
+// 載入資料庫設定
+require_once '../config.php';
+
+// 如果 session 中沒有 user_id，嘗試從 username 查找（後台兼容）
+if (empty($_SESSION['user_id']) && !empty($_SESSION['username'])) {
+    try {
+        require_once '../config.php';
+        $conn_temp = getDatabaseConnection();
+        $user_stmt = $conn_temp->prepare("SELECT id FROM user WHERE username = ? LIMIT 1");
+        $user_stmt->bind_param("s", $_SESSION['username']);
+        $user_stmt->execute();
+        $user_result = $user_stmt->get_result();
+        if ($user_row = $user_result->fetch_assoc()) {
+            $_SESSION['user_id'] = (int)$user_row['id'];
+        }
+        $user_stmt->close();
+        $conn_temp->close();
+    } catch (Exception $e) {
+        error_log('contact_logs_api.php: 無法從 username 查找 user_id: ' . $e->getMessage());
+    }
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -47,31 +60,66 @@ try {
     $method = $_SERVER['REQUEST_METHOD'];
 
     if ($method === 'POST') {
-        // 僅老師可新增聯絡紀錄（支援 '老師' 或 'TEA'）
-        $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+        // 檢查登入狀態（支援前台和後台）
+        $isLoggedIn = ((isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) ||
+                      (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true)) &&
                      isset($_SESSION['username']) && !empty($_SESSION['username']) &&
                      isset($_SESSION['role']) && !empty($_SESSION['role']);
-        $isTeacher = ($_SESSION['role'] === '老師' || $_SESSION['role'] === 'TEA' || $_SESSION['role'] === 'STA' || $_SESSION['role'] === '學校行政人員');
+        $isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+        $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+        $user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
         
-        if (!$isLoggedIn || !$isTeacher) {
+        // 招生中心不能寫聯絡記錄
+        $isAdmissionCenter = in_array($user_role, ['ADM', 'STA']);
+        if ($isAdmissionCenter) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => '招生中心不能寫聯絡記錄']);
+            exit;
+        }
+        
+        // 允許老師或主任寫聯絡記錄
+        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'AA');
+        $isDirector = ($user_role === 'DI');
+        
+        if (!$isLoggedIn || (!$isTeacher && !$isDirector)) {
             http_response_code(403);
             echo json_encode(['success' => false, 'message' => '權限不足']);
             exit;
         }
 
-        // 取得老師 user.id
+        // 取得使用者 user.id
         $username = $_SESSION['username'];
-        $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'STA')");
-        $tstmt->bind_param('s', $username);
-        $tstmt->execute();
-        $tres = $tstmt->get_result();
-        $teacher = $tres->fetch_assoc();
-        if (!$teacher) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => '找不到老師']);
-            exit;
+        if ($isDirector) {
+            // 主任：使用 user_id
+            if ($user_id <= 0) {
+                $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND u.role = 'DI'");
+                $tstmt->bind_param('s', $username);
+                $tstmt->execute();
+                $tres = $tstmt->get_result();
+                $teacher = $tres->fetch_assoc();
+                if (!$teacher) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => '找不到主任']);
+                    exit;
+                }
+                $teacher_id = (int)$teacher['id'];
+            } else {
+                $teacher_id = $user_id;
+            }
+        } else {
+            // 老師：查詢 user.id
+            $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'STA' OR u.role = 'AA')");
+            $tstmt->bind_param('s', $username);
+            $tstmt->execute();
+            $tres = $tstmt->get_result();
+            $teacher = $tres->fetch_assoc();
+            if (!$teacher) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => '找不到老師']);
+                exit;
+            }
+            $teacher_id = (int)$teacher['id'];
         }
-        $teacher_id = (int)$teacher['id'];
 
         // 讀取輸入
         $input = $_POST;
@@ -108,15 +156,69 @@ try {
             exit;
         }
 
-        // 僅能對分配給自己的學生新增紀錄
-        $astmt = $conn->prepare("SELECT 1 FROM enrollment_intention WHERE id = ? AND assigned_teacher_id = ?");
-        $astmt->bind_param('ii', $enrollment_id, $teacher_id);
-        $astmt->execute();
-        $ares = $astmt->get_result();
-        if ($ares->num_rows === 0) {
-            http_response_code(403);
-            echo json_encode(['success' => false, 'message' => '僅能新增分配給您的學生']);
-            exit;
+        // 檢查權限：僅能對分配給自己的學生新增紀錄
+        // 對於老師：必須 assigned_teacher_id = 自己的ID
+        // 對於主任：必須 assigned_teacher_id = 自己的ID（自行聯絡）或 NULL（尚未分配）
+        if ($isDirector) {
+            // 主任：檢查 assigned_teacher_id 是否為自己（自行聯絡）
+            $astmt = $conn->prepare("SELECT assigned_teacher_id, assigned_department FROM enrollment_intention WHERE id = ?");
+            $astmt->bind_param('i', $enrollment_id);
+            $astmt->execute();
+            $ares = $astmt->get_result();
+            $enrollment = $ares->fetch_assoc();
+            
+            if (!$enrollment) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => '找不到該學生']);
+                exit;
+            }
+            
+            $assigned_teacher_id = $enrollment['assigned_teacher_id'] ?? null;
+            $assigned_department = $enrollment['assigned_department'] ?? null;
+            
+            // 獲取主任的科系代碼
+            $table_check = $conn->query("SHOW TABLES LIKE 'director'");
+            $has_director_table = $table_check && $table_check->num_rows > 0;
+            
+            if ($has_director_table) {
+                $dept_stmt = $conn->prepare("SELECT department FROM director WHERE user_id = ?");
+            } else {
+                $dept_stmt = $conn->prepare("SELECT department FROM teacher WHERE user_id = ?");
+            }
+            $dept_stmt->bind_param('i', $teacher_id);
+            $dept_stmt->execute();
+            $dept_res = $dept_stmt->get_result();
+            $dept_row = $dept_res->fetch_assoc();
+            $director_department = $dept_row ? $dept_row['department'] : null;
+            
+            // 檢查：必須是主任自己科系的學生，且 assigned_teacher_id 為主任自己（自行聯絡）
+            // 使用 TRIM 和大小寫不敏感比較
+            $assigned_dept_trim = trim($assigned_department ?? '');
+            $director_dept_trim = trim($director_department ?? '');
+            if (strtoupper($assigned_dept_trim) !== strtoupper($director_dept_trim)) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => '僅能對自己科系的學生寫聯絡記錄']);
+                exit;
+            }
+            
+            // 如果已分配給其他老師，主任不能寫記錄
+            // 如果 assigned_teacher_id 為 NULL 或等於主任自己的ID，則允許寫記錄
+            if ($assigned_teacher_id !== null && $assigned_teacher_id != $teacher_id) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => '該學生已分配給其他老師，主任不能寫聯絡記錄']);
+                exit;
+            }
+        } else {
+            // 老師：必須 assigned_teacher_id = 自己的ID
+            $astmt = $conn->prepare("SELECT 1 FROM enrollment_intention WHERE id = ? AND assigned_teacher_id = ?");
+            $astmt->bind_param('ii', $enrollment_id, $teacher_id);
+            $astmt->execute();
+            $ares = $astmt->get_result();
+            if ($ares->num_rows === 0) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => '僅能新增分配給您的學生']);
+                exit;
+            }
         }
 
         // 寫入資料（使用實際的欄位名稱：enrollment_id, method, notes）
@@ -136,17 +238,26 @@ try {
     if ($method === 'GET') {
         // 允許老師查詢自己學生的紀錄，或後台管理端查詢（主任可查看自己科系老師的紀錄）
         $isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
-        $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+        $isLoggedIn = ((isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) ||
+                      (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true)) &&
                      isset($_SESSION['username']) && !empty($_SESSION['username']) &&
                      isset($_SESSION['role']) && !empty($_SESSION['role']);
         $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
-        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'AA');
+        $isTeacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'AA');
         $isDirector = ($user_role === 'DI');
         $isAdmissionCenter = in_array($user_role, ['ADM', 'STA']);
         
-        if (!$isAdmin && (!$isLoggedIn || !$isTeacher)) {
+        // 允許的用戶：管理員、招生中心、老師、主任
+        if (!$isAdmin && !$isAdmissionCenter && (!$isLoggedIn || (!$isTeacher && !$isDirector))) {
             http_response_code(403);
-            echo json_encode(['success' => false, 'message' => '權限不足']);
+            echo json_encode(['success' => false, 'message' => '權限不足', 'debug' => [
+                'isAdmin' => $isAdmin,
+                'isAdmissionCenter' => $isAdmissionCenter,
+                'isLoggedIn' => $isLoggedIn,
+                'user_role' => $user_role,
+                'isTeacher' => $isTeacher,
+                'isDirector' => $isDirector
+            ]]);
             exit;
         }
 
@@ -159,8 +270,12 @@ try {
             exit;
         }
 
+        // 如果是招生中心或管理員，可以查看所有記錄，跳過權限檢查
+        if ($isAdmin || $isAdmissionCenter) {
+            // 招生中心和管理員可以查看所有記錄，不需要進一步檢查
+        }
         // 如果是老師（非管理端），則檢查是否為分配給自己的學生
-        if (!$isAdmin) {
+        else if (!$isDirector) {
             $username = $_SESSION['username'];
             $tstmt = $conn->prepare("SELECT u.id FROM user u WHERE u.username = ? AND (u.role = '老師' OR u.role = 'TEA' OR u.role = 'AA')");
             $tstmt->bind_param('s', $username);
@@ -249,14 +364,35 @@ try {
         // 如果是招生中心/行政人員（ADM/STA），則允許查看所有學生的聯絡紀錄，不需要額外檢查
 
         // 查詢聯絡紀錄（使用實際的欄位名稱：enrollment_id, notes）
-        // 為了向後兼容，將 notes 拆分為 result 和 follow_up_notes（如果包含分隔符）
-        $q = $conn->prepare("SELECT id, enrollment_id, teacher_id, contact_date, method, notes, created_at FROM enrollment_contact_logs WHERE enrollment_id = ? ORDER BY contact_date DESC, id DESC");
+        // 同時查詢學生分配資訊和老師姓名
+        $q = $conn->prepare("
+            SELECT 
+                cl.id, 
+                cl.enrollment_id, 
+                cl.teacher_id, 
+                cl.contact_date, 
+                cl.method, 
+                cl.notes, 
+                cl.created_at,
+                ei.assigned_teacher_id,
+                u.name AS teacher_name,
+                u.username AS teacher_username,
+                assigned_teacher.name AS assigned_teacher_name,
+                assigned_teacher.username AS assigned_teacher_username
+            FROM enrollment_contact_logs cl
+            LEFT JOIN enrollment_intention ei ON cl.enrollment_id = ei.id
+            LEFT JOIN user u ON cl.teacher_id = u.id
+            LEFT JOIN user assigned_teacher ON ei.assigned_teacher_id = assigned_teacher.id
+            WHERE cl.enrollment_id = ? 
+            ORDER BY cl.contact_date DESC, cl.id DESC
+        ");
         $q->bind_param('i', $enrollment_id);
         $q->execute();
         $res = $q->get_result();
         $rows = $res->fetch_all(MYSQLI_ASSOC);
         
         // 為了向後兼容，將 notes 拆分為 result 和 follow_up_notes
+        // 同時增加分配資訊
         foreach ($rows as &$row) {
             $row['student_id'] = $row['enrollment_id']; // 向後兼容
             $notes = $row['notes'] ?? '';
@@ -268,6 +404,19 @@ try {
             } else {
                 $row['result'] = $notes;
                 $row['follow_up_notes'] = '';
+            }
+            
+            // 增加分配資訊
+            $row['assigned_teacher_name'] = $row['assigned_teacher_name'] ?? null;
+            $row['assigned_teacher_username'] = $row['assigned_teacher_username'] ?? null;
+            $row['assigned_teacher_id'] = $row['assigned_teacher_id'] ?? null;
+            
+            // 格式化分配資訊顯示
+            if (!empty($row['assigned_teacher_id'])) {
+                $assigned_name = $row['assigned_teacher_name'] ?? $row['assigned_teacher_username'] ?? '未知';
+                $row['assigned_info'] = "分配給：{$assigned_name}";
+            } else {
+                $row['assigned_info'] = "尚未分配";
             }
         }
         unset($row);
