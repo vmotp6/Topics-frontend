@@ -1,0 +1,455 @@
+<?php
+require_once 'session_config.php';
+require_once 'config.php';
+
+// 訪客可使用（不做登入限制）
+
+function ensureNewStudentBasicInfoTable($conn) {
+  $sql = "CREATE TABLE IF NOT EXISTS new_student_basic_info (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      student_no VARCHAR(50) NOT NULL,
+      student_name VARCHAR(100) NOT NULL,
+      class_name VARCHAR(100) NOT NULL,
+      enrollment_identity VARCHAR(100) DEFAULT NULL,
+      birthday DATE DEFAULT NULL,
+      gender VARCHAR(20) DEFAULT NULL,
+      id_number VARCHAR(50) DEFAULT NULL,
+      mobile VARCHAR(50) DEFAULT NULL,
+      address VARCHAR(255) DEFAULT NULL,
+      previous_school VARCHAR(150) DEFAULT NULL,
+      photo_path VARCHAR(255) DEFAULT NULL,
+
+      parent_title VARCHAR(50) DEFAULT NULL,
+      parent_name VARCHAR(100) DEFAULT NULL,
+      parent_birth_year VARCHAR(20) DEFAULT NULL,
+      parent_occupation VARCHAR(100) DEFAULT NULL,
+      parent_phone VARCHAR(50) DEFAULT NULL,
+      parent_education VARCHAR(100) DEFAULT NULL,
+
+      guardian_relation VARCHAR(50) DEFAULT NULL,
+      guardian_name VARCHAR(100) DEFAULT NULL,
+      guardian_phone VARCHAR(50) DEFAULT NULL,
+      guardian_mobile VARCHAR(50) DEFAULT NULL,
+      guardian_line VARCHAR(100) DEFAULT NULL,
+      guardian_email VARCHAR(150) DEFAULT NULL,
+
+      emergency_name VARCHAR(100) DEFAULT NULL,
+      emergency_phone VARCHAR(50) DEFAULT NULL,
+      emergency_mobile VARCHAR(50) DEFAULT NULL,
+
+      is_indigenous TINYINT(1) DEFAULT 0,
+      is_new_immigrant_child TINYINT(1) DEFAULT 0,
+      is_overseas_chinese TINYINT(1) DEFAULT 0,
+
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_student_no (student_no),
+      INDEX idx_student_name (student_name),
+      INDEX idx_created_at (created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+  $conn->query($sql);
+}
+
+function safePost($key) {
+  return isset($_POST[$key]) ? trim((string)$_POST[$key]) : '';
+}
+
+$message = '';
+$messageType = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  try {
+    $student_no = safePost('student_no');
+    $student_name = safePost('student_name');
+    $class_name = safePost('class_name');
+    $enrollment_identity = safePost('enrollment_identity');
+    $birthday = safePost('birthday');
+    $gender = safePost('gender');
+    $id_number = safePost('id_number');
+    $mobile = safePost('mobile');
+    $address = safePost('address');
+    $previous_school = safePost('previous_school');
+
+    $parent_title = safePost('parent_title');
+    $parent_name = safePost('parent_name');
+    $parent_birth_year = safePost('parent_birth_year');
+    $parent_occupation = safePost('parent_occupation');
+    $parent_phone = safePost('parent_phone');
+    $parent_education = safePost('parent_education');
+
+    $guardian_relation = safePost('guardian_relation');
+    $guardian_name = safePost('guardian_name');
+    $guardian_phone = safePost('guardian_phone');
+    $guardian_mobile = safePost('guardian_mobile');
+    $guardian_line = safePost('guardian_line');
+    $guardian_email = safePost('guardian_email');
+
+    $emergency_name = safePost('emergency_name');
+    $emergency_phone = safePost('emergency_phone');
+    $emergency_mobile = safePost('emergency_mobile');
+
+    $is_indigenous = (safePost('is_indigenous') === '1') ? 1 : 0;
+    $is_new_immigrant_child = (safePost('is_new_immigrant_child') === '1') ? 1 : 0;
+    $is_overseas_chinese = (safePost('is_overseas_chinese') === '1') ? 1 : 0;
+
+    // 基本驗證（必填）
+    if ($student_no === '' || $student_name === '' || $class_name === '') {
+      throw new Exception('請填寫：學號、姓名、班級');
+    }
+    if ($previous_school === '' || $id_number === '' || $mobile === '') {
+      throw new Exception('請填寫：前一學校、身分證號、手機');
+    }
+
+    // 2 吋照片上傳（選填）
+    $photo_path = null;
+    if (isset($_FILES['photo']) && is_array($_FILES['photo']) && ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+      if (($_FILES['photo']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new Exception('照片上傳失敗，請重試');
+      }
+      if (($_FILES['photo']['size'] ?? 0) > MAX_FILE_SIZE) {
+        throw new Exception('照片檔案過大（上限 10MB）');
+      }
+
+      $original = (string)($_FILES['photo']['name'] ?? '');
+      $ext = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+      $allowed = ['jpg','jpeg','png'];
+      if (!in_array($ext, $allowed, true)) {
+        throw new Exception('照片格式僅支援 JPG / PNG');
+      }
+
+      $upload_dir = rtrim(UPLOAD_DIR, '/\\') . '/new_student_photos/';
+      if (!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+      }
+
+      $safe_base = preg_replace('/[^a-zA-Z0-9_-]/', '', $student_no);
+      if ($safe_base === '') $safe_base = 'student';
+      $filename = $safe_base . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+      $target_path = $upload_dir . $filename;
+
+      if (!move_uploaded_file($_FILES['photo']['tmp_name'], $target_path)) {
+        throw new Exception('照片存檔失敗，請重試');
+      }
+
+      // 存相對路徑，方便之後展示
+      $photo_path = $target_path;
+    }
+
+    $conn = getDatabaseConnection();
+    if (!$conn) throw new Exception('資料庫連接失敗');
+    ensureNewStudentBasicInfoTable($conn);
+
+    $sql = "INSERT INTO new_student_basic_info (
+        student_no, student_name, class_name, enrollment_identity, birthday, gender, id_number, mobile, address, previous_school, photo_path,
+        parent_title, parent_name, parent_birth_year, parent_occupation, parent_phone, parent_education,
+        guardian_relation, guardian_name, guardian_phone, guardian_mobile, guardian_line, guardian_email,
+        emergency_name, emergency_phone, emergency_mobile,
+        is_indigenous, is_new_immigrant_child, is_overseas_chinese
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?
+      )";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) throw new Exception('資料庫寫入準備失敗');
+
+    $stmt->bind_param(
+      "ssssssssssssssssssssssssssiii",
+      $student_no, $student_name, $class_name, $enrollment_identity, $birthday, $gender, $id_number, $mobile, $address, $previous_school, $photo_path,
+      $parent_title, $parent_name, $parent_birth_year, $parent_occupation, $parent_phone, $parent_education,
+      $guardian_relation, $guardian_name, $guardian_phone, $guardian_mobile, $guardian_line, $guardian_email,
+      $emergency_name, $emergency_phone, $emergency_mobile,
+      $is_indigenous, $is_new_immigrant_child, $is_overseas_chinese
+    );
+    if (!$stmt->execute()) {
+      throw new Exception('寫入失敗，請稍後再試');
+    }
+    $stmt->close();
+    $conn->close();
+
+    header("Location: " . $_SERVER['PHP_SELF'] . "?success=1");
+    exit;
+  } catch (Exception $e) {
+    $message = $e->getMessage();
+    $messageType = 'error';
+  }
+}
+
+if (isset($_GET['success']) && $_GET['success'] === '1') {
+  $message = '資料已送出成功！';
+  $messageType = 'success';
+}
+?>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新生入學基本資料登錄 - 康寧大學招生平台</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    /* 避免固定導覽列遮住內容 */
+    body.custom-spacing { padding-top: 140px !important; margin: 0; background: #f3f6fb; font-family: 'Microsoft JhengHei', sans-serif; }
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+      box-sizing: border-box;
+    }
+    .top-spacer { height: 10px; }
+    .hero {
+      background: #b3caebff;
+      border-radius: 18px;
+      padding: 28px 18px;
+      box-shadow: 0 10px 24px rgba(100, 120, 224, 0.14);
+      margin-bottom: 14px;
+      text-align: center;
+      color: #fff;
+    }
+    .hero h2 { margin: 0; font-size: 34px; font-weight: 900; }
+    .hero p { margin: 10px 0 0 0; font-size: 16px; color: rgba(34, 32, 32, 0.92); line-height: 1.7; }
+    .card {
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      padding: 20px;
+    }
+    .msg {
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+    .msg.success { background: #f6ffed; border: 1px solid #b7eb8f; color: #237804; }
+    .msg.error { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
+
+    .section-title {
+      margin: 16px 0 10px 0;
+      font-size: 16px;
+      font-weight: 900;
+      color: #003366;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .req-star { color: #ff4d4f; font-weight: 900; }
+    label { display: block; font-size: 14px; color: #666; margin-bottom: 6px; font-weight: 800; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 0;
+      box-sizing: border-box;
+      background: #fff;
+      font-size: 16px;
+    }
+    textarea { resize: vertical; }
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .btn {
+      border: none;
+      border-radius: 0;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .btn.primary { background: #1890ff; color: #fff; }
+    .btn.secondary { background: #f5f5f5; color: #333; border: 1px solid #e0e0e0; }
+    .hint { font-size: 12px; color: #777; margin-top: 6px; }
+  </style>
+</head>
+<body class="custom-spacing">
+<?php include("share/header.php"); ?>
+<main>
+  <div class="page">
+    <div class="top-spacer"></div>
+    <section class="hero">
+      <h2>新生入學基本資料登錄</h2>
+      <p>請填寫新生入學基本資料與家長/監護人資訊（含 2 吋照片上傳）。</p>
+    </section>
+
+    <div class="card">
+      <?php if (!empty($message)): ?>
+        <div class="msg <?php echo htmlspecialchars($messageType); ?>">
+          <?php echo htmlspecialchars($message); ?>
+        </div>
+      <?php endif; ?>
+
+      <form method="POST" enctype="multipart/form-data">
+        <div class="section-title"><i class="fas fa-id-card"></i> 新生入學基本資料</div>
+        <div class="grid">
+          <div>
+            <label>學號 <span class="req-star">*</span></label>
+            <input name="student_no" value="<?php echo htmlspecialchars(safePost('student_no')); ?>" required>
+          </div>
+          <div>
+            <label>姓名 <span class="req-star">*</span></label>
+            <input name="student_name" value="<?php echo htmlspecialchars(safePost('student_name')); ?>" required>
+          </div>
+          <div>
+            <label>班級 <span class="req-star">*</span></label>
+            <input name="class_name" value="<?php echo htmlspecialchars(safePost('class_name')); ?>" required>
+          </div>
+          <div>
+            <label>在學身分</label>
+            <input name="enrollment_identity" value="<?php echo htmlspecialchars(safePost('enrollment_identity')); ?>" placeholder="例：一般生/特殊身分...">
+          </div>
+          <div>
+            <label>生日</label>
+            <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday')); ?>">
+          </div>
+          <div>
+            <label>性別</label>
+            <select name="gender">
+              <?php $g = safePost('gender'); ?>
+              <option value="" <?php echo $g===''?'selected':''; ?>>請選擇</option>
+              <option value="男" <?php echo $g==='男'?'selected':''; ?>>男</option>
+              <option value="女" <?php echo $g==='女'?'selected':''; ?>>女</option>
+              <option value="其他" <?php echo $g==='其他'?'selected':''; ?>>其他</option>
+            </select>
+          </div>
+          <div>
+            <label>身分證號 <span class="req-star">*</span></label>
+            <input name="id_number" value="<?php echo htmlspecialchars(safePost('id_number')); ?>" required>
+          </div>
+          <div>
+            <label>手機 <span class="req-star">*</span></label>
+            <input name="mobile" value="<?php echo htmlspecialchars(safePost('mobile')); ?>" required>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>通訊地址</label>
+            <input name="address" value="<?php echo htmlspecialchars(safePost('address')); ?>">
+          </div>
+          <div>
+            <label>前一學校 <span class="req-star">*</span></label>
+            <input name="previous_school" value="<?php echo htmlspecialchars(safePost('previous_school')); ?>" required>
+          </div>
+          <div>
+            <label>2 吋照片（JPG/PNG）</label>
+            <input type="file" name="photo" accept="image/jpeg,image/png">
+            <div class="hint">單檔最大 10MB</div>
+          </div>
+        </div>
+
+        <div class="section-title"><i class="fas fa-user-friends"></i> 家長或監護人資訊</div>
+        <div class="grid">
+          <div><label>稱謂</label><input name="parent_title" value="<?php echo htmlspecialchars(safePost('parent_title')); ?>" placeholder="例：父/母/監護人"></div>
+          <div><label>姓名</label><input name="parent_name" value="<?php echo htmlspecialchars(safePost('parent_name')); ?>"></div>
+          <div><label>年次</label><input name="parent_birth_year" value="<?php echo htmlspecialchars(safePost('parent_birth_year')); ?>" placeholder="例：70"></div>
+          <div><label>職業</label><input name="parent_occupation" value="<?php echo htmlspecialchars(safePost('parent_occupation')); ?>"></div>
+          <div><label>電話</label><input name="parent_phone" value="<?php echo htmlspecialchars(safePost('parent_phone')); ?>"></div>
+          <div><label>教育程度</label><input name="parent_education" value="<?php echo htmlspecialchars(safePost('parent_education')); ?>"></div>
+        </div>
+
+        <div class="section-title"><i class="fas fa-user-shield"></i> 監護人資料</div>
+        <div class="grid">
+          <div><label>關係</label><input name="guardian_relation" value="<?php echo htmlspecialchars(safePost('guardian_relation')); ?>"></div>
+          <div><label>姓名</label><input name="guardian_name" value="<?php echo htmlspecialchars(safePost('guardian_name')); ?>"></div>
+          <div><label>電話</label><input name="guardian_phone" value="<?php echo htmlspecialchars(safePost('guardian_phone')); ?>"></div>
+          <div><label>手機</label><input name="guardian_mobile" value="<?php echo htmlspecialchars(safePost('guardian_mobile')); ?>"></div>
+          <div><label>LINE</label><input name="guardian_line" value="<?php echo htmlspecialchars(safePost('guardian_line')); ?>"></div>
+          <div><label>EMAIL</label><input type="email" name="guardian_email" value="<?php echo htmlspecialchars(safePost('guardian_email')); ?>"></div>
+        </div>
+
+        <div class="section-title"><i class="fas fa-phone"></i> 緊急聯絡人</div>
+        <div class="grid">
+          <div><label>姓名</label><input name="emergency_name" value="<?php echo htmlspecialchars(safePost('emergency_name')); ?>"></div>
+          <div><label>電話</label><input name="emergency_phone" value="<?php echo htmlspecialchars(safePost('emergency_phone')); ?>"></div>
+          <div><label>手機</label><input name="emergency_mobile" value="<?php echo htmlspecialchars(safePost('emergency_mobile')); ?>"></div>
+        </div>
+
+        <div class="section-title"><i class="fas fa-clipboard-check"></i> 個人身分資料</div>
+        <div class="grid">
+          <?php
+            $v_indigenous = safePost('is_indigenous');
+            if ($v_indigenous === '') $v_indigenous = '0';
+            $v_new_immigrant = safePost('is_new_immigrant_child');
+            if ($v_new_immigrant === '') $v_new_immigrant = '0';
+            $v_overseas = safePost('is_overseas_chinese');
+            if ($v_overseas === '') $v_overseas = '0';
+          ?>
+
+          <div>
+            <label>本人是否為原住民</label>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_indigenous" value="1" <?php echo ($v_indigenous === '1') ? 'checked' : ''; ?> style="width:auto;">
+                是
+              </label>
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_indigenous" value="0" <?php echo ($v_indigenous === '0') ? 'checked' : ''; ?> style="width:auto;">
+                否
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label>本人是否為新住民子女</label>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_new_immigrant_child" value="1" <?php echo ($v_new_immigrant === '1') ? 'checked' : ''; ?> style="width:auto;">
+                是
+              </label>
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_new_immigrant_child" value="0" <?php echo ($v_new_immigrant === '0') ? 'checked' : ''; ?> style="width:auto;">
+                否
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label>本人是否為僑生</label>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_overseas_chinese" value="1" <?php echo ($v_overseas === '1') ? 'checked' : ''; ?> style="width:auto;">
+                是
+              </label>
+              <label style="display:flex; gap:8px; align-items:center; font-weight:900; margin:0;">
+                <input type="radio" name="is_overseas_chinese" value="0" <?php echo ($v_overseas === '0') ? 'checked' : ''; ?> style="width:auto;">
+                否
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary"><i class="fas fa-paper-plane"></i> 送出</button>
+          <button type="reset" class="btn secondary"><i class="fas fa-undo"></i> 清除</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+<script>
+  // 動態調整本頁 padding-top，避免固定導覽列（可能兩排）遮住內容
+  (function() {
+    function applyNavbarOffset() {
+      const navbar = document.querySelector('.navbar');
+      if (!navbar) return;
+      const extraGap = 8;
+      const h = navbar.offsetHeight || 0;
+      if (h > 0) document.body.style.paddingTop = (h + extraGap) + 'px';
+    }
+    document.addEventListener('DOMContentLoaded', applyNavbarOffset);
+    window.addEventListener('load', applyNavbarOffset);
+    window.addEventListener('resize', applyNavbarOffset);
+  })();
+</script>
+<?php include("share/footer.php"); ?>
+</body>
+</html>
+
+

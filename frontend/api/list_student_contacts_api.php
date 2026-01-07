@@ -80,6 +80,50 @@ try {
   $types = '';
   $params = [];
 
+  // ✅ 權限規則：老師只能看到「自己新增」的聯絡資料
+  $session_role = $_SESSION['role'] ?? '';
+  $session_username = $_SESSION['username'] ?? '';
+  $is_teacher_role = ($session_role === 'TEA' || $session_role === '老師');
+  if ($is_teacher_role) {
+    $creator_id = null;
+    if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
+      $creator_id = (int)$_SESSION['user_id'];
+    } elseif (isset($_SESSION['id']) && (int)$_SESSION['id'] > 0) {
+      $creator_id = (int)$_SESSION['id'];
+    } elseif ($session_username !== '') {
+      // fallback：用 username 反查 user.id（與 add_student_contact_api.php 一致）
+      $stmtUser = $conn->prepare("SELECT id FROM user WHERE username = ? LIMIT 1");
+      if ($stmtUser) {
+        $stmtUser->bind_param("s", $session_username);
+        $stmtUser->execute();
+        $uRes = $stmtUser->get_result();
+        if ($uRow = $uRes->fetch_assoc()) {
+          $creator_id = isset($uRow['id']) ? (int)$uRow['id'] : null;
+        }
+        $stmtUser->close();
+      }
+    }
+
+    // 兼容舊資料：有些可能只有 created_by_username
+    if ($creator_id !== null && $creator_id > 0 && $session_username !== '') {
+      $where[] = "(created_by = ? OR created_by_username = ?)";
+      $types .= "is";
+      $params[] = $creator_id;
+      $params[] = $session_username;
+    } elseif ($creator_id !== null && $creator_id > 0) {
+      $where[] = "created_by = ?";
+      $types .= "i";
+      $params[] = $creator_id;
+    } elseif ($session_username !== '') {
+      $where[] = "created_by_username = ?";
+      $types .= "s";
+      $params[] = $session_username;
+    } else {
+      // 無法識別建立者，保守起見不回傳任何資料
+      $where[] = "1=0";
+    }
+  }
+
   if ($q !== '') {
     $where[] = "(name LIKE ? OR junior_high LIKE ? OR current_grade LIKE ? OR interest_department LIKE ? OR activity_source LIKE ? OR contact_teacher LIKE ? OR status LIKE ? OR contact_method LIKE ? OR contact_method_value LIKE ? OR contact_content LIKE ? OR contact_note LIKE ?)";
     $like = '%' . $q . '%';

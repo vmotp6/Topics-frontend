@@ -846,6 +846,12 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
           <a href="QA.php" class="feature-link">招生QA問答</a>
         </div>
         <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <h3 class="feature-title">新生入學基本資料登錄</h3>
+          <p class="feature-description">新生入學基本資料填寫（含 2 吋照片、家長/監護人、緊急聯絡人與身分資料）。</p>
+          <a href="new_student_basic_info.php" class="feature-link">新生基本資料登錄</a>
+        </div>
+        <div class="feature-card">
           <div class="feature-icon">🎥</div>
           <h3 class="feature-title">招生影片列表</h3>
           <p class="feature-description">查看招生影片列表，了解招生影片情況和進度。</p>
