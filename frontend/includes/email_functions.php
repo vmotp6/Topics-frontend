@@ -35,6 +35,12 @@ function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '') {
         $mail->SMTPSecure = SMTP_SECURE;
         $mail->Port = SMTP_PORT;
         
+        // 啟用詳細錯誤日誌（用於調試）
+        $mail->SMTPDebug = 0; // 0=關閉, 2=詳細
+        $mail->Debugoutput = function($str, $level) {
+            error_log("PHPMailer Debug (Level $level): $str");
+        };
+        
         // 編碼設定
         $mail->CharSet = 'UTF-8';
         $mail->Encoding = 'base64';
@@ -54,11 +60,17 @@ function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '') {
             $mail->AltBody = $altBody;
         }
         
-        $mail->send();
-        return true;
+        $result = $mail->send();
+        if ($result) {
+            error_log("✅ PHPMailer 郵件發送成功: 收件人=$to, 主題=$subject");
+        } else {
+            error_log("❌ PHPMailer 郵件發送失敗: 收件人=$to, 主題=$subject");
+        }
+        return $result;
         
     } catch (Exception $e) {
-        error_log("PHPMailer 錯誤: " . $e->getMessage());
+        error_log("❌ PHPMailer 異常: 收件人=$to, 錯誤=" . $e->getMessage());
+        error_log("PHPMailer 異常堆疊: " . $e->getTraceAsString());
         return false;
     }
 }
@@ -87,19 +99,31 @@ function sendEmailWithBuiltIn($to, $subject, $body) {
 function sendEmail($to, $subject, $body, $altBody = '') {
     global $phpmailer_available;
     
+    error_log("開始發送郵件: 收件人=$to, 主題=$subject");
+    
     // 檢查 SMTP 設定是否已配置
     if (empty(SMTP_USERNAME) || empty(SMTP_PASSWORD) || empty(SMTP_FROM_EMAIL)) {
-        error_log("SMTP 設定未完成，請在 config.php 中填入相關資訊");
+        error_log("❌ SMTP 設定未完成，請在 config.php 中填入相關資訊");
+        error_log("SMTP_USERNAME=" . (defined('SMTP_USERNAME') ? (empty(SMTP_USERNAME) ? '空' : '已設置') : '未定義'));
+        error_log("SMTP_PASSWORD=" . (defined('SMTP_PASSWORD') ? (empty(SMTP_PASSWORD) ? '空' : '已設置') : '未定義'));
+        error_log("SMTP_FROM_EMAIL=" . (defined('SMTP_FROM_EMAIL') ? (empty(SMTP_FROM_EMAIL) ? '空' : SMTP_FROM_EMAIL) : '未定義'));
         return false;
     }
     
     // 優先使用 PHPMailer
     if ($phpmailer_available) {
+        error_log("使用 PHPMailer 發送郵件");
         return sendEmailWithPHPMailer($to, $subject, $body, $altBody);
     } else {
         // 備用方案：使用內建 mail() 函數
-        error_log("PHPMailer 未安裝，使用內建 mail() 函數");
-        return sendEmailWithBuiltIn($to, $subject, $body);
+        error_log("⚠️ PHPMailer 未安裝，使用內建 mail() 函數");
+        $result = sendEmailWithBuiltIn($to, $subject, $body);
+        if ($result) {
+            error_log("✅ 內建 mail() 函數發送成功: 收件人=$to");
+        } else {
+            error_log("❌ 內建 mail() 函數發送失敗: 收件人=$to");
+        }
+        return $result;
     }
 }
 
