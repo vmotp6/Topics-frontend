@@ -310,6 +310,32 @@ function getDepartmentStats($pdo, $department_filter = '') {
         if ($has_choices_table) {
             // 使用正規化的 enrollment_choices 表結構
             try {
+                // 構建部門過濾條件
+                $dept_filter = '';
+                if (!empty($department_filter)) {
+                    // 檢查部門過濾是科系代碼還是科系名稱
+                    // 如果是「資訊管理科」或包含「資管」，則過濾為 IM 或包含「資訊管理」的科系
+                    if (stripos($department_filter, '資訊管理') !== false || stripos($department_filter, '資管') !== false) {
+                        // 查詢 departments 表，找到資訊管理科的代碼
+                        $dept_check = $pdo->query("SELECT code FROM departments WHERE code = 'IM' OR name LIKE '%資訊管理%' OR name LIKE '%資管%' LIMIT 1");
+                        $dept_row = $dept_check->fetch(PDO::FETCH_ASSOC);
+                        if ($dept_row) {
+                            $dept_code = $dept_row['code'];
+                            $escaped_code = $pdo->quote($dept_code);
+                            $escaped_name = $pdo->quote('%' . $department_filter . '%');
+                            $dept_filter = " AND (ec.department_code = $escaped_code OR d.name LIKE $escaped_name OR d.code = $escaped_code)";
+                        } else {
+                            // 如果找不到，使用模糊匹配
+                            $escaped_dept = $pdo->quote('%' . $department_filter . '%');
+                            $dept_filter = " AND (d.name LIKE $escaped_dept OR ec.department_code LIKE $escaped_dept)";
+                        }
+                    } else {
+                        // 其他科系，使用模糊匹配
+                        $escaped_dept = $pdo->quote('%' . $department_filter . '%');
+                        $dept_filter = " AND (d.name LIKE $escaped_dept OR ec.department_code LIKE $escaped_dept)";
+                    }
+                }
+                
                 $stmt = $pdo->query("
                     SELECT 
                         CASE ec.choice_order
@@ -323,7 +349,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
                     FROM enrollment_intention ei
                     INNER JOIN enrollment_choices ec ON ei.id = ec.enrollment_id
                     LEFT JOIN departments d ON ec.department_code = d.code
-                    WHERE ec.department_code IS NOT NULL AND ec.department_code != ''
+                    WHERE ec.department_code IS NOT NULL AND ec.department_code != '' $dept_filter
                     GROUP BY ec.choice_order, COALESCE(d.name, ec.department_code, '無特定')
                 ");
                 
@@ -562,7 +588,7 @@ function getSystemStats($pdo, $department_filter = '') {
                 error_log("學制統計查詢失敗，嘗試不使用篩選: " . $e->getMessage());
                 error_log("失敗的 SQL: " . $sql);
                 error_log("使用的 filter: " . $filter);
-                error_log("has_intention_columns: " . ($has_intention_columns ? 'true' : 'false'));
+                error_log("has_intention_columns: " . (($has_intention1 && $has_intention2 && $has_intention3) ? 'true' : 'false'));
                 
                 try {
                     $stmt = $pdo->query("
@@ -887,8 +913,31 @@ function getMonthlyStats($pdo, $department_filter = '') {
 
 function getSchoolDepartmentStats($pdo, $department_filter = '') {
     try {
-        // 國中選擇科系分佈應該顯示所有數據，不受部門限制
-        $filter = '1=1'; // 不應用部門篩選
+        // 構建部門過濾條件
+        $dept_filter = '';
+        if (!empty($department_filter)) {
+            // 檢查部門過濾是科系代碼還是科系名稱
+            // 如果是「資訊管理科」或包含「資管」，則過濾為 IM 或包含「資訊管理」的科系
+            if (stripos($department_filter, '資訊管理') !== false || stripos($department_filter, '資管') !== false) {
+                // 查詢 departments 表，找到資訊管理科的代碼
+                $dept_check = $pdo->query("SELECT code FROM departments WHERE code = 'IM' OR name LIKE '%資訊管理%' OR name LIKE '%資管%' LIMIT 1");
+                $dept_row = $dept_check->fetch(PDO::FETCH_ASSOC);
+                if ($dept_row) {
+                    $dept_code = $dept_row['code'];
+                    $escaped_code = $pdo->quote($dept_code);
+                    $escaped_name = $pdo->quote('%' . $department_filter . '%');
+                    $dept_filter = " AND (ec.department_code = $escaped_code OR d.name LIKE $escaped_name OR d.code = $escaped_code)";
+                } else {
+                    // 如果找不到，使用模糊匹配
+                    $escaped_dept = $pdo->quote('%' . $department_filter . '%');
+                    $dept_filter = " AND (d.name LIKE $escaped_dept OR ec.department_code LIKE $escaped_dept)";
+                }
+            } else {
+                // 其他科系，使用模糊匹配
+                $escaped_dept = $pdo->quote('%' . $department_filter . '%');
+                $dept_filter = " AND (d.name LIKE $escaped_dept OR ec.department_code LIKE $escaped_dept)";
+            }
+        }
         
         // 檢查 enrollment_choices 表是否存在
         $check_table = $pdo->query("SHOW TABLES LIKE 'enrollment_choices'");
@@ -932,7 +981,7 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
                     $school_join
                     WHERE ei.junior_high IS NOT NULL AND ei.junior_high != ''
                         AND ec.department_code IS NOT NULL AND ec.department_code != ''
-                        AND $filter
+                        $dept_filter
                     GROUP BY $group_by_school, $group_by_dept, ec.choice_order
                     ORDER BY school_name, department, ec.choice_order
                 ");

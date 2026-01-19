@@ -1178,12 +1178,19 @@ try {
                                         $notification_path = __DIR__ . '/../includes/enrollment_notification_functions.php';
                                         if (file_exists($notification_path)) {
                                             require_once $notification_path;
-                                            sendDirectorAssignmentNotification($pdo, $first_dept_code, $emailData);
+                                            error_log("開始發送主任通知郵件: 科系=$first_dept_code, 學生=" . ($emailData['name'] ?? 'N/A'));
+                                            $email_sent = sendDirectorAssignmentNotification($pdo, $first_dept_code, $emailData);
+                                            if ($email_sent) {
+                                                error_log("✅ 主任通知郵件發送成功: 科系=$first_dept_code");
+                                            } else {
+                                                error_log("❌ 主任通知郵件發送失敗: 科系=$first_dept_code (請檢查錯誤日誌)");
+                                            }
                                         } else {
-                                            error_log("找不到郵件通知函數文件: $notification_path");
+                                            error_log("❌ 找不到郵件通知函數文件: $notification_path");
                                         }
                                     } catch (Exception $e) {
-                                        error_log("發送主任通知郵件時發生錯誤: " . $e->getMessage());
+                                        error_log("❌ 發送主任通知郵件時發生異常: " . $e->getMessage());
+                                        error_log("異常堆疊: " . $e->getTraceAsString());
                                         // 不影響主流程，繼續執行
                                     }
                                 } else {
