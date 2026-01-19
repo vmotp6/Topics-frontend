@@ -106,8 +106,29 @@ function sendEmail($to, $subject, $body, $altBody = '') {
 /**
  * 發送歡迎郵件
  */
-function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $courseText) {
+function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $courseText, $sessionType = '實體', $location = '', $onlineLink = '') {
     $subject = "康寧大學五專入學說明會 - 報名確認通知";
+    
+    // 根據場次類型生成不同的內容
+    // 線上場次：只顯示連結，不顯示地點
+    // 實體場次：只顯示地點，不顯示連結
+    $sessionInfo = '';
+    $sessionType = trim($sessionType);
+    if ($sessionType === '線上') {
+        // 線上場次：顯示線上會議連結
+        if (!empty($onlineLink)) {
+            $sessionInfo = "<p><strong>線上會議連結：</strong><a href='{$onlineLink}' style='color: #667eea; text-decoration: underline;'>{$onlineLink}</a></p>";
+        } else {
+            $sessionInfo = "<p><strong>線上會議連結：</strong>將於活動前另行通知</p>";
+        }
+    } else {
+        // 實體場次：顯示活動地點
+        if (!empty($location)) {
+            $sessionInfo = "<p><strong>活動地點：</strong>{$location}</p>";
+        } else {
+            $sessionInfo = "<p><strong>活動地點：</strong>將於活動前另行通知</p>";
+        }
+    }
     
     $body = "
     <!DOCTYPE html>
@@ -140,6 +161,8 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
                     <p><strong>學生姓名：</strong>{$studentName}</p>
                     <p><strong>姓名：</strong>{$parentName}</p>
                     <p><strong>參加場次：</strong>{$sessionName}</p>
+                    <p><strong>場次類型：</strong>{$sessionType}</p>
+                    {$sessionInfo}
                     <p><strong>體驗課程：</strong>{$courseText}</p>
                 </div>
                 
@@ -153,9 +176,19 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
                 <div class='info-box'>
                     <h3>⏰ 重要提醒</h3>
                     <ul>
-                        <li>我們會在活動前再次發送提醒郵件</li>
+                        <li>我們會在活動前再次發送提醒郵件</li>";
+    
+    if ($sessionType === '線上') {
+        $body .= "
+                        <li>請提前測試您的網路連線和視訊設備</li>
+                        <li>建議提前 5 分鐘進入線上會議室</li>";
+    } else {
+        $body .= "
                         <li>請記得在活動當天攜帶學生證或相關證件</li>
-                        <li>建議提前 15 分鐘到達會場</li>
+                        <li>建議提前 15 分鐘到達會場</li>";
+    }
+    
+    $body .= "
                         <li>如需要取消或變更，請提前通知我們</li>
                     </ul>
                 </div>
@@ -173,6 +206,25 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
     ";
     
     // 純文字版本（備用）
+    // 線上場次：只顯示連結，不顯示地點
+    // 實體場次：只顯示地點，不顯示連結
+    $sessionInfoText = '';
+    if ($sessionType === '線上') {
+        // 線上場次：顯示線上會議連結
+        if (!empty($onlineLink)) {
+            $sessionInfoText = "線上會議連結：{$onlineLink}";
+        } else {
+            $sessionInfoText = "線上會議連結：將於活動前另行通知";
+        }
+    } else {
+        // 實體場次：顯示活動地點
+        if (!empty($location)) {
+            $sessionInfoText = "活動地點：{$location}";
+        } else {
+            $sessionInfoText = "活動地點：將於活動前另行通知";
+        }
+    }
+    
     $altBody = "
 康寧大學五專入學說明會 - 報名確認通知
 
@@ -184,12 +236,24 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
 - 學生姓名：{$studentName}
 - 姓名：{$parentName}
 - 參加場次：{$sessionName}
+- 場次類型：{$sessionType}
+- {$sessionInfoText}
 - 體驗課程：{$courseText}
 
 重要提醒：
-- 我們會在活動前再次發送提醒郵件
+- 我們會在活動前再次發送提醒郵件";
+    
+    if ($sessionType === '線上') {
+        $altBody .= "
+- 請提前測試您的網路連線和視訊設備
+- 建議提前 5 分鐘進入線上會議室";
+    } else {
+        $altBody .= "
 - 請記得在活動當天攜帶學生證或相關證件
-- 建議提前 15 分鐘到達會場
+- 建議提前 15 分鐘到達會場";
+    }
+    
+    $altBody .= "
 
 如有任何問題，歡迎與我們聯繫。
 
@@ -202,8 +266,29 @@ function sendWelcomeEmail($email, $studentName, $parentName, $sessionName, $cour
 /**
  * 發送提醒郵件
  */
-function sendReminderEmail($email, $studentName, $parentName, $sessionName, $sessionDate) {
+function sendReminderEmail($email, $studentName, $parentName, $sessionName, $sessionDate, $sessionType = '實體', $location = '', $onlineLink = '') {
     $subject = "康寧大學五專入學說明會 - 活動提醒通知";
+    
+    // 根據場次類型生成不同的內容
+    // 線上場次：只顯示連結，不顯示地點
+    // 實體場次：只顯示地點，不顯示連結
+    $sessionInfo = '';
+    $sessionType = trim($sessionType);
+    if ($sessionType === '線上') {
+        // 線上場次：顯示線上會議連結
+        if (!empty($onlineLink)) {
+            $sessionInfo = "<p><strong>線上會議連結：</strong><a href='{$onlineLink}' style='color: #667eea; text-decoration: underline; font-weight: bold;'>{$onlineLink}</a></p>";
+        } else {
+            $sessionInfo = "<p><strong>線上會議連結：</strong>將於活動前另行通知</p>";
+        }
+    } else {
+        // 實體場次：顯示活動地點
+        if (!empty($location)) {
+            $sessionInfo = "<p><strong>活動地點：</strong>{$location}</p>";
+        } else {
+            $sessionInfo = "<p><strong>活動地點：</strong>將於活動前另行通知</p>";
+        }
+    }
     
     $body = "
     <!DOCTYPE html>
@@ -232,14 +317,28 @@ function sendReminderEmail($email, $studentName, $parentName, $sessionName, $ses
                     <h3>📅 活動即將開始</h3>
                     <p>提醒您，{$studentName} 同學報名的「{$sessionName}」即將舉行。</p>
                     <p><strong>活動時間：</strong>{$sessionDate}</p>
+                    <p><strong>場次類型：</strong>{$sessionType}</p>
+                    {$sessionInfo}
                 </div>
                 
                 <h3>📝 出席準備事項</h3>
-                <ul>
+                <ul>";
+    
+    if ($sessionType === '線上') {
+        $body .= "
+                    <li>請提前測試您的網路連線和視訊設備</li>
+                    <li>建議提前 5 分鐘進入線上會議室</li>
+                    <li>建議準備筆記本，記錄重要資訊</li>
+                    <li>如有疑問，歡迎在會議中提問</li>";
+    } else {
+        $body .= "
                     <li>請攜帶學生證或相關身份證明</li>
                     <li>建議攜帶筆記本，記錄重要資訊</li>
                     <li>如有疑問，歡迎現場提問</li>
-                    <li>建議提前 15 分鐘到達會場</li>
+                    <li>建議提前 15 分鐘到達會場</li>";
+    }
+    
+    $body .= "
                 </ul>
                 
                 <p>我們期待您的蒞臨！</p>
@@ -282,8 +381,41 @@ function testEmailFunction($testEmail = null) {
 /**
  * 發送修改確認郵件
  */
-function sendModifyConfirmationEmail($email, $studentName, $parentName, $sessionName, $courseText) {
+function sendModifyConfirmationEmail($email, $studentName, $parentName, $sessionName, $courseText, $sessionType = '實體', $location = '', $onlineLink = '') {
     $subject = "康寧大學五專入學說明會 - 報名修改確認";
+    
+    // 根據場次類型生成不同的內容
+    // 線上場次：只顯示連結，不顯示地點
+    // 實體場次：只顯示地點，不顯示連結
+    $sessionInfo = '';
+    $sessionType = trim($sessionType);
+    if ($sessionType === '線上') {
+        // 線上場次：顯示線上會議連結
+        if (!empty($onlineLink)) {
+            $sessionInfo = "<tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>線上會議連結：</td>
+                        <td style='padding: 8px 0; color: #333;'><a href='{$onlineLink}' style='color: #667eea; text-decoration: underline;'>{$onlineLink}</a></td>
+                    </tr>";
+        } else {
+            $sessionInfo = "<tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>線上會議連結：</td>
+                        <td style='padding: 8px 0; color: #333;'>將於活動前另行通知</td>
+                    </tr>";
+        }
+    } else {
+        // 實體場次：顯示活動地點
+        if (!empty($location)) {
+            $sessionInfo = "<tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>活動地點：</td>
+                        <td style='padding: 8px 0; color: #333;'>{$location}</td>
+                    </tr>";
+        } else {
+            $sessionInfo = "<tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>活動地點：</td>
+                        <td style='padding: 8px 0; color: #333;'>將於活動前另行通知</td>
+                    </tr>";
+        }
+    }
     
     $body = "
     <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
@@ -311,6 +443,11 @@ function sendModifyConfirmationEmail($email, $studentName, $parentName, $session
                         <td style='padding: 8px 0; color: #333;'>{$sessionName}</td>
                     </tr>
                     <tr>
+                        <td style='padding: 8px 0; font-weight: bold; color: #555;'>場次類型：</td>
+                        <td style='padding: 8px 0; color: #333;'>{$sessionType}</td>
+                    </tr>
+                    {$sessionInfo}
+                    <tr>
                         <td style='padding: 8px 0; font-weight: bold; color: #555;'>體驗課程：</td>
                         <td style='padding: 8px 0; color: #333;'>{$courseText}</td>
                     </tr>
@@ -324,7 +461,15 @@ function sendModifyConfirmationEmail($email, $studentName, $parentName, $session
             <div style='background: #e8f4fd; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #667eea;'>
                 <h4 style='color: #667eea; margin-top: 0; margin-bottom: 10px;'>📋 重要提醒：</h4>
                 <ul style='margin: 0; padding-left: 20px; color: #333;'>
-                    <li>請確認修改後的場次時間和地點</li>
+                    <li>請確認修改後的場次時間";
+    
+    if ($sessionType === '線上') {
+        $body .= "和線上會議連結";
+    } else {
+        $body .= "和地點";
+    }
+    
+    $body .= "</li>
                     <li>活動前一天我們會再次發送提醒郵件</li>
                     <li>如有任何疑問，請聯繫招生諮詢老師</li>
                     <li>您可隨時透過電子郵件查詢您的報名狀態</li>

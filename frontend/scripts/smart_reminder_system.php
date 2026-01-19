@@ -20,7 +20,7 @@ try {
     // 查詢所有未發送提醒的報名者
     $applications_sql = "SELECT a.id, a.email, a.student_name, a.parent_name, 
                                 a.course_priority_1, a.course_priority_2, a.created_at,
-                                s.session_name, s.session_date, s.session_type
+                                s.session_name, s.session_date, s.session_type, s.location, s.online_link
                          FROM admission_applications a
                          INNER JOIN admission_sessions s ON a.session_id = s.id
                          WHERE a.reminder_sent = 0 
@@ -98,12 +98,19 @@ try {
             if ($should_send) {
                 echo "   📤 發送提醒郵件...\n";
                 
+                $session_type = $application['session_type'] ?? '實體';
+                $location = $application['location'] ?? '';
+                $online_link = $application['online_link'] ?? '';
+                
                 $email_sent = sendReminderEmail(
                     $application['email'],
                     $application['student_name'],
                     $application['parent_name'],
                     $session_name,
-                    $session_date
+                    $session_date,
+                    $session_type,
+                    $location,
+                    $online_link
                 );
                 
                 if ($email_sent) {

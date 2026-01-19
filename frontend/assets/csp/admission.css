@@ -990,6 +990,46 @@ textarea:focus {
     box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
 }
 
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 10px;
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* 線上場次 */
+.badge-online {
+    background-color: #3498db;
+    color: #ffffff;
+}
+
+/* 實體場次 */
+.badge-offline {
+    background-color: #27ae60;
+    color: #ffffff;
+}
+
+/* 額滿（full-session）時，badge 不吃灰色與刪除線 */
+.full-session .badge {
+    color: #ffffff !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+}
+
+/* radio disabled 時，badge 稍微降權但仍有顏色 */
+.radio-item.disabled .badge {
+    filter: grayscale(20%);
+    opacity: 0.9;
+}
+
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }

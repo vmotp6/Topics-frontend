@@ -353,7 +353,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                         require_once 'includes/email_functions.php';
                         
                         // 取得修改後的完整資料
-                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
+                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, s.location, s.online_link, sd.name as school_name
                                         FROM admission_applications a 
                                         LEFT JOIN admission_sessions s ON a.session_id = s.id 
                                         LEFT JOIN school_data sd ON a.school = sd.school_code
@@ -380,13 +380,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                             }
                             $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇科系';
                             
+                            // 取得場次資訊
+                            $session_type_modify = $updated_row['session_type'] ?? '實體';
+                            $location_modify = $updated_row['location'] ?? '';
+                            $online_link_modify = $updated_row['online_link'] ?? '';
+                            
                             // 發送修改確認郵件
                             $modify_email_sent = sendModifyConfirmationEmail(
                                 $updated_row['email'],
                                 $updated_row['student_name'],
                                 $updated_row['parent_name'],
                                 $updated_row['session_name'],
-                                $course_text
+                                $course_text,
+                                $session_type_modify,
+                                $location_modify,
+                                $online_link_modify
                             );
                             
                             if ($modify_email_sent) {
@@ -724,13 +732,32 @@ if ($_POST && !isset($_POST['action'])) {
                 }
                 $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
                 
+                // 查詢場次資訊（包含 session_type、location、online_link）
+                $session_info_query = "SELECT session_type, location, online_link FROM admission_sessions WHERE id = ?";
+                $session_info_stmt = $conn->prepare($session_info_query);
+                $session_info_stmt->bind_param("i", $session_id);
+                $session_info_stmt->execute();
+                $session_info_result = $session_info_stmt->get_result();
+                $session_type = '實體';
+                $location = '';
+                $online_link = '';
+                if ($session_info_row = $session_info_result->fetch_assoc()) {
+                    $session_type = $session_info_row['session_type'] ?? '實體';
+                    $location = $session_info_row['location'] ?? '';
+                    $online_link = $session_info_row['online_link'] ?? '';
+                }
+                $session_info_stmt->close();
+                
                 // 嘗試發送歡迎郵件
                 $email_sent = sendWelcomeEmail(
                     $_POST['email'],
                     $_POST['student_name'],
                     $_POST['parent_name'],
                     $session_name,
-                    $course_text
+                    $course_text,
+                    $session_type,
+                    $location,
+                    $online_link
                 );
                 
                 // 更新郵件發送狀態
@@ -754,8 +781,8 @@ if ($_POST && !isset($_POST['action'])) {
             
             // 檢查是否需要立即發送提醒郵件
             try {
-                // 獲取場次日期
-                $session_date_query = "SELECT session_date FROM admission_sessions WHERE id = ?";
+                // 獲取場次日期和相關資訊
+                $session_date_query = "SELECT session_date, session_type, location, online_link FROM admission_sessions WHERE id = ?";
                 $session_date_stmt = $conn->prepare($session_date_query);
                 $session_date_stmt->bind_param("i", $session_id);
                 $session_date_stmt->execute();
@@ -763,6 +790,9 @@ if ($_POST && !isset($_POST['action'])) {
                 
                 if ($session_date_row = $session_date_result->fetch_assoc()) {
                     $session_date = $session_date_row['session_date'];
+                    $session_type_reminder = $session_date_row['session_type'] ?? '實體';
+                    $location_reminder = $session_date_row['location'] ?? '';
+                    $online_link_reminder = $session_date_row['online_link'] ?? '';
                     $today = new DateTime();
                     $session_date_obj = new DateTime($session_date);
                     $days_until_session = $today->diff($session_date_obj)->days;
@@ -774,7 +804,10 @@ if ($_POST && !isset($_POST['action'])) {
                             $_POST['student_name'],
                             $_POST['parent_name'],
                             $session_name,
-                            $session_date
+                            $session_date,
+                            $session_type_reminder,
+                            $location_reminder,
+                            $online_link_reminder
                         );
                         
                         if ($reminder_sent) {
@@ -1096,7 +1129,10 @@ $conn->close();
                         <?php else: ?>
                             <?php foreach ($sessions as $session): 
                                 $is_full = $session['remaining_spots'] <= 0;
-                                $session_display = $session['session_name'] . ($session['session_type'] === '線上' ? ' (線上)' : '');
+                                $type_label = ((int)$session['session_type'] === 1)
+                                ? '<span class="badge badge-online">線上</span>'
+                                : '<span class="badge badge-offline">實體</span>';
+                                $session_display = $session['session_name'] . ' ' . $type_label;
                                 $registered_count = $session['registered_count'] ?? 0;
                                 $spots_info = "（{$registered_count}/{$session['max_participants']} 人）";
                             ?>
@@ -1104,13 +1140,14 @@ $conn->close();
                                     <input type="radio" name="session_choice" value="<?php echo $session['id']; ?>" 
                                            <?php echo (isset($_POST['session_choice']) && $_POST['session_choice'] == $session['id']) ? 'checked' : ''; ?>
                                            <?php echo $is_full ? 'disabled' : ''; ?> required>
-                                    <span class="<?php echo $is_full ? 'full-session' : ''; ?>">
-                                        <?php echo htmlspecialchars($session_display); ?>
-                                        <span class="spots-info"><?php echo $spots_info; ?></span>
-                                        <?php if ($is_full): ?>
-                                            <span class="full-badge">額滿</span>
-                                        <?php endif; ?>
-                                    </span>
+                                           <span class="<?php echo $is_full ? 'full-session' : ''; ?>">
+                                                <?php echo htmlspecialchars($session['session_name']); ?>
+                                                <span class="spots-info"><?php echo $spots_info; ?></span>
+                                                <?php echo $type_label; ?>
+                                                <?php if ($is_full): ?>
+                                                <span class="full-badge">額滿</span>
+                                                <?php endif; ?>
+                                           </span>
                                 </label>
                             <?php endforeach; ?>
                         <?php endif; ?>
