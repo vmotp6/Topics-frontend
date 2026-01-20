@@ -302,6 +302,14 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
               <option value="Line">Line</option>
               <option value="Email">Email</option>
               <option value="面談">面談</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size: 13px; color:#666; margin-bottom:6px; font-weight:800;">聯絡結果</label>
+            <select id="smContactResult" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px;">
+              <option value="contacted">已聯絡</option>
+              <option value="unreachable">聯絡不到</option>
             </select>
           </div>
         </div>
@@ -557,6 +565,8 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
       const today = new Date().toISOString().slice(0, 10);
       document.getElementById('smContactDate').value = today;
       document.getElementById('smContactMethod').value = '電話';
+      var cr = document.getElementById('smContactResult');
+      if (cr) cr.value = 'contacted';
       document.getElementById('smContactNotes').value = '';
       document.getElementById('smAddContactLogModal').style.display = 'flex';
     }
@@ -578,14 +588,17 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
       }
 
       try {
+        var crEl = document.getElementById('smContactResult');
+        var contact_result = (crEl && crEl.value) ? crEl.value : 'contacted';
         const response = await fetch('api/contact_logs_api.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             student_id: currentContactStudentId,
             contact_date,
-            contact_method,
-            notes
+            method: contact_method,
+            notes,
+            contact_result
           })
         });
         const data = await response.json();
@@ -624,17 +637,22 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
               </div>
             `;
           } else {
-            contactLogsList.innerHTML = data.logs.map(log => `
+            contactLogsList.innerHTML = data.logs.map(log => {
+              const isUnreachable = (log.contact_result || '') === 'unreachable';
+              const unreachableBadge = isUnreachable ? '<span style="margin-left: 8px; background: #ff4d4f; color: #fff; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight:900;">聯絡不到</span>' : '';
+              const dateStr = (log.contact_date || '').match(/^(\d{4}-\d{2}-\d{2})/) ? (log.contact_date || '').match(/^(\d{4}-\d{2}-\d{2})/)[1] : (log.contact_date || '');
+              return `
               <div class="student-item">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; gap:10px;">
                   <div>
-                    <strong>${escapeHtml(log.contact_date)}</strong>
-                    <span style="margin-left: 10px; background: #e3f2fd; color: #1976d2; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight:900;">${escapeHtml(log.method || log.contact_method || '')}</span>
+                    <strong>${escapeHtml(dateStr || '')}</strong>
+                    <span style="margin-left: 10px; background: #e3f2fd; color: #1976d2; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight:900;">${escapeHtml(log.method || log.contact_method || '')}</span>${unreachableBadge}
                   </div>
                 </div>
                 <div style="color:#666; line-height:1.6; white-space: pre-wrap;">${escapeHtml(log.notes || log.result || '')}</div>
               </div>
-            `).join('');
+            `;
+            }).join('');
           }
         } else {
           contactLogsList.innerHTML = `
