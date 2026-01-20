@@ -25,7 +25,7 @@ try {
     echo "明天日期：{$tomorrow_date}\n\n";
     
     // 查詢明天有活動的場次
-    $sessions_sql = "SELECT id, session_name, session_date, session_type 
+    $sessions_sql = "SELECT id, session_name, session_date, session_type, location, online_link 
                      FROM admission_sessions 
                      WHERE session_date = ? AND is_active = 1";
     

@@ -278,6 +278,47 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
         $message = "第一科系和第二科系不能相同，請選擇不同的科系。";
         $messageType = "error";
     } else {
+        // 驗證科系代碼是否存在於 departments 表中，並將空字串轉為 NULL
+        if (!empty($new_course_priority_1)) {
+            $dept_check_query = "SELECT code FROM departments WHERE code = ? LIMIT 1";
+            $dept_check_stmt = $conn->prepare($dept_check_query);
+            if ($dept_check_stmt === false) {
+                error_log("準備驗證科系代碼1失敗: " . $conn->error);
+                $new_course_priority_1 = null;
+            } else {
+                $dept_check_stmt->bind_param("s", $new_course_priority_1);
+                $dept_check_stmt->execute();
+                $dept_check_result = $dept_check_stmt->get_result();
+                if ($dept_check_result->num_rows === 0) {
+                    error_log("警告：科系代碼1不存在於 departments 表中: " . $new_course_priority_1);
+                    $new_course_priority_1 = null;
+                }
+                $dept_check_stmt->close();
+            }
+        } else {
+            $new_course_priority_1 = null;
+        }
+        
+        if (!empty($new_course_priority_2)) {
+            $dept_check_query2 = "SELECT code FROM departments WHERE code = ? LIMIT 1";
+            $dept_check_stmt2 = $conn->prepare($dept_check_query2);
+            if ($dept_check_stmt2 === false) {
+                error_log("準備驗證科系代碼2失敗: " . $conn->error);
+                $new_course_priority_2 = null;
+            } else {
+                $dept_check_stmt2->bind_param("s", $new_course_priority_2);
+                $dept_check_stmt2->execute();
+                $dept_check_result2 = $dept_check_stmt2->get_result();
+                if ($dept_check_result2->num_rows === 0) {
+                    error_log("警告：科系代碼2不存在於 departments 表中: " . $new_course_priority_2);
+                    $new_course_priority_2 = null;
+                }
+                $dept_check_stmt2->close();
+            }
+        } else {
+            $new_course_priority_2 = null;
+        }
+        
         // 驗證電子郵件和申請ID的匹配
         $verify_query = "SELECT id FROM admission_applications WHERE id = ? AND email = ?";
         $verify_stmt = $conn->prepare($verify_query);
@@ -327,22 +368,31 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                 }
                 $duplicate_check_stmt->close();
                 // 取得新場次資訊
+                $new_session_name = '';
                 $session_info_query = "SELECT session_name FROM admission_sessions WHERE id = ?";
                 $session_info_stmt = $conn->prepare($session_info_query);
-                $session_info_stmt->bind_param("i", $new_session_id);
-                $session_info_stmt->execute();
-                $session_info_result = $session_info_stmt->get_result();
-                $new_session_name = '';
-                if ($session_info_row = $session_info_result->fetch_assoc()) {
-                    $new_session_name = $session_info_row['session_name'];
+                if ($session_info_stmt === false) {
+                    error_log("準備查詢新場次資訊失敗: " . $conn->error);
+                } else {
+                    $session_info_stmt->bind_param("i", $new_session_id);
+                    $session_info_stmt->execute();
+                    $session_info_result = $session_info_stmt->get_result();
+                    if ($session_info_row = $session_info_result->fetch_assoc()) {
+                        $new_session_name = $session_info_row['session_name'];
+                    }
+                    $session_info_stmt->close();
                 }
-                $session_info_stmt->close();
                 
                 // 更新報名記錄（移除 session_choice 字段）
                 $update_query = "UPDATE admission_applications 
                                 SET session_id = ?, course_priority_1 = ?, course_priority_2 = ?
                                 WHERE id = ? AND email = ?";
                 $update_stmt = $conn->prepare($update_query);
+                if ($update_stmt === false) {
+                    error_log("準備更新報名記錄失敗: " . $conn->error);
+                    $success_message = "報名修改失敗：資料庫錯誤";
+                    goto skip_modify_update;
+                }
                 $update_stmt->bind_param("issis", $new_session_id, $new_course_priority_1, $new_course_priority_2, $application_id, $email);
                 
                 if ($update_stmt->execute()) {
@@ -353,7 +403,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                         require_once 'includes/email_functions.php';
                         
                         // 取得修改後的完整資料
-                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, sd.name as school_name
+                        $updated_query = "SELECT a.*, s.session_name, s.session_date, s.session_type, s.location, s.online_link, sd.name as school_name
                                         FROM admission_applications a 
                                         LEFT JOIN admission_sessions s ON a.session_id = s.id 
                                         LEFT JOIN school_data sd ON a.school = sd.school_code
@@ -380,13 +430,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'modify' && isset($_POST['ap
                             }
                             $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇科系';
                             
+                            // 取得場次資訊
+                            $session_type_modify = $updated_row['session_type'] ?? '實體';
+                            $location_modify = $updated_row['location'] ?? '';
+                            $online_link_modify = $updated_row['online_link'] ?? '';
+                            
                             // 發送修改確認郵件
                             $modify_email_sent = sendModifyConfirmationEmail(
                                 $updated_row['email'],
                                 $updated_row['student_name'],
                                 $updated_row['parent_name'],
                                 $updated_row['session_name'],
-                                $course_text
+                                $course_text,
+                                $session_type_modify,
+                                $location_modify,
+                                $online_link_modify
                             );
                             
                             if ($modify_email_sent) {
@@ -606,6 +664,51 @@ if ($_POST && !isset($_POST['action'])) {
             $conn = getDatabaseConnection();
         }
         
+        // 驗證科系代碼是否存在於 departments 表中，並將空字串轉為 NULL
+        if (!empty($course_priority_1)) {
+            $dept_check_query = "SELECT code FROM departments WHERE code = ? LIMIT 1";
+            $dept_check_stmt = $conn->prepare($dept_check_query);
+            if ($dept_check_stmt === false) {
+                error_log("準備驗證科系代碼1失敗: " . $conn->error);
+                $course_priority_1 = null; // 如果查詢失敗，設為 NULL
+            } else {
+                $dept_check_stmt->bind_param("s", $course_priority_1);
+                $dept_check_stmt->execute();
+                $dept_check_result = $dept_check_stmt->get_result();
+                if ($dept_check_result->num_rows === 0) {
+                    // 科系代碼不存在，設為 NULL
+                    error_log("警告：科系代碼1不存在於 departments 表中: " . $course_priority_1);
+                    $course_priority_1 = null;
+                }
+                $dept_check_stmt->close();
+            }
+        } else {
+            // 空字串轉為 NULL，以符合外鍵約束
+            $course_priority_1 = null;
+        }
+        
+        if (!empty($course_priority_2)) {
+            $dept_check_query2 = "SELECT code FROM departments WHERE code = ? LIMIT 1";
+            $dept_check_stmt2 = $conn->prepare($dept_check_query2);
+            if ($dept_check_stmt2 === false) {
+                error_log("準備驗證科系代碼2失敗: " . $conn->error);
+                $course_priority_2 = null; // 如果查詢失敗，設為 NULL
+            } else {
+                $dept_check_stmt2->bind_param("s", $course_priority_2);
+                $dept_check_stmt2->execute();
+                $dept_check_result2 = $dept_check_stmt2->get_result();
+                if ($dept_check_result2->num_rows === 0) {
+                    // 科系代碼不存在，設為 NULL
+                    error_log("警告：科系代碼2不存在於 departments 表中: " . $course_priority_2);
+                    $course_priority_2 = null;
+                }
+                $dept_check_stmt2->close();
+            }
+        } else {
+            // 空字串轉為 NULL，以符合外鍵約束
+            $course_priority_2 = null;
+        }
+        
         // 取得選擇的場次資訊
         $session_info_query = "SELECT id, session_name FROM admission_sessions WHERE id = ?";
         $session_stmt = $conn->prepare($session_info_query);
@@ -670,6 +773,8 @@ if ($_POST && !isset($_POST['action'])) {
             throw new Exception("SQL 準備失敗: " . $conn->error . " | SQL: " . $sql);
         }
         
+        // 使用 "s" 類型綁定，但允許 NULL 值
+        // course_priority_1 和 course_priority_2 可能為 NULL
         $stmt->bind_param("ssssssiissi", 
             $_POST['email'],
             $school_code,  // 存儲 school_data.school_code (varchar(20))
@@ -679,8 +784,8 @@ if ($_POST && !isset($_POST['action'])) {
             $_POST['contact_phone'],
             $_POST['line_id'],
             $session_id,  // int
-            $course_priority_1,  // 存儲 departments.code
-            $course_priority_2,  // 存儲 departments.code
+            $course_priority_1,  // 存儲 departments.code 或 NULL
+            $course_priority_2,  // 存儲 departments.code 或 NULL
             $receive_info_value  // tinyint: 0=否, 1=是
         );
         
@@ -698,31 +803,61 @@ if ($_POST && !isset($_POST['action'])) {
                     // 查詢科系名稱
                     $dept_query_1 = "SELECT name FROM departments WHERE code = ? LIMIT 1";
                     $dept_stmt_1 = $conn->prepare($dept_query_1);
-                    $dept_stmt_1->bind_param("s", $course_priority_1);
-                    $dept_stmt_1->execute();
-                    $dept_result_1 = $dept_stmt_1->get_result();
-                    $dept_name_1 = $course_priority_1; // 預設使用代碼
-                    if ($dept_row_1 = $dept_result_1->fetch_assoc()) {
-                        $dept_name_1 = $dept_row_1['name'];
+                    if ($dept_stmt_1 === false) {
+                        error_log("準備查詢科系名稱1失敗: " . $conn->error);
+                        $dept_name_1 = $course_priority_1; // 預設使用代碼
+                    } else {
+                        $dept_stmt_1->bind_param("s", $course_priority_1);
+                        $dept_stmt_1->execute();
+                        $dept_result_1 = $dept_stmt_1->get_result();
+                        $dept_name_1 = $course_priority_1; // 預設使用代碼
+                        if ($dept_row_1 = $dept_result_1->fetch_assoc()) {
+                            $dept_name_1 = $dept_row_1['name'];
+                        }
+                        $dept_stmt_1->close();
                     }
-                    $dept_stmt_1->close();
                     $course_info[] = "第一選擇：" . $dept_name_1;
                 }
                 if (!empty($course_priority_2)) {
                     // 查詢科系名稱
                     $dept_query_2 = "SELECT name FROM departments WHERE code = ? LIMIT 1";
                     $dept_stmt_2 = $conn->prepare($dept_query_2);
-                    $dept_stmt_2->bind_param("s", $course_priority_2);
-                    $dept_stmt_2->execute();
-                    $dept_result_2 = $dept_stmt_2->get_result();
-                    $dept_name_2 = $course_priority_2; // 預設使用代碼
-                    if ($dept_row_2 = $dept_result_2->fetch_assoc()) {
-                        $dept_name_2 = $dept_row_2['name'];
+                    if ($dept_stmt_2 === false) {
+                        error_log("準備查詢科系名稱2失敗: " . $conn->error);
+                        $dept_name_2 = $course_priority_2; // 預設使用代碼
+                    } else {
+                        $dept_stmt_2->bind_param("s", $course_priority_2);
+                        $dept_stmt_2->execute();
+                        $dept_result_2 = $dept_stmt_2->get_result();
+                        $dept_name_2 = $course_priority_2; // 預設使用代碼
+                        if ($dept_row_2 = $dept_result_2->fetch_assoc()) {
+                            $dept_name_2 = $dept_row_2['name'];
+                        }
+                        $dept_stmt_2->close();
                     }
-                    $dept_stmt_2->close();
                     $course_info[] = "第二選擇：" . $dept_name_2;
                 }
                 $course_text = !empty($course_info) ? implode('、', $course_info) : '未選擇體驗課程';
+                
+                // 查詢場次資訊（包含 session_type、location、online_link）
+                $session_type = '實體';
+                $location = '';
+                $online_link = '';
+                $session_info_query = "SELECT session_type, location, online_link FROM admission_sessions WHERE id = ?";
+                $session_info_stmt = $conn->prepare($session_info_query);
+                if ($session_info_stmt === false) {
+                    error_log("準備查詢場次資訊失敗: " . $conn->error);
+                } else {
+                    $session_info_stmt->bind_param("i", $session_id);
+                    $session_info_stmt->execute();
+                    $session_info_result = $session_info_stmt->get_result();
+                    if ($session_info_row = $session_info_result->fetch_assoc()) {
+                        $session_type = $session_info_row['session_type'] ?? '實體';
+                        $location = $session_info_row['location'] ?? '';
+                        $online_link = $session_info_row['online_link'] ?? '';
+                    }
+                    $session_info_stmt->close();
+                }
                 
                 // 嘗試發送歡迎郵件
                 $email_sent = sendWelcomeEmail(
@@ -730,7 +865,10 @@ if ($_POST && !isset($_POST['action'])) {
                     $_POST['student_name'],
                     $_POST['parent_name'],
                     $session_name,
-                    $course_text
+                    $course_text,
+                    $session_type,
+                    $location,
+                    $online_link
                 );
                 
                 // 更新郵件發送狀態
@@ -754,42 +892,56 @@ if ($_POST && !isset($_POST['action'])) {
             
             // 檢查是否需要立即發送提醒郵件
             try {
-                // 獲取場次日期
-                $session_date_query = "SELECT session_date FROM admission_sessions WHERE id = ?";
+                // 獲取場次日期和相關資訊
+                $session_date_query = "SELECT session_date, session_type, location, online_link FROM admission_sessions WHERE id = ?";
                 $session_date_stmt = $conn->prepare($session_date_query);
-                $session_date_stmt->bind_param("i", $session_id);
-                $session_date_stmt->execute();
-                $session_date_result = $session_date_stmt->get_result();
-                
-                if ($session_date_row = $session_date_result->fetch_assoc()) {
-                    $session_date = $session_date_row['session_date'];
-                    $today = new DateTime();
-                    $session_date_obj = new DateTime($session_date);
-                    $days_until_session = $today->diff($session_date_obj)->days;
+                if ($session_date_stmt === false) {
+                    error_log("準備查詢場次日期失敗: " . $conn->error);
+                } else {
+                    $session_date_stmt->bind_param("i", $session_id);
+                    $session_date_stmt->execute();
+                    $session_date_result = $session_date_stmt->get_result();
                     
-                    // 如果活動是明天或今天，立即發送提醒郵件
-                    if ($days_until_session <= 1) {
-                        $reminder_sent = sendReminderEmail(
-                            $_POST['email'],
-                            $_POST['student_name'],
-                            $_POST['parent_name'],
-                            $session_name,
-                            $session_date
-                        );
+                    if ($session_date_row = $session_date_result->fetch_assoc()) {
+                        $session_date = $session_date_row['session_date'];
+                        $session_type_reminder = $session_date_row['session_type'] ?? '實體';
+                        $location_reminder = $session_date_row['location'] ?? '';
+                        $online_link_reminder = $session_date_row['online_link'] ?? '';
+                        $today = new DateTime();
+                        $session_date_obj = new DateTime($session_date);
+                        $days_until_session = $today->diff($session_date_obj)->days;
                         
-                        if ($reminder_sent) {
-                            // 更新提醒郵件發送狀態
-                            $reminder_update_sql = "UPDATE admission_applications SET reminder_sent = 1, reminder_sent_at = NOW() WHERE id = ?";
-                            $reminder_update_stmt = $conn->prepare($reminder_update_sql);
-                            $reminder_update_stmt->bind_param("i", $application_id);
-                            $reminder_update_stmt->execute();
-                            $reminder_update_stmt->close();
+                        // 如果活動是明天或今天，立即發送提醒郵件
+                        if ($days_until_session <= 1) {
+                            $reminder_sent = sendReminderEmail(
+                                $_POST['email'],
+                                $_POST['student_name'],
+                                $_POST['parent_name'],
+                                $session_name,
+                                $session_date,
+                                $session_type_reminder,
+                                $location_reminder,
+                                $online_link_reminder
+                            );
                             
-                            $message .= " 提醒郵件也已發送！";
+                            if ($reminder_sent) {
+                                // 更新提醒郵件發送狀態
+                                $reminder_update_sql = "UPDATE admission_applications SET reminder_sent = 1, reminder_sent_at = NOW() WHERE id = ?";
+                                $reminder_update_stmt = $conn->prepare($reminder_update_sql);
+                                if ($reminder_update_stmt === false) {
+                                    error_log("準備更新提醒郵件狀態失敗: " . $conn->error);
+                                } else {
+                                    $reminder_update_stmt->bind_param("i", $application_id);
+                                    $reminder_update_stmt->execute();
+                                    $reminder_update_stmt->close();
+                                }
+                                
+                                $message .= " 提醒郵件也已發送！";
+                            }
                         }
                     }
+                    $session_date_stmt->close();
                 }
-                $session_date_stmt->close();
                 
             } catch (Exception $e) {
                 // 提醒郵件發送失敗不影響報名成功
@@ -1096,7 +1248,10 @@ $conn->close();
                         <?php else: ?>
                             <?php foreach ($sessions as $session): 
                                 $is_full = $session['remaining_spots'] <= 0;
-                                $session_display = $session['session_name'] . ($session['session_type'] === '線上' ? ' (線上)' : '');
+                                $type_label = ((int)$session['session_type'] === 1)
+                                ? '<span class="badge badge-online">線上</span>'
+                                : '<span class="badge badge-offline">實體</span>';
+                                $session_display = $session['session_name'] . ' ' . $type_label;
                                 $registered_count = $session['registered_count'] ?? 0;
                                 $spots_info = "（{$registered_count}/{$session['max_participants']} 人）";
                             ?>
@@ -1104,13 +1259,14 @@ $conn->close();
                                     <input type="radio" name="session_choice" value="<?php echo $session['id']; ?>" 
                                            <?php echo (isset($_POST['session_choice']) && $_POST['session_choice'] == $session['id']) ? 'checked' : ''; ?>
                                            <?php echo $is_full ? 'disabled' : ''; ?> required>
-                                    <span class="<?php echo $is_full ? 'full-session' : ''; ?>">
-                                        <?php echo htmlspecialchars($session_display); ?>
-                                        <span class="spots-info"><?php echo $spots_info; ?></span>
-                                        <?php if ($is_full): ?>
-                                            <span class="full-badge">額滿</span>
-                                        <?php endif; ?>
-                                    </span>
+                                           <span class="<?php echo $is_full ? 'full-session' : ''; ?>">
+                                                <?php echo htmlspecialchars($session['session_name']); ?>
+                                                <span class="spots-info"><?php echo $spots_info; ?></span>
+                                                <?php echo $type_label; ?>
+                                                <?php if ($is_full): ?>
+                                                <span class="full-badge">額滿</span>
+                                                <?php endif; ?>
+                                           </span>
                                 </label>
                             <?php endforeach; ?>
                         <?php endif; ?>
