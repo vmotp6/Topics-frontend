@@ -559,6 +559,70 @@ try {
                 if (!empty($choice_errors)) {
                     error_log("志願序插入錯誤: " . implode('; ', $choice_errors));
                 }
+                
+                // 自動分配給每個志願的主任並發送郵件通知
+                try {
+                    // 載入續招報名通知函數
+                    $notification_path = __DIR__ . '/includes/continued_admission_notification_functions.php';
+                    if (file_exists($notification_path)) {
+                        require_once $notification_path;
+                        
+                        // 準備學生資料
+                        $student_data = [
+                            'name' => $name,
+                            'apply_no' => $apply_no,
+                            'phone' => $phone,
+                            'mobile' => $mobile,
+                            'email' => '' // 續招報名表單可能沒有email欄位
+                        ];
+                        
+                        // 查詢所有已插入的志願序
+                        $choices_query = $pdo->prepare("
+                            SELECT choice_order, department_code 
+                            FROM continued_admission_choices 
+                            WHERE application_id = ? 
+                            ORDER BY choice_order ASC
+                        ");
+                        $choices_query->execute([$insert_id]);
+                        $inserted_choices = $choices_query->fetchAll(PDO::FETCH_ASSOC);
+                        
+                        // 為每個志願分配給對應科系的主任並發送郵件
+                        foreach ($inserted_choices as $choice) {
+                            $dept_code = $choice['department_code'];
+                            $choice_order = $choice['choice_order'];
+                            
+                            // 更新 assigned_department（使用第一志願的科系）
+                            if ($choice_order == 1) {
+                                try {
+                                    $update_stmt = $pdo->prepare("UPDATE continued_admission SET assigned_department = ? WHERE id = ?");
+                                    $update_stmt->execute([$dept_code, $insert_id]);
+                                    error_log("已自動分配第一志願科系 {$dept_code} 給報名 ID {$insert_id}");
+                                } catch (PDOException $e) {
+                                    error_log("更新 assigned_department 失敗: " . $e->getMessage());
+                                }
+                            }
+                            
+                            // 發送郵件通知給該科系的主任
+                            try {
+                                error_log("開始發送續招報名通知郵件: 科系={$dept_code}, 志願順序={$choice_order}, 報名ID={$insert_id}");
+                                $email_sent = sendContinuedAdmissionDirectorNotification($pdo, $dept_code, $choice_order, $student_data, $insert_id);
+                                if ($email_sent) {
+                                    error_log("✅ 續招報名通知郵件發送成功: 科系={$dept_code}, 志願順序={$choice_order}");
+                                } else {
+                                    error_log("❌ 續招報名通知郵件發送失敗: 科系={$dept_code}, 志願順序={$choice_order} (請檢查錯誤日誌)");
+                                }
+                            } catch (Exception $e) {
+                                error_log("❌ 發送續招報名通知郵件時發生異常: " . $e->getMessage());
+                                // 不影響主流程，繼續執行
+                            }
+                        }
+                    } else {
+                        error_log("❌ 找不到續招報名通知函數文件: $notification_path");
+                    }
+                } catch (Exception $e) {
+                    error_log("❌ 自動分配和發送郵件時發生異常: " . $e->getMessage());
+                    // 不影響主流程，繼續執行
+                }
             } catch (PDOException $e) {
                 error_log("插入志願序時發生嚴重錯誤: " . $e->getMessage());
                 error_log("錯誤代碼: " . $e->getCode());

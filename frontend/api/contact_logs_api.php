@@ -45,17 +45,32 @@ function ensureContactLogsTable($conn) {
             contact_date DATE NOT NULL,
             method VARCHAR(20) NOT NULL,
             notes TEXT NOT NULL,
+            contact_result VARCHAR(20) DEFAULT 'contacted',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_enrollment_id (enrollment_id),
             INDEX idx_teacher_id (teacher_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
         $conn->query($sql);
+    } else {
+        // 現有表：若無 contact_result 欄位則新增
+        $col = $conn->query("SHOW COLUMNS FROM enrollment_contact_logs LIKE 'contact_result'");
+        if (!$col || $col->num_rows === 0) {
+            @$conn->query("ALTER TABLE enrollment_contact_logs ADD COLUMN contact_result VARCHAR(20) DEFAULT 'contacted' COMMENT 'contacted=已聯絡, unreachable=聯絡不到' AFTER notes");
+        }
+    }
+}
+
+function ensureCaseClosedColumn($conn) {
+    $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'case_closed'");
+    if (!$r || $r->num_rows === 0) {
+        @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN case_closed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=否,1=是(結案後顯示於歷史紀錄)'");
     }
 }
 
 try {
     $conn = getDatabaseConnection();
     ensureContactLogsTable($conn);
+    ensureCaseClosedColumn($conn);
 
     $method = $_SERVER['REQUEST_METHOD'];
 
@@ -139,16 +154,19 @@ try {
                  (isset($input['contact_method']) ? trim($input['contact_method']) : '');
         
         // 優先使用 notes，如果沒有則合併 result 和 follow_up_notes（向後兼容）
-        if (isset($input['notes']) && !empty(trim($input['notes']))) {
-            $notes = trim($input['notes']);
+        if (isset($input['notes']) && trim((string)$input['notes']) !== '') {
+            $notes = trim((string)$input['notes']);
         } else {
-            $contact_result = isset($input['contact_result']) ? trim($input['contact_result']) : '';
-            $follow_up_notes = isset($input['follow_up_notes']) ? trim($input['follow_up_notes']) : '';
-            $notes = $contact_result;
-            if (!empty($follow_up_notes)) {
+            $legacy_result = isset($input['contact_result']) ? trim((string)$input['contact_result']) : '';
+            $follow_up_notes = isset($input['follow_up_notes']) ? trim((string)$input['follow_up_notes']) : '';
+            $notes = $legacy_result;
+            if ($follow_up_notes !== '') {
                 $notes .= ($notes ? "\n\n後續追蹤備註：\n" : '') . $follow_up_notes;
             }
         }
+
+        // 聯絡結果：unreachable=聯絡不到，其他或未填=已聯絡
+        $contact_result = (isset($input['contact_result']) && (string)$input['contact_result'] === 'unreachable') ? 'unreachable' : 'contacted';
 
         if ($enrollment_id <= 0 || $method === '' || $notes === '') {
             http_response_code(400);
@@ -221,9 +239,9 @@ try {
             }
         }
 
-        // 寫入資料（使用實際的欄位名稱：enrollment_id, method, notes）
-        $stmt = $conn->prepare("INSERT INTO enrollment_contact_logs (enrollment_id, teacher_id, contact_date, method, notes) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param('iisss', $enrollment_id, $teacher_id, $contact_date, $method, $notes);
+        // 寫入資料（含 contact_result: contacted=已聯絡, unreachable=聯絡不到）
+        $stmt = $conn->prepare("INSERT INTO enrollment_contact_logs (enrollment_id, teacher_id, contact_date, method, notes, contact_result) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param('iissss', $enrollment_id, $teacher_id, $contact_date, $method, $notes, $contact_result);
         $ok = $stmt->execute();
 
         if ($ok) {
@@ -363,8 +381,7 @@ try {
         }
         // 如果是招生中心/行政人員（ADM/STA），則允許查看所有學生的聯絡紀錄，不需要額外檢查
 
-        // 查詢聯絡紀錄（使用實際的欄位名稱：enrollment_id, notes）
-        // 同時查詢學生分配資訊和老師姓名
+        // 查詢聯絡紀錄（含 contact_result、ei.case_closed 供判斷是否顯示結案按鈕）
         $q = $conn->prepare("
             SELECT 
                 cl.id, 
@@ -373,8 +390,10 @@ try {
                 cl.contact_date, 
                 cl.method, 
                 cl.notes, 
+                cl.contact_result,
                 cl.created_at,
                 ei.assigned_teacher_id,
+                ei.case_closed,
                 u.name AS teacher_name,
                 u.username AS teacher_username,
                 assigned_teacher.name AS assigned_teacher_name,
@@ -390,13 +409,32 @@ try {
         $q->execute();
         $res = $q->get_result();
         $rows = $res->fetch_all(MYSQLI_ASSOC);
+
+        // 若 ei 無 case_closed 欄（舊 DB），視為 0
+        $case_closed = 0;
+        if (isset($rows[0]['case_closed']) && $rows[0]['case_closed'] !== null) {
+            $case_closed = (int)$rows[0]['case_closed'];
+        }
+
+        // 主任且未結案，且最近 3 筆皆為「聯絡不到」→ 顯示結案按鈕
+        $show_close_button = false;
+        if ($isDirector && $case_closed === 0 && count($rows) >= 3) {
+            $last3 = array_slice($rows, 0, 3);
+            $all_unreachable = true;
+            foreach ($last3 as $r) {
+                if (($r['contact_result'] ?? '') !== 'unreachable') {
+                    $all_unreachable = false;
+                    break;
+                }
+            }
+            $show_close_button = $all_unreachable;
+        }
         
         // 為了向後兼容，將 notes 拆分為 result 和 follow_up_notes
-        // 同時增加分配資訊
+        // 同時增加分配資訊、contact_result 顯示用
         foreach ($rows as &$row) {
             $row['student_id'] = $row['enrollment_id']; // 向後兼容
             $notes = $row['notes'] ?? '';
-            // 嘗試從 notes 中提取 follow_up_notes（如果有分隔符）
             if (strpos($notes, '後續追蹤備註：') !== false) {
                 $parts = explode('後續追蹤備註：', $notes, 2);
                 $row['result'] = trim($parts[0]);
@@ -406,22 +444,24 @@ try {
                 $row['follow_up_notes'] = '';
             }
             
-            // 增加分配資訊
             $row['assigned_teacher_name'] = $row['assigned_teacher_name'] ?? null;
             $row['assigned_teacher_username'] = $row['assigned_teacher_username'] ?? null;
             $row['assigned_teacher_id'] = $row['assigned_teacher_id'] ?? null;
             
-            // 格式化分配資訊顯示
             if (!empty($row['assigned_teacher_id'])) {
                 $assigned_name = $row['assigned_teacher_name'] ?? $row['assigned_teacher_username'] ?? '未知';
                 $row['assigned_info'] = "分配給：{$assigned_name}";
             } else {
                 $row['assigned_info'] = "尚未分配";
             }
+            // contact_result 向後兼容：NULL 或空視為 contacted
+            if (!isset($row['contact_result']) || $row['contact_result'] === '') {
+                $row['contact_result'] = 'contacted';
+            }
         }
         unset($row);
         
-        echo json_encode(['success' => true, 'logs' => $rows]);
+        echo json_encode(['success' => true, 'logs' => $rows, 'show_close_button' => $show_close_button, 'case_closed' => (int)$case_closed]);
         exit;
     }
 

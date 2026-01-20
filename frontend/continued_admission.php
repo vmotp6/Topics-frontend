@@ -32,6 +32,35 @@ foreach ($courses as $course) {
     $fieldName = 'choice_' . strtolower($course['code']);
     $courseNameToFieldMap[$course['course_name']] = $fieldName;
 }
+
+// 從 department_quotas 取得全體科系的報名時間區間（最早開始與最晚結束）
+$registrationOpen = false;
+$registrationStart = null;
+$registrationEnd = null;
+
+try {
+    $time_sql = "SELECT 
+                    MIN(register_start) AS min_start,
+                    MAX(register_end) AS max_end
+                 FROM department_quotas
+                 WHERE is_active = 1
+                   AND register_start IS NOT NULL
+                   AND register_end IS NOT NULL";
+    $time_result = $conn->query($time_sql);
+    if ($time_result && $row = $time_result->fetch_assoc()) {
+        if (!empty($row['min_start']) && !empty($row['max_end'])) {
+            $registrationStart = new DateTime($row['min_start']);
+            $registrationEnd = new DateTime($row['max_end']);
+            $now = new DateTime('now');
+            if ($now >= $registrationStart && $now <= $registrationEnd) {
+                $registrationOpen = true;
+            }
+        }
+    }
+} catch (Exception $e) {
+    // 若時間設定查詢失敗，不影響表單顯示，只記錄錯誤
+    error_log('continued_admission registration time query failed: ' . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -70,6 +99,12 @@ foreach ($courses as $course) {
   <div class="form-container">
     <div class="form-header">
       <h1>康寧大學續招報名表</h1>
+    </div>
+
+    <div id="registrationNotOpen" style="display: none; padding: 24px; margin-bottom: 16px; background-color: #fff7e6; border: 1px solid #ffe7ba; border-radius: 8px; color: #ad6800; line-height: 1.7;">
+      <h2 style="margin-bottom: 8px; font-size: 20px;">續招報名尚未開放</h2>
+      <p style="margin: 0;">本次續招報名尚未（或已不再）開放。</p>
+      <p style="margin: 4px 0 0;">預計開放時間：<span id="registrationTimeRange">待公告</span></p>
     </div>
 
     <!-- 錄取查詢區域 -->
@@ -395,9 +430,35 @@ foreach ($courses as $course) {
   </div>
 
   <script>
+    // 由後端傳入的報名時間與開放狀態
+    const registrationOpen = <?php echo $registrationOpen ? 'true' : 'false'; ?>;
+    const registrationStartText = '<?php echo $registrationStart ? $registrationStart->format('Y-m-d H:i') : ''; ?>';
+    const registrationEndText = '<?php echo $registrationEnd ? $registrationEnd->format('Y-m-d H:i') : ''; ?>';
+
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!registrationOpen) {
+        const formContent = document.getElementById('formContent');
+        const notOpen = document.getElementById('registrationNotOpen');
+        const timeRange = document.getElementById('registrationTimeRange');
+
+        if (formContent) formContent.style.display = 'none';
+        if (notOpen) notOpen.style.display = 'block';
+
+        if (timeRange) {
+          if (registrationStartText && registrationEndText) {
+            timeRange.textContent = registrationStartText + ' 至 ' + registrationEndText;
+          } else {
+            timeRange.textContent = '待公告';
+          }
+        }
+      }
+    });
+  </script>
+
+  <script>
     // 全域變數
     let selectedChoices = [];
-    const maxChoices = 2; // 最多選擇的科系數量
+    const maxChoices = 3; // 最多選擇的科系數量
     
     // 科系名稱到隱藏欄位名稱的映射（從 PHP 傳遞）
     const choiceMap = <?php echo json_encode($courseNameToFieldMap, JSON_UNESCAPED_UNICODE); ?>;
