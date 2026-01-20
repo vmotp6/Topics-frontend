@@ -785,47 +785,57 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommender_grade_code = $_POST['recommender_grade'] ?? '';
         $recommender_department_code = $_POST['recommender_department'] ?? '';
         $student_grade_code = $_POST['student_grade'] ?? '';
-        $student_interest_input = !empty($_POST['student_interest']) ? trim($_POST['student_interest']) : '';
-        $student_interest_code = null;
-        
-        // 驗證並轉換 student_interest（可能是 code 或名稱）
-        if (!empty($student_interest_input)) {
-            // 先檢查是否為有效的 code
-            $dept_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
-            $dept_check->bind_param("s", $student_interest_input);
-            $dept_check->execute();
-            $dept_result = $dept_check->get_result();
-            
-            if ($dept_result->num_rows > 0) {
-                // 是有效的 code
-                $student_interest_code = $student_interest_input;
-            } else {
-                // 不是 code，可能是科系名稱，嘗試查找對應的 code
-                $dept_check2 = $conn->prepare("SELECT code FROM departments WHERE name = ? LIMIT 1");
-                $dept_check2->bind_param("s", $student_interest_input);
-                $dept_check2->execute();
-                $dept_result2 = $dept_check2->get_result();
-                
-                if ($dept_result2->num_rows > 0) {
-                    // 找到對應的 code
-                    $dept_row = $dept_result2->fetch_assoc();
-                    $student_interest_code = $dept_row['code'];
-                    error_log("將科系名稱 '$student_interest_input' 轉換為 code: '$student_interest_code'");
-                } else {
-                    // 既不是 code 也不是有效的科系名稱，設為 null
-                    error_log("警告：student_interest '$student_interest_input' 既不是有效的 code 也不是有效的科系名稱，將設為 NULL");
-                    $student_interest_code = null;
+
+        // 學生興趣（可多選）：前端會送 student_interest[]（科系代碼）
+        // 為向後相容，若仍收到單值，轉成陣列處理
+        $student_interest_inputs = $_POST['student_interest'] ?? [];
+        if (!is_array($student_interest_inputs)) {
+            $student_interest_inputs = [$student_interest_inputs];
+        }
+        $student_interest_inputs = array_values(array_filter(array_map(function($v) {
+            return trim((string)$v);
+        }, $student_interest_inputs), function($v) {
+            return $v !== '';
+        }));
+        $student_interest_inputs = array_values(array_unique($student_interest_inputs));
+
+        $student_interest_code = null; // 主要（第一個）興趣：寫回原本 admission_recommendations.student_interest（保持後台相容）
+        $student_interest_codes = [];  // 全部興趣：寫入關聯表 admission_recommendation_interests
+        $student_interest_names = [];
+
+        // 驗證 student_interest[]：必須是 departments.code
+        if (!empty($student_interest_inputs)) {
+            $dept_check = $conn->prepare("SELECT code, name FROM departments WHERE code = ? LIMIT 1");
+            if ($dept_check) {
+                foreach ($student_interest_inputs as $code_in) {
+                    $dept_check->bind_param("s", $code_in);
+                    $dept_check->execute();
+                    $dept_result = $dept_check->get_result();
+                    if ($dept_result && $dept_result->num_rows > 0) {
+                        $dr = $dept_result->fetch_assoc();
+                        $code_ok = (string)($dr['code'] ?? $code_in);
+                        $student_interest_codes[] = $code_ok;
+                        $student_interest_names[] = (string)($dr['name'] ?? $code_ok);
+                    } else {
+                        // 理論上不會發生（因為來自下拉選單），若被竄改就忽略
+                        error_log("警告：student_interest code '$code_in' 不存在於 departments 表中，將忽略");
+                    }
                 }
-                $dept_check2->close();
+                $dept_check->close();
             }
-            $dept_check->close();
+
+            $student_interest_codes = array_values(array_unique(array_filter($student_interest_codes)));
+            if (!empty($student_interest_codes)) {
+                $student_interest_code = $student_interest_codes[0];
+            }
         }
         
         // 準備其他變數
         $student_grade = $_POST['student_grade'] ?? '';
         $student_email = $_POST['student_email'] ?? '';
         $student_line_id = $_POST['student_line_id'] ?? '';
-        $student_interest = $_POST['student_interest'] ?? '';
+        // 多選時不再使用單一 student_interest 字串做顯示；保留向後相容變數
+        $student_interest = is_array($_POST['student_interest'] ?? null) ? '' : ($_POST['student_interest'] ?? '');
         $additional_info = $_POST['additional_info'] ?? '';
         
         // 動態構建 INSERT 語句，只使用存在的欄位
@@ -1146,6 +1156,38 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommendation_id = $conn->insert_id;
         
         if ($recommendation_id > 0) {
+
+            // 學生興趣（多選）寫入關聯表：admission_recommendation_interests
+            // - admission_recommendations.student_interest 仍保存第一個興趣（保持後台列表/既有 FK 相容）
+            // - 此表保存全部選擇
+            try {
+                if (!empty($student_interest_codes)) {
+                    $t_interest = $conn->query("SHOW TABLES LIKE 'admission_recommendation_interests'");
+                    if ($t_interest && $t_interest->num_rows == 0) {
+                        // 建表（不加外鍵以避免不同環境/引擎造成失敗）
+                        $conn->query("CREATE TABLE admission_recommendation_interests (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            recommendation_id INT NOT NULL,
+                            department_code VARCHAR(50) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE KEY uq_rec_dept (recommendation_id, department_code),
+                            INDEX idx_rec (recommendation_id),
+                            INDEX idx_dept (department_code)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+                    }
+
+                    $ins_interest = $conn->prepare("INSERT IGNORE INTO admission_recommendation_interests (recommendation_id, department_code) VALUES (?, ?)");
+                    if ($ins_interest) {
+                        foreach ($student_interest_codes as $code) {
+                            $ins_interest->bind_param('is', $recommendation_id, $code);
+                            @$ins_interest->execute();
+                        }
+                        $ins_interest->close();
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("插入 admission_recommendation_interests 失敗: " . $e->getMessage());
+            }
             
             // 插入推薦人資料到 recommender 表
             try {
@@ -1655,6 +1697,84 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
     
     .help-text i {
       color: #667eea;
+    }
+
+    /* 多選下拉（可勾選） */
+    .multi-select-dropdown {
+      position: relative;
+      width: 100%;
+    }
+    .multi-select-trigger {
+      width: 100%;
+      padding: 12px 45px 12px 15px;
+      border: 2px solid #e1e8ed;
+      border-radius: 8px;
+      font-size: 1rem;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      transition: all 0.3s ease;
+      text-align: left;
+    }
+    .multi-select-trigger:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    .multi-select-trigger .trigger-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #333;
+    }
+    .multi-select-trigger .trigger-icon {
+      color: #6c757d;
+      flex: 0 0 auto;
+    }
+    .multi-select-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid #e1e8ed;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      max-height: 280px;
+      overflow: auto;
+      z-index: 1200;
+      display: none;
+      padding: 8px;
+    }
+    .multi-select-panel.show {
+      display: block;
+    }
+    .multi-select-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .multi-select-option:hover {
+      background: #f8f9fa;
+    }
+    .multi-select-option input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #667eea;
+    }
+    .multi-select-option .label-text {
+      color: #333;
+      font-size: 14px;
+      line-height: 1.2;
     }
   </style>
 </head>
@@ -2232,18 +2352,31 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
 
         <div class="form-group full-width">
-          <label for="student_interest">學生興趣領域（選填）</label>
-          <select id="student_interest" name="student_interest">
-            <option value="">請選擇興趣領域</option>
-            <?php 
-            // 被推薦人科系（興趣）：關聯 departments.code
-            foreach ($departments as $code => $name): ?>
-              <option value="<?php echo htmlspecialchars($code); ?>" 
-                      <?php echo (isset($_POST['student_interest']) && $_POST['student_interest'] === $code) ? 'selected' : ''; ?>>
-                <?php echo htmlspecialchars($name); ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+          <label for="student_interest">學生興趣領域（選填，可複選）</label>
+          <?php 
+            $posted_interest = $_POST['student_interest'] ?? [];
+            if (!is_array($posted_interest)) $posted_interest = [$posted_interest];
+          ?>
+          <div class="multi-select-dropdown" id="interestDropdown">
+            <button type="button" class="multi-select-trigger" id="interestTrigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="trigger-text" id="interestTriggerText">請選擇興趣領域</span>
+              <i class="fas fa-chevron-down trigger-icon" aria-hidden="true"></i>
+            </button>
+            <div class="multi-select-panel" id="interestPanel" role="listbox" aria-multiselectable="true">
+              <?php foreach ($departments as $code => $name): ?>
+                <label class="multi-select-option">
+                  <input type="checkbox"
+                         name="student_interest[]"
+                         value="<?php echo htmlspecialchars($code); ?>"
+                         <?php echo in_array($code, $posted_interest, true) ? 'checked' : ''; ?>>
+                  <span class="label-text"><?php echo htmlspecialchars($name); ?></span>
+                </label>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <div class="help-text" style="margin-top:8px;">
+            <i class="fas fa-info-circle"></i> 點擊欄位展開下拉清單，可勾選多個興趣領域
+          </div>
         </div>
 
         <div class="form-group full-width">
@@ -2765,6 +2898,77 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化學校搜尋功能
     initializeSchoolSearch();
+
+    // 學生興趣（可勾選多選下拉）
+    (function initInterestDropdown(){
+        const dropdown = document.getElementById('interestDropdown');
+        const trigger = document.getElementById('interestTrigger');
+        const triggerText = document.getElementById('interestTriggerText');
+        const panel = document.getElementById('interestPanel');
+        if (!dropdown || !trigger || !triggerText || !panel) return;
+
+        function getSelected() {
+            const checked = Array.from(panel.querySelectorAll('input[type="checkbox"][name="student_interest[]"]:checked'));
+            return checked.map(cb => {
+                const label = cb.closest('label');
+                const textEl = label ? label.querySelector('.label-text') : null;
+                return (textEl ? (textEl.textContent || '') : '').trim();
+            }).filter(Boolean);
+        }
+
+        function updateTriggerText() {
+            const names = getSelected();
+            if (names.length === 0) {
+                triggerText.textContent = '請選擇興趣領域';
+                return;
+            }
+            // 顯示前 2 個，剩下以「+N」表示，避免太長
+            const head = names.slice(0, 2);
+            const rest = names.length - head.length;
+            triggerText.textContent = rest > 0 ? `${head.join('、')} +${rest}` : head.join('、');
+        }
+
+        function openPanel() {
+            panel.classList.add('show');
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+        function closePanel() {
+            panel.classList.remove('show');
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+        function togglePanel() {
+            if (panel.classList.contains('show')) closePanel();
+            else openPanel();
+        }
+
+        trigger.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePanel();
+        });
+        panel.addEventListener('click', function(e) {
+            // 避免點擊 panel 造成外部 click 立即關閉
+            e.stopPropagation();
+        });
+        dropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        panel.addEventListener('change', function(e) {
+            const t = e.target;
+            if (t && t.matches('input[type="checkbox"][name="student_interest[]"]')) {
+                updateTriggerText();
+            }
+        });
+
+        document.addEventListener('click', function() {
+            closePanel();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closePanel();
+        });
+
+        updateTriggerText();
+    })();
 });
 
 // 檔案上傳區域互動功能
