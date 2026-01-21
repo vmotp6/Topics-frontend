@@ -10,6 +10,7 @@ function ensureNewStudentBasicInfoTable($conn) {
       student_no VARCHAR(50) NOT NULL,
       student_name VARCHAR(100) NOT NULL,
       class_name VARCHAR(100) NOT NULL,
+      department_id VARCHAR(50) DEFAULT NULL,
       enrollment_identity VARCHAR(100) DEFAULT NULL,
       birthday DATE DEFAULT NULL,
       gender VARCHAR(20) DEFAULT NULL,
@@ -64,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $student_no = safePost('student_no');
     $student_name = safePost('student_name');
     $class_name = safePost('class_name');
+    $department_id = safePost('department_id'); // 所在科系（departments.code）
     $enrollment_identity = safePost('enrollment_identity');
     $birthday = safePost('birthday');
     $gender = safePost('gender');
@@ -194,14 +196,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
 
+    // 科系驗證（允許空白；若填寫需存在於 departments）
+    if ($department_id === '') {
+      $department_id = null;
+    } else {
+      $conn_dept = getDatabaseConnection();
+      if (!$conn_dept) {
+        throw new Exception('科系驗證失敗，請稍後再試');
+      }
+      $dept_stmt = $conn_dept->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
+      if (!$dept_stmt) {
+        throw new Exception('科系驗證失敗，請稍後再試');
+      }
+      $dept_stmt->bind_param("s", $department_id);
+      $dept_stmt->execute();
+      $dept_res = $dept_stmt->get_result();
+      if (!$dept_res || $dept_res->num_rows === 0) {
+        throw new Exception('所選科系不存在，請重新選擇');
+      }
+      $dept_stmt->close();
+      $conn_dept->close();
+    }
+
     $sql = "INSERT INTO new_student_basic_info (
-        student_no, student_name, class_name, enrollment_identity, birthday, gender, id_number, mobile, address, previous_school, photo_path,
+        student_no, student_name, class_name, department_id, enrollment_identity, birthday, gender, id_number, mobile, address, previous_school, photo_path,
         parent_title, parent_name, parent_birth_year, parent_occupation, parent_phone, parent_education,
         guardian_relation, guardian_name, guardian_phone, guardian_mobile, guardian_line, guardian_email,
         emergency_name, emergency_phone, emergency_mobile,
         is_indigenous, is_new_immigrant_child, is_overseas_chinese
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?,
@@ -211,8 +235,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$stmt) throw new Exception('資料庫寫入準備失敗');
 
     $stmt->bind_param(
-      "ssssssssssssssssssssssssssiii",
-      $student_no, $student_name, $class_name, $enrollment_identity, $birthday, $gender, $id_number, $mobile, $address, $previous_school, $photo_path,
+      "sssssssssssssssssssssssssssiii",
+      $student_no, $student_name, $class_name, $department_id, $enrollment_identity, $birthday, $gender, $id_number, $mobile, $address, $previous_school, $photo_path,
       $parent_title, $parent_name, $parent_birth_year, $parent_occupation, $parent_phone, $parent_education,
       $guardian_relation, $guardian_name, $guardian_phone, $guardian_mobile, $guardian_line, $guardian_email,
       $emergency_name, $emergency_phone, $emergency_mobile,
@@ -235,6 +259,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['success']) && $_GET['success'] === '1') {
   $message = '資料已送出成功！';
   $messageType = 'success';
+}
+
+$department_id = isset($department_id) ? $department_id : safePost('department_id');
+
+$departments = [];
+
+$conn = getDatabaseConnection();
+if ($conn) {
+  $sql = "SELECT code, name FROM departments ORDER BY name";
+  $res = $conn->query($sql);
+  if ($res) {
+    while ($row = $res->fetch_assoc()) {
+      $departments[] = $row;
+    }
+  }
 }
 
 // GET / 或送出失敗時：如果只有 school_code，補回顯示文字
@@ -403,14 +442,32 @@ try {
             <label>學號 <span class="req-star">*</span></label>
             <input name="student_no" value="<?php echo htmlspecialchars(safePost('student_no')); ?>" required>
           </div>
+
           <div>
             <label>姓名 <span class="req-star">*</span></label>
             <input name="student_name" value="<?php echo htmlspecialchars(safePost('student_name')); ?>" required>
           </div>
+
           <div>
             <label>班級 <span class="req-star">*</span></label>
             <input name="class_name" value="<?php echo htmlspecialchars(safePost('class_name')); ?>" required>
           </div>
+
+          <div>
+              <label>所在科系</label>
+              <select name="department_id" id="department_id">
+                <option value="">請選擇科系</option>
+                <?php foreach ($departments as $dept): 
+                  if ($dept['code'] === 'AA') continue; 
+                  $selected = ($department_id === $dept['code']) ? 'selected' : '';
+                ?>
+                  <option value="<?php echo htmlspecialchars($dept['code']); ?>" <?php echo $selected; ?>>
+                    <?php echo htmlspecialchars($dept['name']); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+          </div>
+
           <div>
             <label>在學身分</label>
             <?php $enroll_identity = safePost('enrollment_identity'); ?>
@@ -420,10 +477,12 @@ try {
               <option value="特殊生" <?php echo $enroll_identity==='特殊生'?'selected':''; ?>>特殊生</option>
             </select>
           </div>
+
           <div>
             <label>生日</label>
             <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday')); ?>">
           </div>
+
           <div>
             <label>性別</label>
             <select name="gender">
@@ -434,18 +493,22 @@ try {
               <option value="其他" <?php echo $g==='其他'?'selected':''; ?>>其他</option>
             </select>
           </div>
+
           <div>
             <label>身分證號 <span class="req-star">*</span></label>
             <input name="id_number" value="<?php echo htmlspecialchars(safePost('id_number')); ?>" required>
           </div>
+
           <div>
             <label>手機 <span class="req-star">*</span></label>
             <input name="mobile" value="<?php echo htmlspecialchars(safePost('mobile')); ?>" required>
           </div>
+
           <div style="grid-column: 1 / -1;">
             <label>通訊地址</label>
             <input name="address" value="<?php echo htmlspecialchars(safePost('address')); ?>">
           </div>
+
           <div>
             <label>前一學校 <span class="req-star">*</span></label>
             <div class="school-search-wrap">
@@ -453,7 +516,9 @@ try {
               <input type="hidden" id="previous_school" name="previous_school" value="<?php echo htmlspecialchars(safePost('previous_school')); ?>">
               <div id="previousSchoolResults" class="school-results" aria-label="school search results"></div>
             </div>
-          </div>
+          </div> 
+
+
           <div>
             <label>2 吋照片（JPG/PNG）</label>
             <input type="file" name="photo" accept="image/jpeg,image/png">
