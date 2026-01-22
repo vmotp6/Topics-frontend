@@ -64,6 +64,27 @@ $grades = []; // 年級資料 (code => name)
 $search_results = [];
 $search_student_id = '';
 
+// 學生興趣顯示：CSV(code,code,...) -> 名稱列表
+function format_student_interest_display($interest_codes_csv, $departments_map) {
+    $raw = trim((string)$interest_codes_csv);
+    if ($raw === '') return '';
+    $codes = array_values(array_filter(array_map('trim', explode(',', $raw)), function($v){ return $v !== ''; }));
+    if (empty($codes)) return '';
+    $names = [];
+    foreach ($codes as $c) {
+        $names[] = $departments_map[$c] ?? $c;
+    }
+    // 去重但保留順序
+    $seen = [];
+    $out = [];
+    foreach ($names as $n) {
+        if (isset($seen[$n])) continue;
+        $seen[$n] = true;
+        $out[] = $n;
+    }
+    return implode('、', $out);
+}
+
 // 從資料庫撈取科系資料 (departments 表)
 // 推薦人科系和被推薦人科系（興趣）都關聯 departments.code
 try {
@@ -564,6 +585,42 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         if (isset($_GET['debug']) && $_GET['debug'] == '1') {
             error_log("資料表現有欄位: " . implode(', ', $existing_columns));
         }
+
+        // ------------------------------------------------------------
+        // student_interest 改為可存多選（CSV）：
+        // - 嘗試移除指向 departments.code 的外鍵
+        // - 嘗試將欄位型別改為 TEXT NULL
+        // ------------------------------------------------------------
+        if (in_array('student_interest', $existing_columns, true)) {
+            try {
+                // 1) 嘗試找出 foreign key constraint name（若存在）
+                $fk_sql = "
+                    SELECT CONSTRAINT_NAME
+                    FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'admission_recommendations'
+                      AND COLUMN_NAME = 'student_interest'
+                      AND REFERENCED_TABLE_NAME IS NOT NULL
+                    LIMIT 1
+                ";
+                $fk_res = $conn->query($fk_sql);
+                if ($fk_res && $fk_res->num_rows > 0) {
+                    $fk_row = $fk_res->fetch_assoc();
+                    $fk_name = $fk_row['CONSTRAINT_NAME'] ?? '';
+                    if ($fk_name !== '') {
+                        // 先嘗試 drop foreign key
+                        @$conn->query("ALTER TABLE admission_recommendations DROP FOREIGN KEY `$fk_name`");
+                    }
+                }
+
+                // 2) 嘗試把欄位改成 TEXT（允許存 CSV）
+                // MySQL 允許 TEXT 預設值限制，這裡用 NULL
+                @$conn->query("ALTER TABLE admission_recommendations MODIFY COLUMN student_interest TEXT NULL");
+            } catch (Exception $e) {
+                // 若權限不足或資料庫不支援 information_schema，則忽略（但多選寫入可能會受限）
+                error_log("student_interest 欄位自動調整失敗: " . $e->getMessage());
+            }
+        }
         
         // 驗證必填欄位
         $required_fields = [
@@ -786,56 +843,44 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommender_department_code = $_POST['recommender_department'] ?? '';
         $student_grade_code = $_POST['student_grade'] ?? '';
 
-        // 學生興趣（可多選）：前端會送 student_interest[]（科系代碼）
-        // 為向後相容，若仍收到單值，轉成陣列處理
+        // 學生興趣（可勾選多選）：前端送 student_interest[]
         $student_interest_inputs = $_POST['student_interest'] ?? [];
         if (!is_array($student_interest_inputs)) {
             $student_interest_inputs = [$student_interest_inputs];
         }
-        $student_interest_inputs = array_values(array_filter(array_map(function($v) {
+        $student_interest_inputs = array_values(array_filter(array_map(function($v){
             return trim((string)$v);
-        }, $student_interest_inputs), function($v) {
+        }, $student_interest_inputs), function($v){
             return $v !== '';
         }));
-        $student_interest_inputs = array_values(array_unique($student_interest_inputs));
 
-        $student_interest_code = null; // 主要（第一個）興趣：寫回原本 admission_recommendations.student_interest（保持後台相容）
-        $student_interest_codes = [];  // 全部興趣：寫入關聯表 admission_recommendation_interests
-        $student_interest_names = [];
-
-        // 驗證 student_interest[]：必須是 departments.code
+        // 只保留有效的 departments.code（避免非法值寫進去）
+        $student_interest_codes = [];
         if (!empty($student_interest_inputs)) {
-            $dept_check = $conn->prepare("SELECT code, name FROM departments WHERE code = ? LIMIT 1");
+            $dept_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
             if ($dept_check) {
                 foreach ($student_interest_inputs as $code_in) {
                     $dept_check->bind_param("s", $code_in);
                     $dept_check->execute();
                     $dept_result = $dept_check->get_result();
                     if ($dept_result && $dept_result->num_rows > 0) {
-                        $dr = $dept_result->fetch_assoc();
-                        $code_ok = (string)($dr['code'] ?? $code_in);
-                        $student_interest_codes[] = $code_ok;
-                        $student_interest_names[] = (string)($dr['name'] ?? $code_ok);
-                    } else {
-                        // 理論上不會發生（因為來自下拉選單），若被竄改就忽略
-                        error_log("警告：student_interest code '$code_in' 不存在於 departments 表中，將忽略");
+                        $student_interest_codes[] = $code_in;
                     }
                 }
                 $dept_check->close();
             }
-
-            $student_interest_codes = array_values(array_unique(array_filter($student_interest_codes)));
-            if (!empty($student_interest_codes)) {
-                $student_interest_code = $student_interest_codes[0];
-            }
         }
+
+        // 將多筆 code 用逗號存進 admission_recommendations.student_interest（例如：IM,OPT,ECCE）
+        // 注意：要能存多筆，資料表欄位需改成 TEXT 並移除外鍵（下方會嘗試自動處理）
+        $student_interest_csv = !empty($student_interest_codes) ? implode(',', array_values(array_unique($student_interest_codes))) : null;
         
         // 準備其他變數
         $student_grade = $_POST['student_grade'] ?? '';
         $student_email = $_POST['student_email'] ?? '';
         $student_line_id = $_POST['student_line_id'] ?? '';
-        // 多選時不再使用單一 student_interest 字串做顯示；保留向後相容變數
-        $student_interest = is_array($_POST['student_interest'] ?? null) ? '' : ($_POST['student_interest'] ?? '');
+        // 向後相容：使用 CSV（或 null）
+        $student_interest = $student_interest_csv;
         $additional_info = $_POST['additional_info'] ?? '';
         
         // 動態構建 INSERT 語句，只使用存在的欄位
@@ -959,40 +1004,16 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $bind_types .= 's';
         }
         
-        // 學生興趣
-        // 注意：根據錯誤信息，student_interest 字段有外鍵約束引用 departments.code
-        // 因此應該插入 code 而不是名稱，如果為空則插入 NULL
+        // 學生興趣（可多選）：以 CSV 形式存入 student_interest（例如：IM,OPT,ECCE）
         if (in_array('student_interest', $existing_columns)) {
-            // student_interest 字段有外鍵約束，應該插入 code
             $insert_fields[] = 'student_interest';
-            // 如果為空或無效，插入 NULL 而不是空字符串（外鍵約束要求）
-            // 注意：NULL 值需要使用特殊處理，不能直接綁定字符串
-            if ($student_interest_code !== null && $student_interest_code !== '') {
-                // 再次驗證確保 code 存在（雙重檢查）
-                $final_check = $conn->prepare("SELECT code FROM departments WHERE code = ? LIMIT 1");
-                $final_check->bind_param("s", $student_interest_code);
-                $final_check->execute();
-                $final_result = $final_check->get_result();
-                if ($final_result->num_rows > 0) {
-                    $insert_values[] = $student_interest_code;
-                    $bind_types .= 's';
-                } else {
-                    // 即使驗證過，再次檢查時發現不存在，設為 NULL
-                    error_log("錯誤：student_interest_code '$student_interest_code' 在最終檢查時不存在於 departments 表中，將設為 NULL");
-                    $insert_values[] = null;
-                    $bind_types .= 's'; // NULL 仍然使用 's' 類型，但值為 null
-                }
-                $final_check->close();
-            } else {
-                // 為空或無效，插入 NULL
-                $insert_values[] = null;
-                $bind_types .= 's'; // NULL 使用 's' 類型
-            }
+            $insert_values[] = ($student_interest_csv !== null && $student_interest_csv !== '') ? $student_interest_csv : null;
+            $bind_types .= 's';
         }
         if (in_array('student_interest_code', $existing_columns)) {
             $insert_fields[] = 'student_interest_code';
-            // 如果為空，插入 NULL 而不是空字符串
-            $insert_values[] = ($student_interest_code !== null && $student_interest_code !== '') ? $student_interest_code : null;
+            // 向後相容：若有 student_interest_code 欄位，也存同樣的 CSV
+            $insert_values[] = ($student_interest_csv !== null && $student_interest_csv !== '') ? $student_interest_csv : null;
             $bind_types .= 's';
         }
         
@@ -1156,38 +1177,6 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommendation_id = $conn->insert_id;
         
         if ($recommendation_id > 0) {
-
-            // 學生興趣（多選）寫入關聯表：admission_recommendation_interests
-            // - admission_recommendations.student_interest 仍保存第一個興趣（保持後台列表/既有 FK 相容）
-            // - 此表保存全部選擇
-            try {
-                if (!empty($student_interest_codes)) {
-                    $t_interest = $conn->query("SHOW TABLES LIKE 'admission_recommendation_interests'");
-                    if ($t_interest && $t_interest->num_rows == 0) {
-                        // 建表（不加外鍵以避免不同環境/引擎造成失敗）
-                        $conn->query("CREATE TABLE admission_recommendation_interests (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            recommendation_id INT NOT NULL,
-                            department_code VARCHAR(50) NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            UNIQUE KEY uq_rec_dept (recommendation_id, department_code),
-                            INDEX idx_rec (recommendation_id),
-                            INDEX idx_dept (department_code)
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-                    }
-
-                    $ins_interest = $conn->prepare("INSERT IGNORE INTO admission_recommendation_interests (recommendation_id, department_code) VALUES (?, ?)");
-                    if ($ins_interest) {
-                        foreach ($student_interest_codes as $code) {
-                            $ins_interest->bind_param('is', $recommendation_id, $code);
-                            @$ins_interest->execute();
-                        }
-                        $ins_interest->close();
-                    }
-                }
-            } catch (Exception $e) {
-                error_log("插入 admission_recommendation_interests 失敗: " . $e->getMessage());
-            }
             
             // 插入推薦人資料到 recommender 表
             try {
@@ -1699,7 +1688,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
       color: #667eea;
     }
 
-    /* 多選下拉（可勾選） */
+    /* 學生興趣：下拉可勾選多選 */
     .multi-select-dropdown {
       position: relative;
       width: 100%;
@@ -1751,9 +1740,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
       display: none;
       padding: 8px;
     }
-    .multi-select-panel.show {
-      display: block;
-    }
+    .multi-select-panel.show { display: block; }
     .multi-select-option {
       display: flex;
       align-items: center;
@@ -1763,9 +1750,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
       cursor: pointer;
       user-select: none;
     }
-    .multi-select-option:hover {
-      background: #f8f9fa;
-    }
+    .multi-select-option:hover { background: #f8f9fa; }
     .multi-select-option input[type="checkbox"] {
       width: 16px;
       height: 16px;
@@ -1897,7 +1882,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             </div>
             <div class="detail-item">
               <div class="detail-label">學生興趣</div>
-              <div class="detail-value"><?php echo !empty($single_detail['student_interest_name'] ?? $single_detail['student_interest']) ? htmlspecialchars($single_detail['student_interest_name'] ?? $single_detail['student_interest']) : '<span style="color: #8c8c8c;">未填寫</span>'; ?></div>
+              <div class="detail-value">
+                <?php
+                  $interest_raw = $single_detail['student_interest_code'] ?? $single_detail['student_interest'] ?? '';
+                  $interest_display = format_student_interest_display($interest_raw, $departments);
+                  echo ($interest_display !== '') ? htmlspecialchars($interest_display) : '<span style="color: #8c8c8c;">未填寫</span>';
+                ?>
+              </div>
             </div>
           </div>
         </div>
@@ -2352,8 +2343,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         </div>
 
         <div class="form-group full-width">
-          <label for="student_interest">學生興趣領域（選填，可複選）</label>
-          <?php 
+          <label for="student_interest">學生興趣領域（選填）</label>
+          <?php
             $posted_interest = $_POST['student_interest'] ?? [];
             if (!is_array($posted_interest)) $posted_interest = [$posted_interest];
           ?>
@@ -2922,7 +2913,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 triggerText.textContent = '請選擇興趣領域';
                 return;
             }
-            // 顯示前 2 個，剩下以「+N」表示，避免太長
             const head = names.slice(0, 2);
             const rest = names.length - head.length;
             triggerText.textContent = rest > 0 ? `${head.join('、')} +${rest}` : head.join('、');
@@ -2946,7 +2936,6 @@ document.addEventListener('DOMContentLoaded', function() {
             togglePanel();
         });
         panel.addEventListener('click', function(e) {
-            // 避免點擊 panel 造成外部 click 立即關閉
             e.stopPropagation();
         });
         dropdown.addEventListener('click', function(e) {

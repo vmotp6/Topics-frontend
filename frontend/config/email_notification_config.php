@@ -34,6 +34,10 @@ $email_templates = [
         'subject' => '【康寧大學】推薦審核通過通知',
         'template' => 'approval_notification_template'
     ],
+    'rejection_notification' => [
+        'subject' => '【康寧大學】推薦審核未通過通知',
+        'template' => 'rejection_notification_template'
+    ],
     'enrollment_notification' => [
         'subject' => '【康寧大學】入學確認通知',
         'template' => 'enrollment_notification_template'
@@ -143,6 +147,12 @@ function getEmailTemplate($template_name, $data = []) {
                             <p><strong>推薦人科系：</strong>{recommender_department}</p>
                             <p><strong>審核通過時間：</strong>{approval_time}</p>
                         </div>
+
+                        <div class="info-box">
+                            <h3>💰 獎金資訊</h3>
+                            <p>您本次推薦獲得的獎金金額為：<strong>{bonus_amount}</strong> 元</p>
+                            <p style="color:#666; font-size:14px; margin-top:8px;">※ 若同一位被推薦學生有多人通過，獎金將依規則分攤。</p>
+                        </div>
                         
                         <div class="info-box">
                             <h3>📚 後續步驟</h3>
@@ -153,6 +163,62 @@ function getEmailTemplate($template_name, $data = []) {
                         
                         <p>感謝您為康寧大學推薦優秀學生，期待被推薦學生的加入！</p>
                         
+                        <div class="footer">
+                            <p>此郵件由系統自動發送，請勿直接回覆</p>
+                            <p>康寧大學招生辦公室 | 電話：(02) 2632-1181</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ',
+
+        'rejection_notification_template' => '
+            <!DOCTYPE html>
+            <html lang="zh-Hant">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>推薦審核未通過通知</title>
+                <style>
+                    body { font-family: "Microsoft JhengHei", Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(90deg, #7ac9c7 0%, #956dbd 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+                    .highlight { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                    .info-box { background: white; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin: 15px 0; }
+                    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>📌 推薦審核未通過通知</h1>
+                        <p>康寧大學招生推薦系統</p>
+                    </div>
+                    <div class="content">
+                        <h2>親愛的 {recommender_name} 同學，您好！</h2>
+
+                        <div class="highlight">
+                            <h3>❌ 很抱歉，您推薦的學生未通過審核</h3>
+                            <p>我們通知您，您推薦的 <strong>{student_name}</strong> 同學之推薦申請未通過審核。</p>
+                        </div>
+
+                        <div class="info-box">
+                            <h3>📋 申請資訊</h3>
+                            <p><strong>被推薦學生：</strong>{student_name}</p>
+                            <p><strong>被推薦學生學校：</strong>{student_school}</p>
+                            <p><strong>被推薦學生年級：</strong>{student_grade}</p>
+                            <p><strong>推薦人：</strong>{recommender_name} ({recommender_student_id})</p>
+                            <p><strong>推薦人科系：</strong>{recommender_department}</p>
+                            <p><strong>通知時間：</strong>{review_time}</p>
+                        </div>
+
+                        <div class="info-box">
+                            <h3>📞 如有疑問</h3>
+                            <p>若您對審核結果有任何疑問，請聯繫招生辦公室協助確認。</p>
+                        </div>
+
                         <div class="footer">
                             <p>此郵件由系統自動發送，請勿直接回覆</p>
                             <p>康寧大學招生辦公室 | 電話：(02) 2632-1181</p>
