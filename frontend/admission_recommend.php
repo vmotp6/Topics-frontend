@@ -807,9 +807,13 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             $_POST['student_phone'] = $phone; // 標準化電話號碼格式
         }
         
-        // 處理檔案上傳
+        // 處理檔案上傳（必填）
         $proof_evidence_path = '';
-        
+
+        if (!isset($_FILES['proof_evidence']) || $_FILES['proof_evidence']['error'] === UPLOAD_ERR_NO_FILE) {
+            throw new Exception('請上傳其他相關證明文件');
+        }
+
         if (isset($_FILES['proof_evidence']) && $_FILES['proof_evidence']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = 'uploads/proof_evidence/';
             if (!is_dir($upload_dir)) {
@@ -836,6 +840,10 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             } else {
                 throw new Exception('檔案上傳失敗，請重試。');
             }
+        } else {
+            // 其他上傳錯誤
+            $err = $_FILES['proof_evidence']['error'] ?? -1;
+            throw new Exception('檔案上傳失敗（錯誤代碼：' . $err . '），請重試。');
         }
         
         // 準備變數，獲取 code 值
@@ -2388,9 +2396,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
         <div class="form-group full-width">
           <div class="document-item">
-            <label>其他相關證明文件</label>
+            <label>其他相關證明文件 <span style="color:#cf1322; font-weight:800;">*</span></label>
             <input type="file" id="proof_evidence" name="proof_evidence" 
-                   accept="image/*,.pdf,.doc,.docx" class="file-input">
+                   accept="image/*,.pdf,.doc,.docx" class="file-input" required>
           </div>
           <div class="note">
             <i class="fas fa-info-circle"></i> 請上傳相關證明文件(支援PDF、JPG、PNG格式,單個文件大小不超過5MB)
