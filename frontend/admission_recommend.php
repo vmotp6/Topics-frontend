@@ -1177,6 +1177,22 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $recommendation_id = $conn->insert_id;
         
         if ($recommendation_id > 0) {
+            // 若 admission_recommendations 有 academic_year 欄位，則用 created_at 回填本筆學年度（民國年）
+            // 規則：每年 8/1 切換學年度（8-12 月：YEAR-1911；1-7 月：YEAR-1912）
+            if (in_array('academic_year', $existing_columns, true)) {
+                $stmt_year = $conn->prepare("UPDATE admission_recommendations
+                    SET academic_year = CASE
+                        WHEN created_at IS NULL THEN NULL
+                        WHEN MONTH(created_at) >= 8 THEN YEAR(created_at) - 1911
+                        ELSE YEAR(created_at) - 1912
+                    END
+                    WHERE id = ? AND (academic_year IS NULL OR academic_year = 0)");
+                if ($stmt_year) {
+                    $stmt_year->bind_param('i', $recommendation_id);
+                    @$stmt_year->execute();
+                    $stmt_year->close();
+                }
+            }
             
             // 插入推薦人資料到 recommender 表
             try {
