@@ -1055,7 +1055,7 @@ function getActiveClass($targetFile) {
 
                         <?php 
                         // 檢查是否為允許進入後台的角色（管理員、行政人員、主任）
-                        $allowed_backend_roles = ['ADM', 'STA', 'DI', 'AS' , '管理員', '行政人員', '主任' , '科助'];
+                        $allowed_backend_roles = ['ADM', 'STA', 'DI', 'AS','TEA' , '管理員', '行政人員', '主任' , '科助'];
                         $can_access_backend = in_array($user_role, $allowed_backend_roles);
                         if ($can_access_backend) {
                           // 與前台相同網域下的 Topics-backend 入口，攜帶目前 session id 供後台可選擇採用
