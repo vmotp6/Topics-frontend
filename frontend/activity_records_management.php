@@ -169,11 +169,56 @@ if (isset($teacher_stmt) && $teacher_stmt !== false) {
                         }
                     }
                     
+                    // 從學校名稱中提取 school_code（格式：學校名稱 (城市區域)）
+                    $school_name = isset($_POST['school_name']) ? trim($_POST['school_name']) : '';
+                    $school_code = null;
+                    if (!empty($school_name)) {
+                        // 檢查格式是否為：學校名稱 (城市區域)
+                        if (preg_match('/^.+ \(.+\)$/', $school_name)) {
+                            // 從學校名稱中提取 school_code
+                            $school_name_only = preg_replace('/\s*\([^)]*\)\s*$/', '', $school_name);
+                            
+                            // 查詢 school_data 表獲取 school_code
+                            $school_query = "SELECT school_code FROM school_data WHERE name = ? AND is_active = 1 LIMIT 1";
+                            $school_stmt = $conn->prepare($school_query);
+                            if ($school_stmt) {
+                                $school_stmt->bind_param("s", $school_name_only);
+                                $school_stmt->execute();
+                                $school_result = $school_stmt->get_result();
+                                if ($school_result && $school_result->num_rows > 0) {
+                                    $school_row = $school_result->fetch_assoc();
+                                    $school_code = $school_row['school_code'];
+                                } else {
+                                    // 如果找不到，嘗試模糊匹配
+                                    $school_query2 = "SELECT school_code FROM school_data WHERE name LIKE ? AND is_active = 1 LIMIT 1";
+                                    $school_stmt2 = $conn->prepare($school_query2);
+                                    if ($school_stmt2) {
+                                        $like_pattern = "%" . $school_name_only . "%";
+                                        $school_stmt2->bind_param("s", $like_pattern);
+                                        $school_stmt2->execute();
+                                        $school_result2 = $school_stmt2->get_result();
+                                        if ($school_result2 && $school_result2->num_rows > 0) {
+                                            $school_row2 = $school_result2->fetch_assoc();
+                                            $school_code = $school_row2['school_code'];
+                                        }
+                                        $school_stmt2->close();
+                                    }
+                                }
+                                $school_stmt->close();
+                            }
+                        }
+                    }
+                    
+                    // 如果無法提取 school_code，使用原值（向後相容）
+                    if ($school_code === null) {
+                        $school_code = $school_name;
+                    }
+                    
                     $update_stmt = $conn->prepare($update_sql);
                     if ($update_stmt) {
                         $update_stmt->bind_param("ssiissii", 
                             $_POST['activity_date'],
-                            $_POST['school_name'],  // 表單欄位是 school_name，資料表欄位是 school
+                            $school_code,  // 存儲 school_code 而不是學校名稱
                             $activity_type_id,      // 存儲 ID 而不是代碼
                             $activity_time_value,   // 1=上班日, 2=假日
                             $_POST['suggestion'],
@@ -295,10 +340,12 @@ if (isset($_SESSION['role']) && in_array($current_role, ['學校行政人員', '
     // 🔹 若是招生中心 → 查看所有老師紀錄
     $records_sql = "SELECT ar.*, u.name AS teacher_name_display, 
                            (SELECT name FROM departments WHERE code = t.department) AS teacher_department_display,
-                           t.department AS teacher_department_code
+                           t.department AS teacher_department_code,
+                           sd.name AS school_name_display, sd.city AS school_city, sd.district AS school_district
                     FROM activity_records ar
                     LEFT JOIN user u ON ar.teacher_id = u.id
                     LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+                    LEFT JOIN school_data sd ON ar.school = sd.school_code
                     WHERE 1 ";
 
                      // 篩選參數
@@ -402,6 +449,23 @@ if (isset($_SESSION['role']) && in_array($current_role, ['學校行政人員', '
                     $row['activity_feedback_display'] = '';
                 }
                 
+                // 處理學校名稱顯示（從 school_code 轉換為中文名稱）
+                if (!empty($row['school_name_display'])) {
+                    $city = $row['school_city'] ?? '';
+                    $district = $row['school_district'] ?? '';
+                    $location = trim($city . $district);
+                    if ($location) {
+                        $row['school_display'] = $row['school_name_display'] . ' (' . $location . ')';
+                    } else {
+                        $row['school_display'] = $row['school_name_display'];
+                    }
+                } else if (!empty($row['school'])) {
+                    // 如果沒有 JOIN 到學校名稱，使用 school_code 作為備用顯示
+                    $row['school_display'] = $row['school'];
+                } else {
+                    $row['school_display'] = '—';
+                }
+                
                 // 確保 uploaded_files 字段存在並正確處理
                 if (!isset($row['uploaded_files'])) {
                     $row['uploaded_files'] = null;
@@ -437,10 +501,12 @@ if (isset($_SESSION['role']) && in_array($current_role, ['學校行政人員', '
             ar.*, 
             u.name AS teacher_name_display, 
             (SELECT name FROM departments WHERE code = t.department) AS teacher_department_display,
-            t.department AS teacher_department_code
+            t.department AS teacher_department_code,
+            sd.name AS school_name_display, sd.city AS school_city, sd.district AS school_district
         FROM activity_records ar
         LEFT JOIN user u ON ar.teacher_id = u.id
         LEFT JOIN teacher t ON ar.teacher_id = t.user_id
+        LEFT JOIN school_data sd ON ar.school = sd.school_code
         WHERE ar.teacher_id = ?";
     
     // 添加搜索功能
@@ -545,6 +611,24 @@ if (isset($_SESSION['role']) && in_array($current_role, ['學校行政人員', '
                 } else {
                     $row['activity_feedback_display'] = '';
                 }
+                
+                // 處理學校名稱顯示（從 school_code 轉換為中文名稱）
+                if (!empty($row['school_name_display'])) {
+                    $city = $row['school_city'] ?? '';
+                    $district = $row['school_district'] ?? '';
+                    $location = trim($city . $district);
+                    if ($location) {
+                        $row['school_display'] = $row['school_name_display'] . ' (' . $location . ')';
+                    } else {
+                        $row['school_display'] = $row['school_name_display'];
+                    }
+                } else if (!empty($row['school'])) {
+                    // 如果沒有 JOIN 到學校名稱，使用 school_code 作為備用顯示
+                    $row['school_display'] = $row['school'];
+                } else {
+                    $row['school_display'] = '—';
+                }
+                
                 // 確保 uploaded_files 字段存在並正確處理
                 if (!isset($row['uploaded_files'])) {
                     $row['uploaded_files'] = null;
@@ -1191,7 +1275,7 @@ $conn->close();
                                 <td><?php echo htmlspecialchars($record['activity_date']); ?></td>
                                 <td><?php echo htmlspecialchars($record['teacher_name_display'] ?? $record['teacher_name'] ?? '—'); ?></td>
                                  <td><?php echo htmlspecialchars($record['teacher_department_display'] ?? $record['teacher_department'] ?? '—'); ?></td>
-                                <td><?php echo htmlspecialchars($record['school'] ?? ''); ?></td>
+                                <td><?php echo htmlspecialchars($record['school_display'] ?? $record['school'] ?? '—'); ?></td>
                                 <td>
                                     <span class="activity-type"><?php echo htmlspecialchars($record['activity_type_display'] ?? convertActivityTypeCodeToName($record['activity_type'], $conn)); ?></span>
                                 </td>
@@ -1380,7 +1464,7 @@ $conn->close();
                     <div><strong>活動日期:</strong><br>${record.activity_date}</div>
                     <div><strong>教師單位:</strong><br>${record.teacher_department_display || record.teacher_department || '—'}</div>
                     <div><strong>教師姓名:</strong><br>${record.teacher_name_display || record.teacher_name || '—'}</div>
-                    <div><strong>學校名稱:</strong><br>${record.school || ''}</div>
+                    <div><strong>學校名稱:</strong><br>${record.school_display || record.school || '—'}</div>
                     <div><strong>聯絡窗口:</strong><br>${record.contact_person || '未填寫'}</div>
                     <div><strong>聯絡電話:</strong><br>${record.contact_phone || '未填寫'}</div>
                     <div><strong>活動性質:</strong><br>${record.activity_type_display || record.activity_type || '—'}</div>
@@ -1488,7 +1572,7 @@ $conn->close();
                         </div>
                         <div>
                             <label><strong>學校名稱:</strong></label>
-                            <input type="text" name="school_name" value="${record.school || ''}" required style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
+                            <input type="text" name="school_name" value="${record.school_display || record.school || ''}" required style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 5px;">
                         </div>
                     </div>
                     
