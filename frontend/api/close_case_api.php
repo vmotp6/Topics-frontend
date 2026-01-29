@@ -48,7 +48,7 @@ try {
     }
     $fs = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'follow_up_status'");
     if (!$fs || $fs->num_rows === 0) {
-        @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN follow_up_status VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/remind_registration/decline_follow_up/closed_unreachable/closed_declined'");
+        @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN follow_up_status VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/decline_follow_up/closed_unreachable/closed_declined'");
     }
 
     // 主任科系

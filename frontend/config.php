@@ -37,7 +37,7 @@ define('SMTP_PORT', 587);                        // Gmail SMTP 端口 (TLS)
 define('SMTP_USERNAME', 'vichuang2005@gmail.com');                     // 您的 Gmail 地址 (請填入)
 define('SMTP_PASSWORD', 'sulvmlfyysjdhrcp');                     // 您的 Gmail 應用程序密碼 (請填入)
 define('SMTP_FROM_EMAIL', 'vichuang2005@gmail.com');                   // 發送者郵件地址 (請填入)
-define('SMTP_FROM_NAME', '康寧大學五專入學說明會');  // 發送者名稱
+define('SMTP_FROM_NAME', '康寧大學招生系統');  // 發送者名稱
 define('SMTP_SECURE', 'tls');                    // 加密類型 (tls 或 ssl)
 
 // Google Maps API 設定

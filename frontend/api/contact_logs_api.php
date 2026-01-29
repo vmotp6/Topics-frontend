@@ -70,8 +70,7 @@ function ensureCaseClosedColumn($conn) {
 function ensureContactLogsFollowUpColumns($conn) {
     $cols = ['intention_level' => "VARCHAR(20) DEFAULT NULL COMMENT 'high/medium/low/none' AFTER contact_result",
              'decline_reason' => "VARCHAR(100) DEFAULT NULL COMMENT '不來原因' AFTER intention_level",
-             'need_follow_up' => "VARCHAR(20) DEFAULT NULL COMMENT 'yes/no/later' AFTER decline_reason",
-             'remind_registration' => "TINYINT(1) DEFAULT NULL COMMENT '0=否,1=是' AFTER need_follow_up"];
+             'need_follow_up' => "VARCHAR(20) DEFAULT NULL COMMENT 'yes/no/later' AFTER decline_reason"];
     foreach ($cols as $name => $def) {
         $r = @$conn->query("SHOW COLUMNS FROM enrollment_contact_logs LIKE '$name'");
         if (!$r || $r->num_rows === 0) {
@@ -82,9 +81,7 @@ function ensureContactLogsFollowUpColumns($conn) {
 
 function ensureEnrollmentIntentionFollowUpColumns($conn) {
     $cols = ['intention_level' => "VARCHAR(20) DEFAULT NULL COMMENT 'high/medium/low/none 學生目前意願，僅在填寫/變更時更新'",
-             'follow_up_status' => "VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/remind_registration/decline_follow_up/closed_unreachable/closed_declined'",
-             'remind_registration_date' => "DATE DEFAULT NULL",
-             'remind_registration_done' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=否,1=是'",
+             'follow_up_status' => "VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/decline_follow_up/closed_unreachable/closed_declined'",
              'decline_reason_final' => "VARCHAR(100) DEFAULT NULL COMMENT '結案時不來原因'"];
     foreach ($cols as $name => $def) {
         $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$name'");
