@@ -41,10 +41,14 @@ if ($enrollment_id <= 0) {
 try {
     $conn = getDatabaseConnection();
 
-    // 確保 case_closed 欄位存在
+    // 確保 case_closed、follow_up_status 欄位存在
     $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'case_closed'");
     if (!$r || $r->num_rows === 0) {
         @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN case_closed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=否,1=是'");
+    }
+    $fs = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'follow_up_status'");
+    if (!$fs || $fs->num_rows === 0) {
+        @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN follow_up_status VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/remind_registration/decline_follow_up/closed_unreachable/closed_declined'");
     }
 
     // 主任科系
@@ -124,8 +128,8 @@ try {
         }
     }
 
-    // 執行結案
-    $up = $conn->prepare("UPDATE enrollment_intention SET case_closed = 1 WHERE id = ?");
+    // 執行結案（聯絡不到），並設 follow_up_status=closed_unreachable
+    $up = $conn->prepare("UPDATE enrollment_intention SET case_closed = 1, follow_up_status = 'closed_unreachable' WHERE id = ?");
     $up->bind_param('i', $enrollment_id);
     if (!$up->execute()) {
         http_response_code(500);
