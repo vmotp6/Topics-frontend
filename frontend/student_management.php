@@ -17,6 +17,10 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>學生管理 - 康寧大學招生平台</title>
   <style>
+    main {
+      padding-top: 96px;
+      box-sizing: border-box;
+    }
     .sm-page {
       max-width: 1200px;
       margin: 0 auto;
@@ -32,21 +36,26 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
       padding: 16px;
     }
 
-    .sm-title {
-      margin: 0 0 8px 0;
-      font-size: 22px;
-      font-weight: 700;
-      color: #003366;
-      display: flex;
-      gap: 10px;
-      align-items: center;
+    .sm-hero {
+      background: #6b7cf0;
+      border-radius: 18px;
+      padding: 28px 20px;
+      text-align: center;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(90, 102, 220, 0.2);
+      margin-bottom: 16px;
     }
-
-    .sm-subtitle {
-      margin: 0 0 16px 0;
-      color: #666;
-      font-size: 14px;
-      line-height: 1.5;
+    .sm-hero-title {
+      margin: 0 0 8px 0;
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    .sm-hero-subtitle {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.6;
+      opacity: 0.92;
     }
 
     /* ==== Students block styles (from index.php, slightly de-scoped) ==== */
@@ -207,8 +216,10 @@ $can_access = $isLoggedIn && in_array($user_role, $allowed_roles, true);
 <main>
   <div class="sm-page">
     <div class="sm-card">
-      <div class="sm-title"><i class="fas fa-user-graduate"></i> 學生管理</div>
-      <p class="sm-subtitle">老師端可查看分配學生、快速取得聯絡資訊、查看/新增聯絡紀錄。</p>
+      <div class="sm-hero">
+        <div class="sm-hero-title">學生管理</div>
+        <p class="sm-hero-subtitle">老師端可查看分配學生、快速取得聯絡資訊、查看/新增聯絡紀錄。</p>
+      </div>
 
       <?php if (!$can_access): ?>
         <div class="sm-inline-panel" style="background:#fff2f0; border-color:#ffccc7;">
