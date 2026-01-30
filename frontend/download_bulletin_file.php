@@ -27,12 +27,27 @@ try {
         die('檔案不存在');
     }
 
-    // 檔案路徑
-    $file_path = __DIR__ . '/' . $file['file_path'];
+    // 檔案路徑處理：支援後台路徑（../../Topics-backend/frontend/...）
+    $file_path = $file['file_path'];
     
-    if (!file_exists($file_path)) {
+    // 如果是相對路徑，先嘗試當前目錄
+    if (strpos($file_path, '/') !== 0 && strpos($file_path, 'http') !== 0) {
+        // 檢查是否包含後台路徑
+        if (strpos($file_path, '../../Topics-backend/frontend/') === 0) {
+            // 轉換為絕對路徑
+            $file_path = __DIR__ . '/' . $file_path;
+        } else {
+            // 直接使用相對路徑
+            $file_path = __DIR__ . '/' . $file_path;
+        }
+    }
+    
+    // 標準化路徑（處理 .. 和 .）
+    $file_path = realpath($file_path);
+    
+    if (!$file_path || !file_exists($file_path)) {
         http_response_code(404);
-        die('檔案不存在');
+        die('檔案不存在：' . htmlspecialchars($file['file_path']));
     }
 
     // 設定下載標頭
