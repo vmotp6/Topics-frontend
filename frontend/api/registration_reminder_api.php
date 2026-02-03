@@ -38,11 +38,15 @@ function ensureRegistrationColumns($conn) {
         'registration_stage' => "VARCHAR(20) DEFAULT NULL COMMENT 'priority_exam/joint_exam/continued_recruitment 當前報名階段'",
         'priority_exam_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試是否已提醒'",
         'priority_exam_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試是否已報名'",
+        'priority_exam_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試本階段不報'",
         'joint_exam_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '聯合免試是否已提醒'",
         'joint_exam_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '聯合免試是否已報名'",
+        'joint_exam_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '聯合免試本階段不報'",
         'continued_recruitment_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招是否已提醒'",
         'continued_recruitment_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招是否已報名'",
-        'is_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已報名（任一階段）'"
+        'continued_recruitment_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招本階段不報'",
+        'is_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已報名（任一階段）'",
+        'check_in_status' => "VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '報到流程: pending=待報到, reminded=已提醒報到, completed=已完成報到, declined=放棄報到'"
     ];
     foreach ($cols as $name => $def) {
         $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$name'");
@@ -55,9 +59,9 @@ function ensureRegistrationColumns($conn) {
 // 判斷當前報名階段
 function getCurrentRegistrationStage() {
     $current_month = (int)date('m');
-    if ($current_month >= 1 && $current_month < 2) {
+    if ($current_month >= 2 && $current_month < 3) {
         return 'priority_exam'; // 5月：優先免試
-    } elseif ($current_month >= 6 && $current_month < 8) {
+    } elseif ($current_month >= 6 && $current_month < 7) {
         return 'joint_exam'; // 6-7月：聯合免試
     } elseif ($current_month >= 8) {
         return 'continued_recruitment'; // 8月以後：續招
@@ -171,12 +175,131 @@ try {
         }
         
         $registered_col = $stage . '_registered';
-        // 同時標記該階段已報名，以及整體已報名狀態
-        $stmt = $conn->prepare("UPDATE enrollment_intention SET $registered_col = 1, is_registered = 1 WHERE id = ?");
+        // 同時標記該階段已報名、整體已報名狀態，並啟動報到流程（待報到）
+        $stmt = $conn->prepare("UPDATE enrollment_intention SET $registered_col = 1, is_registered = 1, check_in_status = 'pending' WHERE id = ?");
         $stmt->bind_param("i", $enrollment_id);
         
         if ($stmt->execute()) {
             echo json_encode(['success' => true, 'message' => '已標記為已報名']);
+        } else {
+            echo json_encode(['success' => false, 'message' => '更新失敗：' . $stmt->error]);
+        }
+        $stmt->close();
+        
+    } elseif ($method === 'POST' && $action === 'decline_stage') {
+        // 本階段不報：招生流程狀態回復為「持續聯絡追蹤」，學生仍留當年度招生名單，下一階段可再提醒
+        $enrollment_id = (int)($_POST['enrollment_id'] ?? 0);
+        if ($enrollment_id <= 0) {
+            echo json_encode(['success' => false, 'message' => '無效的學生ID']);
+            exit;
+        }
+        if ($isAdmissionCenter) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => '招生中心不可變更報名狀態']);
+            exit;
+        }
+        
+        $stage = getCurrentRegistrationStage();
+        if (!$stage) {
+            echo json_encode(['success' => false, 'message' => '目前非報名期間']);
+            exit;
+        }
+        
+        $check = $conn->prepare("SELECT assigned_teacher_id FROM enrollment_intention WHERE id = ?");
+        $check->bind_param("i", $enrollment_id);
+        $check->execute();
+        $res = $check->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $check->close();
+        $assigned_teacher_id = $row ? (int)$row['assigned_teacher_id'] : 0;
+        
+        $canOperate = false;
+        if ($user_role === 'TEA' && $assigned_teacher_id === $user_id) {
+            $canOperate = true;
+        } elseif ($user_role === 'DI' && $assigned_teacher_id === $user_id) {
+            $canOperate = true;
+        }
+        if (!$canOperate) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => '僅能對自己名單的學生操作']);
+            exit;
+        }
+        
+        $declined_col = $stage . '_declined';
+        $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$declined_col'");
+        if (!$r || $r->num_rows === 0) {
+            @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN `$declined_col` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '本階段不報'");
+        }
+        
+        $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1, follow_up_status = 'tracking' WHERE id = ?");
+        $stmt->bind_param("i", $enrollment_id);
+        
+        if ($stmt->execute()) {
+            echo json_encode(['success' => true, 'message' => '已記錄本階段不報，學生將於下一招生階段可再次提醒報名']);
+        } else {
+            echo json_encode(['success' => false, 'message' => '更新失敗：' . $stmt->error]);
+        }
+        $stmt->close();
+        
+    } elseif ($method === 'POST' && in_array($action, ['check_in_remind', 'check_in_complete', 'check_in_decline'], true)) {
+        // 報到流程：已提醒報到、已完成報到、放棄報到（僅影響報到流程，不回到招生追蹤）
+        $enrollment_id = (int)($_POST['enrollment_id'] ?? 0);
+        if ($enrollment_id <= 0) {
+            echo json_encode(['success' => false, 'message' => '無效的學生ID']);
+            exit;
+        }
+        
+        $status_map = [
+            'check_in_remind' => 'reminded',
+            'check_in_complete' => 'completed',
+            'check_in_decline' => 'declined'
+        ];
+        $new_status = $status_map[$action];
+        
+        // 僅允許老師/主任對自己名單的學生操作；招生中心也可操作報到狀態
+        $check = $conn->prepare("SELECT assigned_teacher_id, is_registered FROM enrollment_intention WHERE id = ?");
+        $check->bind_param("i", $enrollment_id);
+        $check->execute();
+        $res = $check->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $check->close();
+        $assigned_teacher_id = $row ? (int)$row['assigned_teacher_id'] : 0;
+        $is_reg = (int)($row['is_registered'] ?? 0) === 1;
+        
+        if (!$is_reg) {
+            echo json_encode(['success' => false, 'message' => '該學生尚未標記為已報名']);
+            exit;
+        }
+        
+        $canOperate = false;
+        if ($user_role === 'TEA' && $assigned_teacher_id === $user_id) {
+            $canOperate = true;
+        } elseif ($user_role === 'DI' && $assigned_teacher_id === $user_id) {
+            $canOperate = true;
+        } elseif ($isAdmissionCenter) {
+            $canOperate = true;
+        }
+        if (!$canOperate) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => '僅能對自己名單的學生或由招生中心操作報到狀態']);
+            exit;
+        }
+        
+        $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'check_in_status'");
+        if (!$r || $r->num_rows === 0) {
+            @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN check_in_status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '報到流程'");
+        }
+        
+        $stmt = $conn->prepare("UPDATE enrollment_intention SET check_in_status = ? WHERE id = ?");
+        $stmt->bind_param("si", $new_status, $enrollment_id);
+        
+        $msg = [
+            'reminded' => '已標記為已提醒報到',
+            'completed' => '已標記為已完成報到',
+            'declined' => '已標記為放棄報到（僅影響報到流程）'
+        ];
+        if ($stmt->execute()) {
+            echo json_encode(['success' => true, 'message' => $msg[$new_status]]);
         } else {
             echo json_encode(['success' => false, 'message' => '更新失敗：' . $stmt->error]);
         }
