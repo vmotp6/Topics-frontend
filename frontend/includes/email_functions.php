@@ -22,7 +22,7 @@ if (!$phpmailer_available && file_exists(__DIR__ . '/../PHPMailer/src/PHPMailer.
 /**
  * 使用 PHPMailer 發送 SMTP 郵件
  */
-function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '') {
+function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '', $attachments = []) {
     try {
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         
@@ -60,6 +60,19 @@ function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '') {
             $mail->AltBody = $altBody;
         }
         
+        if (!empty($attachments) && is_array($attachments)) {
+            foreach ($attachments as $att) {
+                $path = isset($att['path']) ? (string)$att['path'] : '';
+                if ($path === '' || !file_exists($path)) continue;
+                $name = isset($att['name']) ? (string)$att['name'] : '';
+                if ($name !== '') {
+                    $mail->addAttachment($path, $name);
+                } else {
+                    $mail->addAttachment($path);
+                }
+            }
+        }
+
         $result = $mail->send();
         if ($result) {
             error_log("✅ PHPMailer 郵件發送成功: 收件人=$to, 主題=$subject");
@@ -78,25 +91,65 @@ function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '') {
 /**
  * 使用內建 mail() 函數發送郵件（備用方案）
  */
-function sendEmailWithBuiltIn($to, $subject, $body) {
+function sendEmailWithBuiltIn($to, $subject, $body, $altBody = '', $attachments = []) {
     // 設定郵件頭
     $headers = array();
     $headers[] = 'MIME-Version: 1.0';
-    $headers[] = 'Content-type: text/html; charset=UTF-8';
     $headers[] = 'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>';
     $headers[] = 'Reply-To: ' . SMTP_FROM_EMAIL;
     $headers[] = 'X-Mailer: PHP/' . phpversion();
-    
+
+    $has_attachments = (!empty($attachments) && is_array($attachments));
+    if (!$has_attachments) {
+        $headers[] = 'Content-type: text/html; charset=UTF-8';
+        $header_string = implode("\r\n", $headers);
+        return mail($to, $subject, $body, $header_string);
+    }
+
+    $boundary = 'b1_' . md5(uniqid((string)microtime(true), true));
+    $alt_boundary = 'b2_' . md5(uniqid('alt', true));
+    $headers[] = 'Content-Type: multipart/mixed; boundary="' . $boundary . '"';
     $header_string = implode("\r\n", $headers);
-    
-    // 發送郵件
-    return mail($to, $subject, $body, $header_string);
+
+    $message = '';
+    $message .= '--' . $boundary . "\r\n";
+    $message .= 'Content-Type: multipart/alternative; boundary="' . $alt_boundary . '"' . "\r\n\r\n";
+
+    if ($altBody !== '') {
+        $message .= '--' . $alt_boundary . "\r\n";
+        $message .= "Content-Type: text/plain; charset=UTF-8\r\n";
+        $message .= "Content-Transfer-Encoding: base64\r\n\r\n";
+        $message .= chunk_split(base64_encode($altBody)) . "\r\n";
+    }
+
+    $message .= '--' . $alt_boundary . "\r\n";
+    $message .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $message .= "Content-Transfer-Encoding: base64\r\n\r\n";
+    $message .= chunk_split(base64_encode($body)) . "\r\n";
+    $message .= '--' . $alt_boundary . "--\r\n";
+
+    foreach ($attachments as $att) {
+        $path = isset($att['path']) ? (string)$att['path'] : '';
+        if ($path === '' || !file_exists($path)) continue;
+        $name = isset($att['name']) ? (string)$att['name'] : basename($path);
+        $mime = isset($att['mime']) ? (string)$att['mime'] : 'application/octet-stream';
+        $data = @file_get_contents($path);
+        if ($data === false) continue;
+        $message .= '--' . $boundary . "\r\n";
+        $message .= 'Content-Type: ' . $mime . '; name="' . $name . '"' . "\r\n";
+        $message .= 'Content-Transfer-Encoding: base64' . "\r\n";
+        $message .= 'Content-Disposition: attachment; filename="' . $name . '"' . "\r\n\r\n";
+        $message .= chunk_split(base64_encode($data)) . "\r\n";
+    }
+    $message .= '--' . $boundary . "--\r\n";
+
+    return mail($to, $subject, $message, $header_string);
 }
 
 /**
  * 通用郵件發送函數
  */
-function sendEmail($to, $subject, $body, $altBody = '') {
+function sendEmail($to, $subject, $body, $altBody = '', $attachments = []) {
     global $phpmailer_available;
     
     error_log("開始發送郵件: 收件人=$to, 主題=$subject");
@@ -113,11 +166,11 @@ function sendEmail($to, $subject, $body, $altBody = '') {
     // 優先使用 PHPMailer
     if ($phpmailer_available) {
         error_log("使用 PHPMailer 發送郵件");
-        return sendEmailWithPHPMailer($to, $subject, $body, $altBody);
+        return sendEmailWithPHPMailer($to, $subject, $body, $altBody, $attachments);
     } else {
         // 備用方案：使用內建 mail() 函數
         error_log("⚠️ PHPMailer 未安裝，使用內建 mail() 函數");
-        $result = sendEmailWithBuiltIn($to, $subject, $body);
+        $result = sendEmailWithBuiltIn($to, $subject, $body, $altBody, $attachments);
         if ($result) {
             error_log("✅ 內建 mail() 函數發送成功: 收件人=$to");
         } else {
