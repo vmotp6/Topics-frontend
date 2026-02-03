@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/email_functions.php';
 $token = isset($_GET['token']) ? trim((string)$_GET['token']) : '';
 $error = '';
 $data = null;
+$same_recs = [];
 
 try {
     $conn = getDatabaseConnection();
@@ -182,6 +183,54 @@ try {
                     $error = '此筆推薦尚未審核通過，無法簽核。';
                 }
             }
+
+            // 同一推薦人所有推薦學生資料（姓名 + 學號/教師編號）
+            $same_recs = [];
+            if ($data && $error === '') {
+                $rk_name = trim((string)($data['recommender_name'] ?? ''));
+                $rk_id = trim((string)($data['recommender_student_id'] ?? ''));
+                if ($rk_name !== '' && $rk_id !== '') {
+                    $list_sql = "SELECT
+                        ar.id,
+                        {$rec_name_expr} AS recommender_name,
+                        {$rec_id_expr} AS recommender_student_id,
+                        {$rec_grade_expr} AS recommender_grade,
+                        {$rec_dept_expr} AS recommender_department,
+                        {$rec_phone_expr} AS recommender_phone,
+                        {$rec_email_expr} AS recommender_email,
+                        {$stu_name_expr} AS student_name,
+                        {$stu_school_expr} AS student_school,
+                        {$stu_grade_expr} AS student_grade,
+                        {$stu_phone_expr} AS student_phone,
+                        {$stu_email_expr} AS student_email,
+                        {$stu_line_expr} AS student_line_id,
+                        {$interest_expr} AS student_interest,
+                        {$reason_expr} AS recommendation_reason,
+                        {$additional_expr} AS additional_info,
+                        {$proof_expr} AS proof_evidence,
+                        {$created_expr} AS created_at,
+                        {$status_expr} AS status
+                    FROM admission_recommendations ar
+                    " . ($has_recommender_table ? "LEFT JOIN recommender rec ON ar.id = rec.recommendations_id " : "") . "
+                    " . ($has_recommended_table ? "LEFT JOIN recommended red ON ar.id = red.recommendations_id " : "") . "
+                    " . ($has_interest ? "LEFT JOIN departments interest_dept ON " . ($ar_has_student_interest ? "ar.student_interest" : "ar.student_interest_code") . " = interest_dept.code " : "") . "
+                    WHERE {$rec_name_expr} = ? AND {$rec_id_expr} = ?
+                    ORDER BY ar.id DESC";
+                    $stmt3 = $conn->prepare($list_sql);
+                    if ($stmt3) {
+                        $stmt3->bind_param('ss', $rk_name, $rk_id);
+                        if ($stmt3->execute()) {
+                            $res3 = $stmt3->get_result();
+                            if ($res3) {
+                                while ($row = $res3->fetch_assoc()) {
+                                    $same_recs[] = $row;
+                                }
+                            }
+                        }
+                        $stmt3->close();
+                    }
+                }
+            }
         }
     }
     $conn->close();
@@ -292,6 +341,52 @@ try {
             <?php endif; ?>
           </table>
         </div>
+
+        <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
+        <div class="detail-section">
+          <h4 class="detail-title">同一推薦人所有推薦學生</h4>
+          <?php foreach ($same_recs as $row): ?>
+            <div class="detail-wrap" style="margin-top:12px;">
+              <div class="detail-card">
+                <h4 class="detail-title">被推薦人資訊（推薦編號：<?php echo htmlspecialchars($row['id'] ?? ''); ?>）</h4>
+                <table class="detail-table">
+                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">就讀學校</td><td><?php echo htmlspecialchars($row['student_school'] ?? ''); ?></td></tr>
+                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['student_grade'] ?? ''); ?></td></tr>
+                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['student_email'] ?? ''); ?></td></tr>
+                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['student_phone'] ?? ''); ?></td></tr>
+                  <tr><td class="label">LINE ID</td><td><?php echo htmlspecialchars($row['student_line_id'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學生興趣</td><td><?php echo htmlspecialchars($row['student_interest'] ?? ''); ?></td></tr>
+                </table>
+              </div>
+              <div class="detail-card">
+                <h4 class="detail-title">推薦資訊</h4>
+                <table class="detail-table">
+                  <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
+                  <?php if (!empty($row['additional_info'])): ?>
+                  <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
+                  <?php endif; ?>
+                  <?php if (!empty($row['proof_evidence'])): ?>
+                  <tr>
+                    <td class="label">證明文件</td>
+                    <td>
+                      <?php
+                        $file_path2 = str_replace('\\', '/', $row['proof_evidence']);
+                        $file_url2 = '/Topics-frontend/frontend/' . $file_path2;
+                      ?>
+                      <a class="file-link" href="<?php echo htmlspecialchars($file_url2); ?>" target="_blank" rel="noopener">查看文件</a>
+                    </td>
+                  </tr>
+                  <?php endif; ?>
+                  <?php if (!empty($row['created_at'])): ?>
+                  <tr><td class="label">推薦時間</td><td><?php echo htmlspecialchars(date('Y/m/d H:i', strtotime($row['created_at']))); ?></td></tr>
+                  <?php endif; ?>
+                </table>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
 
       <div class="section">
