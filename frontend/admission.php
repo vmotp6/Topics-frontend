@@ -15,7 +15,7 @@ $sessions_query = "SELECT s.id, s.session_name, s.session_date, s.session_type, 
                           (s.max_participants - COUNT(a.id)) as remaining_spots
                    FROM admission_sessions s 
                    LEFT JOIN admission_applications a ON s.id = a.session_id 
-                   WHERE s.is_active = 1 
+                   WHERE s.is_active = 1 AND YEAR(s.session_date) = YEAR(CURDATE())
                    GROUP BY s.id, s.session_name, s.session_date, s.session_type, s.max_participants
                    ORDER BY 
                        CASE WHEN (s.max_participants - COUNT(a.id)) <= 0 THEN 1 ELSE 0 END,
@@ -765,8 +765,12 @@ if ($_POST && !isset($_POST['action'])) {
             $receive_info_value = ($_POST['receive_info'] === '是，願意') ? 1 : 0;
         }
         
+        // 是否參加過社團活動、是否來過技藝班（選填，未選則為 0）
+        $joined_club_activity = isset($_POST['joined_club_activity']) ? (int)$_POST['joined_club_activity'] : 0;
+        $attended_skill_class = isset($_POST['attended_skill_class']) ? (int)$_POST['attended_skill_class'] : 0;
+        
         // 插入資料（使用正確的表名和字段名）
-        $sql = "INSERT INTO admission_applications (email, school, student_name, grade, parent_name, contact_phone, line_id, session_id, course_priority_1, course_priority_2, receive_info, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
+        $sql = "INSERT INTO admission_applications (email, school, student_name, grade, parent_name, contact_phone, line_id, session_id, course_priority_1, course_priority_2, receive_info, joined_club_activity, attended_skill_class, email_sent, reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)";
         
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
@@ -775,7 +779,7 @@ if ($_POST && !isset($_POST['action'])) {
         
         // 使用 "s" 類型綁定，但允許 NULL 值
         // course_priority_1 和 course_priority_2 可能為 NULL
-        $stmt->bind_param("ssssssiissi", 
+        $stmt->bind_param("ssssssiissiii", 
             $_POST['email'],
             $school_code,  // 存儲 school_data.school_code (varchar(20))
             $_POST['student_name'],
@@ -786,7 +790,9 @@ if ($_POST && !isset($_POST['action'])) {
             $session_id,  // int
             $course_priority_1,  // 存儲 departments.code 或 NULL
             $course_priority_2,  // 存儲 departments.code 或 NULL
-            $receive_info_value  // tinyint: 0=否, 1=是
+            $receive_info_value,  // tinyint: 0=否, 1=是
+            $joined_club_activity,  // 是否參加過社團活動 0=否, 1=是
+            $attended_skill_class   // 是否來過技藝班 0=否, 1=是
         );
         
         if ($stmt->execute()) {
@@ -1235,6 +1241,41 @@ $conn->close();
                         <div class="field-group">
                             <label>LINE ID (選填)：</label>
                             <input type="text" name="line_id" placeholder="如有LINE帳號可填寫，方便聯繫" value="<?php echo isset($_POST['line_id']) ? htmlspecialchars($_POST['line_id']) : ''; ?>">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 其他經驗（選填） -->
+                <div class="form-section">
+                    <h3><i class="fas fa-star"></i> 其他經驗（選填）</h3>
+                    <div class="form-row">
+                        <div class="field-group">
+                            <label>是否參加過我們學校的社團活動：</label>
+                            <div class="radio-group" style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <label class="radio-item">
+                                    <input type="radio" name="joined_club_activity" value="1" <?php echo (isset($_POST['joined_club_activity']) && $_POST['joined_club_activity'] === '1') ? 'checked' : ''; ?>>
+                                    <span>是</span>
+                                </label>
+                                <label class="radio-item">
+                                    <input type="radio" name="joined_club_activity" value="0" <?php echo (isset($_POST['joined_club_activity']) && $_POST['joined_club_activity'] === '0') ? 'checked' : ''; ?>>
+                                    <span>否</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="field-group">
+                            <label>是否有來過我們學校的技藝班：</label>
+                            <div class="radio-group" style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <label class="radio-item">
+                                    <input type="radio" name="attended_skill_class" value="1" <?php echo (isset($_POST['attended_skill_class']) && $_POST['attended_skill_class'] === '1') ? 'checked' : ''; ?>>
+                                    <span>是</span>
+                                </label>
+                                <label class="radio-item">
+                                    <input type="radio" name="attended_skill_class" value="0" <?php echo (isset($_POST['attended_skill_class']) && $_POST['attended_skill_class'] === '0') ? 'checked' : ''; ?>>
+                                    <span>否</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
