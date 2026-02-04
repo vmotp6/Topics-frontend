@@ -6,9 +6,10 @@ header('Content-Type: application/json; charset=utf-8');
 
 $token = isset($_POST['token']) ? trim((string)$_POST['token']) : '';
 $signature = isset($_POST['signature']) ? trim((string)$_POST['signature']) : '';
+$signature_url = isset($_POST['signature_url']) ? trim((string)$_POST['signature_url']) : '';
 $reject_reason = isset($_POST['reject_reason']) ? trim((string)$_POST['reject_reason']) : '';
 
-if ($token === '' || ($signature === '' && $reject_reason === '')) {
+if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '')) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
     exit;
 }
@@ -107,28 +108,36 @@ try {
 
     $public_path = '';
     if ($reject_reason === '') {
-        // 儲存簽名檔案
-        if (!preg_match('/^data:image\/png;base64,/', $signature)) {
-            echo json_encode(['success' => false, 'message' => '簽名格式錯誤']);
-            exit;
-        }
-        $raw = base64_decode(str_replace('data:image/png;base64,', '', $signature), true);
-        if ($raw === false) {
-            echo json_encode(['success' => false, 'message' => '簽名解碼失敗']);
-            exit;
-        }
+        if ($signature_url !== '') {
+            $url = $signature_url;
+            if (!preg_match('/^https?:\/\//i', $url) && strpos($url, '/') !== 0) {
+                $url = '/Topics-backend/frontend/' . ltrim($url, '/');
+            }
+            $public_path = $url;
+        } else {
+            // 儲存簽名檔案
+            if (!preg_match('/^data:image\/png;base64,/', $signature)) {
+                echo json_encode(['success' => false, 'message' => '簽名格式錯誤']);
+                exit;
+            }
+            $raw = base64_decode(str_replace('data:image/png;base64,', '', $signature), true);
+            if ($raw === false) {
+                echo json_encode(['success' => false, 'message' => '簽名解碼失敗']);
+                exit;
+            }
 
-        $dir = __DIR__ . '/uploads/recommendation_approvals';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+            $dir = __DIR__ . '/uploads/recommendation_approvals';
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            $filename = 'signature_' . $rid . '_' . time() . '.png';
+            $path = $dir . '/' . $filename;
+            if (file_put_contents($path, $raw) === false) {
+                echo json_encode(['success' => false, 'message' => '簽名保存失敗']);
+                exit;
+            }
+            $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
         }
-        $filename = 'signature_' . $rid . '_' . time() . '.png';
-        $path = $dir . '/' . $filename;
-        if (file_put_contents($path, $raw) === false) {
-            echo json_encode(['success' => false, 'message' => '簽名保存失敗']);
-            exit;
-        }
-        $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
 
         $upd = $conn->prepare("UPDATE recommendation_approval_links
             SET status = 'signed', signature_path = ?, signed_at = NOW()

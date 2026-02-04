@@ -342,26 +342,10 @@ try {
           </table>
         </div>
 
-        <?php if (!empty($same_recs) && count($same_recs) >= 1): ?>
+        <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
         <div class="detail-section">
           <h4 class="detail-title">同一推薦人所有推薦學生</h4>
           <?php foreach ($same_recs as $row): ?>
-            <?php
-              $st_raw = trim((string)($row['status'] ?? ''));
-              $st_norm = strtolower($st_raw);
-              $status_label = '未填寫';
-              if ($st_raw === '' || $st_norm === 'pending') {
-                $status_label = '未填寫';
-              } elseif (in_array($st_norm, ['ap', 'approved', '通過'], true)) {
-                $status_label = '通過';
-              } elseif (in_array($st_norm, ['re', 'rejected', '不通過'], true)) {
-                $status_label = '不通過';
-              } elseif (in_array($st_norm, ['mc', '需人工審查', '需人工確認'], true)) {
-                $status_label = '需人工審查';
-              } else {
-                $status_label = $st_raw;
-              }
-            ?>
             <div class="detail-wrap" style="margin-top:12px;">
               <div class="detail-card">
                 <h4 class="detail-title">被推薦人資訊（推薦編號：<?php echo htmlspecialchars($row['id'] ?? ''); ?>）</h4>
@@ -379,7 +363,6 @@ try {
                 <h4 class="detail-title">推薦資訊</h4>
                 <table class="detail-table">
                   <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
-                  <tr><td class="label">審核結果</td><td><?php echo htmlspecialchars($status_label); ?></td></tr>
                   <?php if (!empty($row['additional_info'])): ?>
                   <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
                   <?php endif; ?>
@@ -415,11 +398,11 @@ try {
             </div>
           <?php endif; ?>
         <?php else: ?>
-          <div class="label">線上簽名</div>
+          <div class="label">線上簽章</div>
           <canvas id="signatureCanvas"></canvas>
           <div class="btns">
             <button class="btn-secondary" type="button" onclick="clearSignature()">清除</button>
-            <button class="btn-primary" type="button" onclick="submitSignature()">確認簽名</button>
+            <button class="btn-primary" type="button" onclick="submitSignature()">確認簽章</button>
             <button class="btn-danger" type="button" onclick="openReject()">不通過</button>
           </div>
           <div id="rejectBox" class="reject-box" style="display:none;">
@@ -430,7 +413,7 @@ try {
               <button class="btn-danger" type="button" onclick="submitReject()">確認不通過</button>
             </div>
           </div>
-          <div class="muted">可使用滑鼠或手機觸控簽名。</div>
+          <div class="muted">可使用滑鼠或手機觸控簽章。</div>
         <?php endif; ?>
       </div>
     <?php endif; ?>
