@@ -231,7 +231,7 @@ try {
             @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN `$declined_col` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '本階段不報'");
         }
         
-        $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1, follow_up_status = 'tracking' WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1 WHERE id = ?");
         $stmt->bind_param("i", $enrollment_id);
         
         if ($stmt->execute()) {

@@ -60,43 +60,9 @@ function ensureContactLogsTable($conn) {
     }
 }
 
-function ensureCaseClosedColumn($conn) {
-    $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'case_closed'");
-    if (!$r || $r->num_rows === 0) {
-        @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN case_closed TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=否,1=是(結案後顯示於歷史紀錄)'");
-    }
-}
-
-function ensureContactLogsFollowUpColumns($conn) {
-    $cols = ['intention_level' => "VARCHAR(20) DEFAULT NULL COMMENT 'high/medium/low/none' AFTER contact_result",
-             'decline_reason' => "VARCHAR(100) DEFAULT NULL COMMENT '不來原因' AFTER intention_level",
-             'need_follow_up' => "VARCHAR(20) DEFAULT NULL COMMENT 'yes/no/later' AFTER decline_reason"];
-    foreach ($cols as $name => $def) {
-        $r = @$conn->query("SHOW COLUMNS FROM enrollment_contact_logs LIKE '$name'");
-        if (!$r || $r->num_rows === 0) {
-            @$conn->query("ALTER TABLE enrollment_contact_logs ADD COLUMN $name $def");
-        }
-    }
-}
-
-function ensureEnrollmentIntentionFollowUpColumns($conn) {
-    $cols = ['intention_level' => "VARCHAR(20) DEFAULT NULL COMMENT 'high/medium/low/none 學生目前意願，僅在填寫/變更時更新'",
-             'follow_up_status' => "VARCHAR(30) DEFAULT 'tracking' COMMENT 'tracking/decline_follow_up/closed_unreachable/closed_declined'",
-             'decline_reason_final' => "VARCHAR(100) DEFAULT NULL COMMENT '結案時不來原因'"];
-    foreach ($cols as $name => $def) {
-        $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$name'");
-        if (!$r || $r->num_rows === 0) {
-            @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN $name $def");
-        }
-    }
-}
-
 try {
     $conn = getDatabaseConnection();
     ensureContactLogsTable($conn);
-    ensureCaseClosedColumn($conn);
-    ensureContactLogsFollowUpColumns($conn);
-    ensureEnrollmentIntentionFollowUpColumns($conn);
 
     $method = $_SERVER['REQUEST_METHOD'];
 
@@ -194,46 +160,10 @@ try {
         // 聯絡結果：unreachable=聯絡不到，其他或未填=已聯絡
         $contact_result = (isset($input['contact_result']) && (string)$input['contact_result'] === 'unreachable') ? 'unreachable' : 'contacted';
 
-        // 追蹤欄位（選填）。意願：僅在「變更」時送 high/medium/low/none，不填＝不變、以學生目前意願為準
-        $intention_level = isset($input['intention_level']) && in_array((string)$input['intention_level'], ['high','medium','low','none'], true) ? (string)$input['intention_level'] : null;
-        $decline_reason = isset($input['decline_reason']) ? trim((string)$input['decline_reason']) : '';
-        if ($decline_reason === '') $decline_reason = null;
-        $need_follow_up = isset($input['need_follow_up']) && in_array((string)$input['need_follow_up'], ['yes','no','later'], true) ? (string)$input['need_follow_up'] : null;
-
         if ($enrollment_id <= 0 || $method === '' || $notes === '') {
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => '缺少必要欄位']);
             exit;
-        }
-
-        // 取得學生目前意願（用於：不填＝不變時的 effective）
-        $current_intention = null;
-        $sel = $conn->prepare("SELECT intention_level FROM enrollment_intention WHERE id = ?");
-        $sel->bind_param('i', $enrollment_id);
-        $sel->execute();
-        $sr = $sel->get_result();
-        $r = $sr->fetch_assoc();
-        if ($r && isset($r['intention_level'])) $current_intention = $r['intention_level'];
-        $effective_intention = $intention_level !== null ? $intention_level : $current_intention;
-
-        // 結案（無意願）：主任或老師、 effective 意願為 none 或 low、且「不要再聯絡」時；不來原因必填
-        $do_close_declined = false;
-        $decline_reason_final = null;
-        if ($contact_result === 'contacted' && in_array($effective_intention, ['none','low'], true) && $need_follow_up === 'no') {
-            // 主任或老師都可以結案
-            if (!$isDirector && !$isTeacher) {
-                http_response_code(403);
-                echo json_encode(['success' => false, 'message' => '僅主任或老師可執行結案（無意願）']);
-                exit;
-            }
-            $decline_reason_final = isset($input['decline_reason']) ? trim((string)$input['decline_reason']) : '';
-            if ($decline_reason_final === '' && isset($input['decline_reason_final'])) $decline_reason_final = trim((string)$input['decline_reason_final']);
-            if ($decline_reason_final === '') {
-                http_response_code(400);
-                echo json_encode(['success' => false, 'message' => '結案（無意願）時請選擇或填寫不來原因']);
-                exit;
-            }
-            $do_close_declined = true;
         }
 
         // 檢查權限：僅能對分配給自己的學生新增紀錄
@@ -301,57 +231,15 @@ try {
             }
         }
 
-        // 寫入聯絡紀錄（含追蹤欄位；bind 需傳字串/整數，空字串表未填）
-        $il = $intention_level !== null ? $intention_level : '';
-        $dr = $decline_reason !== null ? $decline_reason : '';
-        $nf = $need_follow_up !== null ? $need_follow_up : '';
-        $stmt = $conn->prepare("INSERT INTO enrollment_contact_logs (enrollment_id, teacher_id, contact_date, method, notes, contact_result, intention_level, decline_reason, need_follow_up) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param('iisssssss', $enrollment_id, $teacher_id, $contact_date, $method, $notes, $contact_result, $il, $dr, $nf);
+        // 寫入聯絡紀錄（僅保留聯絡資料，不含「意願追蹤/結案」欄位）
+        $stmt = $conn->prepare("INSERT INTO enrollment_contact_logs (enrollment_id, teacher_id, contact_date, method, notes, contact_result) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param('iissss', $enrollment_id, $teacher_id, $contact_date, $method, $notes, $contact_result);
         $ok = $stmt->execute();
 
         if (!$ok) {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => '寫入失敗']);
             exit;
-        }
-
-        // 已聯絡時：依追蹤邏輯更新 enrollment_intention。
-        // 意願邏輯：第一次填寫時（$current_intention === null）且表單有填寫意願，則記錄；之後僅在表單有變更時更新。
-        $should_update_intention = false;
-        $intention_to_update = null;
-        if ($intention_level !== null) {
-            // 表單有填寫意願：第一次填寫或變更時都更新
-            $should_update_intention = true;
-            $intention_to_update = $intention_level;
-        } elseif ($current_intention === null && $contact_result === 'contacted') {
-            // 第一次填寫聯絡紀錄但沒有填寫意願：不更新（保持 NULL）
-            $should_update_intention = false;
-        }
-        
-        if ($contact_result === 'contacted') {
-            if ($do_close_declined) {
-                $up = $conn->prepare("UPDATE enrollment_intention SET case_closed = 1, follow_up_status = 'closed_declined', decline_reason_final = ?, intention_level = ? WHERE id = ?");
-                $up->bind_param('ssi', $decline_reason_final, $effective_intention, $enrollment_id);
-                @$up->execute();
-            } elseif (in_array($effective_intention, ['none','low'], true) && in_array($need_follow_up, ['yes','later'], true)) {
-                if ($should_update_intention) {
-                    $up = $conn->prepare("UPDATE enrollment_intention SET follow_up_status = 'decline_follow_up', intention_level = ? WHERE id = ?");
-                    $up->bind_param('si', $intention_to_update, $enrollment_id);
-                } else {
-                    $up = $conn->prepare("UPDATE enrollment_intention SET follow_up_status = 'decline_follow_up' WHERE id = ?");
-                    $up->bind_param('i', $enrollment_id);
-                }
-                @$up->execute();
-            } else {
-                if ($should_update_intention) {
-                    $up = $conn->prepare("UPDATE enrollment_intention SET follow_up_status = 'tracking', intention_level = ? WHERE id = ?");
-                    $up->bind_param('si', $intention_to_update, $enrollment_id);
-                } else {
-                    $up = $conn->prepare("UPDATE enrollment_intention SET follow_up_status = 'tracking' WHERE id = ?");
-                    $up->bind_param('i', $enrollment_id);
-                }
-                @$up->execute();
-            }
         }
 
         echo json_encode(['success' => true, 'id' => $conn->insert_id]);
@@ -486,7 +374,7 @@ try {
         }
         // 如果是招生中心/行政人員（ADM/STA），則允許查看所有學生的聯絡紀錄，不需要額外檢查
 
-        // 查詢聯絡紀錄（含 contact_result、追蹤欄位、ei.case_closed 供判斷是否顯示結案按鈕）
+        // 查詢聯絡紀錄（含 contact_result）
         $q = $conn->prepare("
             SELECT 
                 cl.id, 
@@ -496,12 +384,8 @@ try {
                 cl.method, 
                 cl.notes, 
                 cl.contact_result,
-                cl.intention_level,
-                cl.decline_reason,
-                cl.need_follow_up,
                 cl.created_at,
                 ei.assigned_teacher_id,
-                ei.case_closed,
                 u.name AS teacher_name,
                 u.username AS teacher_username,
                 assigned_teacher.name AS assigned_teacher_name,
@@ -517,38 +401,6 @@ try {
         $q->execute();
         $res = $q->get_result();
         $rows = $res->fetch_all(MYSQLI_ASSOC);
-
-        // 學生意願與追蹤狀態（即使 0 筆紀錄也回傳，供表單顯示「目前意願」）
-        $current_intention_level = null;
-        $current_follow_up_status = null;
-        $eq = $conn->prepare("SELECT intention_level, follow_up_status FROM enrollment_intention WHERE id = ?");
-        $eq->bind_param('i', $enrollment_id);
-        $eq->execute();
-        $eqr = $eq->get_result();
-        if ($eqr && ($erow = $eqr->fetch_assoc())) {
-            $current_intention_level = $erow['intention_level'] ?? null;
-            $current_follow_up_status = $erow['follow_up_status'] ?? null;
-        }
-
-        // 若 ei 無 case_closed 欄（舊 DB），視為 0
-        $case_closed = 0;
-        if (isset($rows[0]['case_closed']) && $rows[0]['case_closed'] !== null) {
-            $case_closed = (int)$rows[0]['case_closed'];
-        }
-
-        // 主任且未結案，且最近 3 筆皆為「聯絡不到」→ 顯示結案按鈕
-        $show_close_button = false;
-        if ($isDirector && $case_closed === 0 && count($rows) >= 3) {
-            $last3 = array_slice($rows, 0, 3);
-            $all_unreachable = true;
-            foreach ($last3 as $r) {
-                if (($r['contact_result'] ?? '') !== 'unreachable') {
-                    $all_unreachable = false;
-                    break;
-                }
-            }
-            $show_close_button = $all_unreachable;
-        }
         
         // 為了向後兼容，將 notes 拆分為 result 和 follow_up_notes
         // 同時增加分配資訊、contact_result 顯示用
@@ -581,7 +433,7 @@ try {
         }
         unset($row);
         
-        echo json_encode(['success' => true, 'logs' => $rows, 'show_close_button' => $show_close_button, 'case_closed' => (int)$case_closed, 'current_intention_level' => $current_intention_level, 'current_follow_up_status' => $current_follow_up_status]);
+        echo json_encode(['success' => true, 'logs' => $rows]);
         exit;
     }
 
