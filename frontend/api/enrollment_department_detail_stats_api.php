@@ -1,0 +1,248 @@
+<?php
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+// 處理 OPTIONS 預檢請求
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
+try {
+    // 引入資料庫設定
+    $config_path = '../config.php';
+    if (!file_exists($config_path)) {
+        echo json_encode(['success' => false, 'error' => '找不到設定檔案: ' . $config_path], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    require_once $config_path;
+
+    // 取得科系名稱參數（中文名稱或科代碼皆可）
+    $department = isset($_GET['department']) ? trim($_GET['department']) : '';
+    if ($department === '') {
+        echo json_encode(['success' => false, 'error' => '科系名稱不能為空'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // 建立資料庫連線（使用 mysqli）
+    $conn = getDatabaseConnection();
+    if (!$conn || $conn->connect_error) {
+        echo json_encode(['success' => false, 'error' => '資料庫連線失敗'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // 檢查 enrollment_intention 表是否存在
+    $tbl_check = $conn->query("SHOW TABLES LIKE 'enrollment_intention'");
+    if (!$tbl_check || $tbl_check->num_rows === 0) {
+        // 沒有就讀意願表，直接回傳空資料
+        echo json_encode([
+            'success' => true,
+            'department' => $department,
+            'department_codes' => [],
+            'status_summary' => [
+                'total_assigned' => 0,
+                'applied' => 0,
+                'checked_in' => 0,
+                'declined' => 0,
+                'tracking' => 0,
+            ],
+            'schools' => []
+        ], JSON_UNESCAPED_UNICODE);
+        $conn->close();
+        exit;
+    }
+
+    // 取得 enrollment_intention 欄位結構
+    $cols_rs = $conn->query("DESCRIBE enrollment_intention");
+    $columns = [];
+    while ($col = $cols_rs->fetch_assoc()) {
+        $columns[] = $col['Field'];
+    }
+
+    $has_assigned_department = in_array('assigned_department', $columns, true);
+    $has_is_registered       = in_array('is_registered', $columns, true);
+    $has_check_in_status     = in_array('check_in_status', $columns, true);
+    $has_follow_up_status    = in_array('follow_up_status', $columns, true);
+    $has_junior_high         = in_array('junior_high', $columns, true);
+
+    // 若沒有 assigned_department 欄位，則無法以「分配到本系」為基準，只回傳空資料避免 SQL 錯誤
+    if (!$has_assigned_department) {
+        echo json_encode([
+            'success' => true,
+            'department' => $department,
+            'department_codes' => [],
+            'status_summary' => [
+                'total_assigned' => 0,
+                'applied' => 0,
+                'checked_in' => 0,
+                'declined' => 0,
+                'tracking' => 0,
+            ],
+            'schools' => []
+        ], JSON_UNESCAPED_UNICODE);
+        $conn->close();
+        exit;
+    }
+
+    // 先嘗試從 departments 依中文名稱找科代碼；找不到時，將傳入值視為 code 使用
+    $dept_codes = [];
+    $stmt = $conn->prepare("SELECT code FROM departments WHERE name = ? OR code = ?");
+    if ($stmt) {
+        $stmt->bind_param('ss', $department, $department);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            if (!empty($row['code'])) {
+                $dept_codes[] = $row['code'];
+            }
+        }
+        $stmt->close();
+    }
+
+    if (empty($dept_codes)) {
+        // 若找不到對應資料，就直接用傳入的參數當作科代碼比對
+        $dept_codes[] = $department;
+    }
+
+    // 構建 IN 子句（安全轉義）
+    $escaped_codes = array_map(function ($c) use ($conn) {
+        return "'" . $conn->real_escape_string($c) . "'";
+    }, $dept_codes);
+    $in_clause = implode(', ', $escaped_codes);
+
+    // --------- 1. 計算總分配人數（以 assigned_department 為基準）---------
+    $total_assigned = 0;
+    $sql_total = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause)";
+    if ($rs_total = $conn->query($sql_total)) {
+        if ($row = $rs_total->fetch_assoc()) {
+            $total_assigned = (int)($row['cnt'] ?? 0);
+        }
+        $rs_total->free();
+    }
+
+    // --------- 2. 各狀態統計 ---------
+    // 已報名：若有 is_registered 欄位，使用 is_registered=1；否則以 total_assigned 近似
+    $applied = 0;
+    if ($has_is_registered) {
+        $sql_applied = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause) AND is_registered = 1";
+        if ($rs_applied = $conn->query($sql_applied)) {
+            if ($row = $rs_applied->fetch_assoc()) {
+                $applied = (int)($row['cnt'] ?? 0);
+            }
+            $rs_applied->free();
+        }
+    } else {
+        $applied = $total_assigned;
+    }
+
+    // 已報到 / 放棄（報到流程）
+    $checked_in = 0;
+    $declined   = 0;
+    if ($has_check_in_status) {
+        $sql_checkin = "
+            SELECT check_in_status, COUNT(*) AS cnt
+            FROM enrollment_intention
+            WHERE assigned_department IN ($in_clause)
+              AND check_in_status IN ('completed', 'declined')
+            GROUP BY check_in_status
+        ";
+        if ($rs_checkin = $conn->query($sql_checkin)) {
+            while ($row = $rs_checkin->fetch_assoc()) {
+                $status = $row['check_in_status'] ?? '';
+                $cnt    = (int)($row['cnt'] ?? 0);
+                if ($status === 'completed') {
+                    $checked_in = $cnt;
+                } elseif ($status === 'declined') {
+                    $declined = $cnt;
+                }
+            }
+            $rs_checkin->free();
+        }
+    }
+
+    // 尚在追蹤：follow_up_status = 'tracking'
+    $tracking = 0;
+    if ($has_follow_up_status) {
+        $sql_track = "
+            SELECT COUNT(*) AS cnt
+            FROM enrollment_intention
+            WHERE assigned_department IN ($in_clause)
+              AND follow_up_status = 'tracking'
+        ";
+        if ($rs_track = $conn->query($sql_track)) {
+            if ($row = $rs_track->fetch_assoc()) {
+                $tracking = (int)($row['cnt'] ?? 0);
+            }
+            $rs_track->free();
+        }
+    }
+
+    // --------- 3. 來源國中統計（這些國中有幾人分配到我們這個科）---------
+    // 國中欄位 enrollment_intention.junior_high 存的是學校代碼，用 school_data 轉成顯示名稱
+    $schools = [];
+    if ($has_junior_high) {
+        $check_school_tbl = $conn->query("SHOW TABLES LIKE 'school_data'");
+        $has_school_data = $check_school_tbl && $check_school_tbl->num_rows > 0;
+
+        if ($has_school_data) {
+            $sql_schools = "
+                SELECT
+                    COALESCE(sd.name, ei.junior_high, '未填寫') AS school_name,
+                    COUNT(*) AS cnt
+                FROM enrollment_intention ei
+                LEFT JOIN school_data sd ON ei.junior_high = sd.school_code
+                WHERE ei.assigned_department IN ($in_clause)
+                  AND ei.junior_high IS NOT NULL
+                  AND ei.junior_high <> ''
+                GROUP BY COALESCE(sd.name, ei.junior_high, '未填寫')
+                ORDER BY COUNT(*) DESC, school_name ASC
+            ";
+        } else {
+            $sql_schools = "
+                SELECT ei.junior_high AS school_name, COUNT(*) AS cnt
+                FROM enrollment_intention ei
+                WHERE ei.assigned_department IN ($in_clause)
+                  AND ei.junior_high IS NOT NULL
+                  AND ei.junior_high <> ''
+                GROUP BY ei.junior_high
+                ORDER BY COUNT(*) DESC, ei.junior_high ASC
+            ";
+        }
+
+        if ($rs_sch = $conn->query($sql_schools)) {
+            while ($row = $rs_sch->fetch_assoc()) {
+                $schools[] = [
+                    'name'  => $row['school_name'] ?? '未填寫',
+                    'count' => (int)($row['cnt'] ?? 0),
+                ];
+            }
+            $rs_sch->free();
+        }
+    }
+
+    $conn->close();
+
+    echo json_encode([
+        'success' => true,
+        'department' => $department,
+        'department_codes' => $dept_codes,
+        'status_summary' => [
+            'total_assigned' => $total_assigned,
+            'applied'        => $applied,
+            'checked_in'     => $checked_in,
+            'declined'       => $declined,
+            'tracking'       => $tracking,
+        ],
+        'schools' => $schools,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+
+} catch (Throwable $e) {
+    // 捕捉所有錯誤，避免輸出非 JSON
+    error_log('enrollment_department_detail_stats_api 錯誤: ' . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => '伺服器內部錯誤'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+

@@ -1075,6 +1075,16 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
             $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
             if ($table_check->rowCount() === 0) {
                 error_log("enrollment_intention 表不存在，無法獲取已分配科系統計");
+                // 資料表不存在時，回傳空陣列，前端會顯示「暫無數據」
+                return [];
+            }
+
+            // 檢查是否有 assigned_department 欄位，避免舊資料庫結構造成 SQL 錯誤
+            $describe_result = $pdo->query("DESCRIBE enrollment_intention");
+            $columns = $describe_result ? $describe_result->fetchAll(PDO::FETCH_COLUMN) : [];
+            if (empty($columns) || !in_array('assigned_department', $columns, true)) {
+                error_log("enrollment_intention 表缺少 assigned_department 欄位，已分配科系統計將回傳空結果");
+                // 沒有此欄位表示沒有分配紀錄的結構，回傳空陣列即可
                 return [];
             }
 
@@ -1082,15 +1092,23 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
             $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
 
             // 統計 assigned_department，並 LEFT JOIN departments 取得中文名稱
-            $stmt = $pdo->query("SELECT \
-                    COALESCE(ei.assigned_department, '未填寫') as dept_code, \
-                    COALESCE(d.name, ei.assigned_department, '未填寫') as dept_name, \
-                    COUNT(*) as count \
-                FROM enrollment_intention ei \
-                LEFT JOIN departments d ON ei.assigned_department = d.code \
-                WHERE $filter \
-                GROUP BY ei.assigned_department \
-                ORDER BY COUNT(*) DESC");
+            $sql = "
+                SELECT
+                    COALESCE(ei.assigned_department, '未填寫') as dept_code,
+                    COALESCE(d.name, ei.assigned_department, '未填寫') as dept_name,
+                    COUNT(*) as count
+                FROM enrollment_intention ei
+                LEFT JOIN departments d ON ei.assigned_department = d.code
+                WHERE $filter
+                GROUP BY ei.assigned_department
+                ORDER BY COUNT(*) DESC
+            ";
+
+            $stmt = $pdo->query($sql);
+            if (!$stmt) {
+                error_log('已分配科系統計查詢失敗');
+                return [];
+            }
 
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $stats = [];
@@ -1104,7 +1122,12 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
 
             return $stats;
         } catch (PDOException $e) {
+            // 若真的發生資料庫錯誤，記錄詳細錯誤，但對前端回傳空陣列，避免破版
             error_log("已分配科系統計錯誤: " . $e->getMessage());
-            return ['error' => '無法獲取已分配科系統計'];
+            error_log("已分配科系統計 SQL 錯誤詳情: " . print_r($e->errorInfo, true));
+            return [];
+        } catch (Exception $e) {
+            error_log("已分配科系統計一般錯誤: " . $e->getMessage());
+            return [];
         }
     }
