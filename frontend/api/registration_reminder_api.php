@@ -56,17 +56,46 @@ function ensureRegistrationColumns($conn) {
     }
 }
 
-// 判斷當前報名階段
-function getCurrentRegistrationStage() {
-    $current_month = (int)date('m');
-    if ($current_month >= 2 && $current_month < 3) {
-        return 'priority_exam'; // 5月：優先免試
-    } elseif ($current_month >= 6 && $current_month < 7) {
-        return 'joint_exam'; // 6-7月：聯合免試
-    } elseif ($current_month >= 8) {
-        return 'continued_recruitment'; // 8月以後：續招
+/**
+ * 從 department_quotas 取得續招報名時間區間
+ */
+function getContinuedRecruitmentTimeRange($conn) {
+    $sql = "SELECT MIN(register_start) AS min_start, MAX(register_end) AS max_end 
+            FROM department_quotas 
+            WHERE is_active = 1 AND register_start IS NOT NULL AND register_end IS NOT NULL";
+    $result = @$conn->query($sql);
+    if (!$result || $result->num_rows === 0) {
+        return null;
     }
-    return null; // 非報名期間
+    $row = $result->fetch_assoc();
+    if (empty($row['min_start']) || empty($row['max_end'])) {
+        return null;
+    }
+    return ['start' => $row['min_start'], 'end' => $row['max_end']];
+}
+
+/**
+ * 判斷當前報名階段
+ * 優先免試/聯合免試依月份；續招依「科系名額管理」設定的報名時間區間。
+ */
+function getCurrentRegistrationStage($conn) {
+    $now = time();
+    $current_month = (int)date('m');
+    $continued_range = getContinuedRecruitmentTimeRange($conn);
+    if ($continued_range) {
+        $start_ts = strtotime($continued_range['start']);
+        $end_ts = strtotime($continued_range['end']);
+        if ($start_ts !== false && $end_ts !== false && $now >= $start_ts && $now <= $end_ts) {
+            return 'continued_recruitment';
+        }
+    }
+    if ($current_month >= 5 && $current_month < 6) {
+        return 'priority_exam';
+    }
+    if ($current_month >= 6 && $current_month < 8) {
+        return 'joint_exam';
+    }
+    return null;
 }
 
 try {
@@ -96,7 +125,7 @@ try {
             exit;
         }
         
-        $stage = getCurrentRegistrationStage();
+        $stage = getCurrentRegistrationStage($conn);
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
@@ -147,7 +176,7 @@ try {
             exit;
         }
         
-        $stage = getCurrentRegistrationStage();
+        $stage = getCurrentRegistrationStage($conn);
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
@@ -199,7 +228,7 @@ try {
             exit;
         }
         
-        $stage = getCurrentRegistrationStage();
+        $stage = getCurrentRegistrationStage($conn);
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
