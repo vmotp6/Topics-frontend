@@ -399,10 +399,12 @@ try {
           <?php endif; ?>
         <?php else: ?>
           <div class="label">線上簽章</div>
-          <canvas id="signatureCanvas"></canvas>
+          <iframe
+            id="signatureFrame"
+            src="/Topics-backend/frontend/signature.php?document_id=<?php echo urlencode((string)($data['id'] ?? '')); ?>&document_type=admission_recommendation&embed=1"
+            style="width:100%; min-height:720px; border:1px dashed #bbb; border-radius:10px; background:#fff;"
+          ></iframe>
           <div class="btns">
-            <button class="btn-secondary" type="button" onclick="clearSignature()">清除</button>
-            <button class="btn-primary" type="button" onclick="submitSignature()">確認簽章</button>
             <button class="btn-danger" type="button" onclick="openReject()">不通過</button>
           </div>
           <div id="rejectBox" class="reject-box" style="display:none;">
@@ -413,7 +415,7 @@ try {
               <button class="btn-danger" type="button" onclick="submitReject()">確認不通過</button>
             </div>
           </div>
-          <div class="muted">可使用滑鼠或手機觸控簽章。</div>
+          <div class="muted">請於上方區塊完成電子簽章後，系統會自動回填簽核。</div>
         <?php endif; ?>
       </div>
     <?php endif; ?>
@@ -421,54 +423,19 @@ try {
 
   <script>
     const token = <?php echo json_encode($token); ?>;
-    const canvas = document.getElementById('signatureCanvas');
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      const ratio = window.devicePixelRatio || 1;
-      const resize = () => {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        ctx.setTransform(1,0,0,1,0,0);
-        ctx.scale(ratio, ratio);
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = '#111';
-      };
-      resize();
-      window.addEventListener('resize', resize);
+    window.addEventListener('message', function(event) {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data || {};
+      if (payload.type === 'signature_saved' && payload.signature_url) {
+        submitSignatureUrl(payload.signature_url);
+      }
+    });
 
-      let drawing = false;
-      const getPos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: clientX - rect.left, y: clientY - rect.top };
-      };
-      const start = (e) => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-      const move = (e) => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
-      const end = () => { drawing = false; };
-      canvas.addEventListener('mousedown', start);
-      canvas.addEventListener('mousemove', move);
-      canvas.addEventListener('mouseup', end);
-      canvas.addEventListener('mouseleave', end);
-      canvas.addEventListener('touchstart', start, { passive: true });
-      canvas.addEventListener('touchmove', move, { passive: true });
-      canvas.addEventListener('touchend', end);
-    }
-
-    function clearSignature() {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    function submitSignature() {
-      if (!canvas) return;
-      const dataUrl = canvas.toDataURL('image/png');
+    function submitSignatureUrl(signatureUrl) {
       fetch('recommendation_approval_submit.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token) + '&signature=' + encodeURIComponent(dataUrl)
+        body: 'token=' + encodeURIComponent(token) + '&signature_url=' + encodeURIComponent(signatureUrl)
       })
       .then(res => res.json())
       .then(data => {

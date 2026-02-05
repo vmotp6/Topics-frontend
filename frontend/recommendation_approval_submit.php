@@ -1,6 +1,57 @@
 <?php
 require_once 'config.php';
 require_once __DIR__ . '/includes/email_functions.php';
+require_once __DIR__ . '/../../Topics-backend/frontend/recommendation_review_email.php';
+
+// 確保 application_statuses 中存在主任簽核狀態
+function ensure_application_status_code($conn, $code, $name, $order) {
+    if (!$conn) return;
+    $t = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+    if (!$t || $t->num_rows <= 0) return;
+    $cols = [];
+    $cr = $conn->query("SHOW COLUMNS FROM application_statuses");
+    if ($cr) {
+        while ($row = $cr->fetch_assoc()) {
+            $cols[] = $row['Field'];
+        }
+    }
+    if (!in_array('code', $cols, true)) return;
+    $has_name = in_array('name', $cols, true);
+    $has_order = in_array('display_order', $cols, true);
+    $stmt_check = $conn->prepare("SELECT code FROM application_statuses WHERE code = ? LIMIT 1");
+    if (!$stmt_check) return;
+    $stmt_check->bind_param('s', $code);
+    if ($stmt_check->execute()) {
+        $res = $stmt_check->get_result();
+        if ($res && $res->num_rows > 0) {
+            $stmt_check->close();
+            return;
+        }
+    }
+    $stmt_check->close();
+    if ($has_name && $has_order) {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code, name, display_order) VALUES (?, ?, ?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('ssi', $code, $name, $order);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    } elseif ($has_name) {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code, name) VALUES (?, ?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('ss', $code, $name);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    } else {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code) VALUES (?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('s', $code);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    }
+}
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -108,6 +159,18 @@ try {
 
     $public_path = '';
     if ($reject_reason === '') {
+        // 主任已簽核：更新狀態為科主任已審核
+        ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
+        $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
+        if ($upd_status) {
+            $new_status = 'APD';
+            $upd_status->bind_param('si', $new_status, $rid);
+            @$upd_status->execute();
+            $upd_status->close();
+        }
+        if (function_exists('send_director_approved_email_once')) {
+            @send_director_approved_email_once($conn, $rid, 'director');
+        }
         if ($signature_url !== '') {
             $url = $signature_url;
             if (!preg_match('/^https?:\/\//i', $url) && strpos($url, '/') !== 0) {
