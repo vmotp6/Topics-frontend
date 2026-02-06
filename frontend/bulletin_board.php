@@ -2,8 +2,41 @@
 require_once 'config.php';
 include 'share/header.php'; 
 
+date_default_timezone_set('Asia/Taipei');
+$now = date('Y-m-d H:i:s');
+
 // 從資料庫讀取公告
 $conn = getDatabaseConnection();
+
+// 前台「招生公告欄」載入時：若存在「已到發布時間但尚未發布」的續招公告草稿，立即發布，這樣列表才會顯示
+$check_draft = $conn->prepare("
+    SELECT id, year, publish_at FROM continued_admission_result_announcements
+    WHERE scope = 'all' AND published_at IS NULL AND publish_at IS NOT NULL AND publish_at != '' AND publish_at <= ?
+");
+if ($check_draft) {
+    $check_draft->bind_param("s", $now);
+    $check_draft->execute();
+    $res = $check_draft->get_result();
+    while ($row = $res ? $res->fetch_assoc() : null) {
+        if (!$row) break;
+        $year = (int)$row['year'];
+        $up = $conn->prepare("UPDATE continued_admission_result_announcements SET published_at = NOW(), updated_at = NOW() WHERE scope = 'all' AND year = ?");
+        if ($up) {
+            $up->bind_param("i", $year);
+            $up->execute();
+            $up->close();
+        }
+        $source = "continued_admission_{$year}";
+        $up2 = $conn->prepare("UPDATE bulletin_board SET status_code = 'published', updated_at = NOW() WHERE source = ? AND type_code = 'result'");
+        if ($up2) {
+            $up2->bind_param("s", $source);
+            $up2->execute();
+            $up2->close();
+        }
+    }
+    $check_draft->close();
+}
+
 $bulletin_list = [];
 
 // 查詢已發布的公告（status_code = 'published'）
