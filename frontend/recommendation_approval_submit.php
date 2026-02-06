@@ -1,14 +1,66 @@
 <?php
 require_once 'config.php';
 require_once __DIR__ . '/includes/email_functions.php';
+require_once __DIR__ . '/../../Topics-backend/frontend/recommendation_review_email.php';
+
+// 確保 application_statuses 中存在主任簽核狀態
+function ensure_application_status_code($conn, $code, $name, $order) {
+    if (!$conn) return;
+    $t = $conn->query("SHOW TABLES LIKE 'application_statuses'");
+    if (!$t || $t->num_rows <= 0) return;
+    $cols = [];
+    $cr = $conn->query("SHOW COLUMNS FROM application_statuses");
+    if ($cr) {
+        while ($row = $cr->fetch_assoc()) {
+            $cols[] = $row['Field'];
+        }
+    }
+    if (!in_array('code', $cols, true)) return;
+    $has_name = in_array('name', $cols, true);
+    $has_order = in_array('display_order', $cols, true);
+    $stmt_check = $conn->prepare("SELECT code FROM application_statuses WHERE code = ? LIMIT 1");
+    if (!$stmt_check) return;
+    $stmt_check->bind_param('s', $code);
+    if ($stmt_check->execute()) {
+        $res = $stmt_check->get_result();
+        if ($res && $res->num_rows > 0) {
+            $stmt_check->close();
+            return;
+        }
+    }
+    $stmt_check->close();
+    if ($has_name && $has_order) {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code, name, display_order) VALUES (?, ?, ?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('ssi', $code, $name, $order);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    } elseif ($has_name) {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code, name) VALUES (?, ?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('ss', $code, $name);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    } else {
+        $stmt_ins = $conn->prepare("INSERT INTO application_statuses (code) VALUES (?)");
+        if ($stmt_ins) {
+            $stmt_ins->bind_param('s', $code);
+            @$stmt_ins->execute();
+            $stmt_ins->close();
+        }
+    }
+}
 
 header('Content-Type: application/json; charset=utf-8');
 
 $token = isset($_POST['token']) ? trim((string)$_POST['token']) : '';
 $signature = isset($_POST['signature']) ? trim((string)$_POST['signature']) : '';
+$signature_url = isset($_POST['signature_url']) ? trim((string)$_POST['signature_url']) : '';
 $reject_reason = isset($_POST['reject_reason']) ? trim((string)$_POST['reject_reason']) : '';
 
-if ($token === '' || ($signature === '' && $reject_reason === '')) {
+if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '')) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
     exit;
 }
@@ -107,28 +159,48 @@ try {
 
     $public_path = '';
     if ($reject_reason === '') {
-        // 儲存簽名檔案
-        if (!preg_match('/^data:image\/png;base64,/', $signature)) {
-            echo json_encode(['success' => false, 'message' => '簽名格式錯誤']);
-            exit;
+        // 主任已簽核：更新狀態為科主任已審核
+        ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
+        $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
+        if ($upd_status) {
+            $new_status = 'APD';
+            $upd_status->bind_param('si', $new_status, $rid);
+            @$upd_status->execute();
+            $upd_status->close();
         }
-        $raw = base64_decode(str_replace('data:image/png;base64,', '', $signature), true);
-        if ($raw === false) {
-            echo json_encode(['success' => false, 'message' => '簽名解碼失敗']);
-            exit;
+        if (function_exists('send_director_approved_email_once')) {
+            @send_director_approved_email_once($conn, $rid, 'director');
         }
+        if ($signature_url !== '') {
+            $url = $signature_url;
+            if (!preg_match('/^https?:\/\//i', $url) && strpos($url, '/') !== 0) {
+                $url = '/Topics-backend/frontend/' . ltrim($url, '/');
+            }
+            $public_path = $url;
+        } else {
+            // 儲存簽名檔案
+            if (!preg_match('/^data:image\/png;base64,/', $signature)) {
+                echo json_encode(['success' => false, 'message' => '簽名格式錯誤']);
+                exit;
+            }
+            $raw = base64_decode(str_replace('data:image/png;base64,', '', $signature), true);
+            if ($raw === false) {
+                echo json_encode(['success' => false, 'message' => '簽名解碼失敗']);
+                exit;
+            }
 
-        $dir = __DIR__ . '/uploads/recommendation_approvals';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+            $dir = __DIR__ . '/uploads/recommendation_approvals';
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            $filename = 'signature_' . $rid . '_' . time() . '.png';
+            $path = $dir . '/' . $filename;
+            if (file_put_contents($path, $raw) === false) {
+                echo json_encode(['success' => false, 'message' => '簽名保存失敗']);
+                exit;
+            }
+            $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
         }
-        $filename = 'signature_' . $rid . '_' . time() . '.png';
-        $path = $dir . '/' . $filename;
-        if (file_put_contents($path, $raw) === false) {
-            echo json_encode(['success' => false, 'message' => '簽名保存失敗']);
-            exit;
-        }
-        $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
 
         $upd = $conn->prepare("UPDATE recommendation_approval_links
             SET status = 'signed', signature_path = ?, signed_at = NOW()

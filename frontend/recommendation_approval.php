@@ -342,26 +342,10 @@ try {
           </table>
         </div>
 
-        <?php if (!empty($same_recs) && count($same_recs) >= 1): ?>
+        <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
         <div class="detail-section">
           <h4 class="detail-title">同一推薦人所有推薦學生</h4>
           <?php foreach ($same_recs as $row): ?>
-            <?php
-              $st_raw = trim((string)($row['status'] ?? ''));
-              $st_norm = strtolower($st_raw);
-              $status_label = '未填寫';
-              if ($st_raw === '' || $st_norm === 'pending') {
-                $status_label = '未填寫';
-              } elseif (in_array($st_norm, ['ap', 'approved', '通過'], true)) {
-                $status_label = '通過';
-              } elseif (in_array($st_norm, ['re', 'rejected', '不通過'], true)) {
-                $status_label = '不通過';
-              } elseif (in_array($st_norm, ['mc', '需人工審查', '需人工確認'], true)) {
-                $status_label = '需人工審查';
-              } else {
-                $status_label = $st_raw;
-              }
-            ?>
             <div class="detail-wrap" style="margin-top:12px;">
               <div class="detail-card">
                 <h4 class="detail-title">被推薦人資訊（推薦編號：<?php echo htmlspecialchars($row['id'] ?? ''); ?>）</h4>
@@ -379,7 +363,6 @@ try {
                 <h4 class="detail-title">推薦資訊</h4>
                 <table class="detail-table">
                   <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
-                  <tr><td class="label">審核結果</td><td><?php echo htmlspecialchars($status_label); ?></td></tr>
                   <?php if (!empty($row['additional_info'])): ?>
                   <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
                   <?php endif; ?>
@@ -415,11 +398,13 @@ try {
             </div>
           <?php endif; ?>
         <?php else: ?>
-          <div class="label">線上簽名</div>
-          <canvas id="signatureCanvas"></canvas>
+          <div class="label">線上簽章</div>
+          <iframe
+            id="signatureFrame"
+            src="/Topics-backend/frontend/signature.php?document_id=<?php echo urlencode((string)($data['id'] ?? '')); ?>&document_type=admission_recommendation&embed=1"
+            style="width:100%; min-height:720px; border:1px dashed #bbb; border-radius:10px; background:#fff;"
+          ></iframe>
           <div class="btns">
-            <button class="btn-secondary" type="button" onclick="clearSignature()">清除</button>
-            <button class="btn-primary" type="button" onclick="submitSignature()">確認簽名</button>
             <button class="btn-danger" type="button" onclick="openReject()">不通過</button>
           </div>
           <div id="rejectBox" class="reject-box" style="display:none;">
@@ -430,7 +415,7 @@ try {
               <button class="btn-danger" type="button" onclick="submitReject()">確認不通過</button>
             </div>
           </div>
-          <div class="muted">可使用滑鼠或手機觸控簽名。</div>
+          <div class="muted">請於上方區塊完成電子簽章後，系統會自動回填簽核。</div>
         <?php endif; ?>
       </div>
     <?php endif; ?>
@@ -438,54 +423,19 @@ try {
 
   <script>
     const token = <?php echo json_encode($token); ?>;
-    const canvas = document.getElementById('signatureCanvas');
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      const ratio = window.devicePixelRatio || 1;
-      const resize = () => {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        ctx.setTransform(1,0,0,1,0,0);
-        ctx.scale(ratio, ratio);
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = '#111';
-      };
-      resize();
-      window.addEventListener('resize', resize);
+    window.addEventListener('message', function(event) {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data || {};
+      if (payload.type === 'signature_saved' && payload.signature_url) {
+        submitSignatureUrl(payload.signature_url);
+      }
+    });
 
-      let drawing = false;
-      const getPos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: clientX - rect.left, y: clientY - rect.top };
-      };
-      const start = (e) => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-      const move = (e) => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
-      const end = () => { drawing = false; };
-      canvas.addEventListener('mousedown', start);
-      canvas.addEventListener('mousemove', move);
-      canvas.addEventListener('mouseup', end);
-      canvas.addEventListener('mouseleave', end);
-      canvas.addEventListener('touchstart', start, { passive: true });
-      canvas.addEventListener('touchmove', move, { passive: true });
-      canvas.addEventListener('touchend', end);
-    }
-
-    function clearSignature() {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    function submitSignature() {
-      if (!canvas) return;
-      const dataUrl = canvas.toDataURL('image/png');
+    function submitSignatureUrl(signatureUrl) {
       fetch('recommendation_approval_submit.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token) + '&signature=' + encodeURIComponent(dataUrl)
+        body: 'token=' + encodeURIComponent(token) + '&signature_url=' + encodeURIComponent(signatureUrl)
       })
       .then(res => res.json())
       .then(data => {
