@@ -62,59 +62,67 @@ try {
 
     $action = $_GET['action'] ?? 'overview';
     $department_filter = $_GET['department'] ?? '';
+    // 就讀意願分屆：學年度（民國年），0 表示全部
+    $roc_year = isset($_GET['roc_year']) ? (int)$_GET['roc_year'] : 0;
 
     switch ($action) {
+        case 'available_roc_years':
+            // 回傳就讀意願表內有資料的學年度列表（屆），供前端下拉選單使用
+            $years = getAvailableEnrollmentRocYears($pdo);
+            echo json_encode($years, JSON_UNESCAPED_UNICODE);
+            break;
+
         case 'overview':
             // 總體統計
-            $stats = getOverviewStats($pdo, $department_filter);
+            $stats = getOverviewStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'department':
             // 科系統計
-            $stats = getDepartmentStats($pdo, $department_filter);
+            $stats = getDepartmentStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'system':
             // 學制統計
-            $stats = getSystemStats($pdo, $department_filter);
+            $stats = getSystemStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'grade':
             // 年級統計
-            $stats = getGradeStats($pdo, $department_filter);
+            $stats = getGradeStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'gender':
             // 性別統計
-            $stats = getGenderStats($pdo, $department_filter);
+            $stats = getGenderStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'identity':
             // 身分別統計
-            $stats = getIdentityStats($pdo, $department_filter);
+            $stats = getIdentityStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'monthly':
             // 月度統計
-            $stats = getMonthlyStats($pdo, $department_filter);
+            $stats = getMonthlyStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'school_department':
             // 國中選擇科系統計（限管理員和學校行政人員）
-            $stats = getSchoolDepartmentStats($pdo, $department_filter);
+            $stats = getSchoolDepartmentStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
         case 'assigned_department':
             // 已分配科系（assigned_department）統計，顯示中文名稱
-            $stats = getAssignedDepartmentStats($pdo, $department_filter);
+            $stats = getAssignedDepartmentStats($pdo, $department_filter, $roc_year);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
             
@@ -245,7 +253,46 @@ function buildDepartmentFilter($pdo, $department) {
     }
 }
 
-function getOverviewStats($pdo, $department_filter = '') {
+// 學年度：6月 ~ 隔年6月（民國年）。回傳 WHERE 用的條件片段，table_alias 為 'enrollment_intention' 或 'ei'
+function buildEnrollmentYearCondition($pdo, $roc_year, $table_alias = 'enrollment_intention') {
+    if ($roc_year <= 0) {
+        return '';
+    }
+    $ad_year = $roc_year + 1911;
+    $start = $ad_year . '-06-01 00:00:00';
+    $end = ($ad_year + 1) . '-06-30 23:59:59';
+    $start_q = $pdo->quote($start);
+    $end_q = $pdo->quote($end);
+    return " AND {$table_alias}.created_at >= $start_q AND {$table_alias}.created_at <= $end_q";
+}
+
+// 就讀意願表內有資料的學年度（屆）列表，依 created_at 依 6 月為界推算民國學年度
+function getAvailableEnrollmentRocYears($pdo) {
+    try {
+        $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
+        if ($table_check->rowCount() === 0) {
+            return [];
+        }
+        $stmt = $pdo->query("
+            SELECT DISTINCT
+                (CASE WHEN MONTH(created_at) >= 6 THEN YEAR(created_at) ELSE YEAR(created_at) - 1 END) - 1911 AS roc_year
+            FROM enrollment_intention
+            WHERE created_at IS NOT NULL
+            HAVING roc_year > 0
+            ORDER BY roc_year DESC
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return array_values($rows);
+    } catch (Exception $e) {
+        error_log("getAvailableEnrollmentRocYears: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getOverviewStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -257,21 +304,22 @@ function getOverviewStats($pdo, $department_filter = '') {
         $stats = [];
         // 使用專門針對 enrollment_intention 表的篩選函數
         $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
         
         // 總報名人數
-        $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention WHERE $filter");
+        $stmt = $pdo->query("SELECT COUNT(*) as total FROM enrollment_intention WHERE $filter $year_cond");
         $stats['total'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         
         // 本月報名人數
-        $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE $filter AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
+        $stmt = $pdo->query("SELECT COUNT(*) as monthly FROM enrollment_intention WHERE $filter $year_cond AND DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')");
         $stats['monthly'] = $stmt->fetch(PDO::FETCH_ASSOC)['monthly'];
         
         // 本週報名人數
-        $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE $filter AND YEARWEEK(created_at) = YEARWEEK(NOW())");
+        $stmt = $pdo->query("SELECT COUNT(*) as weekly FROM enrollment_intention WHERE $filter $year_cond AND YEARWEEK(created_at) = YEARWEEK(NOW())");
         $stats['weekly'] = $stmt->fetch(PDO::FETCH_ASSOC)['weekly'];
         
         // 今日報名人數
-        $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE $filter AND DATE(created_at) = CURDATE()");
+        $stmt = $pdo->query("SELECT COUNT(*) as daily FROM enrollment_intention WHERE $filter $year_cond AND DATE(created_at) = CURDATE()");
         $stats['daily'] = $stmt->fetch(PDO::FETCH_ASSOC)['daily'];
         
         return $stats;
@@ -285,7 +333,7 @@ function getOverviewStats($pdo, $department_filter = '') {
     }
 }
 
-function getDepartmentStats($pdo, $department_filter = '') {
+function getDepartmentStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -294,6 +342,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
             return [];
         }
         
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'ei');
         $stats = [];
         
         // 檢查 enrollment_choices 表是否存在（正規化結構）
@@ -349,7 +398,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
                     FROM enrollment_intention ei
                     INNER JOIN enrollment_choices ec ON ei.id = ec.enrollment_id
                     LEFT JOIN departments d ON ec.department_code = d.code
-                    WHERE ec.department_code IS NOT NULL AND ec.department_code != '' $dept_filter
+                    WHERE ec.department_code IS NOT NULL AND ec.department_code != '' $dept_filter $year_cond
                     GROUP BY ec.choice_order, COALESCE(d.name, ec.department_code, '無特定')
                 ");
                 
@@ -362,6 +411,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
         } elseif ($has_intention1 && $has_intention2 && $has_intention3) {
             // 使用舊的 intention1, intention2, intention3 欄位結構
             $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+            $year_cond_plain = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
             
             try {
                 $stmt = $pdo->query("
@@ -370,7 +420,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
                         COALESCE(intention1, '無特定') as department,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE intention1 IS NOT NULL AND intention1 != '' AND $filter
+                    WHERE intention1 IS NOT NULL AND intention1 != '' AND $filter $year_cond_plain
                     GROUP BY intention1
                     
                     UNION ALL
@@ -380,7 +430,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
                         COALESCE(intention2, '無特定') as department,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定' AND $filter
+                    WHERE intention2 IS NOT NULL AND intention2 != '' AND intention2 != '無特定' AND $filter $year_cond_plain
                     GROUP BY intention2
                     
                     UNION ALL
@@ -390,7 +440,7 @@ function getDepartmentStats($pdo, $department_filter = '') {
                         COALESCE(intention3, '無特定') as department,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定' AND $filter
+                    WHERE intention3 IS NOT NULL AND intention3 != '' AND intention3 != '無特定' AND $filter $year_cond_plain
                     GROUP BY intention3
                 ");
                 
@@ -430,7 +480,8 @@ function getDepartmentStats($pdo, $department_filter = '') {
         }
         
         // 計算實際的學生總數（去重）
-        $total_students_stmt = $pdo->query("SELECT COUNT(DISTINCT id) as total FROM enrollment_intention");
+        $year_cond_total = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
+        $total_students_stmt = $pdo->query("SELECT COUNT(DISTINCT id) as total FROM enrollment_intention WHERE 1=1 $year_cond_total");
         $total_students_result = $total_students_stmt->fetch(PDO::FETCH_ASSOC);
         $total_students = (int)($total_students_result['total'] ?? 0);
         
@@ -474,9 +525,10 @@ function getDepartmentStats($pdo, $department_filter = '') {
     }
 }
 
-function getSystemStats($pdo, $department_filter = '') {
+function getSystemStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         $stats = [];
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
         
         // 檢查 enrollment_intention 表是否有 system1, system2, system3 欄位
         $check_columns = $pdo->query("SHOW COLUMNS FROM enrollment_intention LIKE 'system1'");
@@ -521,7 +573,7 @@ function getSystemStats($pdo, $department_filter = '') {
                         COALESCE(system1, '未選擇') as system_type,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE system1 IS NOT NULL AND system1 != '' AND $filter
+                    WHERE system1 IS NOT NULL AND system1 != '' AND $filter $year_cond
                     GROUP BY system1
                     
                     UNION ALL
@@ -530,7 +582,7 @@ function getSystemStats($pdo, $department_filter = '') {
                         COALESCE(system2, '未選擇') as system_type,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' AND $filter
+                    WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' AND $filter $year_cond
                     GROUP BY system2
                     
                     UNION ALL
@@ -539,7 +591,7 @@ function getSystemStats($pdo, $department_filter = '') {
                         COALESCE(system3, '未選擇') as system_type,
                         COUNT(*) as count
                     FROM enrollment_intention 
-                    WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' AND $filter
+                    WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' AND $filter $year_cond
                     GROUP BY system3
                 ";
                 
@@ -556,7 +608,7 @@ function getSystemStats($pdo, $department_filter = '') {
                                 COALESCE(system1, '未選擇') as system_type,
                                 COUNT(*) as count
                             FROM enrollment_intention 
-                            WHERE system1 IS NOT NULL AND system1 != ''
+                            WHERE system1 IS NOT NULL AND system1 != '' $year_cond
                             GROUP BY system1
                             
                             UNION ALL
@@ -565,7 +617,7 @@ function getSystemStats($pdo, $department_filter = '') {
                                 COALESCE(system2, '未選擇') as system_type,
                                 COUNT(*) as count
                             FROM enrollment_intention 
-                            WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇'
+                            WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' $year_cond
                             GROUP BY system2
                             
                             UNION ALL
@@ -574,7 +626,7 @@ function getSystemStats($pdo, $department_filter = '') {
                                 COALESCE(system3, '未選擇') as system_type,
                                 COUNT(*) as count
                             FROM enrollment_intention 
-                            WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇'
+                            WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' $year_cond
                             GROUP BY system3
                         ";
                     }
@@ -596,7 +648,7 @@ function getSystemStats($pdo, $department_filter = '') {
                             COALESCE(system1, '未選擇') as system_type,
                             COUNT(*) as count
                         FROM enrollment_intention 
-                        WHERE system1 IS NOT NULL AND system1 != ''
+                        WHERE system1 IS NOT NULL AND system1 != '' $year_cond
                         GROUP BY system1
                         
                         UNION ALL
@@ -605,7 +657,7 @@ function getSystemStats($pdo, $department_filter = '') {
                             COALESCE(system2, '未選擇') as system_type,
                             COUNT(*) as count
                         FROM enrollment_intention 
-                        WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇'
+                        WHERE system2 IS NOT NULL AND system2 != '' AND system2 != '未選擇' $year_cond
                         GROUP BY system2
                         
                         UNION ALL
@@ -614,7 +666,7 @@ function getSystemStats($pdo, $department_filter = '') {
                             COALESCE(system3, '未選擇') as system_type,
                             COUNT(*) as count
                         FROM enrollment_intention 
-                        WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇'
+                        WHERE system3 IS NOT NULL AND system3 != '' AND system3 != '未選擇' $year_cond
                         GROUP BY system3
                     ");
                     
@@ -717,7 +769,7 @@ function getSystemStats($pdo, $department_filter = '') {
     }
 }
 
-function getGradeStats($pdo, $department_filter = '') {
+function getGradeStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -728,6 +780,7 @@ function getGradeStats($pdo, $department_filter = '') {
         
         // 使用專門針對 enrollment_intention 表的篩選函數
         $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'ei');
         
         $stmt = $pdo->query("
             SELECT 
@@ -736,7 +789,7 @@ function getGradeStats($pdo, $department_filter = '') {
                 COUNT(*) as count
             FROM enrollment_intention ei
             LEFT JOIN identity_options io ON ei.current_grade = io.code
-            WHERE $filter
+            WHERE $filter $year_cond
             GROUP BY ei.current_grade
             ORDER BY COALESCE(io.name, ei.current_grade)
         ");
@@ -760,7 +813,7 @@ function getGradeStats($pdo, $department_filter = '') {
     }
 }
 
-function getGenderStats($pdo, $department_filter = '') {
+function getGenderStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -771,6 +824,7 @@ function getGenderStats($pdo, $department_filter = '') {
         
         // 使用專門針對 enrollment_intention 表的篩選函數
         $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
         
         $stmt = $pdo->query("
             SELECT 
@@ -784,7 +838,7 @@ function getGenderStats($pdo, $department_filter = '') {
                 END as gender_name,
                 COUNT(*) as count
             FROM enrollment_intention 
-            WHERE $filter
+            WHERE $filter $year_cond
             GROUP BY gender
             ORDER BY 
                 CASE COALESCE(gender, '未填寫')
@@ -815,7 +869,7 @@ function getGenderStats($pdo, $department_filter = '') {
     }
 }
 
-function getIdentityStats($pdo, $department_filter = '') {
+function getIdentityStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -826,6 +880,7 @@ function getIdentityStats($pdo, $department_filter = '') {
         
         // 使用專門針對 enrollment_intention 表的篩選函數
         $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
         
         $stmt = $pdo->query("
             SELECT 
@@ -839,7 +894,7 @@ function getIdentityStats($pdo, $department_filter = '') {
                 END as identity_name,
                 COUNT(*) as count
             FROM enrollment_intention 
-            WHERE $filter
+            WHERE $filter $year_cond
             GROUP BY identity
             ORDER BY 
                 CASE COALESCE(identity, '未填寫')
@@ -870,7 +925,7 @@ function getIdentityStats($pdo, $department_filter = '') {
     }
 }
 
-function getMonthlyStats($pdo, $department_filter = '') {
+function getMonthlyStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
         // 檢查 enrollment_intention 表是否存在
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -881,13 +936,14 @@ function getMonthlyStats($pdo, $department_filter = '') {
         
         // 使用專門針對 enrollment_intention 表的篩選函數
         $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'enrollment_intention');
         
         $stmt = $pdo->query("
             SELECT 
                 DATE_FORMAT(created_at, '%Y-%m') as month,
                 COUNT(*) as count
             FROM enrollment_intention 
-            WHERE $filter AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+            WHERE $filter $year_cond AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
             GROUP BY DATE_FORMAT(created_at, '%Y-%m')
             ORDER BY month
         ");
@@ -911,8 +967,9 @@ function getMonthlyStats($pdo, $department_filter = '') {
     }
 }
 
-function getSchoolDepartmentStats($pdo, $department_filter = '') {
+function getSchoolDepartmentStats($pdo, $department_filter = '', $roc_year = 0) {
     try {
+        $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'ei');
         // 構建部門過濾條件
         $dept_filter = '';
         if (!empty($department_filter)) {
@@ -981,7 +1038,7 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
                     $school_join
                     WHERE ei.junior_high IS NOT NULL AND ei.junior_high != ''
                         AND ec.department_code IS NOT NULL AND ec.department_code != ''
-                        $dept_filter
+                        $dept_filter $year_cond
                     GROUP BY $group_by_school, $group_by_dept, ec.choice_order
                     ORDER BY school_name, department, ec.choice_order
                 ");
@@ -1069,7 +1126,7 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
 }
 
     // 已分配科系統計（assigned_department） — 顯示 departments.name 中文名稱
-    function getAssignedDepartmentStats($pdo, $department_filter = '') {
+    function getAssignedDepartmentStats($pdo, $department_filter = '', $roc_year = 0) {
         try {
             // 檢查 enrollment_intention 表是否存在
             $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
@@ -1090,6 +1147,7 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
 
             // 使用專門針對 enrollment_intention 表的篩選函數
             $filter = buildDepartmentFilterForEnrollmentIntention($pdo, $department_filter);
+            $year_cond = buildEnrollmentYearCondition($pdo, $roc_year, 'ei');
 
             // 統計 assigned_department，並 LEFT JOIN departments 取得中文名稱
             $sql = "
@@ -1099,7 +1157,7 @@ function getSchoolDepartmentStats($pdo, $department_filter = '') {
                     COUNT(*) as count
                 FROM enrollment_intention ei
                 LEFT JOIN departments d ON ei.assigned_department = d.code
-                WHERE $filter
+                WHERE $filter $year_cond
                 GROUP BY ei.assigned_department
                 ORDER BY COUNT(*) DESC
             ";

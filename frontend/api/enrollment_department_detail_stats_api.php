@@ -25,12 +25,25 @@ try {
         echo json_encode(['success' => false, 'error' => '科系名稱不能為空'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    // 屆別（學年度民國年），0 表示全部
+    $roc_year = isset($_GET['roc_year']) ? (int)$_GET['roc_year'] : 0;
 
     // 建立資料庫連線（使用 mysqli）
     $conn = getDatabaseConnection();
     if (!$conn || $conn->connect_error) {
         echo json_encode(['success' => false, 'error' => '資料庫連線失敗'], JSON_UNESCAPED_UNICODE);
         exit;
+    }
+    $year_cond_sql = '';
+    $year_cond_sql_ei = '';
+    if ($roc_year > 0) {
+        $ad_year = $roc_year + 1911;
+        $start = $ad_year . '-06-01 00:00:00';
+        $end = ($ad_year + 1) . '-06-30 23:59:59';
+        $start_esc = $conn->real_escape_string($start);
+        $end_esc = $conn->real_escape_string($end);
+        $year_cond_sql   = " AND enrollment_intention.created_at >= '$start_esc' AND enrollment_intention.created_at <= '$end_esc' ";
+        $year_cond_sql_ei = " AND ei.created_at >= '$start_esc' AND ei.created_at <= '$end_esc' ";
     }
 
     // 檢查 enrollment_intention 表是否存在
@@ -114,7 +127,7 @@ try {
 
     // --------- 1. 計算總分配人數（以 assigned_department 為基準）---------
     $total_assigned = 0;
-    $sql_total = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause)";
+    $sql_total = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause) $year_cond_sql";
     if ($rs_total = $conn->query($sql_total)) {
         if ($row = $rs_total->fetch_assoc()) {
             $total_assigned = (int)($row['cnt'] ?? 0);
@@ -126,7 +139,7 @@ try {
     // 已報名：若有 is_registered 欄位，使用 is_registered=1；否則以 total_assigned 近似
     $applied = 0;
     if ($has_is_registered) {
-        $sql_applied = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause) AND is_registered = 1";
+        $sql_applied = "SELECT COUNT(*) AS cnt FROM enrollment_intention WHERE assigned_department IN ($in_clause) AND is_registered = 1 $year_cond_sql";
         if ($rs_applied = $conn->query($sql_applied)) {
             if ($row = $rs_applied->fetch_assoc()) {
                 $applied = (int)($row['cnt'] ?? 0);
@@ -146,6 +159,7 @@ try {
             FROM enrollment_intention
             WHERE assigned_department IN ($in_clause)
               AND check_in_status IN ('completed', 'declined')
+              $year_cond_sql
             GROUP BY check_in_status
         ";
         if ($rs_checkin = $conn->query($sql_checkin)) {
@@ -170,6 +184,7 @@ try {
             FROM enrollment_intention
             WHERE assigned_department IN ($in_clause)
               AND follow_up_status = 'tracking'
+              $year_cond_sql
         ";
         if ($rs_track = $conn->query($sql_track)) {
             if ($row = $rs_track->fetch_assoc()) {
@@ -196,6 +211,7 @@ try {
                 WHERE ei.assigned_department IN ($in_clause)
                   AND ei.junior_high IS NOT NULL
                   AND ei.junior_high <> ''
+                  $year_cond_sql_ei
                 GROUP BY COALESCE(sd.name, ei.junior_high, '未填寫')
                 ORDER BY COUNT(*) DESC, school_name ASC
             ";
@@ -206,6 +222,7 @@ try {
                 WHERE ei.assigned_department IN ($in_clause)
                   AND ei.junior_high IS NOT NULL
                   AND ei.junior_high <> ''
+                  $year_cond_sql_ei
                 GROUP BY ei.junior_high
                 ORDER BY COUNT(*) DESC, ei.junior_high ASC
             ";

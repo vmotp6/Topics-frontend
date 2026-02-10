@@ -294,7 +294,7 @@ $role = $_SESSION['role'] ?? '訪客';
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="line_id">LineID:</label>
+                            <label for="line_id">LINE ID:</label>
                             <input type="text" id="line_id" name="line_id">
                         </div>
                         <div class="form-group">
@@ -331,6 +331,19 @@ $role = $_SESSION['role'] ?? '訪客';
                     <div class="form-group">
                         <label for="remarks">備註:</label>
                         <textarea id="remarks" name="remarks" rows="4"></textarea>
+                    </div>
+
+                    <!-- 從哪裡知道我們的 -->
+                    <h3 class="section-title"><i class="fas fa-star"></i> 從哪裡知道我們</h3>
+
+                    <div class="form-group">
+                        <label for="current_grade"><span class="required">*</span>從哪裡知道我們:</label>
+                        <select id="current_grade" name="current_grade" required>
+                            <option value="">請選擇</option>
+                            <option value="五專">來校體驗</option>
+                            <option value="四技">入班宣導</option>
+                            <option value="四技">升學博覽會</option>
+                        </select>
                     </div>
 
                     <!-- 驗證碼 -->
