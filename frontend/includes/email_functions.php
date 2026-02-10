@@ -72,7 +72,7 @@ function sendEmailWithPHPMailer($to, $subject, $body, $altBody = '', $attachment
                 }
             }
         }
-
+        
         $result = $mail->send();
         if ($result) {
             error_log("✅ PHPMailer 郵件發送成功: 收件人=$to, 主題=$subject");
@@ -98,12 +98,12 @@ function sendEmailWithBuiltIn($to, $subject, $body, $altBody = '', $attachments 
     $headers[] = 'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>';
     $headers[] = 'Reply-To: ' . SMTP_FROM_EMAIL;
     $headers[] = 'X-Mailer: PHP/' . phpversion();
-
+    
     $has_attachments = (!empty($attachments) && is_array($attachments));
     if (!$has_attachments) {
         $headers[] = 'Content-type: text/html; charset=UTF-8';
-        $header_string = implode("\r\n", $headers);
-        return mail($to, $subject, $body, $header_string);
+    $header_string = implode("\r\n", $headers);
+    return mail($to, $subject, $body, $header_string);
     }
 
     $boundary = 'b1_' . md5(uniqid((string)microtime(true), true));

@@ -34,6 +34,7 @@ try {
         signer_name VARCHAR(100) DEFAULT NULL,
         reject_reason VARCHAR(255) DEFAULT NULL,
         confirmed_by_email VARCHAR(255) DEFAULT NULL,
+        group_ids TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         signed_at TIMESTAMP NULL DEFAULT NULL,
         INDEX idx_rec_id (recommendation_id),
@@ -43,7 +44,7 @@ try {
     if ($token === '') {
         $error = '缺少簽核連結參數。';
     } else {
-        $stmt = $conn->prepare("SELECT recommendation_id, status, signature_path FROM recommendation_approval_links WHERE token = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT recommendation_id, status, signature_path, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -54,6 +55,11 @@ try {
             $error = '簽核連結無效或已失效。';
         } else {
             $rid = (int)$link['recommendation_id'];
+            $group_ids = trim((string)($link['group_ids'] ?? ''));
+            $group_id_list = [];
+            if ($group_ids !== '') {
+                $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
+            }
             $is_signed = ($link['status'] === 'signed');
 
             // 取推薦人 / 被推薦人資訊（欄位存在才選取，避免 Unknown column）
@@ -179,14 +185,64 @@ try {
                 $data['is_signed'] = $is_signed ? 1 : 0;
                 $data['signature_path'] = $link['signature_path'] ?? '';
                 $data['status'] = trim((string)($data['status'] ?? ''));
-                if ($data['status'] !== 'AP' && $data['status'] !== 'approved') {
+                if ($data['status'] !== 'AP' && $data['status'] !== 'approved' && $data['status'] !== 'MC') {
                     $error = '此筆推薦尚未審核通過，無法簽核。';
                 }
             }
 
-            // 同一推薦人所有推薦學生資料（姓名 + 學號/教師編號）
             $same_recs = [];
-            if ($data && $error === '') {
+            $same_recs_title = '同一推薦人所有推薦學生';
+            if (!empty($group_id_list)) {
+                $same_recs_title = '本次待審核推薦清單';
+                $ids = $group_id_list;
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $list_sql = "SELECT
+                        ar.id,
+                        {$rec_name_expr} AS recommender_name,
+                        {$rec_id_expr} AS recommender_student_id,
+                        {$rec_grade_expr} AS recommender_grade,
+                        {$rec_dept_expr} AS recommender_department,
+                        {$rec_phone_expr} AS recommender_phone,
+                        {$rec_email_expr} AS recommender_email,
+                        {$stu_name_expr} AS student_name,
+                        {$stu_school_expr} AS student_school,
+                        {$stu_grade_expr} AS student_grade,
+                        {$stu_phone_expr} AS student_phone,
+                        {$stu_email_expr} AS student_email,
+                        {$stu_line_expr} AS student_line_id,
+                        {$interest_expr} AS student_interest,
+                        {$reason_expr} AS recommendation_reason,
+                        {$additional_expr} AS additional_info,
+                        {$proof_expr} AS proof_evidence,
+                        {$created_expr} AS created_at,
+                        {$status_expr} AS status
+                    FROM admission_recommendations ar
+                    " . ($has_recommender_table ? "LEFT JOIN recommender rec ON ar.id = rec.recommendations_id " : "") . "
+                    " . ($has_recommended_table ? "LEFT JOIN recommended red ON ar.id = red.recommendations_id " : "") . "
+                    " . ($has_interest ? "LEFT JOIN departments interest_dept ON " . ($ar_has_student_interest ? "ar.student_interest" : "ar.student_interest_code") . " = interest_dept.code " : "") . "
+                    WHERE ar.id IN ($placeholders)
+                    ORDER BY ar.id DESC";
+                $stmt3 = $conn->prepare($list_sql);
+                if ($stmt3) {
+                    $types = str_repeat('i', count($ids));
+                    $params = array_merge([$types], $ids);
+                    $refs = [];
+                    foreach ($params as $k => $v) $refs[$k] = &$params[$k];
+                    call_user_func_array([$stmt3, 'bind_param'], $refs);
+                    if ($stmt3->execute()) {
+                        $res3 = $stmt3->get_result();
+                        if ($res3) {
+                            while ($row = $res3->fetch_assoc()) {
+                                $same_recs[] = $row;
+                            }
+                        }
+                    }
+                    $stmt3->close();
+                }
+            }
+
+            // 同一推薦人所有推薦學生資料（姓名 + 學號/教師編號）
+            if ($data && $error === '' && empty($same_recs)) {
                 $rk_name = trim((string)($data['recommender_name'] ?? ''));
                 $rk_id = trim((string)($data['recommender_student_id'] ?? ''));
                 if ($rk_name !== '' && $rk_id !== '') {
@@ -344,7 +400,7 @@ try {
 
         <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
         <div class="detail-section">
-          <h4 class="detail-title">同一推薦人所有推薦學生</h4>
+          <h4 class="detail-title"><?php echo htmlspecialchars($same_recs_title ?? '同一推薦人所有推薦學生'); ?></h4>
           <?php foreach ($same_recs as $row): ?>
             <div class="detail-wrap" style="margin-top:12px;">
               <div class="detail-card">
@@ -362,6 +418,8 @@ try {
               <div class="detail-card">
                 <h4 class="detail-title">推薦資訊</h4>
                 <table class="detail-table">
+                  <tr><td class="label">推薦人姓名</td><td><?php echo htmlspecialchars($row['recommender_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學號/教師編號</td><td><?php echo htmlspecialchars($row['recommender_student_id'] ?? ''); ?></td></tr>
                   <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
                   <?php if (!empty($row['additional_info'])): ?>
                   <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
