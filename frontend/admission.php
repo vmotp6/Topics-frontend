@@ -564,10 +564,26 @@ if ($_POST && !isset($_POST['action'])) {
     }
     
     // 驗證驗證碼（不區分大小寫）
-    $captcha_input = $_POST['captcha'] ?? '';
+    $captcha_input = trim($_POST['captcha'] ?? '');
     $captcha_session = $_SESSION['captcha_code'] ?? '';
-    if (empty($captcha_input) || empty($captcha_session) || strtoupper($captcha_input) !== strtoupper($captcha_session)) {
+    
+    // 只允許英文大寫字母和數字
+    $captcha_input = preg_replace('/[^A-Z0-9]/i', '', $captcha_input);
+    $captcha_input = strtoupper($captcha_input);
+    
+    error_log("驗證碼檢查 - 輸入: '{$captcha_input}' (長度: " . strlen($captcha_input) . "), Session: '{$captcha_session}' (長度: " . strlen($captcha_session) . "), Session ID: " . session_id());
+    
+    if (empty($captcha_input)) {
+        $missing_fields[] = 'captcha';
+        error_log("驗證碼為空");
+    } elseif (empty($captcha_session)) {
+        $missing_fields[] = 'captcha';
+        error_log("Session 中沒有驗證碼，可能 Session 過期");
+    } elseif ($captcha_input !== strtoupper($captcha_session)) {
         $missing_fields[] = 'captcha_invalid';
+        error_log("驗證碼不匹配 - 輸入: '{$captcha_input}', Session: '" . strtoupper($captcha_session) . "'");
+    } else {
+        error_log("驗證碼驗證成功");
     }
     
     // 驗證電子郵件格式
@@ -1074,7 +1090,7 @@ $conn->close();
                     <div class="input-wrapper">
                         <i class="fas fa-envelope input-icon"></i>
                         <input type="email" id="searchEmail" name="email" placeholder="請輸入您的電子郵件地址" 
-                               value="<?php echo isset($_GET['action']) && $_GET['action'] === 'search' ? htmlspecialchars($search_email) : ''; ?>" required>
+                               value="<?php echo isset($_GET['action']) && $_GET['action'] === 'search' ? htmlspecialchars($search_email) : ''; ?>" autocomplete="off" required>
                     </div>
                     <button type="button" id="searchBtn" class="search-btn">
                         <i class="fas fa-search"></i>
@@ -1174,14 +1190,14 @@ $conn->close();
                 </div>
             <?php endif; ?>
 
-            <form method="POST" action="">
+            <form method="POST" action="" autocomplete="off">
                 <!-- 基本資訊 -->
                 <div class="form-section">
                     <h3><i class="fas fa-user"></i> 基本資訊</h3>
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 電子郵件：</label>
-                            <input type="email" name="email" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required>
+                            <input type="email" name="email" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" autocomplete="off" required>
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 學校名稱：</label>
@@ -1208,7 +1224,7 @@ $conn->close();
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 學生姓名：</label>
-                            <input type="text" name="student_name" value="<?php echo isset($_POST['student_name']) ? htmlspecialchars($_POST['student_name']) : ''; ?>" required>
+                            <input type="text" name="student_name" value="<?php echo isset($_POST['student_name']) ? htmlspecialchars($_POST['student_name']) : ''; ?>" autocomplete="off" required>
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 就讀年級：</label>
@@ -1230,17 +1246,17 @@ $conn->close();
                     <div class="form-row">
                         <div class="field-group">
                             <label><span class="required">*</span> 姓名：</label>
-                            <input type="text" name="parent_name" value="<?php echo isset($_POST['parent_name']) ? htmlspecialchars($_POST['parent_name']) : ''; ?>" required>
+                            <input type="text" name="parent_name" value="<?php echo isset($_POST['parent_name']) ? htmlspecialchars($_POST['parent_name']) : ''; ?>" autocomplete="off" required>
                         </div>
                         <div class="field-group">
                             <label><span class="required">*</span> 聯絡電話：</label>
-                            <input type="tel" name="contact_phone" maxlength="10" value="<?php echo isset($_POST['contact_phone']) ? htmlspecialchars($_POST['contact_phone']) : ''; ?>" required>
+                            <input type="tel" name="contact_phone" maxlength="10" value="<?php echo isset($_POST['contact_phone']) ? htmlspecialchars($_POST['contact_phone']) : ''; ?>" autocomplete="off" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="field-group">
                             <label>LINE ID (選填)：</label>
-                            <input type="text" name="line_id" placeholder="如有LINE帳號可填寫，方便聯繫" value="<?php echo isset($_POST['line_id']) ? htmlspecialchars($_POST['line_id']) : ''; ?>">
+                            <input type="text" name="line_id" placeholder="如有LINE帳號可填寫，方便聯繫" value="<?php echo isset($_POST['line_id']) ? htmlspecialchars($_POST['line_id']) : ''; ?>" autocomplete="off">
                         </div>
                     </div>
                 </div>
@@ -1406,6 +1422,28 @@ $conn->close();
         
         // 電話號碼格式驗證
         const phoneInput = document.querySelector('[name="contact_phone"]');
+        
+        // 當使用密碼管理器自動填充時，清空驗證碼輸入框（因為自動填充的驗證碼可能過期或不匹配）
+        const captchaInput = document.getElementById('captchaInput');
+        if (captchaInput) {
+            // 監聽 autofill 事件
+            captchaInput.addEventListener('change', function() {
+                // 如果驗證碼被自動填充，清空它
+                if (this.value && this.value.length > 0) {
+                    console.log('檢測到驗證碼自動填充，將其清空');
+                    this.value = '';
+                }
+            });
+            
+            // 同時監聽 input 事件確保清空
+            captchaInput.addEventListener('input', function() {
+                // 如果包含特殊字符（自動填充通常會有）或不是預期的格式，清空
+                if (!/^[A-Z0-9]*$/.test(this.value) || this.value.length > 4) {
+                    console.log('驗證碼格式異常，清空');
+                    this.value = '';
+                }
+            });
+        }
         
         phoneInput.addEventListener('input', function(e) {
             // 只保留數字
@@ -2448,9 +2486,9 @@ $conn->close();
             captchaInput.value = '';
         }
         
-        // 刷新驗證碼圖片（添加時間戳防止緩存）
+        // 刷新驗證碼圖片（添加刷新參數強制生成新驗證碼）
         if (captchaImage) {
-            captchaImage.src = 'captcha_image.php?t=' + new Date().getTime();
+            captchaImage.src = 'captcha_image.php?refresh=1&t=' + new Date().getTime();
         }
     }
     </script>
