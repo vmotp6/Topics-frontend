@@ -76,6 +76,7 @@ try {
         signer_name VARCHAR(100) DEFAULT NULL,
         reject_reason VARCHAR(255) DEFAULT NULL,
         confirmed_by_email VARCHAR(255) DEFAULT NULL,
+        group_ids TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         signed_at TIMESTAMP NULL DEFAULT NULL,
         INDEX idx_rec_id (recommendation_id),
@@ -101,7 +102,7 @@ try {
         $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN reject_reason VARCHAR(255) DEFAULT NULL");
     }
 
-    $stmt = $conn->prepare("SELECT recommendation_id, status FROM recommendation_approval_links WHERE token = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
     $stmt->bind_param('s', $token);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -123,6 +124,11 @@ try {
     }
 
     $rid = (int)$link['recommendation_id'];
+    $group_ids = trim((string)($link['group_ids'] ?? ''));
+    $group_id_list = [];
+    if ($group_ids !== '') {
+        $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
+    }
 
     // 檢查是否審核通過
     $ar_has = function($col) use ($hasColumn) {
@@ -146,16 +152,36 @@ try {
         {$school_code_expr} AS student_school_code,
         {$phone_expr} AS student_phone
         FROM admission_recommendations WHERE id = ? LIMIT 1");
-    $chk->bind_param('i', $rid);
-    $chk->execute();
-    $r2 = $chk->get_result();
-    $rec = $r2 ? $r2->fetch_assoc() : null;
-    $chk->close();
-
-    if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved'], true)) {
-        echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
-        exit;
+    $rec = null;
+    if (!empty($group_id_list)) {
+        $ok = true;
+        foreach ($group_id_list as $gid) {
+            $chk->bind_param('i', $gid);
+            $chk->execute();
+            $r2 = $chk->get_result();
+            $row = $r2 ? $r2->fetch_assoc() : null;
+            if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc'], true)) {
+                $ok = false;
+                break;
+            }
+        }
+        if (!$ok) {
+            $chk->close();
+            echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
+            exit;
+        }
+    } else {
+        $chk->bind_param('i', $rid);
+        $chk->execute();
+        $r2 = $chk->get_result();
+        $rec = $r2 ? $r2->fetch_assoc() : null;
+        if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc'], true)) {
+            $chk->close();
+            echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
+            exit;
+        }
     }
+    $chk->close();
 
     $public_path = '';
     if ($reject_reason === '') {
@@ -164,12 +190,15 @@ try {
         $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
         if ($upd_status) {
             $new_status = 'APD';
-            $upd_status->bind_param('si', $new_status, $rid);
-            @$upd_status->execute();
+            $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+            foreach ($target_ids as $tid) {
+                $upd_status->bind_param('si', $new_status, $tid);
+                @$upd_status->execute();
+                if (function_exists('send_director_approved_email_once')) {
+                    @send_director_approved_email_once($conn, $tid, 'director');
+                }
+            }
             $upd_status->close();
-        }
-        if (function_exists('send_director_approved_email_once')) {
-            @send_director_approved_email_once($conn, $rid, 'director');
         }
         if ($signature_url !== '') {
             $url = $signature_url;
@@ -209,6 +238,18 @@ try {
         $upd->execute();
         $upd->close();
     } else {
+        // 主任未通過：更新狀態為科主任審核未通過
+        ensure_application_status_code($conn, 'APDR', '科主任審核未通過', 96);
+        $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
+        if ($upd_status) {
+            $new_status = 'APDR';
+            $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+            foreach ($target_ids as $tid) {
+                $upd_status->bind_param('si', $new_status, $tid);
+                @$upd_status->execute();
+            }
+            $upd_status->close();
+        }
         $upd = $conn->prepare("UPDATE recommendation_approval_links
             SET status = 'rejected', reject_reason = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
