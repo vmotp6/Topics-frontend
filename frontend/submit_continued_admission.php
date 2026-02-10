@@ -28,6 +28,7 @@ try {
     $gender = $_POST['gender'] ?? '';
     $phone = $_POST['phone'] ?? '';
     $mobile = $_POST['mobile'] ?? '';
+    $email = trim((string)($_POST['email'] ?? ''));
     $school_city = $_POST['school_city'] ?? '';
     $school_name = $_POST['school_name'] ?? '';
     $zip_code = $_POST['zip'] ?? '';
@@ -354,6 +355,12 @@ try {
     // 檢查資料表結構，判斷是否有新欄位
     $columns_check = $pdo->query("SHOW COLUMNS FROM continued_admission");
     $columns = $columns_check->fetchAll(PDO::FETCH_COLUMN);
+    // 若無 email 欄位則新增（供續招委員會第三步驟寄送錄取通知使用）
+    if (!in_array('email', $columns)) {
+        $pdo->exec("ALTER TABLE continued_admission ADD COLUMN email VARCHAR(255) DEFAULT NULL");
+        $columns[] = 'email';
+    }
+    $has_email = in_array('email', $columns);
     // 檢查是否有外籍生欄位（可能是 is_foreign_student 或 foreign_student）
     $has_foreign_fields = in_array('is_foreign_student', $columns) || in_array('foreign_student', $columns);
     $foreign_field_name = in_array('is_foreign_student', $columns) ? 'is_foreign_student' : 'foreign_student';
@@ -380,11 +387,17 @@ try {
                 $values[] = $passport_number;
             }
             
-            $fields = array_merge($fields, ['birth_date', 'gender', 'phone', 'mobile', 'school',
+            $fields = array_merge($fields, ['birth_date', 'gender', 'phone', 'mobile']);
+            $values = array_merge($values, [$birth_date, $gender_int, $phone, $mobile]);
+            if ($has_email) {
+                $fields[] = 'email';
+                $values[] = $email === '' ? null : $email;
+            }
+            $fields = array_merge($fields, ['school',
                 'guardian_name', 'guardian_phone', 'guardian_mobile', 'documents', 'self_intro', 'skills', 
                 'status', 'reviewer_id', 'review_notes', 'reviewed_at', 'updated_at']);
             $values = array_merge($values, [
-                $birth_date, $gender_int, $phone, $mobile, $school_code,
+                $school_code,
                 $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, 
                 'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
             ]);
@@ -411,11 +424,17 @@ try {
                 $values[] = $passport_number;
             }
             
-            $fields = array_merge($fields, ['birth_date', 'gender', 'phone', 'mobile', 'school',
+            $fields = array_merge($fields, ['birth_date', 'gender', 'phone', 'mobile']);
+            $values = array_merge($values, [$birth_date, $gender_int, $phone, $mobile]);
+            if ($has_email) {
+                $fields[] = 'email';
+                $values[] = $email === '' ? null : $email;
+            }
+            $fields = array_merge($fields, ['school',
                 'guardian_name', 'guardian_phone', 'guardian_mobile', 'documents', 'self_intro', 'skills', 
                 'status', 'reviewer_id', 'review_notes', 'reviewed_at', 'updated_at']);
             $values = array_merge($values, [
-                $birth_date, $gender_int, $phone, $mobile, null, // school 設為 NULL
+                null, // school 設為 NULL
                 $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, 
                 'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
             ]);
@@ -429,53 +448,93 @@ try {
     } elseif ($has_birth_date && $has_apply_no) {
         // 如果資料表有 birth_date 和 apply_no，但沒有外籍生欄位
         // 動態構建 SQL，如果 school_code 為空（外籍生），則不包含 school 欄位
+        $emailVal = ($has_email && $email !== '') ? $email : null;
         if (!empty($school_code)) {
-            $sql = "INSERT INTO continued_admission (
-                apply_no, exam_no, name, id_number,
-                birth_date, gender, phone, mobile, school,
-                guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = $pdo->prepare($sql);
-            $result = $stmt->execute([
-                $apply_no, $exam_no, $name, $id_number,
-                $birth_date, $gender_int, $phone, $mobile, $school_code,
-                $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
-                'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
-            ]);
+            if ($has_email) {
+                $sql = "INSERT INTO continued_admission (
+                    apply_no, exam_no, name, id_number,
+                    birth_date, gender, phone, mobile, email, school,
+                    guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute([
+                    $apply_no, $exam_no, $name, $id_number,
+                    $birth_date, $gender_int, $phone, $mobile, $emailVal, $school_code,
+                    $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
+                    'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
+                ]);
+            } else {
+                $sql = "INSERT INTO continued_admission (
+                    apply_no, exam_no, name, id_number,
+                    birth_date, gender, phone, mobile, school,
+                    guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute([
+                    $apply_no, $exam_no, $name, $id_number,
+                    $birth_date, $gender_int, $phone, $mobile, $school_code,
+                    $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
+                    'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
+                ]);
+            }
         } else {
             // 外籍生且學校為空時，使用 NULL 值（需要資料庫允許 NULL）
             // 如果資料庫不允許 NULL，請執行 scripts/database/allow_null_school_for_foreign_students.sql
-            $sql = "INSERT INTO continued_admission (
-                apply_no, exam_no, name, id_number,
-                birth_date, gender, phone, mobile, school,
-                guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = $pdo->prepare($sql);
-            $result = $stmt->execute([
-                $apply_no, $exam_no, $name, $id_number,
-                $birth_date, $gender_int, $phone, $mobile, null, // school 設為 NULL
-                $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
-                'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
-            ]);
+            if ($has_email) {
+                $sql = "INSERT INTO continued_admission (
+                    apply_no, exam_no, name, id_number,
+                    birth_date, gender, phone, mobile, email, school,
+                    guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute([
+                    $apply_no, $exam_no, $name, $id_number,
+                    $birth_date, $gender_int, $phone, $mobile, $emailVal, null,
+                    $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
+                    'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
+                ]);
+            } else {
+                $sql = "INSERT INTO continued_admission (
+                    apply_no, exam_no, name, id_number,
+                    birth_date, gender, phone, mobile, school,
+                    guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, status, reviewer_id, review_notes, reviewed_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute([
+                    $apply_no, $exam_no, $name, $id_number,
+                    $birth_date, $gender_int, $phone, $mobile, null,
+                    $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills,
+                    'PE', 0, '', '0000-00-00 00:00:00', date('Y-m-d H:i:s')
+                ]);
+            }
         }
     } else {
-        // 向後兼容：如果資料表沒有新欄位，使用舊的欄位列表
-        $sql = "INSERT INTO continued_admission (
-            exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
-            school_city, school_name,
-            guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        $stmt = $pdo->prepare($sql);
-        
-        // 執行插入（使用舊格式）
-        $result = $stmt->execute([
-            $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender_int, $phone, $mobile,
-            $school_city, $school_name,
-            $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
-        ]);
+        // 向後兼容：如果資料表沒有新欄位，使用舊的欄位列表（若有 email 欄位則一併寫入）
+        if ($has_email) {
+            $sql = "INSERT INTO continued_admission (
+                exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile, email,
+                school_city, school_name,
+                guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($sql);
+            $result = $stmt->execute([
+                $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender_int, $phone, $mobile, $email === '' ? null : $email,
+                $school_city, $school_name,
+                $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+            ]);
+        } else {
+            $sql = "INSERT INTO continued_admission (
+                exam_no, name, id_number, birth_year, birth_month, birth_day, gender, phone, mobile,
+                school_city, school_name,
+                guardian_name, guardian_phone, guardian_mobile, documents, self_intro, skills, choices
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($sql);
+            $result = $stmt->execute([
+                $exam_no, $name, $id_number, $birth_year, $birth_month, $birth_day, $gender_int, $phone, $mobile,
+                $school_city, $school_name,
+                $guardian_name, $guardian_phone, $guardian_mobile, $documents_json, $self_intro, $skills, $choices_json
+            ]);
+        }
     }
     
     if ($result) {

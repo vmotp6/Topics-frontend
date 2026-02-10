@@ -8,6 +8,36 @@ $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 
 $conn = getDatabaseConnection();
 
+// 前台載入時：若存在「已到發布時間但尚未發布」的草稿，立即寫入 published_at 並更新前台公告狀態，這樣不依賴排程或造訪委員會頁也會發布
+$draft_due = null;
+$check_draft = $conn->prepare("
+    SELECT id, publish_at FROM continued_admission_result_announcements
+    WHERE scope = 'all' AND year = ? AND published_at IS NULL AND publish_at IS NOT NULL AND publish_at != '' AND publish_at <= ?
+    LIMIT 1
+");
+if ($check_draft) {
+    $check_draft->bind_param("is", $year, $now);
+    $check_draft->execute();
+    $res = $check_draft->get_result();
+    $draft_due = $res ? $res->fetch_assoc() : null;
+    $check_draft->close();
+}
+if ($draft_due) {
+    $up = $conn->prepare("UPDATE continued_admission_result_announcements SET published_at = NOW(), updated_at = NOW() WHERE scope = 'all' AND year = ?");
+    if ($up) {
+        $up->bind_param("i", $year);
+        $up->execute();
+        $up->close();
+    }
+    $source = "continued_admission_{$year}";
+    $up2 = $conn->prepare("UPDATE bulletin_board SET status_code = 'published', updated_at = NOW() WHERE source = ? AND type_code = 'result'");
+    if ($up2) {
+        $up2->bind_param("s", $source);
+        $up2->execute();
+        $up2->close();
+    }
+}
+
 // 讀取已發布公告（published_at 有值，且 publish_at <= now 或未設定）
 $announcement = null;
 $stmt = $conn->prepare("

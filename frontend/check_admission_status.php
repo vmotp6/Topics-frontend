@@ -240,6 +240,7 @@ try {
         'gender' => $record['gender'] ?? '',
         'phone' => $record['phone'] ?? '',
         'mobile' => $record['mobile'] ?? '',
+        'email' => $record['email'] ?? '',
         'school_city' => $school_city,
         'school_name' => $school_name,
         'zip' => $zip,

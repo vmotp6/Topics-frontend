@@ -3,6 +3,9 @@
 require_once 'session_config.php';
 require_once 'config.php';
 
+// 與其他前台頁面一致：使用台灣時區，確保「預計開放時間」與開放判斷一致
+date_default_timezone_set('Asia/Taipei');
+
 // 建立資料庫連接
 $conn = getDatabaseConnection();
 
@@ -49,9 +52,10 @@ try {
     $time_result = $conn->query($time_sql);
     if ($time_result && $row = $time_result->fetch_assoc()) {
         if (!empty($row['min_start']) && !empty($row['max_end'])) {
-            $registrationStart = new DateTime($row['min_start']);
-            $registrationEnd = new DateTime($row['max_end']);
-            $now = new DateTime('now');
+            $tz = new DateTimeZone('Asia/Taipei');
+            $registrationStart = new DateTime($row['min_start'], $tz);
+            $registrationEnd = new DateTime($row['max_end'], $tz);
+            $now = new DateTime('now', $tz);
             if ($now >= $registrationStart && $now <= $registrationEnd) {
                 $registrationOpen = true;
             }
@@ -195,6 +199,13 @@ try {
               <label><span class="required">*</span>行動電話</label>
               <input type="tel" name="mobile" id="mobile" placeholder="例：0912345678" pattern="[0-9]{10}" maxlength="10" required>
               <small class="phone-hint" style="display: none; color: #d32f2f; font-size: 12px; margin-top: 4px;">電話號碼輸入錯誤</small>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>Gmail（Email）</label>
+              <input type="email" name="email" id="email" placeholder="例：example@gmail.com（供錄取結果通知寄送）" maxlength="255">
             </div>
           </div>
           
@@ -2519,7 +2530,7 @@ try {
       // 填充基本資料
       const fields = [
         'exam_no', 'student_name', 'id', 'gender',
-        'phone', 'mobile', 'school_city', 'school_name', 'zip', 'city', 'district',
+        'phone', 'mobile', 'email', 'school_city', 'school_name', 'zip', 'city', 'district',
         'village', 'neighbor', 'road', 'section', 'lane', 'alley', 'no', 'floor',
         'guardian', 'guardian_phone', 'guardian_mobile', 'self_intro', 'skills'
       ];

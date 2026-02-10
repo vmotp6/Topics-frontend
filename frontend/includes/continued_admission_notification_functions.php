@@ -475,5 +475,116 @@ function sendScoreDeadlineReminder($conn, $teacher_id, $pending_applications, $r
         return false;
     }
 }
+
+/**
+ * 發送評分截止提醒給招生中心：列出尚未評分完成的科系，提醒催繳
+ *
+ * @param mysqli $conn 資料庫連接
+ * @param array $departments_pending 尚未評分完成的科系列表 [ ['department_code' => '...', 'department_name' => '...', 'pending_count' => N, 'deadline' => '...'], ... ]
+ * @param string $deadline_display 截止時間顯示用
+ * @return int 成功發送數量
+ */
+function sendScoreDeadlineReminderToAdmissionCenter($conn, $departments_pending, $deadline_display) {
+    if (empty($departments_pending)) {
+        return 0;
+    }
+    try {
+        // 查詢招生中心人員（ADM、STA）且有 email 的帳號
+        $r1 = 'ADM';
+        $r2 = 'STA';
+        $r3 = '管理員';
+        $r4 = '行政人員';
+        $sql = "SELECT id, name, email, username FROM user WHERE role IN (?, ?, ?, ?) AND email IS NOT NULL AND TRIM(email) != '' AND status = 1";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('ssss', $r1, $r2, $r3, $r4);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $recipients = [];
+        while ($row = $result->fetch_assoc()) {
+            if (!empty($row['email'])) {
+                $recipients[] = ['name' => $row['name'] ?? $row['username'] ?? '招生中心', 'email' => trim($row['email'])];
+            }
+        }
+        $stmt->close();
+        if (empty($recipients)) {
+            error_log("無法發送招生中心提醒: 找不到具備 email 的招生中心人員（ADM/STA）");
+            return 0;
+        }
+        // 構建科系列表
+        $dept_list = '';
+        foreach ($departments_pending as $d) {
+            $name = htmlspecialchars($d['department_name'] ?? $d['department_code'] ?? '');
+            $count = (int)($d['pending_count'] ?? 0);
+            $dept_list .= "<li style='margin-bottom: 8px;'><strong>{$name}</strong>：尚有 <strong>{$count}</strong> 筆待評分</li>";
+        }
+        $subject = "【康寧大學續招報名】評分催繳提醒 - 以下科系尚未評分完成";
+        $body = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <style>
+                body { font-family: 'Microsoft JhengHei', Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: linear-gradient(90deg, #faad14 0%, #ff8c00 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+                .urgent-box { background: #fff7e6; border: 2px solid #faad14; padding: 20px; margin: 20px 0; border-radius: 8px; }
+                .info-box { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #faad14; }
+                .button { display: inline-block; background: #faad14; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; font-weight: bold; }
+                .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>📋 評分催繳提醒</h1>
+                    <p>以下科系尚未評分完成，請協助催繳</p>
+                </div>
+                <div class='content'>
+                    <p>招生中心您好，</p>
+                    <div class='urgent-box'>
+                        <p style='margin: 0 0 10px 0;'><strong>評分截止時間：</strong>{$deadline_display}</p>
+                        <p style='margin: 0;'>以下科系尚有老師未完成評分，請提醒各科系主任／老師盡快完成評分。</p>
+                    </div>
+                    <div class='info-box'>
+                        <h3 style='margin-top: 0; color: #faad14;'>尚未評分完成的科系</h3>
+                        <ul style='padding-left: 20px; margin: 0;'>
+                            {$dept_list}
+                        </ul>
+                    </div>
+                    <div style='text-align: center; margin-top: 30px;'>
+                        <a href='http://localhost/Topics-backend/frontend/continued_admission_list.php' class='button'>前往續招名單</a>
+                    </div>
+                    <div class='footer'>
+                        <p>此郵件由康寧大學續招報名系統自動發送。</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        $dept_text = '';
+        foreach ($departments_pending as $d) {
+            $name = $d['department_name'] ?? $d['department_code'] ?? '';
+            $count = (int)($d['pending_count'] ?? 0);
+            $dept_text .= "- {$name}：尚有 {$count} 筆待評分\n";
+        }
+        $altBody = "評分催繳提醒\n\n評分截止時間：{$deadline_display}\n\n以下科系尚未評分完成，請協助催繳：\n\n{$dept_text}\n請前往續招名單：http://localhost/Topics-backend/frontend/continued_admission_list.php\n\n此郵件由康寧大學續招報名系統自動發送。";
+        $sent = 0;
+        foreach ($recipients as $r) {
+            $res = sendEmail($r['email'], $subject, $body, $altBody);
+            if ($res) {
+                $sent++;
+                error_log("✅ 已發送評分催繳提醒給招生中心: {$r['name']} ({$r['email']})");
+            } else {
+                error_log("❌ 發送評分催繳提醒失敗: {$r['email']}");
+            }
+        }
+        return $sent;
+    } catch (Exception $e) {
+        error_log("發送招生中心評分催繳提醒時發生錯誤: " . $e->getMessage());
+        return 0;
+    }
+}
 ?>
 
