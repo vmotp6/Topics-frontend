@@ -63,6 +63,10 @@ try {
             $stats = getStatusStats($pdo, $department_filter);
             echo json_encode($stats, JSON_UNESCAPED_UNICODE);
             break;
+        case 'department_quota_status':
+            $stats = getDepartmentQuotaStatusStats($pdo, $department_filter);
+            echo json_encode($stats, JSON_UNESCAPED_UNICODE);
+            break;
         default:
             http_response_code(400);
             echo json_encode(['error' => '無效的操作'], JSON_UNESCAPED_UNICODE);
@@ -110,6 +114,33 @@ function buildDepartmentFilter($pdo, $department) {
     
     // 如果找不到對應的代碼，直接使用原值（可能是代碼）
     return "assigned_department = " . $pdo->quote($department);
+}
+
+// 嘗試將科系名稱轉換為科系代碼（供科系名額統計使用）
+function resolveDepartmentCode($pdo, $department) {
+    if (empty($department)) {
+        return '';
+    }
+
+    try {
+        if (stripos($department, '資訊管理') !== false || stripos($department, '資管') !== false) {
+            $dept_check = $pdo->query("SELECT code FROM departments WHERE code = 'IM' OR name LIKE '%資訊管理%' OR name LIKE '%資管%' LIMIT 1");
+            $dept_row = $dept_check->fetch(PDO::FETCH_ASSOC);
+            if ($dept_row) {
+                return $dept_row['code'];
+            }
+        }
+
+        $dept_check = $pdo->query("SELECT code FROM departments WHERE name = " . $pdo->quote($department) . " OR code = " . $pdo->quote($department) . " LIMIT 1");
+        $dept_row = $dept_check->fetch(PDO::FETCH_ASSOC);
+        if ($dept_row) {
+            return $dept_row['code'];
+        }
+    } catch (PDOException $e) {
+        error_log("resolveDepartmentCode failed: " . $e->getMessage());
+    }
+
+    return '';
 }
 
 // 總覽統計
@@ -455,5 +486,66 @@ function getStatusStats($pdo, $department_filter = '') {
     } catch (PDOException $e) {
         error_log("狀態統計錯誤: " . $e->getMessage());
         return ['error' => '無法獲取狀態統計'];
+    }
+}
+
+// 續招報名統計 - 科系名額與錄取狀態統計
+function getDepartmentQuotaStatusStats($pdo, $department_filter = '') {
+    try {
+        $quota_check = $pdo->query("SHOW TABLES LIKE 'department_quotas'");
+        if ($quota_check->rowCount() === 0) {
+            return ['error' => '找不到 department_quotas 表'];
+        }
+        $dept_check = $pdo->query("SHOW TABLES LIKE 'departments'");
+        if ($dept_check->rowCount() === 0) {
+            return ['error' => '找不到 departments 表'];
+        }
+        $admission_check = $pdo->query("SHOW TABLES LIKE 'continued_admission'");
+        if ($admission_check->rowCount() === 0) {
+            return ['error' => '找不到 continued_admission 表'];
+        }
+
+        $where = 'WHERE 1=1';
+        if (!empty($department_filter)) {
+            $dept_code = resolveDepartmentCode($pdo, $department_filter);
+            if (!empty($dept_code)) {
+                $where .= ' AND d.code = ' . $pdo->quote($dept_code);
+            } else {
+                $where .= ' AND d.name LIKE ' . $pdo->quote('%' . $department_filter . '%');
+            }
+        }
+
+        $sql = "
+            SELECT
+                d.code AS department_code,
+                d.name AS department_name,
+                COALESCE(dq.total_quota, 0) AS total_quota,
+                COALESCE(SUM(CASE WHEN ca.status IN ('approved', 'AP') THEN 1 ELSE 0 END), 0) AS approved_count,
+                COALESCE(SUM(CASE WHEN ca.status IN ('waitlist', 'AD') THEN 1 ELSE 0 END), 0) AS waitlist_count,
+                COALESCE(SUM(CASE WHEN ca.status IN ('rejected', 'RE') THEN 1 ELSE 0 END), 0) AS rejected_count
+            FROM departments d
+            INNER JOIN department_quotas dq ON d.code = dq.department_code AND dq.is_active = 1
+            LEFT JOIN continued_admission ca ON ca.assigned_department = d.code
+            $where
+            GROUP BY d.code, d.name, dq.total_quota
+            ORDER BY d.code
+        ";
+
+        $stmt = $pdo->query($sql);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(function($row) {
+            return [
+                'department_code' => $row['department_code'],
+                'department_name' => $row['department_name'] ?: $row['department_code'],
+                'total_quota' => (int)($row['total_quota'] ?? 0),
+                'approved_count' => (int)($row['approved_count'] ?? 0),
+                'waitlist_count' => (int)($row['waitlist_count'] ?? 0),
+                'rejected_count' => (int)($row['rejected_count'] ?? 0)
+            ];
+        }, $rows);
+    } catch (PDOException $e) {
+        error_log("科系名額統計錯誤: " . $e->getMessage());
+        return ['error' => '無法獲取科系名額統計'];
     }
 }
