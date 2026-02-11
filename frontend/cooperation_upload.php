@@ -337,14 +337,23 @@ $role = $_SESSION['role'] ?? '訪客';
                     <h3 class="section-title"><i class="fas fa-star"></i> 從哪裡知道我們</h3>
 
                     <div class="form-group">
-                        <label for="current_grade"><span class="required">*</span>從哪裡知道我們:</label>
-                        <select id="current_grade" name="current_grade" required>
-                            <option value="">請選擇</option>
-                            <option value="五專">來校體驗</option>
-                            <option value="四技">入班宣導</option>
-                            <option value="四技">升學博覽會</option>
-                        </select>
-                    </div>
+    <label for="how_hear"><span class="required">*</span>從哪裡知道我們:</label>
+    <select id="how_hear" name="how_hear" required>
+        <option value="">請選擇</option>
+        <option value="來校體驗">來校體驗</option>
+        <option value="入班宣導">入班宣導</option>
+        <option value="升學博覽會">升學博覽會</option>
+        <option value="親友推薦">親友推薦</option>
+        <option value="學校社團">學校社團</option>
+        <option value="其他">其他</option>
+    </select>
+    
+    <input type="text" 
+           id="how_hear_other" 
+           name="how_hear_other" 
+           placeholder="請說明是從哪裡得知的..." 
+           style="display: none; margin-top: 10px; border-left: 3px solid #667eea;">
+</div>
 
                     <!-- 驗證碼 -->
                     <div class="captcha-section">
@@ -1364,6 +1373,26 @@ $role = $_SESSION['role'] ?? '訪客';
             
             // 頁面載入時也執行一次，確保初始狀態正確
             updateIntentionOptions();
+
+            const howHearSelect = document.getElementById('how_hear');
+    const howHearOtherInput = document.getElementById('how_hear_other');
+
+    if (howHearSelect && howHearOtherInput) {
+        howHearSelect.addEventListener('change', function() {
+            if (this.value === '其他') {
+                // 顯示輸入框並設為必填
+                howHearOtherInput.style.display = 'block';
+                howHearOtherInput.required = true;
+                // 加入一點動畫效果讓體驗更好
+                howHearOtherInput.style.animation = 'slideDown 0.3s ease';
+            } else {
+                // 隱藏輸入框、移除必填、清空內容
+                howHearOtherInput.style.display = 'none';
+                howHearOtherInput.required = false;
+                howHearOtherInput.value = '';
+            }
+        });
+    }
         });
     </script>
     

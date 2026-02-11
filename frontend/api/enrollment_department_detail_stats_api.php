@@ -61,6 +61,7 @@ try {
                 'declined' => 0,
                 'tracking' => 0,
             ],
+            'grades'  => [],
             'schools' => []
         ], JSON_UNESCAPED_UNICODE);
         $conn->close();
@@ -79,6 +80,7 @@ try {
     $has_check_in_status     = in_array('check_in_status', $columns, true);
     $has_follow_up_status    = in_array('follow_up_status', $columns, true);
     $has_junior_high         = in_array('junior_high', $columns, true);
+    $has_current_grade       = in_array('current_grade', $columns, true);
 
     // 若沒有 assigned_department 欄位，則無法以「分配到本系」為基準，只回傳空資料避免 SQL 錯誤
     if (!$has_assigned_department) {
@@ -93,6 +95,7 @@ try {
                 'declined' => 0,
                 'tracking' => 0,
             ],
+            'grades'  => [],
             'schools' => []
         ], JSON_UNESCAPED_UNICODE);
         $conn->close();
@@ -194,48 +197,97 @@ try {
         }
     }
 
-    // --------- 3. 來源國中統計（這些國中有幾人分配到我們這個科）---------
-    // 國中欄位 enrollment_intention.junior_high 存的是學校代碼，用 school_data 轉成顯示名稱
-    $schools = [];
-    if ($has_junior_high) {
-        $check_school_tbl = $conn->query("SHOW TABLES LIKE 'school_data'");
-        $has_school_data = $check_school_tbl && $check_school_tbl->num_rows > 0;
+    // --------- 3. 年級分布統計（該科分配到的學生按年級分布）---------
+    // 年級代碼與中文名稱的對應
+    $grade_mapping = [
+        'J1' => '國一',
+        'J2' => '國二',
+        'J3' => '國三'
+    ];
+    $grade_order = ['J1', 'J2', 'J3'];
 
-        if ($has_school_data) {
-            $sql_schools = "
-                SELECT
-                    COALESCE(sd.name, ei.junior_high, '未填寫') AS school_name,
-                    COUNT(*) AS cnt
-                FROM enrollment_intention ei
-                LEFT JOIN school_data sd ON ei.junior_high = sd.school_code
-                WHERE ei.assigned_department IN ($in_clause)
-                  AND ei.junior_high IS NOT NULL
-                  AND ei.junior_high <> ''
-                  $year_cond_sql_ei
-                GROUP BY COALESCE(sd.name, ei.junior_high, '未填寫')
-                ORDER BY COUNT(*) DESC, school_name ASC
-            ";
-        } else {
-            $sql_schools = "
-                SELECT ei.junior_high AS school_name, COUNT(*) AS cnt
-                FROM enrollment_intention ei
-                WHERE ei.assigned_department IN ($in_clause)
-                  AND ei.junior_high IS NOT NULL
-                  AND ei.junior_high <> ''
-                  $year_cond_sql_ei
-                GROUP BY ei.junior_high
-                ORDER BY COUNT(*) DESC, ei.junior_high ASC
-            ";
-        }
-
-        if ($rs_sch = $conn->query($sql_schools)) {
-            while ($row = $rs_sch->fetch_assoc()) {
-                $schools[] = [
-                    'name'  => $row['school_name'] ?? '未填寫',
+    $grades = [];
+    if ($has_current_grade) {
+        $sql_grades = "
+            SELECT current_grade, COUNT(*) AS cnt
+            FROM enrollment_intention
+            WHERE assigned_department IN ($in_clause)
+              AND current_grade IS NOT NULL
+              AND current_grade <> ''
+              $year_cond_sql
+            GROUP BY current_grade
+            ORDER BY FIELD(current_grade, 'J1', 'J2', 'J3')
+        ";
+        if ($rs_grades = $conn->query($sql_grades)) {
+            while ($row = $rs_grades->fetch_assoc()) {
+                $grade_code = $row['current_grade'] ?? '';
+                $grade_name = isset($grade_mapping[$grade_code]) ? $grade_mapping[$grade_code] : $grade_code;
+                $grades[] = [
+                    'grade' => $grade_name,
                     'count' => (int)($row['cnt'] ?? 0),
                 ];
             }
+            $rs_grades->free();
+        }
+    }
+
+    // --------- 4. 來源國中統計---------
+    $schools = [];
+    if ($has_junior_high) {
+        $has_how_hear = in_array('how_hear', $columns, true);
+        $check_school_tbl = $conn->query("SHOW TABLES LIKE 'school_data'");
+        $has_school_data = $check_school_tbl && $check_school_tbl->num_rows > 0;
+
+        // 定義欄位 (不含 AS)，用於 GROUP BY
+        $col_school_expr = $has_school_data 
+            ? "COALESCE(sd.name, ei.junior_high, '未填寫')" 
+            : "ei.junior_high";
+        $col_source_expr = $has_how_hear ? "COALESCE(ei.how_hear, '未填寫')" : "'未填寫'";
+
+        // SQL 查詢
+        $sql_schools = "
+            SELECT
+                $col_school_expr AS school_name,
+                $col_source_expr AS how_hear,
+                COUNT(*) AS cnt
+            FROM enrollment_intention ei
+            LEFT JOIN school_data sd ON ei.junior_high = sd.school_code
+            WHERE ei.assigned_department IN ($in_clause)
+              AND ei.junior_high IS NOT NULL
+              AND ei.junior_high <> ''
+              $year_cond_sql_ei
+            GROUP BY $col_school_expr, $col_source_expr
+            ORDER BY cnt DESC, school_name ASC
+        ";
+
+        if ($rs_sch = $conn->query($sql_schools)) {
+            $temp_schools = [];
+            while ($row = $rs_sch->fetch_assoc()) {
+                $sName = $row['school_name'] ?? '未填寫';
+                $sSource = trim($row['how_hear'] ?? '');
+                $sCount = (int)($row['cnt'] ?? 0);
+                if ($sSource === '') $sSource = '未填寫';
+
+                if (!isset($temp_schools[$sName])) {
+                    $temp_schools[$sName] = [ 'name' => $sName, 'count' => 0, 'sources' => [] ];
+                }
+                $temp_schools[$sName]['count'] += $sCount;
+                if (!isset($temp_schools[$sName]['sources'][$sSource])) {
+                    $temp_schools[$sName]['sources'][$sSource] = 0;
+                }
+                $temp_schools[$sName]['sources'][$sSource] += $sCount;
+            }
             $rs_sch->free();
+
+            foreach ($temp_schools as $sName => $data) {
+                $source_list = [];
+                foreach ($data['sources'] as $src => $cnt) {
+                    $source_list[] = ['name' => $src, 'count' => $cnt];
+                }
+                usort($source_list, function($a, $b) { return $b['count'] <=> $a['count']; });
+                $schools[] = ['name' => $sName, 'count' => $data['count'], 'sources' => $source_list];
+            }
+            usort($schools, function($a, $b) { return $b['count'] <=> $a['count']; });
         }
     }
 
@@ -252,6 +304,7 @@ try {
             'declined'       => $declined,
             'tracking'       => $tracking,
         ],
+        'grades'  => $grades,
         'schools' => $schools,
     ], JSON_UNESCAPED_UNICODE);
     exit;

@@ -206,6 +206,9 @@ function sendEnrollmentNotification($data) {
             <div class='field'>
                 <span class='label'>目前年級：</span>{$data['current_grade']}
             </div>
+            <div class='field'>
+                <span class='label'>從哪裡知道我們：</span>{$data['how_hear']}
+            </div>
             
             <div class='field'>
                 <span class='label'>LineID：</span>{$data['line_id']}
@@ -288,6 +291,7 @@ try {
             email VARCHAR(100) DEFAULT NULL COMMENT '電子郵件',
             junior_high VARCHAR(20) DEFAULT NULL COMMENT '就讀或畢業國中，關聯school_data.school_code',
             current_grade VARCHAR(20) DEFAULT NULL COMMENT '目前年級，關聯identity_options.code',
+            how_hear VARCHAR(100) DEFAULT NULL COMMENT '從哪裡知道我們',
             graduation_year INT(4) DEFAULT NULL COMMENT '預計國中畢業年份',
             line_id VARCHAR(100) DEFAULT NULL COMMENT 'LineID',
             facebook VARCHAR(200) DEFAULT NULL COMMENT 'Facebook',
@@ -309,7 +313,17 @@ try {
     } else {
         // 表已存在，不需要添加额外字段
         // junior_high 和 current_grade 字段直接存储关联代码
-        error_log("enrollment_intention 表已存在，使用现有结构");
+        error_log("enrollment_intention 表已存在，使用現有结构");
+        // 確保 how_hear 欄位存在（向後相容性）
+        try {
+            $colStmt = $pdo->query("SHOW COLUMNS FROM enrollment_intention LIKE 'how_hear'");
+            if ($colStmt && $colStmt->rowCount() == 0) {
+                $pdo->exec("ALTER TABLE enrollment_intention ADD COLUMN how_hear VARCHAR(100) DEFAULT NULL COMMENT '從哪裡知道我們' AFTER current_grade");
+                error_log("已自動新增 enrollment_intention.how_hear 欄位");
+            }
+        } catch (PDOException $e) {
+            error_log("檢查/新增 how_hear 欄位時發生錯誤: " . $e->getMessage());
+        }
     }
     
     // 檢查並創建 enrollment_choices 表（如果不存在）
@@ -416,6 +430,25 @@ $facebook = $_POST['facebook'] ?? '';
 $recommended_teacher = $_POST['recommended_teacher'] ?? '';
 $remarks = $_POST['remarks'] ?? '';
 $captcha = $_POST['captcha'] ?? '';
+// 新增：從哪裡知道我們 (how_hear)
+$how_hear = $_POST['how_hear'] ?? '';
+// [新增] 處理「其他」選項輸入邏輯
+// 如果使用者在選單選了「其他」，就讀取 how_hear_other 輸入框的內容
+if ($how_hear === '其他') {
+    // 取得使用者輸入的補充文字
+    $other_text = trim($_POST['how_hear_other'] ?? '');
+    
+    // 如果有輸入內容，將其合併。格式範例：「其他：Facebook廣告」
+    if (!empty($other_text)) {
+        $how_hear = '其他：' . $other_text;
+    }
+}
+
+// [安全防護] 確保長度不超過資料庫限制 (100字元)
+// 因為資料庫欄位是 VARCHAR(100)，輸入太長會報錯，所以這裡先截斷
+if (mb_strlen($how_hear, 'UTF-8') > 100) {
+    $how_hear = mb_substr($how_hear, 0, 100, 'UTF-8');
+}
 
 // 基本驗證
 if (empty($name) || empty($identity) || empty($phone1)) {
@@ -932,12 +965,12 @@ try {
     // 加入 graduation_year 欄位
     $sql = "INSERT INTO enrollment_intention (
         name, identity, gender, phone1, phone2, email,
-        junior_high, current_grade, graduation_year,
+        junior_high, current_grade, how_hear, graduation_year,
         line_id, facebook, recommended_teacher, remarks,
         created_at
     ) VALUES (
         :name, :identity, :gender, :phone1, :phone2, :email,
-        :junior_high, :current_grade, :graduation_year,
+        :junior_high, :current_grade, :how_hear, :graduation_year,
         :line_id, :facebook, :recommended_teacher, :remarks,
         NOW()
     )";
@@ -985,6 +1018,9 @@ try {
     $stmt->bindValue(':junior_high', $junior_high_code ? $junior_high_code : null, $junior_high_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
     // current_grade 直接存储 code
     $stmt->bindValue(':current_grade', $current_grade_code ? $current_grade_code : null, $current_grade_code ? PDO::PARAM_STR : PDO::PARAM_NULL);
+    
+    // how_hear（從哪裡知道我們）
+    $stmt->bindValue(':how_hear', $how_hear ? $how_hear : null, $how_hear ? PDO::PARAM_STR : PDO::PARAM_NULL);
     
     // [新增] 綁定畢業年份參數
     // 這裡因為前面已經算好了 $graduation_year，所以可以直接綁定
@@ -1072,6 +1108,7 @@ try {
             'system3' => $system3,
             'junior_high' => $junior_high,
             'current_grade' => $current_grade,
+            'how_hear' => $how_hear,
             'line_id' => $line_id,
             'facebook' => $facebook,
             'recommended_teacher' => $recommended_teacher, // 保持原始名字格式
