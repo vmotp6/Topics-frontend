@@ -960,6 +960,33 @@ try {
         }
     }
 
+    // [新增功能] 檢查是否重複報名 (驗證：姓名 + 電話1 + 國中學校代碼)
+    // 如果這三項都相同，視為重複資料，不允許再次提交
+    $check_duplicate_sql = "SELECT id FROM enrollment_intention WHERE name = :name AND phone1 = :phone1 AND junior_high = :junior_high LIMIT 1";
+    $check_stmt = $pdo->prepare($check_duplicate_sql);
+    $check_stmt->execute([
+        ':name' => $name,
+        ':phone1' => $phone1,
+        ':junior_high' => $junior_high_code
+    ]);
+    
+    if ($check_stmt->fetch()) {
+        // 清除緩衝區，確保 JSON 格式正確
+        if (ob_get_level() > 0) {
+            @ob_clean();
+        }
+        
+        echo json_encode([
+            'success' => false,
+            'message' => '您已經填寫過就讀意願了！(姓名、電話與國中學校重複)，請勿重複提交。'
+        ]);
+        
+        if (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        exit;
+    }
+
     // 插入資料到 enrollment_intention 表
     // junior_high 直接存储 school_code，current_grade 直接存储 code
     // 加入 graduation_year 欄位
