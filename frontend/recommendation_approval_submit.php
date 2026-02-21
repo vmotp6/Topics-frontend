@@ -59,8 +59,9 @@ $token = isset($_POST['token']) ? trim((string)$_POST['token']) : '';
 $signature = isset($_POST['signature']) ? trim((string)$_POST['signature']) : '';
 $signature_url = isset($_POST['signature_url']) ? trim((string)$_POST['signature_url']) : '';
 $reject_reason = isset($_POST['reject_reason']) ? trim((string)$_POST['reject_reason']) : '';
+$waive_bonus = isset($_POST['waive_bonus']) ? intval($_POST['waive_bonus']) : 0;
 
-if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '')) {
+if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '' && $waive_bonus !== 1)) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
     exit;
 }
@@ -122,6 +123,10 @@ try {
         echo json_encode(['success' => true, 'message' => '已回覆不通過']);
         exit;
     }
+    if (($link['status'] ?? '') === 'waived') {
+        echo json_encode(['success' => true, 'message' => '已設定放棄獎金']);
+        exit;
+    }
 
     $rid = (int)$link['recommendation_id'];
     $group_ids = trim((string)($link['group_ids'] ?? ''));
@@ -160,7 +165,7 @@ try {
             $chk->execute();
             $r2 = $chk->get_result();
             $row = $r2 ? $r2->fetch_assoc() : null;
-            if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc'], true)) {
+            if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
                 $ok = false;
                 break;
             }
@@ -175,7 +180,7 @@ try {
         $chk->execute();
         $r2 = $chk->get_result();
         $rec = $r2 ? $r2->fetch_assoc() : null;
-        if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc'], true)) {
+        if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
             $chk->close();
             echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
             exit;
@@ -184,21 +189,42 @@ try {
     $chk->close();
 
     $public_path = '';
-    if ($reject_reason === '') {
-        // 主任已簽核：更新狀態為科主任已審核
-        ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
+    if ($waive_bonus === 1) {
+        $upd = $conn->prepare("UPDATE recommendation_approval_links
+            SET status = 'waived', reject_reason = ?, signed_at = NOW()
+            WHERE token = ? LIMIT 1");
+        $waive_reason = '放棄獎金';
+        $upd->bind_param('ss', $waive_reason, $token);
+        $upd->execute();
+        $upd->close();
+    } elseif ($reject_reason === '') {
+        // 若原本是 AP/MC（待科主任），簽核後更新為 APD；
+        // 若原本已是 APD（推薦人簽核連結），僅記錄簽核，不重複改狀態/寄信。
+        $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+        $status_stmt = $conn->prepare("SELECT {$status_expr} AS status FROM admission_recommendations WHERE id = ? LIMIT 1");
         $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
-        if ($upd_status) {
-            $new_status = 'APD';
-            $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+        if ($status_stmt && $upd_status) {
+            ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
             foreach ($target_ids as $tid) {
-                $upd_status->bind_param('si', $new_status, $tid);
-                @$upd_status->execute();
-                if (function_exists('send_director_approved_email_once')) {
-                    @send_director_approved_email_once($conn, $tid, 'director');
+                $status_stmt->bind_param('i', $tid);
+                $status_stmt->execute();
+                $sres = $status_stmt->get_result();
+                $srow = $sres ? $sres->fetch_assoc() : null;
+                $st = strtolower(trim((string)($srow['status'] ?? '')));
+                if (in_array($st, ['ap', 'approved', 'mc'], true)) {
+                    $new_status = 'APD';
+                    $upd_status->bind_param('si', $new_status, $tid);
+                    @$upd_status->execute();
+                    if (function_exists('send_director_approved_email_once')) {
+                        @send_director_approved_email_once($conn, $tid, 'director');
+                    }
                 }
             }
+            $status_stmt->close();
             $upd_status->close();
+        } else {
+            if ($status_stmt) $status_stmt->close();
+            if ($upd_status) $upd_status->close();
         }
         if ($signature_url !== '') {
             $url = $signature_url;
@@ -265,7 +291,18 @@ try {
     $student_phone = trim((string)($rec['student_phone'] ?? ''));
 
     $to_email = '110534236@stu.ukn.edu.tw';
-    if ($reject_reason === '') {
+    if ($waive_bonus === 1) {
+        $subject = '推薦人已放棄獎金';
+        $body = "
+            <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                <p>推薦人已確認放棄本筆推薦獎金。</p>
+                <p>學生：{$student_name}</p>
+                <p>學校：{$student_school}</p>
+                <p>聯絡電話：{$student_phone}</p>
+            </div>
+        ";
+        $altBody = "推薦人已確認放棄本筆推薦獎金。\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
+    } elseif ($reject_reason === '') {
         $subject = '科主任已確認通過';
         $body = "
             <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>

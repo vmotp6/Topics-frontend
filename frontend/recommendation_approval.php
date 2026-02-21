@@ -61,6 +61,7 @@ try {
                 $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
             }
             $is_signed = ($link['status'] === 'signed');
+            $is_waived = ($link['status'] === 'waived');
 
             // 取推薦人 / 被推薦人資訊（欄位存在才選取，避免 Unknown column）
             $has_recommender_table = false;
@@ -183,9 +184,11 @@ try {
                 $error = '找不到對應的推薦資料。';
             } else {
                 $data['is_signed'] = $is_signed ? 1 : 0;
+                $data['is_waived'] = $is_waived ? 1 : 0;
                 $data['signature_path'] = $link['signature_path'] ?? '';
                 $data['status'] = trim((string)($data['status'] ?? ''));
-                if ($data['status'] !== 'AP' && $data['status'] !== 'approved' && $data['status'] !== 'MC') {
+                $status_norm = strtolower($data['status']);
+                if (!in_array($status_norm, ['ap', 'approved', 'mc', 'apd'], true) && mb_strpos((string)$data['status'], '審核完成') === false) {
                     $error = '此筆推薦尚未審核通過，無法簽核。';
                 }
             }
@@ -336,6 +339,37 @@ try {
     .detail-section { margin-top: 18px; }
     .file-link { color:#1677ff; text-decoration: none; }
     .muted { color:#666; font-size:12px; }
+    .waive-q { margin-bottom: 10px; color:#262626; font-weight: 700; }
+    .btn-warning { background:#fa8c16; color:#fff; }
+    .modal-mask {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-card {
+      width: 92%;
+      max-width: 520px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+      overflow: hidden;
+    }
+    .modal-head { padding: 16px 18px; border-bottom: 1px solid #f0f0f0; font-weight: 700; }
+    .modal-body { padding: 20px 18px; color: #262626; line-height: 1.8; }
+    .modal-foot {
+      padding: 14px 18px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -448,7 +482,9 @@ try {
       </div>
 
       <div class="section">
-        <?php if ((int)$data['is_signed'] === 1): ?>
+        <?php if ((int)($data['is_waived'] ?? 0) === 1): ?>
+          <div class="alert">您已選擇放棄獎金，招生中心將無法再發送推薦獎金。</div>
+        <?php elseif ((int)$data['is_signed'] === 1): ?>
           <div class="alert success">已完成簽核，謝謝。</div>
           <?php if (!empty($data['signature_path'])): ?>
             <div class="section">
@@ -456,6 +492,10 @@ try {
             </div>
           <?php endif; ?>
         <?php else: ?>
+          <div class="waive-q">是否放棄獎金</div>
+          <div class="btns" style="margin-top:0; margin-bottom:12px;">
+            <button class="btn-warning" type="button" onclick="openWaiveConfirm()">放棄</button>
+          </div>
           <div class="label">線上簽章</div>
           <iframe
             id="signatureFrame"
@@ -477,6 +517,17 @@ try {
         <?php endif; ?>
       </div>
     <?php endif; ?>
+  </div>
+
+  <div id="waiveConfirmModal" class="modal-mask">
+    <div class="modal-card">
+      <div class="modal-head">提醒</div>
+      <div class="modal-body">放棄後無法拿到推薦獎金，是否要放棄</div>
+      <div class="modal-foot">
+        <button class="btn-secondary" type="button" onclick="closeWaiveConfirm()">再想想</button>
+        <button class="btn-danger" type="button" onclick="submitWaiveBonus()">確定放棄</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -539,6 +590,41 @@ try {
         }
       })
       .catch(() => alert('送出失敗：網路錯誤'));
+    }
+
+    function openWaiveConfirm() {
+      const modal = document.getElementById('waiveConfirmModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeWaiveConfirm() {
+      const modal = document.getElementById('waiveConfirmModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function submitWaiveBonus() {
+      fetch('recommendation_approval_submit.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'token=' + encodeURIComponent(token) + '&waive_bonus=1'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('已設定放棄獎金，招生中心將無法發送獎金。');
+          location.reload();
+        } else {
+          alert('送出失敗：' + (data.message || '未知錯誤'));
+        }
+      })
+      .catch(() => alert('送出失敗：網路錯誤'));
+    }
+
+    const waiveConfirmModal = document.getElementById('waiveConfirmModal');
+    if (waiveConfirmModal) {
+      waiveConfirmModal.addEventListener('click', function(e) {
+        if (e.target === waiveConfirmModal) closeWaiveConfirm();
+      });
     }
   </script>
 </body>
