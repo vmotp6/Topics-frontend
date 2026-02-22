@@ -60,6 +60,9 @@ $signature = isset($_POST['signature']) ? trim((string)$_POST['signature']) : ''
 $signature_url = isset($_POST['signature_url']) ? trim((string)$_POST['signature_url']) : '';
 $reject_reason = isset($_POST['reject_reason']) ? trim((string)$_POST['reject_reason']) : '';
 $waive_bonus = isset($_POST['waive_bonus']) ? intval($_POST['waive_bonus']) : 0;
+$review_decision = isset($_POST['review_decision']) ? trim((string)$_POST['review_decision']) : '';
+$selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$_POST['selected_review_ids']) : '';
+$review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
 
 if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '' && $waive_bonus !== 1)) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
@@ -161,6 +164,12 @@ try {
         {$phone_expr} AS student_phone
         FROM admission_recommendations WHERE id = ? LIMIT 1");
     $rec = null;
+    $is_apd_status = function($status) {
+        $st = trim((string)$status);
+        $st_norm = strtolower($st);
+        return ($st_norm === 'apd' || mb_strpos($st, '審核完成') !== false || mb_strpos($st, '可發獎金') !== false);
+    };
+    $waive_allowed = true;
     if (!empty($group_id_list)) {
         $ok = true;
         foreach ($group_id_list as $gid) {
@@ -171,6 +180,9 @@ try {
             if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
                 $ok = false;
                 break;
+            }
+            if (!$is_apd_status($row['status'] ?? '')) {
+                $waive_allowed = false;
             }
         }
         if (!$ok) {
@@ -188,11 +200,65 @@ try {
             echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
             exit;
         }
+        if (!$is_apd_status($rec['status'] ?? '')) {
+            $waive_allowed = false;
+        }
     }
     $chk->close();
 
+    $allowed_target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+    $allowed_target_ids = array_values(array_unique(array_filter(array_map('intval', $allowed_target_ids), function($v){ return $v > 0; })));
+
+    $selected_review_ids = [];
+    if ($selected_review_ids_raw !== '') {
+        $selected_review_ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $selected_review_ids_raw)), function($v){ return $v > 0; })));
+    }
+    $allowed_id_map = [];
+    foreach ($allowed_target_ids as $aid) $allowed_id_map[$aid] = true;
+    $selected_target_ids = [];
+    foreach ($selected_review_ids as $sid) {
+        if (isset($allowed_id_map[$sid])) $selected_target_ids[] = $sid;
+    }
+
+    $decision_map = [];
+    if ($review_decision_map_raw !== '') {
+        $decoded = json_decode($review_decision_map_raw, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $idKey => $decisionVal) {
+                $did = intval($idKey);
+                $dv = trim((string)$decisionVal);
+                if ($did > 0 && isset($allowed_id_map[$did]) && in_array($dv, ['pass', 'fail'], true)) {
+                    $decision_map[$did] = $dv;
+                }
+            }
+        }
+    }
+
+    $is_signature_submit = ($waive_bonus !== 1 && $reject_reason === '' && ($signature !== '' || $signature_url !== ''));
+    if ($is_signature_submit) {
+        if (empty($decision_map)) {
+            if (!in_array($review_decision, ['pass', 'fail'], true)) {
+                echo json_encode(['success' => false, 'message' => '請先選擇通過或不通過']);
+                exit;
+            }
+            if (empty($selected_target_ids)) {
+                echo json_encode(['success' => false, 'message' => '請先勾選要審核的推薦人']);
+                exit;
+            }
+            foreach ($selected_target_ids as $tid) $decision_map[$tid] = $review_decision;
+        }
+        if (empty($decision_map)) {
+            echo json_encode(['success' => false, 'message' => '缺少可更新的審核項目']);
+            exit;
+        }
+    }
+
     $public_path = '';
     if ($waive_bonus === 1) {
+        if (!$waive_allowed) {
+            echo json_encode(['success' => false, 'message' => '僅審核完成（可發獎金）的簽核可放棄獎金']);
+            exit;
+        }
         $upd = $conn->prepare("UPDATE recommendation_approval_links
             SET status = 'waived', reject_reason = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
@@ -261,26 +327,31 @@ try {
             }
         }
     } elseif ($reject_reason === '') {
-        // 若原本是 AP/MC（待科主任），簽核後更新為 APD；
-        // 若原本已是 APD（推薦人簽核連結），僅記錄簽核，不重複改狀態/寄信。
-        $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+        // 依簽核頁「通過/不通過」決策更新勾選清單的狀態。
+        $target_ids = !empty($decision_map) ? array_values(array_keys($decision_map)) : (!empty($selected_target_ids) ? $selected_target_ids : $allowed_target_ids);
         $status_stmt = $conn->prepare("SELECT {$status_expr} AS status FROM admission_recommendations WHERE id = ? LIMIT 1");
         $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
         if ($status_stmt && $upd_status) {
             ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
+            ensure_application_status_code($conn, 'APDR', '科主任審核未通過', 96);
             foreach ($target_ids as $tid) {
                 $status_stmt->bind_param('i', $tid);
                 $status_stmt->execute();
                 $sres = $status_stmt->get_result();
                 $srow = $sres ? $sres->fetch_assoc() : null;
                 $st = strtolower(trim((string)($srow['status'] ?? '')));
-                if (in_array($st, ['ap', 'approved', 'mc'], true)) {
+                $decision_for_id = isset($decision_map[$tid]) ? $decision_map[$tid] : $review_decision;
+                if ($decision_for_id === 'pass' && in_array($st, ['ap', 'approved', 'mc', 'apd'], true)) {
                     $new_status = 'APD';
                     $upd_status->bind_param('si', $new_status, $tid);
                     @$upd_status->execute();
                     if (function_exists('send_director_approved_email_once')) {
                         @send_director_approved_email_once($conn, $tid, 'director');
                     }
+                } elseif ($decision_for_id === 'fail' && in_array($st, ['ap', 'approved', 'mc', 'apd', 'apdr'], true)) {
+                    $new_status = 'APDR';
+                    $upd_status->bind_param('si', $new_status, $tid);
+                    @$upd_status->execute();
                 }
             }
             $status_stmt->close();
@@ -365,7 +436,7 @@ try {
             </div>
         ";
         $altBody = "推薦人已確認放棄本筆推薦獎金。\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
-    } elseif ($reject_reason === '') {
+    } elseif ($reject_reason === '' && !in_array('fail', array_values($decision_map), true) && $review_decision !== 'fail') {
         $subject = '科主任已確認通過';
         $body = "
             <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
@@ -377,17 +448,18 @@ try {
         ";
         $altBody = "科主任已經完成簽核，並確認通過。\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
     } else {
+        $notify_reason = ($reject_reason !== '') ? $reject_reason : '推薦人推薦資訊不通過';
         $subject = '科主任回覆不通過';
         $body = "
             <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
                 <p>科主任回覆不通過。</p>
-                <p>原因：{$reject_reason}</p>
+                <p>原因：{$notify_reason}</p>
                 <p>學生：{$student_name}</p>
                 <p>學校：{$student_school}</p>
                 <p>聯絡電話：{$student_phone}</p>
             </div>
         ";
-        $altBody = "科主任回覆不通過。\n原因：{$reject_reason}\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
+        $altBody = "科主任回覆不通過。\n原因：{$notify_reason}\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
     }
     if (function_exists('sendEmail')) {
         @sendEmail($to_email, $subject, $body, $altBody);
