@@ -144,6 +144,9 @@ try {
     $ar_has_student_school = $ar_has('student_school');
     $ar_has_student_school_code = $ar_has('student_school_code');
     $ar_has_student_phone = $ar_has('student_phone');
+    $has_recommended_table = false;
+    $t_recommended = $conn->query("SHOW TABLES LIKE 'recommended'");
+    if ($t_recommended && $t_recommended->num_rows > 0) $has_recommended_table = true;
 
     $status_expr = $ar_has_status ? "COALESCE(status,'')" : "''";
     $name_expr = $ar_has_student_name ? "COALESCE(student_name,'')" : "''";
@@ -197,6 +200,66 @@ try {
         $upd->bind_param('ss', $waive_reason, $token);
         $upd->execute();
         $upd->close();
+
+        // 若簽核者改為放棄獎金，重置同被推薦人的既有「已發送」紀錄，
+        // 讓招生中心依最新可領人數重新手動發送（避免沿用舊平分金額）。
+        $target_ids = !empty($group_id_list) ? $group_id_list : [$rid];
+        $student_names = [];
+        foreach ($target_ids as $tid) {
+            $name_sql = $has_recommended_table
+                ? "SELECT COALESCE(red.name,'') AS student_name
+                   FROM admission_recommendations ar
+                   LEFT JOIN recommended red ON ar.id = red.recommendations_id
+                   WHERE ar.id = ? LIMIT 1"
+                : "SELECT COALESCE(ar.student_name,'') AS student_name
+                   FROM admission_recommendations ar
+                   WHERE ar.id = ? LIMIT 1";
+            $name_stmt = $conn->prepare($name_sql);
+            if ($name_stmt) {
+                $name_stmt->bind_param('i', $tid);
+                $name_stmt->execute();
+                $name_res = $name_stmt->get_result();
+                if ($name_res && ($name_row = $name_res->fetch_assoc())) {
+                    $sn = trim((string)($name_row['student_name'] ?? ''));
+                    if ($sn !== '') $student_names[$sn] = true;
+                }
+                $name_stmt->close();
+            }
+        }
+
+        $reset_ids = [];
+        foreach (array_keys($student_names) as $sn) {
+            $ids_sql = $has_recommended_table
+                ? "SELECT ar.id
+                   FROM admission_recommendations ar
+                   LEFT JOIN recommended red ON ar.id = red.recommendations_id
+                   WHERE red.name = ? AND COALESCE(ar.status,'') IN ('APD')"
+                : "SELECT ar.id
+                   FROM admission_recommendations ar
+                   WHERE ar.student_name = ? AND COALESCE(ar.status,'') IN ('APD')";
+            $ids_stmt = $conn->prepare($ids_sql);
+            if ($ids_stmt) {
+                $ids_stmt->bind_param('s', $sn);
+                $ids_stmt->execute();
+                $ids_res = $ids_stmt->get_result();
+                if ($ids_res) {
+                    while ($ids_row = $ids_res->fetch_assoc()) {
+                        $idv = (int)($ids_row['id'] ?? 0);
+                        if ($idv > 0) $reset_ids[$idv] = true;
+                    }
+                }
+                $ids_stmt->close();
+            }
+        }
+
+        if (!empty($reset_ids)) {
+            $id_values = array_values(array_keys($reset_ids));
+            $id_list_sql = implode(',', array_map('intval', $id_values));
+            if ($id_list_sql !== '') {
+                @$conn->query("DELETE FROM bonus_send_logs WHERE recommendation_id IN ({$id_list_sql})");
+                @$conn->query("DELETE FROM bonus_send_email_logs WHERE recommendation_id IN ({$id_list_sql})");
+            }
+        }
     } elseif ($reject_reason === '') {
         // 若原本是 AP/MC（待科主任），簽核後更新為 APD；
         // 若原本已是 APD（推薦人簽核連結），僅記錄簽核，不重複改狀態/寄信。
