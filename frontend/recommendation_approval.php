@@ -190,7 +190,14 @@ try {
                 $status_norm = strtolower($data['status']);
                 $is_apd_status = ($status_norm === 'apd' || mb_strpos((string)$data['status'], '審核完成') !== false || mb_strpos((string)$data['status'], '可發獎金') !== false);
                 $data['can_waive_bonus'] = $is_apd_status ? 1 : 0;
-                if (!in_array($status_norm, ['ap', 'approved', 'mc', 'apd'], true) && mb_strpos((string)$data['status'], '審核完成') === false) {
+                $data['requires_review_decision'] = $is_apd_status ? 0 : 1;
+                if (
+                    !$is_signed &&
+                    !$is_waived &&
+                    ($link['status'] ?? '') !== 'rejected' &&
+                    !in_array($status_norm, ['ap', 'approved', 'mc', 'apd'], true) &&
+                    mb_strpos((string)$data['status'], '審核完成') === false
+                ) {
                     $error = '此筆推薦尚未審核通過，無法簽核。';
                 }
             }
@@ -421,35 +428,27 @@ try {
                 unset($rec_row);
             }
 
-            // 決策勾選清單：依推薦人(姓名+學號)彙整可套用的推薦編號
+            // 決策勾選清單：每筆推薦資料獨立一列（不再合併同推薦人）
             $decision_recommenders = [];
-            $decision_map = [];
             $decision_rows = [];
             if (is_array($data)) $decision_rows[] = $data;
             if (!empty($same_recs)) {
                 foreach ($same_recs as $r) $decision_rows[] = $r;
             }
+            $decision_seen_ids = [];
             foreach ($decision_rows as $dr) {
                 if (!is_array($dr)) continue;
                 $dr_id = (int)($dr['id'] ?? 0);
                 if ($dr_id <= 0) continue;
-                $dr_name = trim((string)($dr['recommender_name'] ?? ''));
-                $dr_sid = trim((string)($dr['recommender_student_id'] ?? ''));
-                $map_key = ($dr_name !== '' || $dr_sid !== '')
-                    ? ($dr_name . '|' . $dr_sid)
-                    : ('id:' . $dr_id);
-                if (!isset($decision_map[$map_key])) {
-                    $decision_map[$map_key] = [
-                        'recommender_name' => $dr_name,
-                        'recommender_student_id' => $dr_sid,
-                        'ids' => []
-                    ];
-                }
-                $decision_map[$map_key]['ids'][$dr_id] = $dr_id;
-            }
-            foreach ($decision_map as $row) {
-                $row['ids'] = array_values($row['ids']);
-                $decision_recommenders[] = $row;
+                if (isset($decision_seen_ids[$dr_id])) continue;
+                $decision_seen_ids[$dr_id] = true;
+                $decision_recommenders[] = [
+                    'recommender_name' => trim((string)($dr['recommender_name'] ?? '')),
+                    'recommender_student_id' => trim((string)($dr['recommender_student_id'] ?? '')),
+                    'student_name' => trim((string)($dr['student_name'] ?? '')),
+                    'student_school' => trim((string)($dr['student_school'] ?? '')),
+                    'ids' => [$dr_id]
+                ];
             }
         }
     }
@@ -562,6 +561,25 @@ try {
     }
     .btn-pass { background:#52c41a; color:#fff; }
     .btn-fail { background:#ff4d4f; color:#fff; }
+    .decision-reason-label {
+      margin-top: 4px;
+      margin-bottom: 6px;
+      color: #595959;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .decision-reason-input {
+      width: 100%;
+      min-height: 84px;
+      border: 1px solid #d9d9d9;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      resize: vertical;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      background: #fff;
+    }
     .decision-result-note {
       font-size: 22px;
       font-weight: 700;
@@ -752,13 +770,14 @@ try {
         <?php if ((int)($data['is_waived'] ?? 0) === 1): ?>
           <div class="alert">您已選擇放棄獎金，招生中心將無法再發送推薦獎金。</div>
         <?php elseif ((int)$data['is_signed'] === 1): ?>
-          <div class="alert success">已完成簽核，謝謝。</div>
+          <div class="alert success">已完成線上審核，無法再進行簽核。</div>
           <?php if (!empty($data['signature_path'])): ?>
             <div class="section">
               <img src="<?php echo htmlspecialchars($data['signature_path']); ?>" alt="signature" style="max-width:100%; border:1px solid #eee; border-radius:8px;">
             </div>
           <?php endif; ?>
         <?php else: ?>
+          <?php if ((int)($data['requires_review_decision'] ?? 1) === 1): ?>
           <div class="review-decision-box">
             <div class="review-required-title">推薦人推薦資訊是否通過?</div>
             <?php if (!empty($decision_recommenders)): ?>
@@ -767,6 +786,8 @@ try {
                 <tr>
                   <th>推薦人姓名</th>
                   <th>推薦人學號/編號</th>
+                  <th>被推薦人姓名</th>
+                  <th>國中</th>
                   <th class="decision-check-col">勾選</th>
                 </tr>
               </thead>
@@ -776,6 +797,8 @@ try {
                 <tr>
                   <td><?php echo htmlspecialchars($dr['recommender_name'] ?? ''); ?></td>
                   <td><?php echo htmlspecialchars($dr['recommender_student_id'] ?? ''); ?></td>
+                  <td><?php echo htmlspecialchars($dr['student_name'] ?? ''); ?></td>
+                  <td><?php echo htmlspecialchars($dr['student_school'] ?? ''); ?></td>
                   <td class="decision-check-col">
                     <input
                       type="checkbox"
@@ -794,8 +817,11 @@ try {
               <button id="decisionPassBtn" class="btn-pass" type="button" onclick="openDecisionConfirm('pass')">通過</button>
               <button id="decisionFailBtn" class="btn-fail" type="button" onclick="openDecisionConfirm('fail')">不通過</button>
             </div>
+            <div class="decision-reason-label">不通過原因（僅選擇不通過時必填）</div>
+            <textarea id="decisionFailReason" class="decision-reason-input" placeholder="請輸入不通過原因"></textarea>
           </div>
           <div id="decisionResultNote" class="decision-result-note" style="display:none;"></div>
+          <?php endif; ?>
           <?php if ((int)($data['can_waive_bonus'] ?? 0) === 1): ?>
           <div class="waive-q">是否放棄獎金 ?</div>
             <div class="btns" style="margin-top:0; margin-bottom:12px;">
@@ -839,9 +865,12 @@ try {
 
   <script>
     const token = <?php echo json_encode($token); ?>;
+    const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
     let pendingDecisionType = '';
     let pendingDecisionSelectedIds = [];
+    let pendingDecisionReason = '';
     const decidedIdMap = {};
+    const decidedFailReasonMap = {};
 
     function getSelectedDecisionIds() {
       const checkboxes = document.querySelectorAll('.decision-rec-checkbox:checked');
@@ -871,6 +900,18 @@ try {
       if (availableIds.length !== selectedIds.length) {
         alert('已自動忽略已確認過的推薦人，僅送出尚未確認者。');
       }
+      if (type === 'fail') {
+        const reasonEl = document.getElementById('decisionFailReason');
+        const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
+        if (!reasonText) {
+          alert('選擇不通過時，請先填寫不通過原因。');
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        pendingDecisionReason = reasonText;
+      } else {
+        pendingDecisionReason = '';
+      }
       pendingDecisionSelectedIds = availableIds;
       pendingDecisionType = (type === 'pass') ? 'pass' : 'fail';
       const textEl = document.getElementById('decisionConfirmText');
@@ -888,6 +929,7 @@ try {
       if (modal) modal.style.display = 'none';
       pendingDecisionType = '';
       pendingDecisionSelectedIds = [];
+      pendingDecisionReason = '';
     }
 
     function confirmDecision() {
@@ -896,7 +938,14 @@ try {
         return;
       }
       const decidedNow = pendingDecisionSelectedIds.slice();
-      decidedNow.forEach(id => { decidedIdMap[id] = pendingDecisionType; });
+      decidedNow.forEach(id => {
+        decidedIdMap[id] = pendingDecisionType;
+        if (pendingDecisionType === 'fail') {
+          decidedFailReasonMap[id] = pendingDecisionReason;
+        } else if (decidedFailReasonMap[id]) {
+          delete decidedFailReasonMap[id];
+        }
+      });
       closeDecisionConfirm();
 
       const passBtn = document.getElementById('decisionPassBtn');
@@ -940,7 +989,7 @@ try {
 
     function submitSignatureUrl(signatureUrl) {
       const allDecidedIds = Object.keys(decidedIdMap).map(v => parseInt(v, 10)).filter(v => v > 0);
-      if (!allDecidedIds.length) {
+      if (requiresReviewDecision && !allDecidedIds.length) {
         alert('請先完成「推薦人推薦資訊是否通過」必填選項。');
         return;
       }
@@ -950,6 +999,7 @@ try {
         body: 'token=' + encodeURIComponent(token)
           + '&signature_url=' + encodeURIComponent(signatureUrl)
           + '&review_decision_map=' + encodeURIComponent(JSON.stringify(decidedIdMap))
+          + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedFailReasonMap))
       })
       .then(res => res.json())
       .then(data => {

@@ -63,6 +63,7 @@ $waive_bonus = isset($_POST['waive_bonus']) ? intval($_POST['waive_bonus']) : 0;
 $review_decision = isset($_POST['review_decision']) ? trim((string)$_POST['review_decision']) : '';
 $selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$_POST['selected_review_ids']) : '';
 $review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
+$review_fail_reason_map_raw = isset($_POST['review_fail_reason_map']) ? trim((string)$_POST['review_fail_reason_map']) : '';
 
 if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '' && $waive_bonus !== 1)) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
@@ -147,6 +148,13 @@ try {
     $ar_has_student_school = $ar_has('student_school');
     $ar_has_student_school_code = $ar_has('student_school_code');
     $ar_has_student_phone = $ar_has('student_phone');
+    $ar_has_recommender_name = $ar_has('recommender_name');
+    $ar_has_recommender_student_id = $ar_has('recommender_student_id');
+    $ar_has_recommender_department = $ar_has('recommender_department');
+    $ar_has_recommender_department_code = $ar_has('recommender_department_code');
+    $has_recommender_table = false;
+    $t_recommender = $conn->query("SHOW TABLES LIKE 'recommender'");
+    if ($t_recommender && $t_recommender->num_rows > 0) $has_recommender_table = true;
     $has_recommended_table = false;
     $t_recommended = $conn->query("SHOW TABLES LIKE 'recommended'");
     if ($t_recommended && $t_recommended->num_rows > 0) $has_recommended_table = true;
@@ -156,6 +164,38 @@ try {
     $school_expr = $ar_has_student_school ? "COALESCE(student_school,'')" : "''";
     $school_code_expr = $ar_has_student_school_code ? "COALESCE(student_school_code,'')" : "''";
     $phone_expr = $ar_has_student_phone ? "COALESCE(student_phone,'')" : "''";
+    $rec_name_expr = $has_recommender_table
+        ? "COALESCE(rec.name, " . ($ar_has_recommender_name ? "ar.recommender_name" : "''") . ", '')"
+        : ($ar_has_recommender_name ? "COALESCE(ar.recommender_name,'')" : "''");
+    $rec_sid_expr = $has_recommender_table
+        ? "COALESCE(rec.id, " . ($ar_has_recommender_student_id ? "ar.recommender_student_id" : "''") . ", '')"
+        : ($ar_has_recommender_student_id ? "COALESCE(ar.recommender_student_id,'')" : "''");
+    $rec_dept_expr = $has_recommender_table
+        ? "COALESCE(rec.department, " . ($ar_has_recommender_department_code ? "ar.recommender_department_code" : ($ar_has_recommender_department ? "ar.recommender_department" : "''")) . ", '')"
+        : ($ar_has_recommender_department_code ? "COALESCE(ar.recommender_department_code,'')" : ($ar_has_recommender_department ? "COALESCE(ar.recommender_department,'')" : "''"));
+
+    $department_name_map = [];
+    try {
+        $t_dept = $conn->query("SHOW TABLES LIKE 'departments'");
+        if ($t_dept && $t_dept->num_rows > 0) {
+            $r_dept = $conn->query("SELECT code, name FROM departments");
+            if ($r_dept) {
+                while ($dr = $r_dept->fetch_assoc()) {
+                    $code = trim((string)($dr['code'] ?? ''));
+                    $name = trim((string)($dr['name'] ?? ''));
+                    if ($code !== '' && $name !== '') $department_name_map[$code] = $name;
+                }
+            }
+        }
+    } catch (Exception $e) {}
+    $resolve_dept_name = function($raw) use ($department_name_map) {
+        $v = trim((string)$raw);
+        if ($v === '') return '';
+        if (isset($department_name_map[$v])) return (string)$department_name_map[$v];
+        $up = strtoupper($v);
+        if (isset($department_name_map[$up])) return (string)$department_name_map[$up];
+        return $v;
+    };
 
     $chk = $conn->prepare("SELECT {$status_expr} AS status,
         {$name_expr} AS student_name,
@@ -170,6 +210,7 @@ try {
         return ($st_norm === 'apd' || mb_strpos($st, '審核完成') !== false || mb_strpos($st, '可發獎金') !== false);
     };
     $waive_allowed = true;
+    $requires_review_decision = false;
     if (!empty($group_id_list)) {
         $ok = true;
         foreach ($group_id_list as $gid) {
@@ -183,6 +224,7 @@ try {
             }
             if (!$is_apd_status($row['status'] ?? '')) {
                 $waive_allowed = false;
+                $requires_review_decision = true;
             }
         }
         if (!$ok) {
@@ -202,6 +244,7 @@ try {
         }
         if (!$is_apd_status($rec['status'] ?? '')) {
             $waive_allowed = false;
+            $requires_review_decision = true;
         }
     }
     $chk->close();
@@ -233,9 +276,30 @@ try {
             }
         }
     }
+    $fail_reason_map = [];
+    if ($review_fail_reason_map_raw !== '') {
+        $decoded_reason = json_decode($review_fail_reason_map_raw, true);
+        if (is_array($decoded_reason)) {
+            foreach ($decoded_reason as $idKey => $reasonVal) {
+                $did = intval($idKey);
+                $rv = trim((string)$reasonVal);
+                if ($did > 0 && isset($allowed_id_map[$did]) && $rv !== '') {
+                    $fail_reason_map[$did] = mb_substr($rv, 0, 250);
+                }
+            }
+        }
+    }
+
+    // APD（可發獎金）簽核連結不需要「通過/不通過」決策，避免誤改狀態。
+    if (!$requires_review_decision) {
+        $decision_map = [];
+        $fail_reason_map = [];
+        $review_decision = '';
+        $selected_target_ids = [];
+    }
 
     $is_signature_submit = ($waive_bonus !== 1 && $reject_reason === '' && ($signature !== '' || $signature_url !== ''));
-    if ($is_signature_submit) {
+    if ($is_signature_submit && $requires_review_decision) {
         if (empty($decision_map)) {
             if (!in_array($review_decision, ['pass', 'fail'], true)) {
                 echo json_encode(['success' => false, 'message' => '請先選擇通過或不通過']);
@@ -251,9 +315,19 @@ try {
             echo json_encode(['success' => false, 'message' => '缺少可更新的審核項目']);
             exit;
         }
+        foreach ($decision_map as $did => $dv) {
+            if ($dv === 'fail') {
+                $reason_txt = trim((string)($fail_reason_map[$did] ?? ''));
+                if ($reason_txt === '') {
+                    echo json_encode(['success' => false, 'message' => '不通過時請填寫不通過原因']);
+                    exit;
+                }
+            }
+        }
     }
 
     $public_path = '';
+    $failed_email_items = [];
     if ($waive_bonus === 1) {
         if (!$waive_allowed) {
             echo json_encode(['success' => false, 'message' => '僅審核完成（可發獎金）的簽核可放棄獎金']);
@@ -331,6 +405,11 @@ try {
         $target_ids = !empty($decision_map) ? array_values(array_keys($decision_map)) : (!empty($selected_target_ids) ? $selected_target_ids : $allowed_target_ids);
         $status_stmt = $conn->prepare("SELECT {$status_expr} AS status FROM admission_recommendations WHERE id = ? LIMIT 1");
         $upd_status = $conn->prepare("UPDATE admission_recommendations SET status = ? WHERE id = ? LIMIT 1");
+        $failed_reason_rows = [];
+        $detail_stmt = $conn->prepare("SELECT {$rec_name_expr} AS recommender_name, {$rec_sid_expr} AS recommender_student_id, {$rec_dept_expr} AS recommender_department
+            FROM admission_recommendations ar
+            " . ($has_recommender_table ? "LEFT JOIN recommender rec ON ar.id = rec.recommendations_id" : "") . "
+            WHERE ar.id = ? LIMIT 1");
         if ($status_stmt && $upd_status) {
             ensure_application_status_code($conn, 'APD', '科主任已審核', 95);
             ensure_application_status_code($conn, 'APDR', '科主任審核未通過', 96);
@@ -352,13 +431,39 @@ try {
                     $new_status = 'APDR';
                     $upd_status->bind_param('si', $new_status, $tid);
                     @$upd_status->execute();
+                    $fail_reason = trim((string)($fail_reason_map[$tid] ?? ''));
+                    if ($fail_reason !== '') {
+                        $failed_reason_rows[] = $fail_reason;
+                        $info = ['name' => '', 'sid' => '', 'department' => '', 'reason' => $fail_reason];
+                        if ($detail_stmt) {
+                            $detail_stmt->bind_param('i', $tid);
+                            $detail_stmt->execute();
+                            $detail_res = $detail_stmt->get_result();
+                            $detail_row = $detail_res ? $detail_res->fetch_assoc() : null;
+                            if ($detail_row) {
+                                $info['name'] = trim((string)($detail_row['recommender_name'] ?? ''));
+                                $info['sid'] = trim((string)($detail_row['recommender_student_id'] ?? ''));
+                                $info['department'] = $resolve_dept_name($detail_row['recommender_department'] ?? '');
+                            }
+                        }
+                        $failed_email_items[] = $info;
+                    }
                 }
             }
             $status_stmt->close();
             $upd_status->close();
+            if ($detail_stmt) $detail_stmt->close();
         } else {
             if ($status_stmt) $status_stmt->close();
             if ($upd_status) $upd_status->close();
+            if ($detail_stmt) $detail_stmt->close();
+        }
+        $combined_fail_reason = '';
+        if (!empty($failed_reason_rows)) {
+            $combined_fail_reason = implode('；', $failed_reason_rows);
+        }
+        if ($combined_fail_reason !== '' && trim((string)$reject_reason) === '') {
+            $reject_reason = $combined_fail_reason;
         }
         if ($signature_url !== '') {
             $url = $signature_url;
@@ -392,9 +497,10 @@ try {
         }
 
         $upd = $conn->prepare("UPDATE recommendation_approval_links
-            SET status = 'signed', signature_path = ?, signed_at = NOW()
+            SET status = 'signed', signature_path = ?, reject_reason = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
-        $upd->bind_param('ss', $public_path, $token);
+        $rej_value = trim((string)$reject_reason);
+        $upd->bind_param('sss', $public_path, $rej_value, $token);
         $upd->execute();
         $upd->close();
     } else {
@@ -450,16 +556,40 @@ try {
     } else {
         $notify_reason = ($reject_reason !== '') ? $reject_reason : '推薦人推薦資訊不通過';
         $subject = '科主任回覆不通過';
+        $fail_rows_html = '';
+        $fail_rows_text = '';
+        if (!empty($failed_email_items)) {
+            $chunks_html = [];
+            $chunks_text = [];
+            foreach ($failed_email_items as $it) {
+                $n = htmlspecialchars((string)($it['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $sid = htmlspecialchars((string)($it['sid'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $dept = htmlspecialchars((string)($it['department'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $reason = htmlspecialchars((string)($it['reason'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $chunks_html[] = "<li>推薦人姓名：{$n}<br>學號/教師編號：{$sid}<br>科系：{$dept}<br>不通過原因：{$reason}</li>";
+
+                $nt = trim((string)($it['name'] ?? ''));
+                $sidt = trim((string)($it['sid'] ?? ''));
+                $deptt = trim((string)($it['department'] ?? ''));
+                $reasont = trim((string)($it['reason'] ?? ''));
+                $chunks_text[] = "推薦人姓名：{$nt}\n學號/教師編號：{$sidt}\n科系：{$deptt}\n不通過原因：{$reasont}";
+            }
+            if (!empty($chunks_html)) {
+                $fail_rows_html = "<div>不通過名單：</div><ul style='margin:6px 0 10px 18px; padding:0;'>" . implode('', $chunks_html) . "</ul>";
+                $fail_rows_text = "不通過名單：\n" . implode("\n----------------\n", $chunks_text) . "\n";
+            }
+        }
         $body = "
             <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
                 <p>科主任回覆不通過。</p>
                 <p>原因：{$notify_reason}</p>
+                {$fail_rows_html}
                 <p>學生：{$student_name}</p>
                 <p>學校：{$student_school}</p>
                 <p>聯絡電話：{$student_phone}</p>
             </div>
         ";
-        $altBody = "科主任回覆不通過。\n原因：{$notify_reason}\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
+        $altBody = "科主任回覆不通過。\n原因：{$notify_reason}\n{$fail_rows_text}學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
     }
     if (function_exists('sendEmail')) {
         @sendEmail($to_email, $subject, $body, $altBody);
