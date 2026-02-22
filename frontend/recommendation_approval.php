@@ -353,7 +353,7 @@ try {
   <style>
     body { font-family: Arial, sans-serif; background:#f5f7fb; margin:0; padding:24px; color:#333; }
     .card { max-width: 920px; margin: 0 auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 6px 20px rgba(0,0,0,0.08); }
-    h2 { margin:0 0 12px 0; color:#003366; font-size: 44px; }
+    h2 { margin:0 0 12px 0; color:#588dd1; font-size: 34px; }
     .section { margin-top: 18px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .label { font-size: 12px; color:#777; margin-bottom:4px; }
