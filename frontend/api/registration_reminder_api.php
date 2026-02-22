@@ -45,8 +45,12 @@ function ensureRegistrationColumns($conn) {
         'continued_recruitment_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招是否已提醒'",
         'continued_recruitment_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招是否已報名'",
         'continued_recruitment_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '續招本階段不報'",
+        'priority_exam_decline_reason' => "TEXT DEFAULT NULL COMMENT '優先免試本階段不報原因'",
+        'joint_exam_decline_reason' => "TEXT DEFAULT NULL COMMENT '聯合免試本階段不報原因'",
+        'continued_recruitment_decline_reason' => "TEXT DEFAULT NULL COMMENT '續招本階段不報原因'",
         'is_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已報名（任一階段）'",
-        'check_in_status' => "VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '報到流程: pending=待報到, reminded=已提醒報到, completed=已完成報到, declined=放棄報到'"
+        'check_in_status' => "VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '報到流程: pending=待報到, reminded=已提醒報到, completed=已完成報到, declined=放棄報到'",
+        'check_in_decline_reason' => "TEXT DEFAULT NULL COMMENT '放棄報到原因'"
     ];
     foreach ($cols as $name => $def) {
         $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$name'");
@@ -227,8 +231,16 @@ try {
             echo json_encode(['success' => false, 'message' => '招生中心不可變更報名狀態']);
             exit;
         }
-        
-        $stage = getCurrentRegistrationStage($conn);
+
+        // 優先使用前端傳入的階段（與名單頁顯示一致），避免名單有顯示階段但 API 依伺服器時間判定為非報名期間
+        $valid_stages = ['priority_exam', 'joint_exam', 'continued_recruitment'];
+        $stage = null;
+        if (!empty($_POST['stage']) && in_array($_POST['stage'], $valid_stages, true)) {
+            $stage = $_POST['stage'];
+        }
+        if (!$stage) {
+            $stage = getCurrentRegistrationStage($conn);
+        }
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
@@ -255,13 +267,24 @@ try {
         }
         
         $declined_col = $stage . '_declined';
+        $reason_col = $stage . '_decline_reason';
         $r = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$declined_col'");
         if (!$r || $r->num_rows === 0) {
             @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN `$declined_col` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '本階段不報'");
         }
-        
-        $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1 WHERE id = ?");
-        $stmt->bind_param("i", $enrollment_id);
+        $r2 = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE '$reason_col'");
+        if (!$r2 || $r2->num_rows === 0) {
+            @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN `$reason_col` TEXT DEFAULT NULL COMMENT '本階段不報原因'");
+        }
+
+        $decline_reason = isset($_POST['decline_reason']) ? trim((string)$_POST['decline_reason']) : '';
+        if ($decline_reason !== '') {
+            $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1, `$reason_col` = ? WHERE id = ?");
+            $stmt->bind_param("si", $decline_reason, $enrollment_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE enrollment_intention SET `$declined_col` = 1 WHERE id = ?");
+            $stmt->bind_param("i", $enrollment_id);
+        }
         
         if ($stmt->execute()) {
             echo json_encode(['success' => true, 'message' => '已記錄本階段不報，學生將於下一招生階段可再次提醒報名']);
@@ -318,9 +341,22 @@ try {
         if (!$r || $r->num_rows === 0) {
             @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN check_in_status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '報到流程'");
         }
-        
-        $stmt = $conn->prepare("UPDATE enrollment_intention SET check_in_status = ? WHERE id = ?");
-        $stmt->bind_param("si", $new_status, $enrollment_id);
+        $r2 = @$conn->query("SHOW COLUMNS FROM enrollment_intention LIKE 'check_in_decline_reason'");
+        if (!$r2 || $r2->num_rows === 0) {
+            @$conn->query("ALTER TABLE enrollment_intention ADD COLUMN check_in_decline_reason TEXT DEFAULT NULL COMMENT '放棄報到原因'");
+        }
+
+        $check_in_decline_reason = '';
+        if ($action === 'check_in_decline') {
+            $check_in_decline_reason = isset($_POST['check_in_decline_reason']) ? trim((string)$_POST['check_in_decline_reason']) : '';
+        }
+        if ($new_status === 'declined') {
+            $stmt = $conn->prepare("UPDATE enrollment_intention SET check_in_status = ?, check_in_decline_reason = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $new_status, $check_in_decline_reason, $enrollment_id);
+        } else {
+            $stmt = $conn->prepare("UPDATE enrollment_intention SET check_in_status = ? WHERE id = ?");
+            $stmt->bind_param("si", $new_status, $enrollment_id);
+        }
         
         $msg = [
             'reminded' => '已標記為已提醒報到',
