@@ -290,6 +290,53 @@ try {
                     }
                 }
             }
+
+            // 去重：避免 recommender/recommended 關聯重複列造成同一推薦編號重複顯示
+            // 若同一編號有多列，保留「資訊較完整」那筆，避免推薦資訊空白。
+            if (!empty($same_recs)) {
+                $score_row = function($row) {
+                    $score = 0;
+                    $fields = [
+                        'recommender_name',
+                        'recommender_student_id',
+                        'recommendation_reason',
+                        'student_name',
+                        'student_school',
+                        'student_phone',
+                    ];
+                    foreach ($fields as $f) {
+                        if (trim((string)($row[$f] ?? '')) !== '') $score++;
+                    }
+                    return $score;
+                };
+
+                $dedup_map = [];
+                foreach ($same_recs as $row) {
+                    $rid_key = (int)($row['id'] ?? 0);
+                    $uniq_key = ($rid_key > 0)
+                        ? ('id:' . $rid_key)
+                        : ('hash:' . md5(json_encode($row, JSON_UNESCAPED_UNICODE)));
+
+                    if (!isset($dedup_map[$uniq_key])) {
+                        $dedup_map[$uniq_key] = $row;
+                        continue;
+                    }
+
+                    $old_score = $score_row($dedup_map[$uniq_key]);
+                    $new_score = $score_row($row);
+                    if ($new_score > $old_score) {
+                        $dedup_map[$uniq_key] = $row;
+                    }
+                }
+                $same_recs = array_values($dedup_map);
+            }
+
+            // 清單僅顯示「其他待審核」資料，避免與頁面上方主資料（當前推薦編號）重複。
+            if (!empty($same_recs)) {
+                $same_recs = array_values(array_filter($same_recs, function($row) use ($rid) {
+                    return (int)($row['id'] ?? 0) !== (int)$rid;
+                }));
+            }
         }
     }
     $conn->close();
@@ -306,7 +353,7 @@ try {
   <style>
     body { font-family: Arial, sans-serif; background:#f5f7fb; margin:0; padding:24px; color:#333; }
     .card { max-width: 920px; margin: 0 auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 6px 20px rgba(0,0,0,0.08); }
-    h2 { margin:0 0 12px 0; color:#003366; }
+    h2 { margin:0 0 12px 0; color:#003366; font-size: 44px; }
     .section { margin-top: 18px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .label { font-size: 12px; color:#777; margin-bottom:4px; }
@@ -380,6 +427,64 @@ try {
     <?php elseif (!$data): ?>
       <div class="alert">資料載入失敗。</div>
     <?php else: ?>
+      <?php if (!empty($same_recs) && count($same_recs) > 0): ?>
+      <div class="detail-section" style="margin-top:12px; padding-top:12px;">
+        <h4 class="detail-title"><?php echo htmlspecialchars($same_recs_title ?? '同一推薦人所有推薦學生'); ?></h4>
+        <?php foreach ($same_recs as $row): ?>
+          <div style="margin-top:16px; padding-top:8px; border-top:1px dashed #e6edf5;">
+            <div class="detail-wrap" style="margin-top:8px;">
+              <div class="detail-card">
+                <h4 class="detail-title">被推薦人資訊</h4>
+                <table class="detail-table">
+                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">就讀學校</td><td><?php echo htmlspecialchars($row['student_school'] ?? ''); ?></td></tr>
+                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['student_grade'] ?? ''); ?></td></tr>
+                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['student_email'] ?? ''); ?></td></tr>
+                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['student_phone'] ?? ''); ?></td></tr>
+                  <tr><td class="label">LINE ID</td><td><?php echo htmlspecialchars($row['student_line_id'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學生興趣</td><td><?php echo htmlspecialchars($row['student_interest'] ?? ''); ?></td></tr>
+                </table>
+              </div>
+              <div class="detail-card">
+                <h4 class="detail-title">推薦人資訊</h4>
+                <table class="detail-table">
+                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['recommender_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學號/教師編號</td><td><?php echo htmlspecialchars($row['recommender_student_id'] ?? ''); ?></td></tr>
+                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['recommender_grade'] ?? ''); ?></td></tr>
+                  <tr><td class="label">科系</td><td><?php echo htmlspecialchars($row['recommender_department'] ?? ''); ?></td></tr>
+                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['recommender_phone'] ?? ''); ?></td></tr>
+                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['recommender_email'] ?? ''); ?></td></tr>
+                </table>
+              </div>
+            </div>
+            <div class="detail-section" style="margin-top:12px;">
+              <h4 class="detail-title">推薦資訊</h4>
+              <table class="detail-table">
+                <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
+                <?php if (!empty($row['additional_info'])): ?>
+                <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
+                <?php endif; ?>
+                <?php if (!empty($row['proof_evidence'])): ?>
+                <tr>
+                  <td class="label">證明文件</td>
+                  <td>
+                    <?php
+                      $file_path2 = str_replace('\\', '/', $row['proof_evidence']);
+                      $file_url2 = '/Topics-frontend/frontend/' . $file_path2;
+                    ?>
+                    <a class="file-link" href="<?php echo htmlspecialchars($file_url2); ?>" target="_blank" rel="noopener">查看文件</a>
+                  </td>
+                </tr>
+                <?php endif; ?>
+                <?php if (!empty($row['created_at'])): ?>
+                <tr><td class="label">推薦時間</td><td><?php echo htmlspecialchars(date('Y/m/d H:i', strtotime($row['created_at']))); ?></td></tr>
+                <?php endif; ?>
+              </table>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
       <div class="section">
         <div class="detail-wrap">
           <div class="detail-card">
@@ -432,53 +537,6 @@ try {
           </table>
         </div>
 
-        <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
-        <div class="detail-section">
-          <h4 class="detail-title"><?php echo htmlspecialchars($same_recs_title ?? '同一推薦人所有推薦學生'); ?></h4>
-          <?php foreach ($same_recs as $row): ?>
-            <div class="detail-wrap" style="margin-top:12px;">
-              <div class="detail-card">
-                <h4 class="detail-title">被推薦人資訊（推薦編號：<?php echo htmlspecialchars($row['id'] ?? ''); ?>）</h4>
-                <table class="detail-table">
-                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></td></tr>
-                  <tr><td class="label">就讀學校</td><td><?php echo htmlspecialchars($row['student_school'] ?? ''); ?></td></tr>
-                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['student_grade'] ?? ''); ?></td></tr>
-                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['student_email'] ?? ''); ?></td></tr>
-                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['student_phone'] ?? ''); ?></td></tr>
-                  <tr><td class="label">LINE ID</td><td><?php echo htmlspecialchars($row['student_line_id'] ?? ''); ?></td></tr>
-                  <tr><td class="label">學生興趣</td><td><?php echo htmlspecialchars($row['student_interest'] ?? ''); ?></td></tr>
-                </table>
-              </div>
-              <div class="detail-card">
-                <h4 class="detail-title">推薦資訊</h4>
-                <table class="detail-table">
-                  <tr><td class="label">推薦人姓名</td><td><?php echo htmlspecialchars($row['recommender_name'] ?? ''); ?></td></tr>
-                  <tr><td class="label">學號/教師編號</td><td><?php echo htmlspecialchars($row['recommender_student_id'] ?? ''); ?></td></tr>
-                  <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
-                  <?php if (!empty($row['additional_info'])): ?>
-                  <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
-                  <?php endif; ?>
-                  <?php if (!empty($row['proof_evidence'])): ?>
-                  <tr>
-                    <td class="label">證明文件</td>
-                    <td>
-                      <?php
-                        $file_path2 = str_replace('\\', '/', $row['proof_evidence']);
-                        $file_url2 = '/Topics-frontend/frontend/' . $file_path2;
-                      ?>
-                      <a class="file-link" href="<?php echo htmlspecialchars($file_url2); ?>" target="_blank" rel="noopener">查看文件</a>
-                    </td>
-                  </tr>
-                  <?php endif; ?>
-                  <?php if (!empty($row['created_at'])): ?>
-                  <tr><td class="label">推薦時間</td><td><?php echo htmlspecialchars(date('Y/m/d H:i', strtotime($row['created_at']))); ?></td></tr>
-                  <?php endif; ?>
-                </table>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
       </div>
 
       <div class="section">
