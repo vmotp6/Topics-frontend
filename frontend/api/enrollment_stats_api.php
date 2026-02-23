@@ -266,12 +266,15 @@ function buildEnrollmentYearCondition($pdo, $roc_year, $table_alias = 'enrollmen
     return " AND {$table_alias}.created_at >= $start_q AND {$table_alias}.created_at <= $end_q";
 }
 
-// 就讀意願表內有資料的學年度（屆）列表，依 created_at 依 6 月為界推算民國學年度
+// 就讀意願表內有資料的學年度（屆）列表，依 created_at 依 6 月為界推算民國學年度；無資料時至少回傳目前學年度
 function getAvailableEnrollmentRocYears($pdo) {
+    $m = (int)date('n');
+    $y = (int)date('Y');
+    $currentRoc = ($m >= 6 ? $y : $y - 1) - 1911;
     try {
         $table_check = $pdo->query("SHOW TABLES LIKE 'enrollment_intention'");
         if ($table_check->rowCount() === 0) {
-            return [];
+            return $currentRoc > 0 ? [$currentRoc] : [];
         }
         $stmt = $pdo->query("
             SELECT DISTINCT
@@ -282,13 +285,22 @@ function getAvailableEnrollmentRocYears($pdo) {
             ORDER BY roc_year DESC
         ");
         if (!$stmt) {
-            return [];
+            return $currentRoc > 0 ? [$currentRoc] : [];
         }
         $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        return array_values($rows);
+        $years = array_values(array_map('intval', $rows));
+        if (empty($years) && $currentRoc > 0) {
+            return [$currentRoc];
+        }
+        if (!empty($years) && !in_array($currentRoc, $years, true)) {
+            $years[] = $currentRoc;
+            rsort($years);
+            $years = array_values($years);
+        }
+        return $years;
     } catch (Exception $e) {
         error_log("getAvailableEnrollmentRocYears: " . $e->getMessage());
-        return [];
+        return $currentRoc > 0 ? [$currentRoc] : [];
     }
 }
 
