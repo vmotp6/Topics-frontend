@@ -224,7 +224,6 @@ function getGenderStats($pdo, $department_filter = '') {
     try {
         $filter = buildDepartmentFilter($pdo, $department_filter);
         $sql = "SELECT 
-                    COALESCE(gender, '未填寫') as gender_code,
                     CASE 
                         WHEN gender = 1 OR gender = '1' THEN '男'
                         WHEN gender = 2 OR gender = '2' THEN '女'
@@ -235,7 +234,7 @@ function getGenderStats($pdo, $department_filter = '') {
                     COUNT(*) as count
                 FROM continued_admission 
                 WHERE $filter
-                GROUP BY gender
+                GROUP BY gender_name
                 ORDER BY count DESC";
         $stmt = $pdo->query($sql);
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
