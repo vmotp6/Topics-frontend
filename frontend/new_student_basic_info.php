@@ -440,7 +440,7 @@ try {
         <div class="grid">
           <div>
             <label>學號 <span class="req-star">*</span></label>
-            <input name="student_no" value="<?php echo htmlspecialchars(safePost('student_no')); ?>" required>
+            <input name="student_no" value="<?php echo htmlspecialchars(safePost('student_no')); ?>" maxlength="10" required>
           </div>
 
           <div>
@@ -480,7 +480,7 @@ try {
 
           <div>
             <label>生日</label>
-            <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday')); ?>">
+            <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday'));?>"> 
           </div>
 
           <div>
