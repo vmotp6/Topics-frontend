@@ -771,11 +771,6 @@ try {
           <div class="alert">您已選擇放棄獎金，招生中心將無法再發送推薦獎金。</div>
         <?php elseif ((int)$data['is_signed'] === 1): ?>
           <div class="alert success">已完成線上審核，無法再進行簽核。</div>
-          <?php if (!empty($data['signature_path'])): ?>
-            <div class="section">
-              <img src="<?php echo htmlspecialchars($data['signature_path']); ?>" alt="signature" style="max-width:100%; border:1px solid #eee; border-radius:8px;">
-            </div>
-          <?php endif; ?>
         <?php else: ?>
           <?php if ((int)($data['requires_review_decision'] ?? 1) === 1): ?>
           <div class="review-decision-box">
