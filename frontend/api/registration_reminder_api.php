@@ -35,7 +35,11 @@ if (empty($_SESSION['user_id'])) {
 // 確保報名提醒相關欄位存在
 function ensureRegistrationColumns($conn) {
     $cols = [
-        'registration_stage' => "VARCHAR(20) DEFAULT NULL COMMENT 'priority_exam/joint_exam/continued_recruitment 當前報名階段'",
+        'registration_stage' => "VARCHAR(20) DEFAULT NULL COMMENT 'full_exempt/priority_exam/joint_exam/continued_recruitment 當前報名階段'",
+        'full_exempt_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '完全免試是否已提醒'",
+        'full_exempt_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '完全免試是否已報名'",
+        'full_exempt_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '完全免試本階段不報'",
+        'full_exempt_decline_reason' => "TEXT DEFAULT NULL COMMENT '完全免試本階段不報原因'",
         'priority_exam_reminded' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試是否已提醒'",
         'priority_exam_registered' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試是否已報名'",
         'priority_exam_declined' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '優先免試本階段不報'",
@@ -80,7 +84,7 @@ function getContinuedRecruitmentTimeRange($conn) {
 
 /**
  * 判斷當前報名階段
- * 優先免試/聯合免試依月份；續招依「科系名額管理」設定的報名時間區間。
+ * 完全免試(4月)/優先免試(5月)/聯合免試(6-7月)依月份；續招依「科系名額管理」設定的報名時間區間。
  */
 function getCurrentRegistrationStage($conn) {
     $now = time();
@@ -92,6 +96,9 @@ function getCurrentRegistrationStage($conn) {
         if ($start_ts !== false && $end_ts !== false && $now >= $start_ts && $now <= $end_ts) {
             return 'continued_recruitment';
         }
+    }
+    if ($current_month >= 4 && $current_month < 5) {
+        return 'full_exempt'; // 4月：完全免試
     }
     if ($current_month >= 5 && $current_month < 6) {
         return 'priority_exam';
@@ -233,7 +240,7 @@ try {
         }
 
         // 優先使用前端傳入的階段（與名單頁顯示一致），避免名單有顯示階段但 API 依伺服器時間判定為非報名期間
-        $valid_stages = ['priority_exam', 'joint_exam', 'continued_recruitment'];
+        $valid_stages = ['full_exempt', 'priority_exam', 'joint_exam', 'continued_recruitment'];
         $stage = null;
         if (!empty($_POST['stage']) && in_array($_POST['stage'], $valid_stages, true)) {
             $stage = $_POST['stage'];
