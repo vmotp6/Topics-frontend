@@ -611,12 +611,12 @@ try {
                 <p>科主任回覆不通過。</p>
                 <p>原因：{$notify_reason}</p>
                 {$fail_rows_html}
-                <p>學生：{$student_name}</p>
+                 <p>學生：{$student_name}</p>
                 <p>學校：{$student_school}</p>
                 <p>聯絡電話：{$student_phone}</p>
             </div>
         ";
-        $altBody = "科主任回覆不通過。\n原因：{$notify_reason}\n{$fail_rows_text}學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
+        $altBody = "科主任回覆不通過。\n原因：{$notify_reason}\n{$fail_rows_text}";
     }
     if (function_exists('sendEmail')) {
         @sendEmail($to_email, $subject, $body, $altBody);
