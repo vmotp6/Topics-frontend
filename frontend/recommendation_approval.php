@@ -825,7 +825,10 @@ try {
           <?php if ((int)($data['can_waive_bonus'] ?? 0) === 1): ?>
           <div class="waive-q">是否放棄獎金 ?</div>
             <div class="btns" style="margin-top:0; margin-bottom:12px;">
-              <button class="btn-warning" type="button" onclick="openWaiveConfirm()">放棄</button>
+              <button class="btn-warning" type="button" onclick="openWaiveConfirm()" id="waiveBonusBtn">放棄</button>
+            </div>
+            <div id="waivePendingNotice" style="display: none; background: #fff7e6; border: 1px solid #ffd591; color: #ad6800; padding: 14px 18px; border-radius: 8px; margin-bottom: 16px;">
+              <strong>您已選擇放棄獎金。</strong> 請於下方完成線上簽核，簽核完成後放棄獎金即生效。
             </div>
           <?php endif; ?>
           <div class="signature-note">若資訊確認無誤請進行線上簽核，以便招生中心後續作業</div>
@@ -844,10 +847,10 @@ try {
   <div id="waiveConfirmModal" class="modal-mask">
     <div class="modal-card">
       <div class="modal-head">提醒</div>
-      <div class="modal-body">放棄後無法拿到推薦獎金，是否要放棄</div>
+      <div class="modal-body">放棄後無法拿到推薦獎金；需同時完成下方線上簽核，放棄獎金才會生效。是否要放棄？</div>
       <div class="modal-foot">
         <button class="btn-secondary" type="button" onclick="closeWaiveConfirm()">再想想</button>
-        <button class="btn-danger" type="button" onclick="submitWaiveBonus()">確定放棄</button>
+        <button class="btn-danger" type="button" onclick="confirmWaiveThenSign()">確定放棄</button>
       </div>
     </div>
   </div>
@@ -871,6 +874,7 @@ try {
     let pendingDecisionReason = '';
     const decidedIdMap = {};
     const decidedFailReasonMap = {};
+    let pendingWaiveBonus = false;
 
     function getSelectedDecisionIds() {
       const checkboxes = document.querySelectorAll('.decision-rec-checkbox:checked');
@@ -989,22 +993,33 @@ try {
 
     function submitSignatureUrl(signatureUrl) {
       const allDecidedIds = Object.keys(decidedIdMap).map(v => parseInt(v, 10)).filter(v => v > 0);
-      if (requiresReviewDecision && !allDecidedIds.length) {
+      if (requiresReviewDecision && !allDecidedIds.length && !pendingWaiveBonus) {
         alert('請先完成「推薦人推薦資訊是否通過」必填選項。');
         return;
+      }
+      let body = 'token=' + encodeURIComponent(token)
+        + '&signature_url=' + encodeURIComponent(signatureUrl)
+        + '&review_decision_map=' + encodeURIComponent(JSON.stringify(decidedIdMap))
+        + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedFailReasonMap));
+      let isWaiveSubmit = false;
+      if (pendingWaiveBonus) {
+        body += '&waive_bonus=1';
+        isWaiveSubmit = true;
+        pendingWaiveBonus = false;
+        const noticeEl = document.getElementById('waivePendingNotice');
+        if (noticeEl) noticeEl.style.display = 'none';
+        const waiveBtn = document.getElementById('waiveBonusBtn');
+        if (waiveBtn) { waiveBtn.disabled = false; waiveBtn.style.opacity = '1'; }
       }
       fetch('recommendation_approval_submit.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token)
-          + '&signature_url=' + encodeURIComponent(signatureUrl)
-          + '&review_decision_map=' + encodeURIComponent(JSON.stringify(decidedIdMap))
-          + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedFailReasonMap))
+        body: body
       })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert('簽核完成，已通知招生中心。');
+          alert(isWaiveSubmit ? '放棄獎金已生效，招生中心將無法發送獎金。' : '簽核完成，已通知招生中心。');
           location.reload();
         } else {
           alert('簽核失敗：' + (data.message || '未知錯誤'));
@@ -1023,22 +1038,15 @@ try {
       if (modal) modal.style.display = 'none';
     }
 
-    function submitWaiveBonus() {
-      fetch('recommendation_approval_submit.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token) + '&waive_bonus=1'
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert('已設定放棄獎金，招生中心將無法發送獎金。');
-          location.reload();
-        } else {
-          alert('送出失敗：' + (data.message || '未知錯誤'));
-        }
-      })
-      .catch(() => alert('送出失敗：網路錯誤'));
+    function confirmWaiveThenSign() {
+      closeWaiveConfirm();
+      pendingWaiveBonus = true;
+      const noticeEl = document.getElementById('waivePendingNotice');
+      if (noticeEl) noticeEl.style.display = 'block';
+      const waiveBtn = document.getElementById('waiveBonusBtn');
+      if (waiveBtn) { waiveBtn.disabled = true; waiveBtn.style.opacity = '0.6'; }
+      const frame = document.getElementById('signatureFrame');
+      if (frame) frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     const waiveConfirmModal = document.getElementById('waiveConfirmModal');

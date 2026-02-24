@@ -65,7 +65,16 @@ $selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$
 $review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
 $review_fail_reason_map_raw = isset($_POST['review_fail_reason_map']) ? trim((string)$_POST['review_fail_reason_map']) : '';
 
-if ($token === '' || ($signature === '' && $signature_url === '' && $reject_reason === '' && $waive_bonus !== 1)) {
+if ($token === '') {
+    echo json_encode(['success' => false, 'message' => '缺少必要參數']);
+    exit;
+}
+// 放棄獎金必須同時附上線上簽核（signature 或 signature_url）
+if ($waive_bonus === 1 && $signature === '' && $signature_url === '') {
+    echo json_encode(['success' => false, 'message' => '放棄獎金需先完成線上簽核']);
+    exit;
+}
+if ($signature === '' && $signature_url === '' && $reject_reason === '' && $waive_bonus !== 1) {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
     exit;
 }
@@ -333,11 +342,29 @@ try {
             echo json_encode(['success' => false, 'message' => '僅審核完成（可發獎金）的簽核可放棄獎金']);
             exit;
         }
-        $upd = $conn->prepare("UPDATE recommendation_approval_links
-            SET status = 'waived', reject_reason = ?, signed_at = NOW()
-            WHERE token = ? LIMIT 1");
+        // 放棄獎金需附上簽章：使用 signature_url 或儲存 signature 後寫入 signature_path
+        if ($signature_url !== '') {
+            $public_path = $signature_url;
+            if (!preg_match('/^https?:\/\//i', $public_path) && strpos($public_path, '/') !== 0) {
+                $public_path = '/Topics-backend/frontend/' . ltrim($public_path, '/');
+            }
+        } elseif ($signature !== '' && preg_match('/^data:image\/png;base64,/', $signature)) {
+            $raw = base64_decode(str_replace('data:image/png;base64,', '', $signature), true);
+            if ($raw !== false) {
+                $dir = __DIR__ . '/uploads/recommendation_approvals';
+                if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                $filename = 'signature_waive_' . $rid . '_' . time() . '.png';
+                $path = $dir . '/' . $filename;
+                if (file_put_contents($path, $raw) !== false) {
+                    $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
+                }
+            }
+        }
         $waive_reason = '放棄獎金';
-        $upd->bind_param('ss', $waive_reason, $token);
+        $upd = $conn->prepare("UPDATE recommendation_approval_links
+            SET status = 'waived', signature_path = ?, reject_reason = ?, signed_at = NOW()
+            WHERE token = ? LIMIT 1");
+        $upd->bind_param('sss', $public_path, $waive_reason, $token);
         $upd->execute();
         $upd->close();
 
