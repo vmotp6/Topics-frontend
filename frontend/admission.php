@@ -1423,28 +1423,6 @@ $conn->close();
         // 電話號碼格式驗證
         const phoneInput = document.querySelector('[name="contact_phone"]');
         
-        // 當使用密碼管理器自動填充時，清空驗證碼輸入框（因為自動填充的驗證碼可能過期或不匹配）
-        const captchaInput = document.getElementById('captchaInput');
-        if (captchaInput) {
-            // 監聽 autofill 事件
-            captchaInput.addEventListener('change', function() {
-                // 如果驗證碼被自動填充，清空它
-                if (this.value && this.value.length > 0) {
-                    console.log('檢測到驗證碼自動填充，將其清空');
-                    this.value = '';
-                }
-            });
-            
-            // 同時監聽 input 事件確保清空
-            captchaInput.addEventListener('input', function() {
-                // 如果包含特殊字符（自動填充通常會有）或不是預期的格式，清空
-                if (!/^[A-Z0-9]*$/.test(this.value) || this.value.length > 4) {
-                    console.log('驗證碼格式異常，清空');
-                    this.value = '';
-                }
-            });
-        }
-        
         phoneInput.addEventListener('input', function(e) {
             // 只保留數字
             this.value = this.value.replace(/[^0-9]/g, '');
