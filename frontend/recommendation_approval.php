@@ -61,6 +61,7 @@ try {
                 $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
             }
             $is_signed = ($link['status'] === 'signed');
+            $is_waived = ($link['status'] === 'waived');
 
             // 取推薦人 / 被推薦人資訊（欄位存在才選取，避免 Unknown column）
             $has_recommender_table = false;
@@ -183,9 +184,20 @@ try {
                 $error = '找不到對應的推薦資料。';
             } else {
                 $data['is_signed'] = $is_signed ? 1 : 0;
+                $data['is_waived'] = $is_waived ? 1 : 0;
                 $data['signature_path'] = $link['signature_path'] ?? '';
                 $data['status'] = trim((string)($data['status'] ?? ''));
-                if ($data['status'] !== 'AP' && $data['status'] !== 'approved' && $data['status'] !== 'MC') {
+                $status_norm = strtolower($data['status']);
+                $is_apd_status = ($status_norm === 'apd' || mb_strpos((string)$data['status'], '審核完成') !== false || mb_strpos((string)$data['status'], '可發獎金') !== false);
+                $data['can_waive_bonus'] = $is_apd_status ? 1 : 0;
+                $data['requires_review_decision'] = $is_apd_status ? 0 : 1;
+                if (
+                    !$is_signed &&
+                    !$is_waived &&
+                    ($link['status'] ?? '') !== 'rejected' &&
+                    !in_array($status_norm, ['ap', 'approved', 'mc', 'apd'], true) &&
+                    mb_strpos((string)$data['status'], '審核完成') === false
+                ) {
                     $error = '此筆推薦尚未審核通過，無法簽核。';
                 }
             }
@@ -193,7 +205,7 @@ try {
             $same_recs = [];
             $same_recs_title = '同一推薦人所有推薦學生';
             if (!empty($group_id_list)) {
-                $same_recs_title = '本次待審核推薦清單';
+                $same_recs_title = '本次待審核推薦清單如下';
                 $ids = $group_id_list;
                 $placeholders = implode(',', array_fill(0, count($ids), '?'));
                 $list_sql = "SELECT
@@ -287,6 +299,157 @@ try {
                     }
                 }
             }
+
+            // 去重：避免 recommender/recommended 關聯重複列造成同一推薦編號重複顯示
+            // 若同一編號有多列，保留「資訊較完整」那筆，避免推薦資訊空白。
+            if (!empty($same_recs)) {
+                $score_row = function($row) {
+                    $score = 0;
+                    $fields = [
+                        'recommender_name',
+                        'recommender_student_id',
+                        'recommendation_reason',
+                        'student_name',
+                        'student_school',
+                        'student_phone',
+                    ];
+                    foreach ($fields as $f) {
+                        if (trim((string)($row[$f] ?? '')) !== '') $score++;
+                    }
+                    return $score;
+                };
+
+                $dedup_map = [];
+                foreach ($same_recs as $row) {
+                    $rid_key = (int)($row['id'] ?? 0);
+                    $uniq_key = ($rid_key > 0)
+                        ? ('id:' . $rid_key)
+                        : ('hash:' . md5(json_encode($row, JSON_UNESCAPED_UNICODE)));
+
+                    if (!isset($dedup_map[$uniq_key])) {
+                        $dedup_map[$uniq_key] = $row;
+                        continue;
+                    }
+
+                    $old_score = $score_row($dedup_map[$uniq_key]);
+                    $new_score = $score_row($row);
+                    if ($new_score > $old_score) {
+                        $dedup_map[$uniq_key] = $row;
+                    }
+                }
+                $same_recs = array_values($dedup_map);
+            }
+
+            // 清單僅顯示「其他待審核」資料，避免與頁面上方主資料（當前推薦編號）重複。
+            if (!empty($same_recs)) {
+                $same_recs = array_values(array_filter($same_recs, function($row) use ($rid) {
+                    return (int)($row['id'] ?? 0) !== (int)$rid;
+                }));
+            }
+
+            // 年級/科系代碼轉顯示名稱（例如 F5 -> 五專五年級、IM -> 資訊管理科）
+            $department_name_map = [];
+            $grade_name_map = [];
+            $school_name_map = [];
+            try {
+                $t_dept = $conn->query("SHOW TABLES LIKE 'departments'");
+                if ($t_dept && $t_dept->num_rows > 0) {
+                    $r_dept = $conn->query("SELECT code, name FROM departments");
+                    if ($r_dept) {
+                        while ($dr = $r_dept->fetch_assoc()) {
+                            $code = trim((string)($dr['code'] ?? ''));
+                            $name = trim((string)($dr['name'] ?? ''));
+                            if ($code !== '' && $name !== '') $department_name_map[$code] = $name;
+                        }
+                    }
+                }
+
+                $t_grade = $conn->query("SHOW TABLES LIKE 'identity_options'");
+                if ($t_grade && $t_grade->num_rows > 0) {
+                    $r_grade = $conn->query("SELECT code, name FROM identity_options");
+                    if ($r_grade) {
+                        while ($gr = $r_grade->fetch_assoc()) {
+                            $code = trim((string)($gr['code'] ?? ''));
+                            $name = trim((string)($gr['name'] ?? ''));
+                            if ($code !== '' && $name !== '') $grade_name_map[$code] = $name;
+                        }
+                    }
+                }
+
+                $t_school = $conn->query("SHOW TABLES LIKE 'school_data'");
+                if ($t_school && $t_school->num_rows > 0) {
+                    $r_school = $conn->query("SELECT school_code, name FROM school_data");
+                    if ($r_school) {
+                        while ($sr = $r_school->fetch_assoc()) {
+                            $code = trim((string)($sr['school_code'] ?? ''));
+                            $name = trim((string)($sr['name'] ?? ''));
+                            if ($code !== '' && $name !== '') $school_name_map[$code] = $name;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // ignore mapping failures and keep original text
+            }
+
+            $resolve_dept_name = function($raw) use ($department_name_map) {
+                $v = trim((string)$raw);
+                if ($v === '') return '';
+                if (isset($department_name_map[$v])) return (string)$department_name_map[$v];
+                $up = strtoupper($v);
+                if (isset($department_name_map[$up])) return (string)$department_name_map[$up];
+                return $v;
+            };
+            $resolve_grade_name = function($raw) use ($grade_name_map) {
+                $v = trim((string)$raw);
+                if ($v === '') return '';
+                if (isset($grade_name_map[$v])) return (string)$grade_name_map[$v];
+                $up = strtoupper($v);
+                if (isset($grade_name_map[$up])) return (string)$grade_name_map[$up];
+                return $v;
+            };
+            $resolve_school_name = function($raw) use ($school_name_map) {
+                $v = trim((string)$raw);
+                if ($v === '') return '';
+                if (isset($school_name_map[$v])) return (string)$school_name_map[$v];
+                return $v;
+            };
+            $apply_display_name = function(&$row) use ($resolve_dept_name, $resolve_grade_name, $resolve_school_name) {
+                if (!is_array($row)) return;
+                $row['student_grade'] = $resolve_grade_name($row['student_grade'] ?? '');
+                $row['recommender_grade'] = $resolve_grade_name($row['recommender_grade'] ?? '');
+                $row['recommender_department'] = $resolve_dept_name($row['recommender_department'] ?? '');
+                $row['student_interest'] = $resolve_dept_name($row['student_interest'] ?? '');
+                $row['student_school'] = $resolve_school_name($row['student_school'] ?? '');
+            };
+
+            if (is_array($data)) $apply_display_name($data);
+            if (!empty($same_recs)) {
+                foreach ($same_recs as &$rec_row) $apply_display_name($rec_row);
+                unset($rec_row);
+            }
+
+            // 決策勾選清單：每筆推薦資料獨立一列（不再合併同推薦人）
+            $decision_recommenders = [];
+            $decision_rows = [];
+            if (is_array($data)) $decision_rows[] = $data;
+            if (!empty($same_recs)) {
+                foreach ($same_recs as $r) $decision_rows[] = $r;
+            }
+            $decision_seen_ids = [];
+            foreach ($decision_rows as $dr) {
+                if (!is_array($dr)) continue;
+                $dr_id = (int)($dr['id'] ?? 0);
+                if ($dr_id <= 0) continue;
+                if (isset($decision_seen_ids[$dr_id])) continue;
+                $decision_seen_ids[$dr_id] = true;
+                $decision_recommenders[] = [
+                    'recommender_name' => trim((string)($dr['recommender_name'] ?? '')),
+                    'recommender_student_id' => trim((string)($dr['recommender_student_id'] ?? '')),
+                    'student_name' => trim((string)($dr['student_name'] ?? '')),
+                    'student_school' => trim((string)($dr['student_school'] ?? '')),
+                    'ids' => [$dr_id]
+                ];
+            }
         }
     }
     $conn->close();
@@ -303,7 +466,7 @@ try {
   <style>
     body { font-family: Arial, sans-serif; background:#f5f7fb; margin:0; padding:24px; color:#333; }
     .card { max-width: 920px; margin: 0 auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 6px 20px rgba(0,0,0,0.08); }
-    h2 { margin:0 0 12px 0; color:#003366; }
+    h2 { margin:0 0 12px 0; color:#588dd1; font-size: 34px; }
     .section { margin-top: 18px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .label { font-size: 12px; color:#777; margin-bottom:4px; }
@@ -336,6 +499,137 @@ try {
     .detail-section { margin-top: 18px; }
     .file-link { color:#1677ff; text-decoration: none; }
     .muted { color:#666; font-size:12px; }
+    .waive-q { margin-bottom: 12px; color:#cf1322; font-weight: 700; font-size: 21px; }
+    .btn-warning {
+      background:#fa8c16;
+      color:#fff;
+      padding: 10px 20px;
+      font-size: 18px;
+      border-radius: 10px;
+    }
+    .signature-note {
+      color: #69b1ff;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 8px 0 10px 0;
+    }
+    .review-required-title {
+      color: #003366;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 6px 0 10px 0;
+    }
+    .review-decision-wrap {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .review-decision-box {
+      border: 1px solid #d9d9d9;
+      border-radius: 8px;
+      background: #fafafa;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .decision-check-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      background: #fff;
+    }
+    .decision-check-table th,
+    .decision-check-table td {
+      border: 1px solid #d9d9d9;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 20px;
+    }
+    .decision-check-table th {
+      background: #f5f5f5;
+      font-weight: 700;
+      color: #333;
+    }
+    .decision-check-col {
+      width: 86px;
+      text-align: center !important;
+    }
+    .decision-rec-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .btn-pass { background:#52c41a; color:#fff; }
+    .btn-fail { background:#ff4d4f; color:#fff; }
+    .decision-reason-label {
+      margin-top: 4px;
+      margin-bottom: 6px;
+      color: #595959;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .decision-reason-input {
+      width: 100%;
+      min-height: 84px;
+      border: 1px solid #d9d9d9;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      resize: vertical;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .decision-result-note {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 8px 0 10px 0;
+      color: #69b1ff;
+    }
+    .modal-mask {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-card {
+      width: 92%;
+      max-width: 520px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+      overflow: hidden;
+    }
+    .modal-head { padding: 16px 18px; border-bottom: 1px solid #f0f0f0; font-weight: 700; }
+    .modal-body { padding: 20px 18px; color: #262626; line-height: 1.8; }
+    .modal-foot {
+      padding: 14px 18px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .rec-list-top-divider,
+    .rec-separator {
+      width: 100%;
+      height: 2px;
+      margin: 12px 0 14px 0;
+      background-image: repeating-linear-gradient(
+        to right,
+        #e3e8ef 0px,
+        #e3e8ef 8px,
+        transparent 8px,
+        transparent 12px
+      );
+      opacity: 1;
+    }
+    .rec-separator { margin: 18px 0 14px 0; }
   </style>
 </head>
 <body>
@@ -346,6 +640,78 @@ try {
     <?php elseif (!$data): ?>
       <div class="alert">資料載入失敗。</div>
     <?php else: ?>
+      <?php if (!empty($same_recs) && count($same_recs) > 0): ?>
+      <div class="detail-section" style="margin-top:12px; padding-top:12px;">
+        <h4 class="detail-title"><?php echo htmlspecialchars($same_recs_title ?? '同一推薦人所有推薦學生'); ?></h4>
+        <div class="rec-list-top-divider"></div>
+        <?php $same_recs_count = count($same_recs); ?>
+        <?php foreach ($same_recs as $idx => $row): ?>
+          <?php
+            $show_sep_before = false;
+            if ((int)$idx > 0) {
+                $prev = $same_recs[$idx - 1] ?? [];
+                $prev_name = trim((string)($prev['recommender_name'] ?? ''));
+                $prev_sid = trim((string)($prev['recommender_student_id'] ?? ''));
+                $cur_name = trim((string)($row['recommender_name'] ?? ''));
+                $cur_sid = trim((string)($row['recommender_student_id'] ?? ''));
+                $show_sep_before = (($prev_name . '|' . $prev_sid) !== ($cur_name . '|' . $cur_sid));
+            }
+          ?>
+          <?php if ($show_sep_before): ?><div class="rec-separator"></div><?php endif; ?>
+          <div style="margin-top:12px; padding-top:2px;">
+            <div class="detail-wrap" style="margin-top:8px;">
+              <div class="detail-card">
+                <h4 class="detail-title">被推薦人資訊</h4>
+                <table class="detail-table">
+                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">就讀學校</td><td><?php echo htmlspecialchars($row['student_school'] ?? ''); ?></td></tr>
+                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['student_grade'] ?? ''); ?></td></tr>
+                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['student_email'] ?? ''); ?></td></tr>
+                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['student_phone'] ?? ''); ?></td></tr>
+                  <tr><td class="label">LINE ID</td><td><?php echo htmlspecialchars($row['student_line_id'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學生興趣</td><td><?php echo htmlspecialchars($row['student_interest'] ?? ''); ?></td></tr>
+                </table>
+              </div>
+              <div class="detail-card">
+                <h4 class="detail-title">推薦人資訊</h4>
+                <table class="detail-table">
+                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['recommender_name'] ?? ''); ?></td></tr>
+                  <tr><td class="label">學號/教師編號</td><td><?php echo htmlspecialchars($row['recommender_student_id'] ?? ''); ?></td></tr>
+                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['recommender_grade'] ?? ''); ?></td></tr>
+                  <tr><td class="label">科系</td><td><?php echo htmlspecialchars($row['recommender_department'] ?? ''); ?></td></tr>
+                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['recommender_phone'] ?? ''); ?></td></tr>
+                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['recommender_email'] ?? ''); ?></td></tr>
+                </table>
+              </div>
+            </div>
+            <div class="detail-section" style="margin-top:12px;">
+              <h4 class="detail-title">推薦資訊</h4>
+              <table class="detail-table">
+                <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
+                <?php if (!empty($row['additional_info'])): ?>
+                <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
+                <?php endif; ?>
+                <?php if (!empty($row['proof_evidence'])): ?>
+                <tr>
+                  <td class="label">證明文件</td>
+                  <td>
+                    <?php
+                      $file_path2 = str_replace('\\', '/', $row['proof_evidence']);
+                      $file_url2 = '/Topics-frontend/frontend/' . $file_path2;
+                    ?>
+                    <a class="file-link" href="<?php echo htmlspecialchars($file_url2); ?>" target="_blank" rel="noopener">查看文件</a>
+                  </td>
+                </tr>
+                <?php endif; ?>
+                <?php if (!empty($row['created_at'])): ?>
+                <tr><td class="label">推薦時間</td><td><?php echo htmlspecialchars(date('Y/m/d H:i', strtotime($row['created_at']))); ?></td></tr>
+                <?php endif; ?>
+              </table>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
       <div class="section">
         <div class="detail-wrap">
           <div class="detail-card">
@@ -398,89 +764,225 @@ try {
           </table>
         </div>
 
-        <?php if (!empty($same_recs) && count($same_recs) > 1): ?>
-        <div class="detail-section">
-          <h4 class="detail-title"><?php echo htmlspecialchars($same_recs_title ?? '同一推薦人所有推薦學生'); ?></h4>
-          <?php foreach ($same_recs as $row): ?>
-            <div class="detail-wrap" style="margin-top:12px;">
-              <div class="detail-card">
-                <h4 class="detail-title">被推薦人資訊（推薦編號：<?php echo htmlspecialchars($row['id'] ?? ''); ?>）</h4>
-                <table class="detail-table">
-                  <tr><td class="label">姓名</td><td><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></td></tr>
-                  <tr><td class="label">就讀學校</td><td><?php echo htmlspecialchars($row['student_school'] ?? ''); ?></td></tr>
-                  <tr><td class="label">年級</td><td><?php echo htmlspecialchars($row['student_grade'] ?? ''); ?></td></tr>
-                  <tr><td class="label">電子郵件</td><td><?php echo htmlspecialchars($row['student_email'] ?? ''); ?></td></tr>
-                  <tr><td class="label">聯絡電話</td><td><?php echo htmlspecialchars($row['student_phone'] ?? ''); ?></td></tr>
-                  <tr><td class="label">LINE ID</td><td><?php echo htmlspecialchars($row['student_line_id'] ?? ''); ?></td></tr>
-                  <tr><td class="label">學生興趣</td><td><?php echo htmlspecialchars($row['student_interest'] ?? ''); ?></td></tr>
-                </table>
-              </div>
-              <div class="detail-card">
-                <h4 class="detail-title">推薦資訊</h4>
-                <table class="detail-table">
-                  <tr><td class="label">推薦人姓名</td><td><?php echo htmlspecialchars($row['recommender_name'] ?? ''); ?></td></tr>
-                  <tr><td class="label">學號/教師編號</td><td><?php echo htmlspecialchars($row['recommender_student_id'] ?? ''); ?></td></tr>
-                  <tr><td class="label">推薦理由</td><td><?php echo nl2br(htmlspecialchars($row['recommendation_reason'] ?? '')); ?></td></tr>
-                  <?php if (!empty($row['additional_info'])): ?>
-                  <tr><td class="label">其他補充資訊</td><td><?php echo nl2br(htmlspecialchars($row['additional_info'] ?? '')); ?></td></tr>
-                  <?php endif; ?>
-                  <?php if (!empty($row['proof_evidence'])): ?>
-                  <tr>
-                    <td class="label">證明文件</td>
-                    <td>
-                      <?php
-                        $file_path2 = str_replace('\\', '/', $row['proof_evidence']);
-                        $file_url2 = '/Topics-frontend/frontend/' . $file_path2;
-                      ?>
-                      <a class="file-link" href="<?php echo htmlspecialchars($file_url2); ?>" target="_blank" rel="noopener">查看文件</a>
-                    </td>
-                  </tr>
-                  <?php endif; ?>
-                  <?php if (!empty($row['created_at'])): ?>
-                  <tr><td class="label">推薦時間</td><td><?php echo htmlspecialchars(date('Y/m/d H:i', strtotime($row['created_at']))); ?></td></tr>
-                  <?php endif; ?>
-                </table>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
       </div>
 
       <div class="section">
-        <?php if ((int)$data['is_signed'] === 1): ?>
-          <div class="alert success">已完成簽核，謝謝。</div>
+        <?php if ((int)($data['is_waived'] ?? 0) === 1): ?>
+          <div class="alert">您已選擇放棄獎金，招生中心將無法再發送推薦獎金。</div>
+        <?php elseif ((int)$data['is_signed'] === 1): ?>
+          <div class="alert success">已完成線上審核，無法再進行簽核。</div>
           <?php if (!empty($data['signature_path'])): ?>
             <div class="section">
               <img src="<?php echo htmlspecialchars($data['signature_path']); ?>" alt="signature" style="max-width:100%; border:1px solid #eee; border-radius:8px;">
             </div>
           <?php endif; ?>
         <?php else: ?>
+          <?php if ((int)($data['requires_review_decision'] ?? 1) === 1): ?>
+          <div class="review-decision-box">
+            <div class="review-required-title">推薦人推薦資訊是否通過?</div>
+            <?php if (!empty($decision_recommenders)): ?>
+            <table class="decision-check-table">
+              <thead>
+                <tr>
+                  <th>推薦人姓名</th>
+                  <th>推薦人學號/編號</th>
+                  <th>被推薦人姓名</th>
+                  <th>國中</th>
+                  <th class="decision-check-col">勾選</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($decision_recommenders as $dr): ?>
+                <?php $id_csv = implode(',', array_map('intval', (array)($dr['ids'] ?? []))); ?>
+                <tr>
+                  <td><?php echo htmlspecialchars($dr['recommender_name'] ?? ''); ?></td>
+                  <td><?php echo htmlspecialchars($dr['recommender_student_id'] ?? ''); ?></td>
+                  <td><?php echo htmlspecialchars($dr['student_name'] ?? ''); ?></td>
+                  <td><?php echo htmlspecialchars($dr['student_school'] ?? ''); ?></td>
+                  <td class="decision-check-col">
+                    <input
+                      type="checkbox"
+                      class="decision-rec-checkbox"
+                      data-rec-ids="<?php echo htmlspecialchars($id_csv); ?>"
+                    />
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+            <?php else: ?>
+            <div class="alert" style="margin-bottom:10px;">查無可勾選的推薦人清單，請重新整理後再試。</div>
+            <?php endif; ?>
+            <div class="review-decision-wrap">
+              <button id="decisionPassBtn" class="btn-pass" type="button" onclick="openDecisionConfirm('pass')">通過</button>
+              <button id="decisionFailBtn" class="btn-fail" type="button" onclick="openDecisionConfirm('fail')">不通過</button>
+            </div>
+            <div class="decision-reason-label">不通過原因（僅選擇不通過時必填）</div>
+            <textarea id="decisionFailReason" class="decision-reason-input" placeholder="請輸入不通過原因"></textarea>
+          </div>
+          <div id="decisionResultNote" class="decision-result-note" style="display:none;"></div>
+          <?php endif; ?>
+          <?php if ((int)($data['can_waive_bonus'] ?? 0) === 1): ?>
+          <div class="waive-q">是否放棄獎金 ?</div>
+            <div class="btns" style="margin-top:0; margin-bottom:12px;">
+              <button class="btn-warning" type="button" onclick="openWaiveConfirm()" id="waiveBonusBtn">放棄</button>
+            </div>
+            <div id="waivePendingNotice" style="display: none; background: #fff7e6; border: 1px solid #ffd591; color: #ad6800; padding: 14px 18px; border-radius: 8px; margin-bottom: 16px;">
+              <strong>您已選擇放棄獎金。</strong> 請於下方完成線上簽核，簽核完成後放棄獎金即生效。
+            </div>
+          <?php endif; ?>
+          <div class="signature-note">若資訊確認無誤請進行線上簽核，以便招生中心後續作業</div>
           <div class="label">線上簽章</div>
           <iframe
             id="signatureFrame"
             src="/Topics-backend/frontend/signature.php?document_id=<?php echo urlencode((string)($data['id'] ?? '')); ?>&document_type=admission_recommendation&embed=1"
             style="width:100%; min-height:720px; border:1px dashed #bbb; border-radius:10px; background:#fff;"
           ></iframe>
-          <div class="btns">
-            <button class="btn-danger" type="button" onclick="openReject()">不通過</button>
-          </div>
-          <div id="rejectBox" class="reject-box" style="display:none;">
-            <div class="label" style="margin-bottom:6px;">不通過原因</div>
-            <textarea id="rejectReason" placeholder="請輸入不通過原因"></textarea>
-            <div class="btns" style="margin-top:8px;">
-              <button class="btn-secondary" type="button" onclick="closeReject()">取消</button>
-              <button class="btn-danger" type="button" onclick="submitReject()">確認不通過</button>
-            </div>
-          </div>
           <div class="muted">請於上方區塊完成電子簽章後，系統會自動回填簽核。</div>
         <?php endif; ?>
       </div>
     <?php endif; ?>
   </div>
 
+  <div id="waiveConfirmModal" class="modal-mask">
+    <div class="modal-card">
+      <div class="modal-head">提醒</div>
+      <div class="modal-body">放棄後無法拿到推薦獎金；需同時完成下方線上簽核，放棄獎金才會生效。是否要放棄？</div>
+      <div class="modal-foot">
+        <button class="btn-secondary" type="button" onclick="closeWaiveConfirm()">再想想</button>
+        <button class="btn-danger" type="button" onclick="confirmWaiveThenSign()">確定放棄</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="decisionConfirmModal" class="modal-mask">
+    <div class="modal-card">
+      <div class="modal-head">提醒</div>
+      <div class="modal-body" id="decisionConfirmText"></div>
+      <div class="modal-foot">
+        <button class="btn-secondary" type="button" onclick="closeDecisionConfirm()">取消</button>
+        <button class="btn-primary" type="button" onclick="confirmDecision()">確定</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const token = <?php echo json_encode($token); ?>;
+    const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
+    let pendingDecisionType = '';
+    let pendingDecisionSelectedIds = [];
+    let pendingDecisionReason = '';
+    const decidedIdMap = {};
+    const decidedFailReasonMap = {};
+    let pendingWaiveBonus = false;
+
+    function getSelectedDecisionIds() {
+      const checkboxes = document.querySelectorAll('.decision-rec-checkbox:checked');
+      const idMap = {};
+      checkboxes.forEach(cb => {
+        const raw = (cb.getAttribute('data-rec-ids') || '').trim();
+        if (!raw) return;
+        raw.split(',').forEach(v => {
+          const id = parseInt(String(v || '').trim(), 10);
+          if (id > 0) idMap[id] = id;
+        });
+      });
+      return Object.keys(idMap).map(k => parseInt(k, 10)).filter(v => v > 0);
+    }
+
+    function openDecisionConfirm(type) {
+      const selectedIds = getSelectedDecisionIds();
+      if (!selectedIds.length) {
+        alert('請先勾選要審核的推薦人。');
+        return;
+      }
+      const availableIds = selectedIds.filter(id => !decidedIdMap[id]);
+      if (!availableIds.length) {
+        alert('本次勾選皆已確認過通過/不通過，請先勾選尚未確認的推薦人。');
+        return;
+      }
+      if (availableIds.length !== selectedIds.length) {
+        alert('已自動忽略已確認過的推薦人，僅送出尚未確認者。');
+      }
+      if (type === 'fail') {
+        const reasonEl = document.getElementById('decisionFailReason');
+        const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
+        if (!reasonText) {
+          alert('選擇不通過時，請先填寫不通過原因。');
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        pendingDecisionReason = reasonText;
+      } else {
+        pendingDecisionReason = '';
+      }
+      pendingDecisionSelectedIds = availableIds;
+      pendingDecisionType = (type === 'pass') ? 'pass' : 'fail';
+      const textEl = document.getElementById('decisionConfirmText');
+      const modal = document.getElementById('decisionConfirmModal');
+      if (textEl) {
+        textEl.textContent = pendingDecisionType === 'pass'
+          ? '確定為通過?一旦按下確定後就不能再更改選項'
+          : '確定為不通過?一旦按下確定後就不能再更改選項';
+      }
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeDecisionConfirm() {
+      const modal = document.getElementById('decisionConfirmModal');
+      if (modal) modal.style.display = 'none';
+      pendingDecisionType = '';
+      pendingDecisionSelectedIds = [];
+      pendingDecisionReason = '';
+    }
+
+    function confirmDecision() {
+      if (!pendingDecisionType) {
+        closeDecisionConfirm();
+        return;
+      }
+      const decidedNow = pendingDecisionSelectedIds.slice();
+      decidedNow.forEach(id => {
+        decidedIdMap[id] = pendingDecisionType;
+        if (pendingDecisionType === 'fail') {
+          decidedFailReasonMap[id] = pendingDecisionReason;
+        } else if (decidedFailReasonMap[id]) {
+          delete decidedFailReasonMap[id];
+        }
+      });
+      closeDecisionConfirm();
+
+      const passBtn = document.getElementById('decisionPassBtn');
+      const failBtn = document.getElementById('decisionFailBtn');
+      if (passBtn) { passBtn.disabled = false; passBtn.style.opacity = '1'; passBtn.style.cursor = 'pointer'; }
+      if (failBtn) { failBtn.disabled = false; failBtn.style.opacity = '1'; failBtn.style.cursor = 'pointer'; }
+      const cbs = document.querySelectorAll('.decision-rec-checkbox');
+      cbs.forEach(cb => {
+        const raw = (cb.getAttribute('data-rec-ids') || '').trim();
+        const ids = raw ? raw.split(',').map(v => parseInt(String(v || '').trim(), 10)).filter(v => v > 0) : [];
+        const isDecided = ids.some(id => !!decidedIdMap[id]);
+        if (isDecided) {
+          cb.checked = true;
+          cb.disabled = true;
+          cb.style.cursor = 'not-allowed';
+          cb.title = '此推薦人已確認，不可再變更';
+        } else {
+          cb.checked = false;
+          cb.disabled = false;
+          cb.style.cursor = 'pointer';
+          cb.title = '';
+        }
+      });
+
+      const noteEl = document.getElementById('decisionResultNote');
+      if (noteEl) {
+        noteEl.style.display = 'block';
+        const passCount = Object.values(decidedIdMap).filter(v => v === 'pass').length;
+        const failCount = Object.values(decidedIdMap).filter(v => v === 'fail').length;
+        noteEl.textContent = '已確認：通過 ' + passCount + ' 筆，不通過 ' + failCount + ' 筆。可繼續勾選尚未確認的推薦人。';
+      }
+    }
+
     window.addEventListener('message', function(event) {
       if (event.origin !== window.location.origin) return;
       const payload = event.data || {};
@@ -490,15 +992,34 @@ try {
     });
 
     function submitSignatureUrl(signatureUrl) {
+      const allDecidedIds = Object.keys(decidedIdMap).map(v => parseInt(v, 10)).filter(v => v > 0);
+      if (requiresReviewDecision && !allDecidedIds.length && !pendingWaiveBonus) {
+        alert('請先完成「推薦人推薦資訊是否通過」必填選項。');
+        return;
+      }
+      let body = 'token=' + encodeURIComponent(token)
+        + '&signature_url=' + encodeURIComponent(signatureUrl)
+        + '&review_decision_map=' + encodeURIComponent(JSON.stringify(decidedIdMap))
+        + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedFailReasonMap));
+      let isWaiveSubmit = false;
+      if (pendingWaiveBonus) {
+        body += '&waive_bonus=1';
+        isWaiveSubmit = true;
+        pendingWaiveBonus = false;
+        const noticeEl = document.getElementById('waivePendingNotice');
+        if (noticeEl) noticeEl.style.display = 'none';
+        const waiveBtn = document.getElementById('waiveBonusBtn');
+        if (waiveBtn) { waiveBtn.disabled = false; waiveBtn.style.opacity = '1'; }
+      }
       fetch('recommendation_approval_submit.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token) + '&signature_url=' + encodeURIComponent(signatureUrl)
+        body: body
       })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert('簽核完成，已通知招生中心。');
+          alert(isWaiveSubmit ? '放棄獎金已生效，招生中心將無法發送獎金。' : '簽核完成，已通知招生中心。');
           location.reload();
         } else {
           alert('簽核失敗：' + (data.message || '未知錯誤'));
@@ -507,38 +1028,38 @@ try {
       .catch(() => alert('簽核失敗：網路錯誤'));
     }
 
-    function openReject() {
-      const box = document.getElementById('rejectBox');
-      if (box) box.style.display = 'block';
+    function openWaiveConfirm() {
+      const modal = document.getElementById('waiveConfirmModal');
+      if (modal) modal.style.display = 'flex';
     }
-    function closeReject() {
-      const box = document.getElementById('rejectBox');
-      const reason = document.getElementById('rejectReason');
-      if (box) box.style.display = 'none';
-      if (reason) reason.value = '';
+
+    function closeWaiveConfirm() {
+      const modal = document.getElementById('waiveConfirmModal');
+      if (modal) modal.style.display = 'none';
     }
-    function submitReject() {
-      const reason = document.getElementById('rejectReason');
-      const text = reason ? reason.value.trim() : '';
-      if (!text) {
-        alert('請輸入不通過原因');
-        return;
-      }
-      fetch('recommendation_approval_submit.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'token=' + encodeURIComponent(token) + '&reject_reason=' + encodeURIComponent(text)
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert('已回覆不通過，已通知招生中心。');
-          location.reload();
-        } else {
-          alert('送出失敗：' + (data.message || '未知錯誤'));
-        }
-      })
-      .catch(() => alert('送出失敗：網路錯誤'));
+
+    function confirmWaiveThenSign() {
+      closeWaiveConfirm();
+      pendingWaiveBonus = true;
+      const noticeEl = document.getElementById('waivePendingNotice');
+      if (noticeEl) noticeEl.style.display = 'block';
+      const waiveBtn = document.getElementById('waiveBonusBtn');
+      if (waiveBtn) { waiveBtn.disabled = true; waiveBtn.style.opacity = '0.6'; }
+      const frame = document.getElementById('signatureFrame');
+      if (frame) frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const waiveConfirmModal = document.getElementById('waiveConfirmModal');
+    if (waiveConfirmModal) {
+      waiveConfirmModal.addEventListener('click', function(e) {
+        if (e.target === waiveConfirmModal) closeWaiveConfirm();
+      });
+    }
+    const decisionConfirmModal = document.getElementById('decisionConfirmModal');
+    if (decisionConfirmModal) {
+      decisionConfirmModal.addEventListener('click', function(e) {
+        if (e.target === decisionConfirmModal) closeDecisionConfirm();
+      });
     }
   </script>
 </body>
