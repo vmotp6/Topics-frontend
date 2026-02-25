@@ -394,10 +394,35 @@ try {
             $resolve_dept_name = function($raw) use ($department_name_map) {
                 $v = trim((string)$raw);
                 if ($v === '') return '';
-                if (isset($department_name_map[$v])) return (string)$department_name_map[$v];
-                $up = strtoupper($v);
-                if (isset($department_name_map[$up])) return (string)$department_name_map[$up];
-                return $v;
+                // 支援多科系代碼（例如：IM,LTC）轉中文名稱顯示
+                $parts = preg_split('/\s*[,，]\s*/u', $v);
+                if (!$parts || count($parts) <= 1) {
+                    if (isset($department_name_map[$v])) return (string)$department_name_map[$v];
+                    $up = strtoupper($v);
+                    if (isset($department_name_map[$up])) return (string)$department_name_map[$up];
+                    return $v;
+                }
+                $mapped = [];
+                foreach ($parts as $p) {
+                    $p = trim((string)$p);
+                    if ($p === '') continue;
+                    if (isset($department_name_map[$p])) {
+                        $mapped[] = (string)$department_name_map[$p];
+                    } else {
+                        $up = strtoupper($p);
+                        $mapped[] = isset($department_name_map[$up]) ? (string)$department_name_map[$up] : $p;
+                    }
+                }
+                if (empty($mapped)) return $v;
+                // 去重且保留順序
+                $uniq = [];
+                $seen = [];
+                foreach ($mapped as $name) {
+                    if (isset($seen[$name])) continue;
+                    $seen[$name] = true;
+                    $uniq[] = $name;
+                }
+                return implode('、', $uniq);
             };
             $resolve_grade_name = function($raw) use ($grade_name_map) {
                 $v = trim((string)$raw);
