@@ -556,6 +556,30 @@ try {
     $student_school = trim((string)($rec['student_school'] ?? ''));
     if ($student_school === '') $student_school = trim((string)($rec['student_school_code'] ?? ''));
     $student_phone = trim((string)($rec['student_phone'] ?? ''));
+    $is_bonus_signature_notice = (!$requires_review_decision && $is_signature_submit && $waive_bonus !== 1 && $reject_reason === '');
+    $signed_recommender_name = '';
+    $signed_recommender_sid = '';
+    $signed_recommender_dept = '';
+    if ($is_bonus_signature_notice) {
+        $rec_info_sql = "SELECT {$rec_name_expr} AS recommender_name, {$rec_sid_expr} AS recommender_student_id, {$rec_dept_expr} AS recommender_department
+            FROM admission_recommendations ar
+            " . ($has_recommender_table ? "LEFT JOIN recommender rec ON ar.id = rec.recommendations_id" : "") . "
+            WHERE ar.id = ? LIMIT 1";
+        $rec_info_stmt = $conn->prepare($rec_info_sql);
+        if ($rec_info_stmt) {
+            $rec_info_stmt->bind_param('i', $rid);
+            if ($rec_info_stmt->execute()) {
+                $rec_info_res = $rec_info_stmt->get_result();
+                $rec_info = $rec_info_res ? $rec_info_res->fetch_assoc() : null;
+                if ($rec_info) {
+                    $signed_recommender_name = trim((string)($rec_info['recommender_name'] ?? ''));
+                    $signed_recommender_sid = trim((string)($rec_info['recommender_student_id'] ?? ''));
+                    $signed_recommender_dept = $resolve_dept_name($rec_info['recommender_department'] ?? '');
+                }
+            }
+            $rec_info_stmt->close();
+        }
+    }
 
     $to_email = '110534236@stu.ukn.edu.tw';
     if ($waive_bonus === 1) {
@@ -569,6 +593,20 @@ try {
             </div>
         ";
         $altBody = "推薦人已確認放棄本筆推薦獎金。\n學生：{$student_name}\n學校：{$student_school}\n聯絡電話：{$student_phone}";
+    } elseif ($is_bonus_signature_notice) {
+        $subject = '推薦人已完成獎金簽核';
+        $name_html = htmlspecialchars($signed_recommender_name, ENT_QUOTES, 'UTF-8');
+        $sid_html = htmlspecialchars($signed_recommender_sid, ENT_QUOTES, 'UTF-8');
+        $dept_html = htmlspecialchars($signed_recommender_dept, ENT_QUOTES, 'UTF-8');
+        $body = "
+            <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                <p>推薦人已完成獎金簽核。</p>
+                <p>推薦人姓名：{$name_html}</p>
+                <p>學號/教師編號：{$sid_html}</p>
+                <p>科系：{$dept_html}</p>
+            </div>
+        ";
+        $altBody = "推薦人已完成獎金簽核。\n推薦人姓名：{$signed_recommender_name}\n學號/教師編號：{$signed_recommender_sid}\n科系：{$signed_recommender_dept}";
     } elseif ($reject_reason === '' && !in_array('fail', array_values($decision_map), true) && $review_decision !== 'fail') {
         $subject = '科主任已確認通過';
         $body = "
