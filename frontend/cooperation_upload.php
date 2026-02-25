@@ -53,7 +53,7 @@ try {
         $courses = $courses_stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (PDOException $e) {
         error_log("查詢科系選項失敗（admission_courses 表可能不存在）: " . $e->getMessage());
-        $courses = ['護理科', '嬰幼兒保育科', '視光科', '數位影視動畫科', '資訊管理科', '企業管理科', '應用外語科', '長期照護學系'];
+        $courses = ['護理科', '嬰幼兒保育科', '視光科', '數位影視動畫科', '資訊管理科', '企業管理科', '應用外語科'];
     }
 } catch (PDOException $e) {
     $db_error = "資料庫連線失敗，請檢查設定: " . $e->getMessage();
