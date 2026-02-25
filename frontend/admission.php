@@ -1341,7 +1341,7 @@ $conn->close();
                             <h4><i class="fas fa-list"></i> 可選科系</h4>
                             <div class="course-list" id="availableCourses">
                                 <?php foreach ($departments as $dept):
-                                    if ($dept['code'] === 'AA') continue; ?>  
+                                    if ($dept['code'] === 'AA' || $dept['code'] === 'LTC') continue; ?>  
                                     <div class="course-item" draggable="true" data-course="<?php echo htmlspecialchars($dept['code']); ?>" data-course-name="<?php echo htmlspecialchars($dept['name']); ?>">
                                         <i class="fas fa-grip-vertical"></i>
                                         <span><?php echo htmlspecialchars($dept['name']); ?></span>
