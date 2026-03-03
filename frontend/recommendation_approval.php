@@ -60,6 +60,7 @@ try {
             if ($group_ids !== '') {
                 $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
             }
+            $is_target_confirmation_mode = (!empty($group_id_list) && count($group_id_list) > 1);
             $is_signed = ($link['status'] === 'signed');
             $is_waived = ($link['status'] === 'waived');
 
@@ -189,12 +190,20 @@ try {
                 $data['status'] = trim((string)($data['status'] ?? ''));
                 $status_norm = strtolower($data['status']);
                 $is_apd_status = ($status_norm === 'apd' || mb_strpos((string)$data['status'], '審核完成') !== false || mb_strpos((string)$data['status'], '可發獎金') !== false);
-                $data['can_waive_bonus'] = $is_apd_status ? 1 : 0;
-                $data['requires_review_decision'] = $is_apd_status ? 0 : 1;
+                if ($is_target_confirmation_mode) {
+                    // 「確認推薦對象」流程固定走決策，不提供放棄獎金
+                    $data['can_waive_bonus'] = 0;
+                    $data['requires_review_decision'] = 1;
+                } else {
+                    $data['can_waive_bonus'] = $is_apd_status ? 1 : 0;
+                    $data['requires_review_decision'] = $is_apd_status ? 0 : 1;
+                }
+                $data['is_target_confirmation_mode'] = $is_target_confirmation_mode ? 1 : 0;
                 if (
                     !$is_signed &&
                     !$is_waived &&
                     ($link['status'] ?? '') !== 'rejected' &&
+                    !$is_target_confirmation_mode &&
                     !in_array($status_norm, ['ap', 'approved', 'mc', 'apd'], true) &&
                     mb_strpos((string)$data['status'], '審核完成') === false
                 ) {
@@ -470,6 +479,7 @@ try {
                 $decision_recommenders[] = [
                     'recommender_name' => trim((string)($dr['recommender_name'] ?? '')),
                     'recommender_student_id' => trim((string)($dr['recommender_student_id'] ?? '')),
+                    'recommender_department' => trim((string)($dr['recommender_department'] ?? '')),
                     'student_name' => trim((string)($dr['student_name'] ?? '')),
                     'student_school' => trim((string)($dr['student_school'] ?? '')),
                     'ids' => [$dr_id]
@@ -806,8 +816,12 @@ try {
                 <tr>
                   <th>推薦人姓名</th>
                   <th>推薦人學號/編號</th>
+                  <?php if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1): ?>
+                  <th>推薦人科系</th>
+                  <?php else: ?>
                   <th>被推薦人姓名</th>
                   <th>國中</th>
+                  <?php endif; ?>
                   <th class="decision-check-col">勾選</th>
                 </tr>
               </thead>
@@ -817,8 +831,12 @@ try {
                 <tr>
                   <td><?php echo htmlspecialchars($dr['recommender_name'] ?? ''); ?></td>
                   <td><?php echo htmlspecialchars($dr['recommender_student_id'] ?? ''); ?></td>
+                  <?php if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1): ?>
+                  <td><?php echo htmlspecialchars($dr['recommender_department'] ?? ''); ?></td>
+                  <?php else: ?>
                   <td><?php echo htmlspecialchars($dr['student_name'] ?? ''); ?></td>
                   <td><?php echo htmlspecialchars($dr['student_school'] ?? ''); ?></td>
+                  <?php endif; ?>
                   <td class="decision-check-col">
                     <input
                       type="checkbox"
@@ -837,8 +855,8 @@ try {
               <button id="decisionPassBtn" class="btn-pass" type="button" onclick="openDecisionConfirm('pass')">通過</button>
               <button id="decisionFailBtn" class="btn-fail" type="button" onclick="openDecisionConfirm('fail')">不通過</button>
             </div>
-            <div class="decision-reason-label">不通過原因（僅選擇不通過時必填）</div>
-            <textarea id="decisionFailReason" class="decision-reason-input" placeholder="請輸入不通過原因"></textarea>
+            <div class="decision-reason-label"><?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? '原因（選擇通過/不通過皆必填）' : '不通過原因（僅選擇不通過時必填）'; ?></div>
+            <textarea id="decisionFailReason" class="decision-reason-input" placeholder="<?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? '請輸入原因' : '請輸入不通過原因'; ?>"></textarea>
           </div>
           <div id="decisionResultNote" class="decision-result-note" style="display:none;"></div>
           <?php endif; ?>
@@ -889,11 +907,12 @@ try {
   <script>
     const token = <?php echo json_encode($token); ?>;
     const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
+    const isTargetConfirmationMode = <?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? 'true' : 'false'; ?>;
     let pendingDecisionType = '';
     let pendingDecisionSelectedIds = [];
     let pendingDecisionReason = '';
     const decidedIdMap = {};
-    const decidedFailReasonMap = {};
+    const decidedReasonMap = {};
     let pendingWaiveBonus = false;
 
     function getSelectedDecisionIds() {
@@ -924,9 +943,16 @@ try {
       if (availableIds.length !== selectedIds.length) {
         alert('已自動忽略已確認過的推薦人，僅送出尚未確認者。');
       }
-      if (type === 'fail') {
-        const reasonEl = document.getElementById('decisionFailReason');
-        const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
+      const reasonEl = document.getElementById('decisionFailReason');
+      const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
+      if (isTargetConfirmationMode) {
+        if (!reasonText) {
+          alert('請先填寫原因。');
+          if (reasonEl) reasonEl.focus();
+          return;
+        }
+        pendingDecisionReason = reasonText;
+      } else if (type === 'fail') {
         if (!reasonText) {
           alert('選擇不通過時，請先填寫不通過原因。');
           if (reasonEl) reasonEl.focus();
@@ -964,10 +990,12 @@ try {
       const decidedNow = pendingDecisionSelectedIds.slice();
       decidedNow.forEach(id => {
         decidedIdMap[id] = pendingDecisionType;
-        if (pendingDecisionType === 'fail') {
-          decidedFailReasonMap[id] = pendingDecisionReason;
-        } else if (decidedFailReasonMap[id]) {
-          delete decidedFailReasonMap[id];
+        if (isTargetConfirmationMode) {
+          decidedReasonMap[id] = pendingDecisionReason;
+        } else if (pendingDecisionType === 'fail') {
+          decidedReasonMap[id] = pendingDecisionReason;
+        } else if (decidedReasonMap[id]) {
+          delete decidedReasonMap[id];
         }
       });
       closeDecisionConfirm();
@@ -1020,7 +1048,8 @@ try {
       let body = 'token=' + encodeURIComponent(token)
         + '&signature_url=' + encodeURIComponent(signatureUrl)
         + '&review_decision_map=' + encodeURIComponent(JSON.stringify(decidedIdMap))
-        + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedFailReasonMap));
+        + '&review_reason_map=' + encodeURIComponent(JSON.stringify(decidedReasonMap))
+        + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(decidedReasonMap));
       let isWaiveSubmit = false;
       if (pendingWaiveBonus) {
         body += '&waive_bonus=1';

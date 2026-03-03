@@ -63,7 +63,12 @@ $waive_bonus = isset($_POST['waive_bonus']) ? intval($_POST['waive_bonus']) : 0;
 $review_decision = isset($_POST['review_decision']) ? trim((string)$_POST['review_decision']) : '';
 $selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$_POST['selected_review_ids']) : '';
 $review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
+$review_reason_map_raw = isset($_POST['review_reason_map']) ? trim((string)$_POST['review_reason_map']) : '';
 $review_fail_reason_map_raw = isset($_POST['review_fail_reason_map']) ? trim((string)$_POST['review_fail_reason_map']) : '';
+if ($review_reason_map_raw === '' && $review_fail_reason_map_raw !== '') {
+    // 相容舊前端欄位
+    $review_reason_map_raw = $review_fail_reason_map_raw;
+}
 
 if ($token === '') {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
@@ -147,6 +152,7 @@ try {
     if ($group_ids !== '') {
         $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
     }
+    $is_target_confirmation_mode = (!empty($group_id_list) && count($group_id_list) > 1);
 
     // 檢查是否審核通過
     $ar_has = function($col) use ($hasColumn) {
@@ -227,11 +233,15 @@ try {
             $chk->execute();
             $r2 = $chk->get_result();
             $row = $r2 ? $r2->fetch_assoc() : null;
-            if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
+            if (!$row) {
                 $ok = false;
                 break;
             }
-            if (!$is_apd_status($row['status'] ?? '')) {
+            if (!$is_target_confirmation_mode && !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd', 'apdr'], true)) {
+                $ok = false;
+                break;
+            }
+            if (!$is_target_confirmation_mode && !$is_apd_status($row['status'] ?? '')) {
                 $waive_allowed = false;
                 $requires_review_decision = true;
             }
@@ -246,12 +256,12 @@ try {
         $chk->execute();
         $r2 = $chk->get_result();
         $rec = $r2 ? $r2->fetch_assoc() : null;
-        if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
+        if (!$rec || (!in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd', 'apdr'], true) && !$is_target_confirmation_mode)) {
             $chk->close();
             echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
             exit;
         }
-        if (!$is_apd_status($rec['status'] ?? '')) {
+        if (!$is_target_confirmation_mode && !$is_apd_status($rec['status'] ?? '')) {
             $waive_allowed = false;
             $requires_review_decision = true;
         }
@@ -285,15 +295,15 @@ try {
             }
         }
     }
-    $fail_reason_map = [];
-    if ($review_fail_reason_map_raw !== '') {
-        $decoded_reason = json_decode($review_fail_reason_map_raw, true);
+    $reason_map = [];
+    if ($review_reason_map_raw !== '') {
+        $decoded_reason = json_decode($review_reason_map_raw, true);
         if (is_array($decoded_reason)) {
             foreach ($decoded_reason as $idKey => $reasonVal) {
                 $did = intval($idKey);
                 $rv = trim((string)$reasonVal);
                 if ($did > 0 && isset($allowed_id_map[$did]) && $rv !== '') {
-                    $fail_reason_map[$did] = mb_substr($rv, 0, 250);
+                    $reason_map[$did] = mb_substr($rv, 0, 250);
                 }
             }
         }
@@ -302,7 +312,7 @@ try {
     // APD（可發獎金）簽核連結不需要「通過/不通過」決策，避免誤改狀態。
     if (!$requires_review_decision) {
         $decision_map = [];
-        $fail_reason_map = [];
+        $reason_map = [];
         $review_decision = '';
         $selected_target_ids = [];
     }
@@ -325,8 +335,14 @@ try {
             exit;
         }
         foreach ($decision_map as $did => $dv) {
-            if ($dv === 'fail') {
-                $reason_txt = trim((string)($fail_reason_map[$did] ?? ''));
+            if ($is_target_confirmation_mode) {
+                $reason_txt = trim((string)($reason_map[$did] ?? ''));
+                if ($reason_txt === '') {
+                    echo json_encode(['success' => false, 'message' => '請填寫通過/不通過原因']);
+                    exit;
+                }
+            } elseif ($dv === 'fail') {
+                $reason_txt = trim((string)($reason_map[$did] ?? ''));
                 if ($reason_txt === '') {
                     echo json_encode(['success' => false, 'message' => '不通過時請填寫不通過原因']);
                     exit;
@@ -458,7 +474,7 @@ try {
                     $new_status = 'APDR';
                     $upd_status->bind_param('si', $new_status, $tid);
                     @$upd_status->execute();
-                    $fail_reason = trim((string)($fail_reason_map[$tid] ?? ''));
+                    $fail_reason = trim((string)($reason_map[$tid] ?? ''));
                     if ($fail_reason !== '') {
                         $failed_reason_rows[] = $fail_reason;
                         $info = ['name' => '', 'sid' => '', 'department' => '', 'reason' => $fail_reason];
