@@ -334,6 +334,22 @@ try {
             echo json_encode(['success' => false, 'message' => '缺少可更新的審核項目']);
             exit;
         }
+        if ($is_target_confirmation_mode) {
+            foreach ($allowed_target_ids as $aid) {
+                if (!isset($decision_map[$aid])) {
+                    echo json_encode(['success' => false, 'message' => '請完整填寫每位推薦人的通過/不通過']);
+                    exit;
+                }
+            }
+            $pass_count = 0;
+            foreach ($decision_map as $dv) {
+                if ($dv === 'pass') $pass_count++;
+            }
+            if ($pass_count <= 0) {
+                echo json_encode(['success' => false, 'message' => '請至少選擇一位推薦人為通過']);
+                exit;
+            }
+        }
         foreach ($decision_map as $did => $dv) {
             if ($is_target_confirmation_mode) {
                 $reason_txt = trim((string)($reason_map[$did] ?? ''));
