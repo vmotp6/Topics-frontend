@@ -116,9 +116,28 @@ try {
         $stmt->close();
         return ((int)$cnt > 0);
     };
+    $tableExists = function($table) use ($conn) {
+        $table = trim((string)$table);
+        if ($table === '') return false;
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+        if (!$stmt) return false;
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $cnt = 0;
+        $stmt->bind_result($cnt);
+        $stmt->fetch();
+        $stmt->close();
+        return ((int)$cnt > 0);
+    };
 
     if (!$hasColumn('recommendation_approval_links', 'reject_reason')) {
         $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN reject_reason VARCHAR(255) DEFAULT NULL");
+    }
+    if (!$hasColumn('recommendation_approval_links', 'decision_result_json')) {
+        $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_result_json TEXT NULL");
+    }
+    if (!$hasColumn('recommendation_approval_links', 'decision_reason_json')) {
+        $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_reason_json TEXT NULL");
     }
 
     $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
@@ -225,7 +244,8 @@ try {
         return ($st_norm === 'apd' || mb_strpos($st, '審核完成') !== false || mb_strpos($st, '可發獎金') !== false);
     };
     $waive_allowed = true;
-    $requires_review_decision = false;
+    // 「確認推薦對象」流程必須保留通過/不通過與理由決策
+    $requires_review_decision = $is_target_confirmation_mode ? true : false;
     if (!empty($group_id_list)) {
         $ok = true;
         foreach ($group_id_list as $gid) {
@@ -455,8 +475,16 @@ try {
             $id_values = array_values(array_keys($reset_ids));
             $id_list_sql = implode(',', array_map('intval', $id_values));
             if ($id_list_sql !== '') {
-                @$conn->query("DELETE FROM bonus_send_logs WHERE recommendation_id IN ({$id_list_sql})");
-                @$conn->query("DELETE FROM bonus_send_email_logs WHERE recommendation_id IN ({$id_list_sql})");
+                if ($tableExists('bonus_send_logs')) {
+                    @$conn->query("DELETE FROM bonus_send_logs WHERE recommendation_id IN ({$id_list_sql})");
+                }
+                // 相容舊環境：若表不存在，先嘗試建立再刪除，避免簽核流程被中斷
+                if (function_exists('ensure_bonus_send_email_logs_table')) {
+                    @ensure_bonus_send_email_logs_table($conn);
+                }
+                if ($tableExists('bonus_send_email_logs')) {
+                    @$conn->query("DELETE FROM bonus_send_email_logs WHERE recommendation_id IN ({$id_list_sql})");
+                }
             }
         }
     } elseif ($reject_reason === '') {
@@ -556,10 +584,12 @@ try {
         }
 
         $upd = $conn->prepare("UPDATE recommendation_approval_links
-            SET status = 'signed', signature_path = ?, reject_reason = ?, signed_at = NOW()
+            SET status = 'signed', signature_path = ?, reject_reason = ?, decision_result_json = ?, decision_reason_json = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
         $rej_value = trim((string)$reject_reason);
-        $upd->bind_param('sss', $public_path, $rej_value, $token);
+        $decision_json = !empty($decision_map) ? json_encode($decision_map, JSON_UNESCAPED_UNICODE) : null;
+        $reason_json = !empty($reason_map) ? json_encode($reason_map, JSON_UNESCAPED_UNICODE) : null;
+        $upd->bind_param('sssss', $public_path, $rej_value, $decision_json, $reason_json, $token);
         $upd->execute();
         $upd->close();
     } else {
