@@ -231,8 +231,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ?, ?, ?,
         ?, ?, ?
       )";
+    // debug: log the SQL in case there are syntax issues
+    error_log('DEBUG: insert SQL: ' . $sql);
     $stmt = $conn->prepare($sql);
-    if (!$stmt) throw new Exception('資料庫寫入準備失敗');
+    if (!$stmt) {
+      // record database error for troubleshooting
+      $err = $conn->error;
+      error_log('DEBUG: prepare failed for insert into new_student_basic_info: ' . $err);
+      throw new Exception('資料庫寫入準備失敗：' . $err);
+    }
 
     $stmt->bind_param(
       "sssssssssssssssssssssssssssiii",
