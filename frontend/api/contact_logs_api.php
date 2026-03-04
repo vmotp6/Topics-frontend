@@ -281,9 +281,14 @@ try {
             exit;
         }
 
-        // 如果是招生中心或管理員，可以查看所有記錄，跳過權限檢查
-        if ($isAdmin || $isAdmissionCenter) {
-            // 招生中心和管理員可以查看所有記錄，不需要進一步檢查
+        // 招生中心不可看任何老師的聯絡紀錄，一律回傳 0 筆（主任仍可查看所有老師的聯絡紀錄）
+        if ($isAdmissionCenter) {
+            echo json_encode(['success' => true, 'contact_logs' => [], 'total' => 0], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        // 如果是管理員，可以查看所有記錄，跳過權限檢查
+        if ($isAdmin) {
+            // 管理員可以查看所有記錄，不需要進一步檢查
         }
         // 如果是老師（非管理端），則檢查是否為分配給自己的學生
         else if (!$isDirector) {

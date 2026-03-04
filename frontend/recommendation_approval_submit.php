@@ -63,7 +63,12 @@ $waive_bonus = isset($_POST['waive_bonus']) ? intval($_POST['waive_bonus']) : 0;
 $review_decision = isset($_POST['review_decision']) ? trim((string)$_POST['review_decision']) : '';
 $selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$_POST['selected_review_ids']) : '';
 $review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
+$review_reason_map_raw = isset($_POST['review_reason_map']) ? trim((string)$_POST['review_reason_map']) : '';
 $review_fail_reason_map_raw = isset($_POST['review_fail_reason_map']) ? trim((string)$_POST['review_fail_reason_map']) : '';
+if ($review_reason_map_raw === '' && $review_fail_reason_map_raw !== '') {
+    // 相容舊前端欄位
+    $review_reason_map_raw = $review_fail_reason_map_raw;
+}
 
 if ($token === '') {
     echo json_encode(['success' => false, 'message' => '缺少必要參數']);
@@ -111,9 +116,28 @@ try {
         $stmt->close();
         return ((int)$cnt > 0);
     };
+    $tableExists = function($table) use ($conn) {
+        $table = trim((string)$table);
+        if ($table === '') return false;
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+        if (!$stmt) return false;
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $cnt = 0;
+        $stmt->bind_result($cnt);
+        $stmt->fetch();
+        $stmt->close();
+        return ((int)$cnt > 0);
+    };
 
     if (!$hasColumn('recommendation_approval_links', 'reject_reason')) {
         $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN reject_reason VARCHAR(255) DEFAULT NULL");
+    }
+    if (!$hasColumn('recommendation_approval_links', 'decision_result_json')) {
+        $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_result_json TEXT NULL");
+    }
+    if (!$hasColumn('recommendation_approval_links', 'decision_reason_json')) {
+        $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_reason_json TEXT NULL");
     }
 
     $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
@@ -147,6 +171,7 @@ try {
     if ($group_ids !== '') {
         $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
     }
+    $is_target_confirmation_mode = (!empty($group_id_list) && count($group_id_list) > 1);
 
     // 檢查是否審核通過
     $ar_has = function($col) use ($hasColumn) {
@@ -219,7 +244,8 @@ try {
         return ($st_norm === 'apd' || mb_strpos($st, '審核完成') !== false || mb_strpos($st, '可發獎金') !== false);
     };
     $waive_allowed = true;
-    $requires_review_decision = false;
+    // 「確認推薦對象」流程必須保留通過/不通過與理由決策
+    $requires_review_decision = $is_target_confirmation_mode ? true : false;
     if (!empty($group_id_list)) {
         $ok = true;
         foreach ($group_id_list as $gid) {
@@ -227,11 +253,15 @@ try {
             $chk->execute();
             $r2 = $chk->get_result();
             $row = $r2 ? $r2->fetch_assoc() : null;
-            if (!$row || !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
+            if (!$row) {
                 $ok = false;
                 break;
             }
-            if (!$is_apd_status($row['status'] ?? '')) {
+            if (!$is_target_confirmation_mode && !in_array(strtolower(trim((string)($row['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd', 'apdr'], true)) {
+                $ok = false;
+                break;
+            }
+            if (!$is_target_confirmation_mode && !$is_apd_status($row['status'] ?? '')) {
                 $waive_allowed = false;
                 $requires_review_decision = true;
             }
@@ -246,12 +276,12 @@ try {
         $chk->execute();
         $r2 = $chk->get_result();
         $rec = $r2 ? $r2->fetch_assoc() : null;
-        if (!$rec || !in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd'], true)) {
+        if (!$rec || (!in_array(strtolower(trim((string)($rec['status'] ?? ''))), ['ap', 'approved', 'mc', 'apd', 'apdr'], true) && !$is_target_confirmation_mode)) {
             $chk->close();
             echo json_encode(['success' => false, 'message' => '此筆推薦尚未審核通過']);
             exit;
         }
-        if (!$is_apd_status($rec['status'] ?? '')) {
+        if (!$is_target_confirmation_mode && !$is_apd_status($rec['status'] ?? '')) {
             $waive_allowed = false;
             $requires_review_decision = true;
         }
@@ -285,15 +315,15 @@ try {
             }
         }
     }
-    $fail_reason_map = [];
-    if ($review_fail_reason_map_raw !== '') {
-        $decoded_reason = json_decode($review_fail_reason_map_raw, true);
+    $reason_map = [];
+    if ($review_reason_map_raw !== '') {
+        $decoded_reason = json_decode($review_reason_map_raw, true);
         if (is_array($decoded_reason)) {
             foreach ($decoded_reason as $idKey => $reasonVal) {
                 $did = intval($idKey);
                 $rv = trim((string)$reasonVal);
                 if ($did > 0 && isset($allowed_id_map[$did]) && $rv !== '') {
-                    $fail_reason_map[$did] = mb_substr($rv, 0, 250);
+                    $reason_map[$did] = mb_substr($rv, 0, 250);
                 }
             }
         }
@@ -302,7 +332,7 @@ try {
     // APD（可發獎金）簽核連結不需要「通過/不通過」決策，避免誤改狀態。
     if (!$requires_review_decision) {
         $decision_map = [];
-        $fail_reason_map = [];
+        $reason_map = [];
         $review_decision = '';
         $selected_target_ids = [];
     }
@@ -324,9 +354,31 @@ try {
             echo json_encode(['success' => false, 'message' => '缺少可更新的審核項目']);
             exit;
         }
+        if ($is_target_confirmation_mode) {
+            foreach ($allowed_target_ids as $aid) {
+                if (!isset($decision_map[$aid])) {
+                    echo json_encode(['success' => false, 'message' => '請完整填寫每位推薦人的通過/不通過']);
+                    exit;
+                }
+            }
+            $pass_count = 0;
+            foreach ($decision_map as $dv) {
+                if ($dv === 'pass') $pass_count++;
+            }
+            if ($pass_count <= 0) {
+                echo json_encode(['success' => false, 'message' => '請至少選擇一位推薦人為通過']);
+                exit;
+            }
+        }
         foreach ($decision_map as $did => $dv) {
-            if ($dv === 'fail') {
-                $reason_txt = trim((string)($fail_reason_map[$did] ?? ''));
+            if ($is_target_confirmation_mode) {
+                $reason_txt = trim((string)($reason_map[$did] ?? ''));
+                if ($reason_txt === '') {
+                    echo json_encode(['success' => false, 'message' => '請填寫通過/不通過原因']);
+                    exit;
+                }
+            } elseif ($dv === 'fail') {
+                $reason_txt = trim((string)($reason_map[$did] ?? ''));
                 if ($reason_txt === '') {
                     echo json_encode(['success' => false, 'message' => '不通過時請填寫不通過原因']);
                     exit;
@@ -423,8 +475,16 @@ try {
             $id_values = array_values(array_keys($reset_ids));
             $id_list_sql = implode(',', array_map('intval', $id_values));
             if ($id_list_sql !== '') {
-                @$conn->query("DELETE FROM bonus_send_logs WHERE recommendation_id IN ({$id_list_sql})");
-                @$conn->query("DELETE FROM bonus_send_email_logs WHERE recommendation_id IN ({$id_list_sql})");
+                if ($tableExists('bonus_send_logs')) {
+                    @$conn->query("DELETE FROM bonus_send_logs WHERE recommendation_id IN ({$id_list_sql})");
+                }
+                // 相容舊環境：若表不存在，先嘗試建立再刪除，避免簽核流程被中斷
+                if (function_exists('ensure_bonus_send_email_logs_table')) {
+                    @ensure_bonus_send_email_logs_table($conn);
+                }
+                if ($tableExists('bonus_send_email_logs')) {
+                    @$conn->query("DELETE FROM bonus_send_email_logs WHERE recommendation_id IN ({$id_list_sql})");
+                }
             }
         }
     } elseif ($reject_reason === '') {
@@ -458,7 +518,7 @@ try {
                     $new_status = 'APDR';
                     $upd_status->bind_param('si', $new_status, $tid);
                     @$upd_status->execute();
-                    $fail_reason = trim((string)($fail_reason_map[$tid] ?? ''));
+                    $fail_reason = trim((string)($reason_map[$tid] ?? ''));
                     if ($fail_reason !== '') {
                         $failed_reason_rows[] = $fail_reason;
                         $info = ['name' => '', 'sid' => '', 'department' => '', 'reason' => $fail_reason];
@@ -524,10 +584,12 @@ try {
         }
 
         $upd = $conn->prepare("UPDATE recommendation_approval_links
-            SET status = 'signed', signature_path = ?, reject_reason = ?, signed_at = NOW()
+            SET status = 'signed', signature_path = ?, reject_reason = ?, decision_result_json = ?, decision_reason_json = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
         $rej_value = trim((string)$reject_reason);
-        $upd->bind_param('sss', $public_path, $rej_value, $token);
+        $decision_json = !empty($decision_map) ? json_encode($decision_map, JSON_UNESCAPED_UNICODE) : null;
+        $reason_json = !empty($reason_map) ? json_encode($reason_map, JSON_UNESCAPED_UNICODE) : null;
+        $upd->bind_param('sssss', $public_path, $rej_value, $decision_json, $reason_json, $token);
         $upd->execute();
         $upd->close();
     } else {

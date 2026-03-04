@@ -85,16 +85,22 @@ function getContinuedRecruitmentTimeRange($conn) {
 /**
  * 判斷當前報名階段
  * 完全免試(4月)/優先免試(5月)/聯合免試(6-7月)依月份；續招依「科系名額管理」設定的報名時間區間。
+ * 一律以 Asia/Taipei 時區判斷，與名單頁 enrollment_list.php 一致。
  */
 function getCurrentRegistrationStage($conn) {
-    $now = time();
-    $current_month = (int)date('m');
+    $tz = new DateTimeZone('Asia/Taipei');
+    $now = new DateTime('now', $tz);
+    $current_month = (int)$now->format('m');
     $continued_range = getContinuedRecruitmentTimeRange($conn);
     if ($continued_range) {
-        $start_ts = strtotime($continued_range['start']);
-        $end_ts = strtotime($continued_range['end']);
-        if ($start_ts !== false && $end_ts !== false && $now >= $start_ts && $now <= $end_ts) {
-            return 'continued_recruitment';
+        try {
+            $start = new DateTime($continued_range['start'], $tz);
+            $end = new DateTime($continued_range['end'], $tz);
+            if ($now >= $start && $now <= $end) {
+                return 'continued_recruitment';
+            }
+        } catch (Exception $e) {
+            // 解析失敗則不視為續招期間
         }
     }
     if ($current_month >= 4 && $current_month < 5) {
@@ -135,8 +141,15 @@ try {
             echo json_encode(['success' => false, 'message' => '招生中心不可進行報名提醒']);
             exit;
         }
-        
-        $stage = getCurrentRegistrationStage($conn);
+        // 優先使用前端傳入的階段（與名單頁顯示一致），避免時區或環境差異導致「名單有按鈕但 API 回非報名期間」
+        $valid_stages = ['full_exempt', 'priority_exam', 'joint_exam', 'continued_recruitment'];
+        $stage = null;
+        if (!empty($_POST['stage']) && in_array($_POST['stage'], $valid_stages, true)) {
+            $stage = $_POST['stage'];
+        }
+        if (!$stage) {
+            $stage = getCurrentRegistrationStage($conn);
+        }
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
@@ -186,8 +199,15 @@ try {
             echo json_encode(['success' => false, 'message' => '招生中心不可變更報名狀態']);
             exit;
         }
-        
-        $stage = getCurrentRegistrationStage($conn);
+        // 優先使用前端傳入的階段（與名單頁顯示一致）
+        $valid_stages = ['full_exempt', 'priority_exam', 'joint_exam', 'continued_recruitment'];
+        $stage = null;
+        if (!empty($_POST['stage']) && in_array($_POST['stage'], $valid_stages, true)) {
+            $stage = $_POST['stage'];
+        }
+        if (!$stage) {
+            $stage = getCurrentRegistrationStage($conn);
+        }
         if (!$stage) {
             echo json_encode(['success' => false, 'message' => '目前非報名期間']);
             exit;
@@ -307,6 +327,11 @@ try {
             echo json_encode(['success' => false, 'message' => '無效的學生ID']);
             exit;
         }
+        if ($isAdmissionCenter) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => '招生中心不可操作報到流程']);
+            exit;
+        }
         
         $status_map = [
             'check_in_remind' => 'reminded',
@@ -315,7 +340,7 @@ try {
         ];
         $new_status = $status_map[$action];
         
-        // 僅允許老師/主任對自己名單的學生操作；招生中心也可操作報到狀態
+        // 僅允許老師/主任對自己名單的學生操作報到狀態
         $check = $conn->prepare("SELECT assigned_teacher_id, is_registered FROM enrollment_intention WHERE id = ?");
         $check->bind_param("i", $enrollment_id);
         $check->execute();
@@ -335,12 +360,10 @@ try {
             $canOperate = true;
         } elseif ($user_role === 'DI' && $assigned_teacher_id === $user_id) {
             $canOperate = true;
-        } elseif ($isAdmissionCenter) {
-            $canOperate = true;
         }
         if (!$canOperate) {
             http_response_code(403);
-            echo json_encode(['success' => false, 'message' => '僅能對自己名單的學生或由招生中心操作報到狀態']);
+            echo json_encode(['success' => false, 'message' => '僅能對自己名單的學生操作報到狀態']);
             exit;
         }
         
