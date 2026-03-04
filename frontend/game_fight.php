@@ -1269,18 +1269,23 @@ function updateHP(){
 }
 
 function showQuestion(){
-    // 檢查遊戲結束條件
-    if(index >= questions.length || hpUser <= 0 || hpEnemy <= 0){
+
+    if (index >= questions.length) {
         endGame();
         return;
     }
-    
+
+    if(hpUser <= 0 || hpEnemy <= 0){
+        endGame();
+        return;
+    }
+
     isAnswering = false;
     const q = questions[index];
-    question.innerText = `(${index+1}/10) ${q.q}`;
+
+    question.innerText = `(${index+1}/${questions.length}) ${q.q}`;
     options.innerHTML = "";
     
-    // 創建選項按鈕
     Object.entries(q.o).forEach(([key, text])=>{
         const btn = document.createElement("button");
         btn.innerText = `${key}. ${text}`;
