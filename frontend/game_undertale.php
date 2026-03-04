@@ -2477,6 +2477,7 @@ function tutorialSuccess() {
 			}, 5500);
 		}
 
+
 		function createBeamAttack(commandCount = null, suppressEnd = false) {
 		// 回合 7：System.out.print 攻擊（從指令文字的 > 位置發射子彈）
 		// commandCount: 指定指令數量（null時隨機2-3個，狂暴模式下至少6個）
