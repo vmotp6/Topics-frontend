@@ -140,7 +140,7 @@ try {
         $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_reason_json TEXT NULL");
     }
 
-    $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids, COALESCE(confirmed_by_email,'') AS confirmed_by_email FROM recommendation_approval_links WHERE token = ? LIMIT 1");
     $stmt->bind_param('s', $token);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -171,7 +171,8 @@ try {
     if ($group_ids !== '') {
         $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
     }
-    $is_target_confirmation_mode = (!empty($group_id_list) && count($group_id_list) > 1);
+    // 預設不是「確認推薦對象」模式；需後續明確比對 email 才啟用
+    $is_target_confirmation_mode = false;
 
     // 檢查是否審核通過
     $ar_has = function($col) use ($hasColumn) {
@@ -182,6 +183,7 @@ try {
     $ar_has_student_school = $ar_has('student_school');
     $ar_has_student_school_code = $ar_has('student_school_code');
     $ar_has_student_phone = $ar_has('student_phone');
+    $ar_has_student_email = $ar_has('student_email');
     $ar_has_recommender_name = $ar_has('recommender_name');
     $ar_has_recommender_student_id = $ar_has('recommender_student_id');
     $ar_has_recommender_department = $ar_has('recommender_department');
@@ -192,6 +194,28 @@ try {
     $has_recommended_table = false;
     $t_recommended = $conn->query("SHOW TABLES LIKE 'recommended'");
     if ($t_recommended && $t_recommended->num_rows > 0) $has_recommended_table = true;
+    // 僅「寄給被推薦人」且同一批多筆時，才視為確認推薦對象模式。
+    $student_email_expr = $has_recommended_table
+        ? "COALESCE(red.email, " . ($ar_has_student_email ? "ar.student_email" : "''") . ", '')"
+        : ($ar_has_student_email ? "COALESCE(ar.student_email,'')" : "''");
+    $student_email_for_link = '';
+    $stmt_email = $conn->prepare("SELECT {$student_email_expr} AS student_email
+        FROM admission_recommendations ar
+        " . ($has_recommended_table ? "LEFT JOIN recommended red ON ar.id = red.recommendations_id" : "") . "
+        WHERE ar.id = ? LIMIT 1");
+    if ($stmt_email) {
+        $stmt_email->bind_param('i', $rid);
+        if ($stmt_email->execute()) {
+            $res_email = $stmt_email->get_result();
+            $row_email = $res_email ? $res_email->fetch_assoc() : null;
+            $student_email_for_link = strtolower(trim((string)($row_email['student_email'] ?? '')));
+        }
+        $stmt_email->close();
+    }
+    $link_email = strtolower(trim((string)($link['confirmed_by_email'] ?? '')));
+    if (!empty($group_id_list) && count($group_id_list) > 1 && $link_email !== '' && $student_email_for_link !== '' && $link_email === $student_email_for_link) {
+        $is_target_confirmation_mode = true;
+    }
 
     $status_expr = $ar_has_status ? "COALESCE(status,'')" : "''";
     $name_expr = $ar_has_student_name ? "COALESCE(student_name,'')" : "''";
@@ -340,27 +364,20 @@ try {
     $is_signature_submit = ($waive_bonus !== 1 && $reject_reason === '' && ($signature !== '' || $signature_url !== ''));
     if ($is_signature_submit && $requires_review_decision) {
         if (empty($decision_map)) {
-            if (!in_array($review_decision, ['pass', 'fail'], true)) {
-                echo json_encode(['success' => false, 'message' => '請先選擇通過或不通過']);
-                exit;
-            }
-            if (empty($selected_target_ids)) {
-                echo json_encode(['success' => false, 'message' => '請先勾選要審核的推薦人']);
-                exit;
-            }
-            foreach ($selected_target_ids as $tid) $decision_map[$tid] = $review_decision;
+            echo json_encode(['success' => false, 'message' => '請先完成表格中的通過/不通過']);
+            exit;
         }
         if (empty($decision_map)) {
             echo json_encode(['success' => false, 'message' => '缺少可更新的審核項目']);
             exit;
         }
-        if ($is_target_confirmation_mode) {
-            foreach ($allowed_target_ids as $aid) {
-                if (!isset($decision_map[$aid])) {
-                    echo json_encode(['success' => false, 'message' => '請完整填寫每位推薦人的通過/不通過']);
-                    exit;
-                }
+        foreach ($allowed_target_ids as $aid) {
+            if (!isset($decision_map[$aid])) {
+                echo json_encode(['success' => false, 'message' => '請完整填寫每位推薦人的通過/不通過']);
+                exit;
             }
+        }
+        if ($is_target_confirmation_mode) {
             $pass_count = 0;
             foreach ($decision_map as $dv) {
                 if ($dv === 'pass') $pass_count++;
@@ -371,13 +388,7 @@ try {
             }
         }
         foreach ($decision_map as $did => $dv) {
-            if ($is_target_confirmation_mode) {
-                $reason_txt = trim((string)($reason_map[$did] ?? ''));
-                if ($reason_txt === '') {
-                    echo json_encode(['success' => false, 'message' => '請填寫通過/不通過原因']);
-                    exit;
-                }
-            } elseif ($dv === 'fail') {
+            if ($dv === 'fail') {
                 $reason_txt = trim((string)($reason_map[$did] ?? ''));
                 if ($reason_txt === '') {
                     echo json_encode(['success' => false, 'message' => '不通過時請填寫不通過原因']);

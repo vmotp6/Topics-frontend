@@ -44,7 +44,7 @@ try {
     if ($token === '') {
         $error = '缺少簽核連結參數。';
     } else {
-        $stmt = $conn->prepare("SELECT recommendation_id, status, signature_path, group_ids FROM recommendation_approval_links WHERE token = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT recommendation_id, status, signature_path, group_ids, COALESCE(confirmed_by_email,'') AS confirmed_by_email FROM recommendation_approval_links WHERE token = ? LIMIT 1");
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -60,7 +60,8 @@ try {
             if ($group_ids !== '') {
                 $group_id_list = array_values(array_filter(array_map('intval', explode(',', $group_ids)), function($v){ return $v > 0; }));
             }
-            $is_target_confirmation_mode = (!empty($group_id_list) && count($group_id_list) > 1);
+            // 預設不是「確認推薦對象」模式；需後續明確比對 email 才啟用
+            $is_target_confirmation_mode = false;
             $is_signed = ($link['status'] === 'signed');
             $is_waived = ($link['status'] === 'waived');
 
@@ -187,6 +188,12 @@ try {
                 $data['is_signed'] = $is_signed ? 1 : 0;
                 $data['is_waived'] = $is_waived ? 1 : 0;
                 $data['signature_path'] = $link['signature_path'] ?? '';
+                // 僅「寄給被推薦人」且同一批多筆時，才視為確認推薦對象模式。
+                $link_email = strtolower(trim((string)($link['confirmed_by_email'] ?? '')));
+                $student_email = strtolower(trim((string)($data['student_email'] ?? '')));
+                if (!empty($group_id_list) && count($group_id_list) > 1 && $link_email !== '' && $student_email !== '' && $link_email === $student_email) {
+                    $is_target_confirmation_mode = true;
+                }
                 $data['status'] = trim((string)($data['status'] ?? ''));
                 $status_norm = strtolower($data['status']);
                 $is_apd_status = ($status_norm === 'apd' || mb_strpos((string)$data['status'], '審核完成') !== false || mb_strpos((string)$data['status'], '可發獎金') !== false);
@@ -635,6 +642,32 @@ try {
       min-height: 64px;
       resize: vertical;
     }
+    .decision-action-wrap {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .decision-bulk-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+    .decision-cell-btn {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .decision-cell-btn.pass { background: #52c41a; }
+    .decision-cell-btn.fail { background: #ff4d4f; }
+    .decision-status-text {
+      font-weight: 700;
+      font-size: 15px;
+      display: none;
+    }
     .modal-mask {
       position: fixed;
       left: 0;
@@ -825,49 +858,37 @@ try {
           <div class="review-decision-box">
             <div class="review-required-title"><?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? '請問以下推薦人你覺得誰比較有與你聯絡?(可複選)' : '推薦人推薦資訊是否通過?'; ?></div>
             <?php if (!empty($decision_recommenders)): ?>
+            <div class="decision-bulk-wrap">
+              <button type="button" class="btn-pass" onclick="openBulkPassConfirm()">全部通過</button>
+            </div>
             <table class="decision-check-table">
               <thead>
                 <tr>
                   <th>推薦人姓名</th>
                   <th>推薦人學號/編號</th>
-                  <?php if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1): ?>
+                  <th>推薦人科系</th>
                   <th>通過/不通過</th>
-                  <th>理由</th>
-                  <?php else: ?>
-                  <th>被推薦人姓名</th>
-                  <th>國中</th>
-                  <th class="decision-check-col">勾選</th>
-                  <?php endif; ?>
+                  <th>不通過原因</th>
                 </tr>
               </thead>
               <tbody>
                 <?php foreach ($decision_recommenders as $dr): ?>
                 <?php $id_csv = implode(',', array_map('intval', (array)($dr['ids'] ?? []))); ?>
+                <?php $first_id = (int)($dr['ids'][0] ?? 0); ?>
                 <tr>
                   <td><?php echo htmlspecialchars($dr['recommender_name'] ?? ''); ?></td>
                   <td><?php echo htmlspecialchars($dr['recommender_student_id'] ?? ''); ?></td>
-                  <?php if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1): ?>
+                  <td><?php echo htmlspecialchars($dr['recommender_department'] ?? ''); ?></td>
                   <td style="min-width:150px;">
-                    <select class="decision-inline-select decision-row-decision" data-rec-ids="<?php echo htmlspecialchars($id_csv); ?>">
-                      <option value="">請選擇</option>
-                      <option value="pass">通過</option>
-                      <option value="fail">不通過</option>
-                    </select>
+                    <div class="decision-action-wrap" data-rec-id="<?php echo (int)$first_id; ?>">
+                      <button type="button" class="decision-cell-btn pass" onclick="openRowDecisionConfirm(<?php echo (int)$first_id; ?>, 'pass')">通過</button>
+                      <button type="button" class="decision-cell-btn fail" onclick="openRowDecisionConfirm(<?php echo (int)$first_id; ?>, 'fail')">不通過</button>
+                      <span class="decision-status-text" id="decisionStatusText-<?php echo (int)$first_id; ?>"></span>
+                    </div>
                   </td>
                   <td style="min-width:220px;">
-                    <textarea class="decision-inline-reason decision-row-reason" data-rec-ids="<?php echo htmlspecialchars($id_csv); ?>" placeholder="請輸入理由"></textarea>
+                    <textarea class="decision-inline-reason decision-row-reason" data-rec-id="<?php echo (int)$first_id; ?>" data-rec-ids="<?php echo htmlspecialchars($id_csv); ?>" placeholder="不通過時必填"></textarea>
                   </td>
-                  <?php else: ?>
-                  <td><?php echo htmlspecialchars($dr['student_name'] ?? ''); ?></td>
-                  <td><?php echo htmlspecialchars($dr['student_school'] ?? ''); ?></td>
-                  <td class="decision-check-col">
-                    <input
-                      type="checkbox"
-                      class="decision-rec-checkbox"
-                      data-rec-ids="<?php echo htmlspecialchars($id_csv); ?>"
-                    />
-                  </td>
-                  <?php endif; ?>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -875,16 +896,7 @@ try {
             <?php else: ?>
             <div class="alert" style="margin-bottom:10px;">查無可勾選的推薦人清單，請重新整理後再試。</div>
             <?php endif; ?>
-            <?php if ((int)($data['is_target_confirmation_mode'] ?? 0) !== 1): ?>
-            <div class="review-decision-wrap">
-              <button id="decisionPassBtn" class="btn-pass" type="button" onclick="openDecisionConfirm('pass')">通過</button>
-              <button id="decisionFailBtn" class="btn-fail" type="button" onclick="openDecisionConfirm('fail')">不通過</button>
-            </div>
-            <div class="decision-reason-label">不通過原因（僅選擇不通過時必填）</div>
-            <textarea id="decisionFailReason" class="decision-reason-input" placeholder="請輸入不通過原因"></textarea>
-            <?php endif; ?>
           </div>
-          <div id="decisionResultNote" class="decision-result-note" style="display:none;"></div>
           <?php endif; ?>
           <?php if ((int)($data['can_waive_bonus'] ?? 0) === 1): ?>
           <div class="waive-q">是否放棄獎金 ?</div>
@@ -935,68 +947,47 @@ try {
     const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
     const isTargetConfirmationMode = <?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? 'true' : 'false'; ?>;
     let pendingDecisionType = '';
-    let pendingDecisionSelectedIds = [];
-    let pendingDecisionReason = '';
+    let pendingDecisionRecId = 0;
+    let pendingBulkPass = false;
     const decidedIdMap = {};
     const decidedReasonMap = {};
     let pendingWaiveBonus = false;
 
-    function getSelectedDecisionIds() {
-      const checkboxes = document.querySelectorAll('.decision-rec-checkbox:checked');
-      const idMap = {};
-      checkboxes.forEach(cb => {
-        const raw = (cb.getAttribute('data-rec-ids') || '').trim();
-        if (!raw) return;
-        raw.split(',').forEach(v => {
-          const id = parseInt(String(v || '').trim(), 10);
-          if (id > 0) idMap[id] = id;
-        });
-      });
-      return Object.keys(idMap).map(k => parseInt(k, 10)).filter(v => v > 0);
-    }
-
-    function openDecisionConfirm(type) {
-      const selectedIds = getSelectedDecisionIds();
-      if (!selectedIds.length) {
-        alert('請先勾選要審核的推薦人。');
-        return;
-      }
-      const availableIds = selectedIds.filter(id => !decidedIdMap[id]);
-      if (!availableIds.length) {
-        alert('本次勾選皆已確認過通過/不通過，請先勾選尚未確認的推薦人。');
-        return;
-      }
-      if (availableIds.length !== selectedIds.length) {
-        alert('已自動忽略已確認過的推薦人，僅送出尚未確認者。');
-      }
-      const reasonEl = document.getElementById('decisionFailReason');
+    function openRowDecisionConfirm(recId, type) {
+      const id = parseInt(String(recId || '0'), 10);
+      if (!id) return;
+      const decision = (type === 'pass') ? 'pass' : 'fail';
+      const reasonEl = document.querySelector('.decision-row-reason[data-rec-id="' + String(id) + '"]');
       const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
-      if (isTargetConfirmationMode) {
-        if (!reasonText) {
-          alert('請先填寫原因。');
-          if (reasonEl) reasonEl.focus();
-          return;
-        }
-        pendingDecisionReason = reasonText;
-      } else if (type === 'fail') {
-        if (!reasonText) {
-          alert('選擇不通過時，請先填寫不通過原因。');
-          if (reasonEl) reasonEl.focus();
-          return;
-        }
-        pendingDecisionReason = reasonText;
-      } else {
-        pendingDecisionReason = '';
+      if (decision === 'fail' && !reasonText) {
+        alert('請先填寫不通過原因');
+        if (reasonEl) reasonEl.focus();
+        return;
       }
-      pendingDecisionSelectedIds = availableIds;
-      pendingDecisionType = (type === 'pass') ? 'pass' : 'fail';
+      pendingDecisionRecId = id;
+      pendingDecisionType = decision;
       const textEl = document.getElementById('decisionConfirmText');
       const modal = document.getElementById('decisionConfirmModal');
       if (textEl) {
-        textEl.textContent = pendingDecisionType === 'pass'
-          ? '確定為通過?一旦按下確定後就不能再更改選項'
-          : '確定為不通過?一旦按下確定後就不能再更改選項';
+        textEl.textContent = decision === 'pass'
+          ? '確認是否為通過?'
+          : '確認是否為不通過?';
       }
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function openBulkPassConfirm() {
+      const rowWrapEls = Array.from(document.querySelectorAll('.decision-action-wrap[data-rec-id]'));
+      if (!rowWrapEls.length) {
+        alert('查無可設定的推薦人清單。');
+        return;
+      }
+      pendingBulkPass = true;
+      pendingDecisionRecId = 0;
+      pendingDecisionType = '';
+      const textEl = document.getElementById('decisionConfirmText');
+      const modal = document.getElementById('decisionConfirmModal');
+      if (textEl) textEl.textContent = '是否確定為全部通過?';
       if (modal) modal.style.display = 'flex';
     }
 
@@ -1004,57 +995,62 @@ try {
       const modal = document.getElementById('decisionConfirmModal');
       if (modal) modal.style.display = 'none';
       pendingDecisionType = '';
-      pendingDecisionSelectedIds = [];
-      pendingDecisionReason = '';
+      pendingDecisionRecId = 0;
+      pendingBulkPass = false;
     }
 
     function confirmDecision() {
-      if (!pendingDecisionType) {
+      if (pendingBulkPass) {
+        const rowWrapEls = Array.from(document.querySelectorAll('.decision-action-wrap[data-rec-id]'));
+        rowWrapEls.forEach(wrapEl => {
+          const id = parseInt(String(wrapEl.getAttribute('data-rec-id') || '0'), 10);
+          if (!id) return;
+          decidedIdMap[id] = 'pass';
+          if (decidedReasonMap[id]) delete decidedReasonMap[id];
+          const btns = wrapEl.querySelectorAll('button.decision-cell-btn');
+          btns.forEach(btn => {
+            btn.style.display = 'none';
+            btn.disabled = true;
+          });
+          const statusTextEl = document.getElementById('decisionStatusText-' + String(id));
+          if (statusTextEl) {
+            statusTextEl.style.display = 'inline';
+            statusTextEl.textContent = '通過';
+            statusTextEl.style.color = '#389e0d';
+          }
+        });
         closeDecisionConfirm();
         return;
       }
-      const decidedNow = pendingDecisionSelectedIds.slice();
-      decidedNow.forEach(id => {
-        decidedIdMap[id] = pendingDecisionType;
-        if (isTargetConfirmationMode) {
-          decidedReasonMap[id] = pendingDecisionReason;
-        } else if (pendingDecisionType === 'fail') {
-          decidedReasonMap[id] = pendingDecisionReason;
-        } else if (decidedReasonMap[id]) {
-          delete decidedReasonMap[id];
-        }
-      });
-      closeDecisionConfirm();
-
-      const passBtn = document.getElementById('decisionPassBtn');
-      const failBtn = document.getElementById('decisionFailBtn');
-      if (passBtn) { passBtn.disabled = false; passBtn.style.opacity = '1'; passBtn.style.cursor = 'pointer'; }
-      if (failBtn) { failBtn.disabled = false; failBtn.style.opacity = '1'; failBtn.style.cursor = 'pointer'; }
-      const cbs = document.querySelectorAll('.decision-rec-checkbox');
-      cbs.forEach(cb => {
-        const raw = (cb.getAttribute('data-rec-ids') || '').trim();
-        const ids = raw ? raw.split(',').map(v => parseInt(String(v || '').trim(), 10)).filter(v => v > 0) : [];
-        const isDecided = ids.some(id => !!decidedIdMap[id]);
-        if (isDecided) {
-          cb.checked = true;
-          cb.disabled = true;
-          cb.style.cursor = 'not-allowed';
-          cb.title = '此推薦人已確認，不可再變更';
-        } else {
-          cb.checked = false;
-          cb.disabled = false;
-          cb.style.cursor = 'pointer';
-          cb.title = '';
-        }
-      });
-
-      const noteEl = document.getElementById('decisionResultNote');
-      if (noteEl) {
-        noteEl.style.display = 'block';
-        const passCount = Object.values(decidedIdMap).filter(v => v === 'pass').length;
-        const failCount = Object.values(decidedIdMap).filter(v => v === 'fail').length;
-        noteEl.textContent = '已確認：通過 ' + passCount + ' 筆，不通過 ' + failCount + ' 筆。可繼續勾選尚未確認的推薦人。';
+      if (!pendingDecisionType || !pendingDecisionRecId) {
+        closeDecisionConfirm();
+        return;
       }
+      const id = pendingDecisionRecId;
+      const decision = pendingDecisionType;
+      const reasonEl = document.querySelector('.decision-row-reason[data-rec-id="' + String(id) + '"]');
+      const reasonText = reasonEl ? String(reasonEl.value || '').trim() : '';
+      decidedIdMap[id] = decision;
+      if (decision === 'fail') {
+        decidedReasonMap[id] = reasonText;
+      } else if (decidedReasonMap[id]) {
+        delete decidedReasonMap[id];
+      }
+      const wrap = document.querySelector('.decision-action-wrap[data-rec-id="' + String(id) + '"]');
+      const statusTextEl = document.getElementById('decisionStatusText-' + String(id));
+      if (wrap) {
+        const btns = wrap.querySelectorAll('button.decision-cell-btn');
+        btns.forEach(btn => {
+          btn.style.display = 'none';
+          btn.disabled = true;
+        });
+      }
+      if (statusTextEl) {
+        statusTextEl.style.display = 'inline';
+        statusTextEl.textContent = (decision === 'pass') ? '通過' : '不通過';
+        statusTextEl.style.color = (decision === 'pass') ? '#389e0d' : '#cf1322';
+      }
+      closeDecisionConfirm();
     }
 
     window.addEventListener('message', function(event) {
@@ -1069,42 +1065,36 @@ try {
       let payloadDecisionMap = Object.assign({}, decidedIdMap);
       let payloadReasonMap = Object.assign({}, decidedReasonMap);
 
-      if (requiresReviewDecision && isTargetConfirmationMode && !pendingWaiveBonus) {
-        payloadDecisionMap = {};
-        payloadReasonMap = {};
-        let passCount = 0;
-        const decisionEls = Array.from(document.querySelectorAll('.decision-row-decision'));
-        if (!decisionEls.length) {
+      if (requiresReviewDecision && !pendingWaiveBonus) {
+        const rowWrapEls = Array.from(document.querySelectorAll('.decision-action-wrap[data-rec-id]'));
+        if (!rowWrapEls.length) {
           alert('查無可填寫的推薦人清單，請重新整理後再試。');
           return;
         }
-        for (const el of decisionEls) {
-          const raw = String(el.getAttribute('data-rec-ids') || '').trim();
-          const recIds = raw.split(',').map(v => parseInt(String(v || '').trim(), 10)).filter(v => v > 0);
-          const firstId = recIds.length ? recIds[0] : 0;
+        let passCount = 0;
+        for (const wrapEl of rowWrapEls) {
+          const firstId = parseInt(String(wrapEl.getAttribute('data-rec-id') || '0'), 10);
           if (!firstId) continue;
-          const decisionVal = String(el.value || '').trim();
+          const decisionVal = String(payloadDecisionMap[firstId] || '').trim();
           if (!decisionVal || (decisionVal !== 'pass' && decisionVal !== 'fail')) {
-            alert('請完整選擇每位推薦人的通過/不通過。');
-            el.focus();
+            alert('請先點擊每位推薦人的通過/不通過按鈕並完成確認。');
             return;
           }
-          const reasonEl = document.querySelector('.decision-row-reason[data-rec-ids="' + raw.replace(/"/g, '\\"') + '"]');
+          const reasonEl = document.querySelector('.decision-row-reason[data-rec-id="' + String(firstId) + '"]');
           const reasonVal = reasonEl ? String(reasonEl.value || '').trim() : '';
-          if (!reasonVal) {
-            alert('請完整填寫每位推薦人的理由。');
+          if (decisionVal === 'fail' && !reasonVal) {
+            alert('不通過時，請填寫不通過原因。');
             if (reasonEl) reasonEl.focus();
             return;
           }
-          payloadDecisionMap[firstId] = decisionVal;
-          payloadReasonMap[firstId] = reasonVal;
+          if (reasonVal) payloadReasonMap[firstId] = reasonVal;
           if (decisionVal === 'pass') passCount += 1;
         }
         if (!Object.keys(payloadDecisionMap).length) {
           alert('請先完成表格中的通過/不通過與理由。');
           return;
         }
-        if (passCount <= 0) {
+        if (isTargetConfirmationMode && passCount <= 0) {
           alert('請至少選擇一位推薦人為通過（可複選）。');
           return;
         }
