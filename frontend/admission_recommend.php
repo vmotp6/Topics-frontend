@@ -626,7 +626,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
         $required_fields = [
             'recommender_name', 'recommender_student_id', 'recommender_grade', 
             'recommender_department', 'recommender_phone', 'recommender_email',
-            'student_name', 'student_school', 
+            'student_name', 'student_school', 'student_email',
             'student_phone', 'recommendation_reason'
         ];
         
@@ -769,6 +769,7 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
                 'student_school' => '就讀學校',
                 'student_school_invalid' => '請從系統提供的選項中選擇學校，不能自行輸入',
                 'student_phone' => '學生聯絡電話',
+                'student_email' => '被推薦學生電子郵件',
                 'recommendation_reason' => '推薦理由'
             ];
             
@@ -785,8 +786,8 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
             throw new Exception('推薦人電子郵件格式不正確');
         }
         
-        // 如果學生有填寫電子郵件，則驗證格式
-        if (!empty($_POST['student_email']) && !filter_var($_POST['student_email'], FILTER_VALIDATE_EMAIL)) {
+        // 被推薦學生電子郵件為必填，需驗證格式
+        if (!filter_var($_POST['student_email'], FILTER_VALIDATE_EMAIL)) {
             throw new Exception('被推薦學生電子郵件格式不正確');
         }
         
@@ -2343,9 +2344,9 @@ if ($_POST && isset($_POST['submit_recommendation'])) {
 
         <div class="form-row">
           <div class="form-group">
-            <label for="student_email">電子郵件（選填）</label>
+            <label for="student_email"><span class="required">*</span> 電子郵件</label>
             <input type="email" id="student_email" name="student_email" 
-                   value="<?php echo isset($_POST['student_email']) ? htmlspecialchars($_POST['student_email']) : ''; ?>">
+                   value="<?php echo isset($_POST['student_email']) ? htmlspecialchars($_POST['student_email']) : ''; ?>" required>
           </div>
           
           <div class="form-group">
