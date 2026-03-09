@@ -503,12 +503,12 @@ try {
 
           <div>
             <label>身分證號 <span class="req-star">*</span></label>
-            <input name="id_number" value="<?php echo htmlspecialchars(safePost('id_number')); ?>" required>
+            <input name="id_number" value="<?php echo htmlspecialchars(safePost('id_number')); ?>" maxlength="10" required>
           </div>
 
           <div>
             <label>手機 <span class="req-star">*</span></label>
-            <input name="mobile" value="<?php echo htmlspecialchars(safePost('mobile')); ?>" required>
+            <input name="mobile" value="<?php echo htmlspecialchars(safePost('mobile')); ?>" maxlength="10" required>
           </div>
 
           <div style="grid-column: 1 / -1;">
@@ -539,7 +539,7 @@ try {
           <div><label>姓名</label><input name="parent_name" value="<?php echo htmlspecialchars(safePost('parent_name')); ?>"></div>
           <div><label>年次</label><input name="parent_birth_year" value="<?php echo htmlspecialchars(safePost('parent_birth_year')); ?>" placeholder="例：70"></div>
           <div><label>職業</label><input name="parent_occupation" value="<?php echo htmlspecialchars(safePost('parent_occupation')); ?>"></div>
-          <div><label>電話</label><input name="parent_phone" value="<?php echo htmlspecialchars(safePost('parent_phone')); ?>"></div>
+          <div><label>電話</label><input name="parent_phone" value="<?php echo htmlspecialchars(safePost('parent_phone')); ?>" maxlength="10"></div>
           <div><label>教育程度</label><input name="parent_education" value="<?php echo htmlspecialchars(safePost('parent_education')); ?>"></div>
         </div>
 
@@ -547,8 +547,8 @@ try {
         <div class="grid">
           <div><label>關係</label><input name="guardian_relation" value="<?php echo htmlspecialchars(safePost('guardian_relation')); ?>"></div>
           <div><label>姓名</label><input name="guardian_name" value="<?php echo htmlspecialchars(safePost('guardian_name')); ?>"></div>
-          <div><label>電話</label><input name="guardian_phone" value="<?php echo htmlspecialchars(safePost('guardian_phone')); ?>"></div>
-          <div><label>手機</label><input name="guardian_mobile" value="<?php echo htmlspecialchars(safePost('guardian_mobile')); ?>"></div>
+          <div><label>電話</label><input name="guardian_phone" value="<?php echo htmlspecialchars(safePost('guardian_phone')); ?>" maxlength="10"></div>
+          <div><label>手機</label><input name="guardian_mobile" value="<?php echo htmlspecialchars(safePost('guardian_mobile')); ?>" maxlength="10"></div>
           <div><label>LINE</label><input name="guardian_line" value="<?php echo htmlspecialchars(safePost('guardian_line')); ?>"></div>
           <div><label>EMAIL</label><input type="email" name="guardian_email" value="<?php echo htmlspecialchars(safePost('guardian_email')); ?>"></div>
         </div>
@@ -556,8 +556,8 @@ try {
         <div class="section-title"><i class="fas fa-phone"></i> 緊急聯絡人</div>
         <div class="grid">
           <div><label>姓名</label><input name="emergency_name" value="<?php echo htmlspecialchars(safePost('emergency_name')); ?>"></div>
-          <div><label>電話</label><input name="emergency_phone" value="<?php echo htmlspecialchars(safePost('emergency_phone')); ?>"></div>
-          <div><label>手機</label><input name="emergency_mobile" value="<?php echo htmlspecialchars(safePost('emergency_mobile')); ?>"></div>
+          <div><label>電話</label><input name="emergency_phone" value="<?php echo htmlspecialchars(safePost('emergency_phone')); ?>" maxlength="10"></div>
+          <div><label>手機</label><input name="emergency_mobile" value="<?php echo htmlspecialchars(safePost('emergency_mobile')); ?>" maxlength="10"></div>
         </div>
 
         <div class="section-title"><i class="fas fa-clipboard-check"></i> 個人身分資料</div>
