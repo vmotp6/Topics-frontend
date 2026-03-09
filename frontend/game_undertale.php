@@ -1025,6 +1025,7 @@ let invulnerableTime = 0;
 						// 若尚未完成教學，進入教學；否則敵人先攻擊
 						if (!tutorialFinished) {
 							startTutorial();
+							return; // 等待 timeout 或其他安全機制再啟動回合
 						} else {
 							enemyTurn();
 						}
@@ -1645,6 +1646,7 @@ function tutorialSuccess() {
 				}
 
 				return; // 狂暴模式下直接返回，不進入玩家回合
+
 			}
 			
 			// 正常模式：根據回合數選擇攻擊類型（難度遞增）

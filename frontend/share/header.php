@@ -900,6 +900,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $header_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+    $is_headers_teacher = ($header_role === '老師' || $header_role === 'TEA' || $header_role === 'DI');
     $is_header_teacher = ($header_role === '老師' || $header_role === 'TEA' || $header_role === 'STA' || $header_role === '學校行政人員' || $header_role === 'DI' || $header_role === 'STA');
     $is_header_student = ($header_role === '學生' || $header_role === 'STU');
     ?>
@@ -948,18 +949,18 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
 
-    <?php if ($isLoggedIn && $is_header_teacher): ?>
+    <?php if ($isLoggedIn && $is_headers_teacher ): ?>
       <a href="<?php echo getCorrectPath('student_management.php'); ?>" class="<?php echo getActiveClass('student_management.php'); ?>">學生管理</a>
       <a href="<?php echo getCorrectPath('student_contact_management.php'); ?>" class="<?php echo getActiveClass('student_contact_management.php'); ?>">學生聯絡管理</a>
     <?php endif; ?>
     
-    <?php if ($isLoggedIn && $is_header_teacher): ?>
+    <?php if ($isLoggedIn && $is_headers_teacher ): ?>
       <a href="<?php echo getCorrectPath('teacher_file_upload.php'); ?>" class="<?php echo getActiveClass('teacher_file_upload.php'); ?>">檔案上傳</a>
     <?php endif; ?>
     
-    <?php if ($isLoggedIn && $is_header_teacher): ?>
+    <!--<?php if ($isLoggedIn && $is_header_teacher): ?>
       <a href="<?php echo getCorrectPath('mobile_teacher.php'); ?>" class="<?php echo getActiveClass('mobile_teacher.php'); ?>">學校活動通知系統</a>
-    <?php endif; ?>
+    <?php endif; ?>-->
     
     <?php if ($isLoggedIn && isset($_SESSION['role']) && $_SESSION['role'] === '管理員'): ?>
       <a href="<?php echo getCorrectPath('admin_recommendations.php'); ?>" class="<?php echo getActiveClass('admin_recommendations.php'); ?>">推薦管理</a>
@@ -1096,6 +1097,7 @@ function getActiveClass($targetFile) {
     <?php 
     // 統一設定角色變數（支援代碼和中文名稱）
     $mobile_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
+    $is_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA');
     $is_mobile_teacher = ($mobile_role === '老師' || $mobile_role === 'TEA' || $mobile_role === 'STA' || $mobile_role === '學校行政人員' || $mobile_role === 'AA');
     $is_mobile_student = ($mobile_role === '學生' || $mobile_role === 'STU');
     if (!($isLoggedIn && $is_mobile_teacher)): ?>
@@ -1129,7 +1131,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('records.php'); ?>" class="<?php echo getActiveClass('records.php'); ?>">活動紀錄填報表單</a>
     <?php endif; ?>
 
-    <?php if ($isLoggedIn && $is_mobile_teacher): ?>
+    <?php if ($isLoggedIn && $is_teacher): ?>
       <a href="<?php echo getCorrectPath('student_management.php'); ?>" class="<?php echo getActiveClass('student_management.php'); ?>">學生管理</a>
       <a href="<?php echo getCorrectPath('student_contact_management.php'); ?>" class="<?php echo getActiveClass('student_contact_management.php'); ?>">學生聯絡管理</a>
     <?php endif; ?>

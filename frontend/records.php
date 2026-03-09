@@ -15,48 +15,24 @@ $is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role ===
 $is_director = ($user_role === 'DI');
 $allowed = $is_teacher || $is_director;
 
-// 登入驗證
-if ($debug_mode) {
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
-        || !isset($_SESSION['role']) 
-        || !$allowed) {
+// 檢查登入狀態（與 header.php 保持一致）
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-        echo "<div style='background: #f8d7da; color: #721c24; padding:20px; border-radius:5px;'>";
-        echo "<h3>⚠️ 登入驗證失敗</h3>";
-        echo "<ul>";
+// 引入資料庫配置
+require_once 'config.php';
 
-        if (!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) {
-            echo "<li>❌ 缺少識別資訊 (SESSION中沒有 user_id、id 或 username)</li>";
-        } else {
-            if (isset($_SESSION['user_id'])) echo "<li>✅ user_id 存在: " . $_SESSION['user_id'] . "</li>";
-            if (isset($_SESSION['id'])) echo "<li>✅ id 存在: " . $_SESSION['id'] . "</li>";
-            if (isset($_SESSION['username'])) echo "<li>✅ username 存在: " . $_SESSION['username'] . "</li>";
-        }
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
 
-        if (!isset($_SESSION['role'])) {
-            echo "<li>❌ 缺少 role (role)</li>";
-        } else {
-            echo "<li>✅ role 存在: " . $_SESSION['role'];
-            if (!$allowed) echo " (但不是 '老師' / 'TEA' / 'AA' 或 'DI')";
-            echo "</li>";
-        }
+$role = $_SESSION['role'] ?? '';
+$allowedRoles = ['TEA', 'STA', 'AA', 'DI', 'IM', '學生', 'STU'];
 
-        echo "</ul>";
-        echo "<p><strong>SESSION 內容：</strong></p>";
-        echo "<pre>";
-        print_r($_SESSION);
-        echo "</pre>";
-        echo "</div>";
-        exit();
-    }
-} else {
-    // 正常模式
-    if ((!isset($_SESSION['user_id']) && !isset($_SESSION['id']) && !isset($_SESSION['username'])) 
-        || !isset($_SESSION['role']) 
-        || !$allowed) {
-        header("Location:index.php");
-        exit();
-    }
+if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
+    header("Location: index.php");
+    exit();
 }
 
 // 建立資料庫連接

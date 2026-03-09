@@ -10,6 +10,18 @@ $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &
 // 引入資料庫配置
 require_once 'config.php';
 
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+$role = $_SESSION['role'] ?? '';
+$allowedRoles = ['TEA', 'STA', 'AA', 'DI', 'IM', '學生', 'STU'];
+
+if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
+    header("Location: index.php");
+    exit();
+}
+
 // 遊戲列表
 $games = [
     [
