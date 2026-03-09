@@ -136,7 +136,7 @@ function formatDateRange($start_date, $end_date) {
 
     /* 頁面主容器 */
     .page-container {
-      max-width: 1800px;
+      width: 90%;
       margin: 0 auto;
       padding: 40px 20px;
     }
@@ -285,6 +285,7 @@ function formatDateRange($start_date, $end_date) {
       flex-direction: column;
       gap: 24px;
       margin-bottom: 40px;
+      width: 100%;
     }
 
     /* 卡片樣式 - 現代化設計 */
@@ -298,7 +299,12 @@ function formatDateRange($start_date, $end_date) {
       transition: all 0.3s ease;
       overflow: hidden;
       position: relative;
-    }
+
+      width: 100%;       /* 強制卡片佔滿父容器寬度 */
+    min-width: 100%;
+  box-sizing: border-box; /* 確保邊框不影響寬度計算 */
+}
+    
 
     .card:hover {
       transform: translateY(-4px);
@@ -344,16 +350,16 @@ function formatDateRange($start_date, $end_date) {
     }
 
     .card-image {
-      width: 380px;
-      min-width: 340px;
-      height: 100%;
-      min-height: 220px;
-      flex-shrink: 0;
-      overflow: hidden;
-      display: flex;
-      align-items: stretch;
-      margin-right: 32px;
-    }
+  width: 380px;      
+  min-width: 380px;  
+  flex-shrink: 0;    
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  margin-right: 32px;
+}
 
     .card-image img {
       width: 100%;
@@ -375,11 +381,12 @@ function formatDateRange($start_date, $end_date) {
     }
 
     .card-body {
-      padding: 20px;
+      padding: 20px 32px;
       flex: 1;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      min-width: 0;
     }
 
     .card-title {

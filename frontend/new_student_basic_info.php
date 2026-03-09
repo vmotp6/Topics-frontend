@@ -487,10 +487,10 @@ try {
 
           <div>
             <label>生日</label>
-            <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday'));?>"> 
+            <input type="date" name="birthday" value="<?php echo htmlspecialchars(safePost('birthday')) ? date('Y-m-d', strtotime(safePost('birthday')) ) : ''; ?>" max="<?php echo date('Y-m-d'); ?>">
           </div>
 
-          <div>
+          <div> 
             <label>性別</label>
             <select name="gender">
               <?php $g = safePost('gender'); ?>
