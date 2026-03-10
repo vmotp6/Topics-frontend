@@ -65,6 +65,8 @@ $selected_review_ids_raw = isset($_POST['selected_review_ids']) ? trim((string)$
 $review_decision_map_raw = isset($_POST['review_decision_map']) ? trim((string)$_POST['review_decision_map']) : '';
 $review_reason_map_raw = isset($_POST['review_reason_map']) ? trim((string)$_POST['review_reason_map']) : '';
 $review_fail_reason_map_raw = isset($_POST['review_fail_reason_map']) ? trim((string)$_POST['review_fail_reason_map']) : '';
+$is_same_person_raw = isset($_POST['is_same_person']) ? trim((string)$_POST['is_same_person']) : '';
+$is_same_person = ($is_same_person_raw === 'yes' || $is_same_person_raw === 'no') ? $is_same_person_raw : '';
 if ($review_reason_map_raw === '' && $review_fail_reason_map_raw !== '') {
     // 相容舊前端欄位
     $review_reason_map_raw = $review_fail_reason_map_raw;
@@ -138,6 +140,9 @@ try {
     }
     if (!$hasColumn('recommendation_approval_links', 'decision_reason_json')) {
         $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN decision_reason_json TEXT NULL");
+    }
+    if (!$hasColumn('recommendation_approval_links', 'same_person_choice')) {
+        $conn->query("ALTER TABLE recommendation_approval_links ADD COLUMN same_person_choice VARCHAR(10) DEFAULT NULL");
     }
 
     $stmt = $conn->prepare("SELECT recommendation_id, status, group_ids, COALESCE(confirmed_by_email,'') AS confirmed_by_email FROM recommendation_approval_links WHERE token = ? LIMIT 1");
@@ -594,13 +599,14 @@ try {
             $public_path = '/Topics-frontend/frontend/uploads/recommendation_approvals/' . $filename;
         }
 
+        $same_val = $is_same_person !== '' ? $is_same_person : null;
         $upd = $conn->prepare("UPDATE recommendation_approval_links
-            SET status = 'signed', signature_path = ?, reject_reason = ?, decision_result_json = ?, decision_reason_json = ?, signed_at = NOW()
+            SET status = 'signed', signature_path = ?, reject_reason = ?, decision_result_json = ?, decision_reason_json = ?, same_person_choice = ?, signed_at = NOW()
             WHERE token = ? LIMIT 1");
         $rej_value = trim((string)$reject_reason);
         $decision_json = !empty($decision_map) ? json_encode($decision_map, JSON_UNESCAPED_UNICODE) : null;
         $reason_json = !empty($reason_map) ? json_encode($reason_map, JSON_UNESCAPED_UNICODE) : null;
-        $upd->bind_param('sssss', $public_path, $rej_value, $decision_json, $reason_json, $token);
+        $upd->bind_param('ssssss', $public_path, $rej_value, $decision_json, $reason_json, $same_val, $token);
         $upd->execute();
         $upd->close();
     } else {

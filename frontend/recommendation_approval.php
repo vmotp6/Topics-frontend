@@ -493,7 +493,37 @@ try {
                 ];
             }
         }
+        // 初審未通過（待科主任審核）時，標題改為「請審核學生資訊是否正確?」
+        $is_preliminary_fail_mode = false;
+        if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1 && !empty($decision_rows)) {
+            foreach ($decision_rows as $dr) {
+                $st = trim((string)($dr['status'] ?? ''));
+                if (strtolower($st) === 'mc' || strtolower($st) === 'manual'
+                    || mb_strpos($st, '初審未通過（待科主任審核）') !== false
+                    || mb_strpos($st, '需人工審查') !== false) {
+                    $is_preliminary_fail_mode = true;
+                    break;
+                }
+            }
+        }
+        // 被推薦人姓名相同：需顯示「是否為同一人」問題
+        $has_duplicate_student_names = false;
+        if ((int)($data['is_target_confirmation_mode'] ?? 0) === 1 && count($decision_recommenders) >= 2) {
+            $name_count = [];
+            foreach ($decision_recommenders as $dr) {
+                $sn = trim((string)($dr['student_name'] ?? ''));
+                if ($sn === '') continue;
+                $name_count[$sn] = ($name_count[$sn] ?? 0) + 1;
+            }
+            foreach ($name_count as $cnt) {
+                if ($cnt >= 2) {
+                    $has_duplicate_student_names = true;
+                    break;
+                }
+            }
+        }
     }
+    if (!isset($has_duplicate_student_names)) $has_duplicate_student_names = false;
     $conn->close();
 } catch (Exception $e) {
     $error = '系統錯誤：' . $e->getMessage();
@@ -855,8 +885,18 @@ try {
           <div class="alert success">已完成線上審核，無法再進行簽核。</div>
         <?php else: ?>
           <?php if ((int)($data['requires_review_decision'] ?? 1) === 1): ?>
+          <?php if (!empty($has_duplicate_student_names)): ?>
+          <div class="same-person-q-box" style="margin-bottom:18px; padding:16px 18px; background:#fff7e6; border:1px solid #ffd591; border-radius:10px;">
+            <div class="same-person-q-title" style="font-weight:700; color:#ad6800; margin-bottom:10px;">被推薦人姓名相同請選擇是否為同一人? <span style="color:#d4380d;">（必填）</span></div>
+            <div class="btns" style="margin-top:0; margin-bottom:8px;">
+              <button type="button" class="btn-primary same-person-btn" data-value="yes" onclick="setSamePersonChoice('yes')">是</button>
+              <button type="button" class="btn-secondary same-person-btn" data-value="no" onclick="setSamePersonChoice('no')">否</button>
+            </div>
+            <div id="samePersonResultText" style="font-weight:600; margin-top:8px; min-height:24px;"></div>
+          </div>
+          <?php endif; ?>
           <div class="review-decision-box">
-            <div class="review-required-title"><?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? '請問以下推薦人你覺得誰比較有與你聯絡?(可複選)' : '推薦人推薦資訊是否通過?'; ?></div>
+            <div class="review-required-title"><?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? (isset($is_preliminary_fail_mode) && $is_preliminary_fail_mode ? '請審核學生資訊是否正確?' : '請問以下推薦人你覺得誰比較有與你聯絡?(可複選)') : '推薦人推薦資訊是否通過?'; ?></div>
             <?php if (!empty($decision_recommenders)): ?>
             <div class="decision-bulk-wrap">
               <button type="button" class="btn-pass" onclick="openBulkPassConfirm()">全部通過</button>
@@ -946,12 +986,28 @@ try {
     const token = <?php echo json_encode($token); ?>;
     const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
     const isTargetConfirmationMode = <?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? 'true' : 'false'; ?>;
+    const hasDuplicateStudentNames = <?php echo !empty($has_duplicate_student_names) ? 'true' : 'false'; ?>;
     let pendingDecisionType = '';
     let pendingDecisionRecId = 0;
     let pendingBulkPass = false;
     const decidedIdMap = {};
     const decidedReasonMap = {};
     let pendingWaiveBonus = false;
+    let samePersonChoice = '';
+
+    function setSamePersonChoice(val) {
+      samePersonChoice = (val === 'yes' || val === 'no') ? val : '';
+      const btns = document.querySelectorAll('.same-person-btn');
+      btns.forEach(btn => {
+        const v = btn.getAttribute('data-value');
+        btn.classList.toggle('btn-primary', v === val);
+        btn.classList.toggle('btn-secondary', v !== val);
+      });
+      const resultEl = document.getElementById('samePersonResultText');
+      if (resultEl) {
+        resultEl.textContent = val === 'yes' ? '被推薦人為同一人' : (val === 'no' ? '被推薦人為不同人' : '');
+      }
+    }
 
     function openRowDecisionConfirm(recId, type) {
       const id = parseInt(String(recId || '0'), 10);
@@ -1105,11 +1161,18 @@ try {
         alert('請先完成「推薦人推薦資訊是否通過」必填選項。');
         return;
       }
+      if (hasDuplicateStudentNames && (samePersonChoice !== 'yes' && samePersonChoice !== 'no')) {
+        alert('請選擇「被推薦人姓名相同是否為同一人」的答案（是/否）。');
+        return;
+      }
       let body = 'token=' + encodeURIComponent(token)
         + '&signature_url=' + encodeURIComponent(signatureUrl)
         + '&review_decision_map=' + encodeURIComponent(JSON.stringify(payloadDecisionMap))
         + '&review_reason_map=' + encodeURIComponent(JSON.stringify(payloadReasonMap))
         + '&review_fail_reason_map=' + encodeURIComponent(JSON.stringify(payloadReasonMap));
+      if (hasDuplicateStudentNames && samePersonChoice) {
+        body += '&is_same_person=' + encodeURIComponent(samePersonChoice);
+      }
       let isWaiveSubmit = false;
       if (pendingWaiveBonus) {
         body += '&waive_bonus=1';
