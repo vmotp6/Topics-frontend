@@ -1035,20 +1035,39 @@ if (isset($_GET['google_login']) && $_GET['google_login'] === 'success') {
       <?php elseif ($is_admin): ?>
         <!-- 管理員：顯示管理員相關功能 -->
         <div class="feature-card">
-          <div class="feature-icon">👑</div>
-          <h3 class="feature-title">推薦管理</h3>
-          <p class="feature-description">管理推薦報名相關事務。</p>
-          <a href="admin_recommendations.php" class="feature-link">推薦管理</a>
+          <div class="feature-icon">🤝</div>
+          <h3 class="feature-title">招生QA問答</h3>
+          <p class="feature-description">提問有關招生、學費、科系、申請流程等資訊。</p>
+          <a href="QA.php" class="feature-link">招生QA問答</a>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎥</div>
+          <h3 class="feature-title">招生影片列表</h3>
+          <p class="feature-description">查看招生影片列表，了解招生影片情況和進度。</p>
+          <a href="radio.php" class="feature-link">招生影片列表</a>
         </div>
         
         <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3 class="feature-title">招生管理</h3>
-          <p class="feature-description">管理招生相關事務。</p>
-          <a href="admin_admission.php" class="feature-link">招生管理</a>
+          <div class="feature-icon">🗺️</div>
+          <h3 class="feature-title">校園地圖</h3>
+          <p class="feature-description">查看校園地圖，了解校園設施和位置。</p>
+          <a href="campus_map.php" class="feature-link">校園地圖</a>
         </div>
 
+        <div class="feature-card">
+          <div class="feature-icon">📢</div>
+          <h3 class="feature-title">招生公告欄</h3>
+          <p class="feature-description">查看招生公告欄，了解招生相關資訊。</p>
+          <a href="bulletin_board.php" class="feature-link">招生公告欄</a>
+        </div>
         
+        <div class="feature-card">
+          <div class="feature-icon">📚</div>
+          <h3 class="feature-title">私訊聊天室</h3>
+          <p class="feature-description">老師或其他學生進行聊天。</p>
+          <a href="chat/chat.php" class="feature-link">私訊聊天室</a>
+        </div>
         
       <?php else: ?>
         <!-- 其他角色：顯示基本功能 -->

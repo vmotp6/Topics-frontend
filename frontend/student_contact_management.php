@@ -2,9 +2,26 @@
 require_once 'session_config.php';
 require_once 'config.php';
 
+// 檢查登入狀態（與 header.php 保持一致）
+$isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && 
+              isset($_SESSION['username']) && !empty($_SESSION['username']) &&
+              isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+// 引入資料庫配置
+require_once 'config.php';
+
 $isLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true &&
               isset($_SESSION['username']) && !empty($_SESSION['username']) &&
               isset($_SESSION['role']) && !empty($_SESSION['role']);
+
+$role = $_SESSION['role'] ?? '';
+$allowedRoles = ['TEA', 'STA', 'AA', 'DI', 'IM', '學生', 'STU'];
+
+if (!$isLoggedIn || !in_array($role, $allowedRoles, true)) {
+    header("Location: index.php");
+    exit();
+}
+
 
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : '';
 $allowed_roles = ['老師', 'TEA', 'STA', '學校行政人員', 'AA', 'DI'];

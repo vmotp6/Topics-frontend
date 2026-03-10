@@ -941,7 +941,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('chat/chat.php'); ?>" class="<?php echo getActiveClass('chat.php'); ?>">私訊聊天室</a>
     <?php endif; ?>
 
-    <?php if ($isLoggedIn): ?>
+    <?php if ($isLoggedIn && $is_header_teacher || $is_header_student): ?>
       <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     <?php endif; ?>
     
@@ -1051,7 +1051,7 @@ function getActiveClass($targetFile) {
             <?php elseif ($user_role === '學生' || $user_role === 'STU'): ?>
                 <a href="<?php echo getCorrectPath('student_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php else: ?>
-                <a href="#" class="btn-logout">個人資料</a>
+                <!--<a href="#" class="btn-logout">個人資料</a>-->
             <?php endif; ?>
 
                         <?php 
@@ -1069,7 +1069,7 @@ function getActiveClass($targetFile) {
                           <a href="<?php echo htmlspecialchars($backend_url); ?>" class="btn-logout">前往後台</a>
                         <?php } ?>
          <?php else: ?>
-           <a href="#" class="btn-logout">個人資料</a>
+
          <?php endif; ?>
          <a href="<?php echo getCorrectPath('logout.php'); ?>" class="btn-logout">登出</a>
        </div>
@@ -1123,7 +1123,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php endif; ?>
     
-    <?php if ($isLoggedIn): ?>
+    <?php if ($isLoggedIn && $is_mobile_teacher || $is_mobile_student): ?>
       <a href="<?php echo getCorrectPath('admission_recommend.php'); ?>" class="<?php echo getActiveClass('admission_recommend.php'); ?>">推薦報名</a>
     <?php endif; ?>
     
