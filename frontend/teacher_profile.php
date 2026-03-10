@@ -28,7 +28,7 @@ if (!$isLoggedIn) {
 
 // 檢查是否為老師或學生角色（支援角色代碼，包含STA行政人員和DI主任）
 $user_role = $_SESSION['role'] ?? '';
-$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'STA');
+$is_teacher = ($user_role === '老師' || $user_role === 'TEA' || $user_role === '學校行政人員' || $user_role === 'STA' || $user_role === 'AS' || $user_role === '科助');
 $is_director = ($user_role === 'DI');
 // DI 身分應該使用老師的介面
 $is_teacher_interface = $is_teacher || $is_director;
@@ -803,7 +803,7 @@ try {
             const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
             
             // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員和DI）
-            const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === 'AA');
+            const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === 'AA' || role === 'AS' || role === '科助');
             const isStudentRole = (role === '學生' || role === 'STU');
             
             // 調試：輸出角色信息

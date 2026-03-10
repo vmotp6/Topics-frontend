@@ -1046,7 +1046,7 @@ function getActiveClass($targetFile) {
             <?php 
             $user_role = $_SESSION['role'];
             // 支援角色代碼和中文名稱
-            if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI' || $user_role === 'STA'): ?>
+            if ($user_role === '老師' || $user_role === 'TEA' || $user_role === 'STA' || $user_role === '學校行政人員' || $user_role === 'DI' || $user_role === 'STA' || $user_role === 'AS'): ?>
                 <a href="<?php echo getCorrectPath('teacher_profile.php'); ?>" class="btn-logout">個人資料</a>
             <?php elseif ($user_role === '學生' || $user_role === 'STU'): ?>
                 <a href="<?php echo getCorrectPath('student_profile.php'); ?>" class="btn-logout">個人資料</a>
