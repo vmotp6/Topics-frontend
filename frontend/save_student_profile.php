@@ -27,7 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $username = $_POST['username'] ?? '';
 $name = $_POST['name'] ?? '';
 $department = $_POST['department'] ?? '';
-$phone = $_POST['phone'] ?? '';
+$phone = trim($_POST['phone'] ?? '');
+$phone_digits = preg_replace('/\D/', '', $phone);
+// 電話防呆：若有填寫須為 8～10 碼數字
+if ($phone_digits !== '' && (strlen($phone_digits) < 8 || strlen($phone_digits) > 10)) {
+    echo json_encode(['success' => false, 'message' => '電話請輸入 8～10 碼數字']);
+    exit;
+}
+$phone = $phone_digits; // 儲存時只存數字
 $student_id = $_POST['student_id'] ?? '';
 $grade = $_POST['grade'] ?? '';
 $class_name = $_POST['class_name'] ?? '';

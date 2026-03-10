@@ -471,9 +471,9 @@ try {
                 
                 <div class="form-group">
                     <label for="phone">電話</label>
-                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>">
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼（8～10 碼數字）" maxlength="10" value="<?php echo htmlspecialchars($current_phone); ?>">
+                    <span id="phoneHint" class="form-hint phone-hint" style="display:none; font-size:12px; color:#f5222d;"></span>
                 </div>
-            <?php else: ?>
                 <!-- 學生專用欄位 -->
                 <div class="form-group">
                     <label for="student_id">學號</label>
@@ -523,7 +523,8 @@ try {
                 
                 <div class="form-group">
                     <label for="phone">電話</label>
-                    <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" value="<?php echo htmlspecialchars($current_phone); ?>">
+                    <input type="tel" id="phone" name="phone" maxlength="10" value="<?php echo htmlspecialchars($current_phone); ?>">
+                    <span id="phoneHint" class="form-hint phone-hint" style="display:none; font-size:12px; color:#f5222d;"></span>
                 </div>
             <?php endif; ?>
             
@@ -645,6 +646,16 @@ try {
                 }
             });
         });
+
+        // 電話欄位：只允許輸入數字，最多 10 碼
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 10);
+                const hint = document.querySelector('.phone-hint');
+                if (hint) hint.style.display = 'none';
+            });
+        }
 
         // 頁面載入時自動填入現有資料（如果 PHP 已經載入）
         window.addEventListener('load', function() {
@@ -800,7 +811,20 @@ try {
             const role = '<?php echo htmlspecialchars($user_role ?? '', ENT_QUOTES, 'UTF-8'); ?>';
             const name = document.getElementById('name') ? document.getElementById('name').value : '';
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
-            const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
+            const phone = document.getElementById('phone') ? document.getElementById('phone').value.trim() : '';
+            
+            // 電話防呆：若有填寫須為 8～10 碼數字
+            const phoneDigits = phone.replace(/\D/g, '');
+            if (phone !== '' && (phoneDigits.length < 8 || phoneDigits.length > 10)) {
+                const msg = document.getElementById('message');
+                if (msg) { msg.className = 'message error'; msg.textContent = '電話請輸入 8～10 碼數字'; }
+                const hint = document.querySelector('.phone-hint');
+                if (hint) { hint.style.display = 'block'; hint.textContent = '請輸入 8～10 碼數字'; }
+                document.getElementById('phone').focus();
+                return;
+            }
+            const hint = document.querySelector('.phone-hint');
+            if (hint) { hint.style.display = 'none'; hint.textContent = ''; }
             
             // 根據角色判斷（支援代碼和中文名稱，包含STA行政人員和DI）
             const isTeacherRole = (role === '老師' || role === 'TEA' || role === 'STA' || role === '學校行政人員' || role === 'DI' || role === 'AA' || role === 'AS' || role === '科助');
@@ -826,7 +850,7 @@ try {
                 formData.append('name', name); // 從表單獲取姓名
             }
             formData.append('department', department);
-            formData.append('phone', phone);
+            formData.append('phone', phoneDigits.length > 0 ? phoneDigits : phone);
             formData.append('role', role); // 添加角色資訊
             
             <?php if (!$is_teacher_interface): ?>

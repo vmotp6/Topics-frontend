@@ -13,8 +13,7 @@ try {
     // 常見的欄位名稱：question/answer, title/content, q/a
     
     $possible_queries = [
-        "SELECT question, answer FROM faq ORDER BY id ASC",
-        "SELECT question, answer FROM qa ORDER BY id ASC", 
+        "SELECT * FROM QA WHERE is_active = 1 ORDER BY id ASC", 
         "SELECT title as question, content as answer FROM faq ORDER BY id ASC",
         "SELECT q as question, a as answer FROM qa ORDER BY id ASC",
         "SELECT question, answer FROM questions ORDER BY id ASC",
