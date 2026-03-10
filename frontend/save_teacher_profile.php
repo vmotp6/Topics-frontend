@@ -32,7 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $username = $_POST['username'] ?? '';
 $name = $_POST['name'] ?? '';
 $department = $_POST['department'] ?? '';
-$phone = $_POST['phone'] ?? '';
+$phone = trim($_POST['phone'] ?? '');
+$phone_digits = preg_replace('/\D/', '', $phone);
+// 電話防呆：若有填寫須為 8～10 碼數字
+if ($phone_digits !== '' && (strlen($phone_digits) < 8 || strlen($phone_digits) > 10)) {
+    echo json_encode(['success' => false, 'message' => '電話請輸入 8～10 碼數字']);
+    exit;
+}
+$phone = $phone_digits; // 儲存時只存數字
 
 // 檢查是否只有頭像上傳（沒有其他資料）
 $avatar_only = isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK &&

@@ -14,10 +14,7 @@ require_once 'config.php';
 function getFAQFromDatabase() {
     try {
         $conn = getDatabaseConnection();
-        
-        // 假設 FAQ 資料表名稱為 'faq' 或 'qa'，欄位為 'question' 和 'answer'
-        // 如果資料表名稱或欄位不同，請告訴我正確的名稱
-        $sql = "SELECT question, answer FROM faq ORDER BY id ASC";
+        $sql = "SELECT question, answer FROM qa WHERE is_active = 1 ORDER BY id ASC";
         $result = $conn->query($sql);
         
         $faqs = [];

@@ -489,7 +489,8 @@ try {
             
             <div class="form-group">
                 <label for="phone">電話</label>
-                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼" maxlength="10" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>">
+                <input type="tel" id="phone" name="phone" placeholder="請輸入電話號碼（8～10 碼數字）" maxlength="10" value="<?php echo htmlspecialchars($current_phone ?? ''); ?>">
+                <span class="form-hint phone-hint" style="display:none; font-size:12px; color:#f5222d;"></span>
             </div>
             
             <button type="submit" class="submit-btn">儲存資料</button>
@@ -612,7 +613,15 @@ try {
         });
 
         // PHP 已經在 HTML 的 value 屬性中設置了所有資料，不需要 JavaScript 再次設置
-        // 這裡保留空的事件監聽器以備將來使用
+        // 電話欄位：只允許輸入數字，最多 10 碼
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 10);
+                const hint = document.querySelector('.phone-hint');
+                if (hint) hint.style.display = 'none';
+            });
+        }
 
         // 表單提交（學生資料）
         document.getElementById('profileForm').addEventListener('submit', function(e) {
@@ -622,13 +631,26 @@ try {
             const role = '<?php echo htmlspecialchars($user_role, ENT_QUOTES, 'UTF-8'); ?>';
             const name = document.getElementById('name') ? document.getElementById('name').value : '';
             const department = document.getElementById('department') ? document.getElementById('department').value : '';
-            const phone = document.getElementById('phone') ? document.getElementById('phone').value : '';
+            const phone = document.getElementById('phone') ? document.getElementById('phone').value.trim() : '';
+            
+            // 電話防呆：若有填寫須為 8～10 碼數字
+            const phoneDigits = phone.replace(/\D/g, '');
+            if (phone !== '' && (phoneDigits.length < 8 || phoneDigits.length > 10)) {
+                const msg = document.getElementById('message');
+                if (msg) { msg.className = 'message error'; msg.textContent = '電話請輸入 8～10 碼數字'; }
+                const hint = document.querySelector('.phone-hint');
+                if (hint) { hint.style.display = 'block'; hint.textContent = '請輸入 8～10 碼數字'; }
+                document.getElementById('phone').focus();
+                return;
+            }
+            const hint = document.querySelector('.phone-hint');
+            if (hint) { hint.style.display = 'none'; hint.textContent = ''; }
             
             const formData = new FormData();
             formData.append('username', username);
             formData.append('name', name); // 從表單獲取姓名
             formData.append('department', department);
-            formData.append('phone', phone);
+            formData.append('phone', phoneDigits.length > 0 ? phoneDigits : '');
             formData.append('role', role); // 添加角色資訊
             
             // 學生專用欄位
