@@ -1,7 +1,7 @@
 <?php
 // 資料庫連接配置檔案
 // 與 backend/app.py 保持一致的連線設定
-
+date_default_timezone_set('Asia/Taipei');
 define('DB_HOST', 'localhost');    // 本地資料庫
 define('DB_USERNAME', 'root');          // 資料庫使用者名稱
 define('DB_PASSWORD', '');              // 資料庫密碼
@@ -12,7 +12,6 @@ define('DB_CHARSET', 'utf8mb4');        // 字符集
 function getDatabaseConnection() {
     $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME);
     
-    // 檢查連接
     if ($conn->connect_error) {
         die("資料庫連接失敗: " . $conn->connect_error);
     }
