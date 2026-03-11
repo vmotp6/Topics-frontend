@@ -927,7 +927,7 @@ function getActiveClass($targetFile) {
       <a href="<?php echo getCorrectPath('cooperation_upload.php'); ?>" class="<?php echo getActiveClass('cooperation_upload.php'); ?>">就讀意願登錄</a>
       <a href="<?php echo getCorrectPath('continued_admission.php'); ?>" class="<?php echo getActiveClass('continued_admission.php'); ?>">續招報名</a>
       <a href="<?php echo getCorrectPath('admission.php'); ?>" class="<?php echo getActiveClass('admission.php'); ?>">五專入學說明會</a>
-      <a href="<?php echo getCorrectPath('mobile_junior.php'); ?>" class="<?php echo getActiveClass('mobile_junior.php'); ?>">國中招生報名網頁</a>
+      <!--<a href="<?php echo getCorrectPath('mobile_junior.php'); ?>" class="<?php echo getActiveClass('mobile_junior.php'); ?>">國中招生報名網頁</a>-->
       <!-- 在校生留言板 - 未登入時也可見 -->
       <a href="<?php echo getCorrectPath('senior_messages.php'); ?>" class="<?php echo getActiveClass('senior_messages.php'); ?>" style="white-space: nowrap !important; flex-shrink: 0; word-break: keep-all;">在校生留言板</a>
     <?php else: ?>
