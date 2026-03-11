@@ -987,6 +987,7 @@ try {
     const requiresReviewDecision = <?php echo ((int)($data['requires_review_decision'] ?? 1) === 1) ? 'true' : 'false'; ?>;
     const isTargetConfirmationMode = <?php echo ((int)($data['is_target_confirmation_mode'] ?? 0) === 1) ? 'true' : 'false'; ?>;
     const hasDuplicateStudentNames = <?php echo !empty($has_duplicate_student_names) ? 'true' : 'false'; ?>;
+    const admissionRecommendListUrl = <?php echo json_encode('/Topics-backend/frontend/admission_recommend_list.php'); ?>;
     let pendingDecisionType = '';
     let pendingDecisionRecId = 0;
     let pendingBulkPass = false;
@@ -1191,6 +1192,9 @@ try {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
+          if (hasDuplicateStudentNames && samePersonChoice === 'yes') {
+            window.open(admissionRecommendListUrl + '?dup=1', '_blank');
+          }
           alert(isWaiveSubmit ? '放棄獎金已生效，招生中心將無法發送獎金。' : '簽核完成，已通知招生中心。');
           location.reload();
         } else {
