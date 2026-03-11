@@ -5,8 +5,6 @@ Flask 後端應用程式
 """
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
-now = datetime.now(ZoneInfo("Asia/Taipei"))
 from flask import Flask, request, jsonify, redirect, session
 from flask_cors import CORS
 import pymysql
